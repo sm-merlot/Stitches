@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -46,7 +45,7 @@ class EditorState {
   bool get canRedo => _redoStack.isNotEmpty;
 
   Thread? get selectedThread => selectedThreadId != null
-      ? pattern.threadById(selectedThreadId!)
+      ? pattern.threadByCode(selectedThreadId!)
       : null;
 
   EditorState copyWith({
@@ -85,15 +84,12 @@ class EditorNotifier extends StateNotifier<EditorState> {
 
   EditorNotifier() : super(EditorState(pattern: CrossStitchPattern.empty()));
 
-  static const _uuid = Uuid();
-
   /// DMC 310 Black — added automatically to every new pattern.
-  static Thread _defaultBlackThread() => Thread(
-        id: _uuid.v4(),
-        code: '310',
-        color: const Color(0xFF000000),
-        name: 'Black',
-      );
+  static const _defaultBlackThread = Thread(
+    dmcCode: '310',
+    color: Color(0xFF000000),
+    name: 'Black',
+  );
 
   void loadPattern(CrossStitchPattern pattern, {String? filePath}) {
     // Restore saved tool, falling back to fullStitch
@@ -106,9 +102,9 @@ class EditorNotifier extends StateNotifier<EditorState> {
 
     // Restore saved thread, falling back to first thread
     String? threadId = pattern.editorSelectedThreadId;
-    if (threadId == null || pattern.threadById(threadId) == null) {
+    if (threadId == null || pattern.threadByCode(threadId) == null) {
       threadId =
-          pattern.threads.isNotEmpty ? pattern.threads.first.id : null;
+          pattern.threads.isNotEmpty ? pattern.threads.first.dmcCode : null;
     }
 
     state = EditorState(
@@ -123,12 +119,12 @@ class EditorNotifier extends StateNotifier<EditorState> {
     // Seed with DMC 310 Black if no threads provided
     final threads = pattern.threads.isNotEmpty
         ? pattern.threads
-        : [_defaultBlackThread()];
+        : [_defaultBlackThread];
     final seeded = pattern.copyWith(threads: threads);
 
     state = EditorState(
       pattern: seeded,
-      selectedThreadId: threads.first.id,
+      selectedThreadId: threads.first.dmcCode,
     );
   }
 
@@ -171,20 +167,20 @@ class EditorNotifier extends StateNotifier<EditorState> {
     final newPattern = state.pattern.copyWith(threads: newThreads);
     state = state.copyWith(
       pattern: newPattern,
-      selectedThreadId: thread.id,
+      selectedThreadId: thread.dmcCode,
       isDirty: true,
     );
   }
 
-  void removeThread(String threadId) {
+  void removeThread(String dmcCode) {
     final newThreads =
-        state.pattern.threads.where((t) => t.id != threadId).toList();
+        state.pattern.threads.where((t) => t.dmcCode != dmcCode).toList();
     final newStitches =
-        state.pattern.stitches.where((s) => s.threadId != threadId).toList();
+        state.pattern.stitches.where((s) => s.threadId != dmcCode).toList();
     final newPattern =
         state.pattern.copyWith(threads: newThreads, stitches: newStitches);
-    final newSelectedId = state.selectedThreadId == threadId
-        ? (newThreads.isNotEmpty ? newThreads.first.id : null)
+    final newSelectedId = state.selectedThreadId == dmcCode
+        ? (newThreads.isNotEmpty ? newThreads.first.dmcCode : null)
         : state.selectedThreadId;
     state = state.copyWith(
       pattern: newPattern,

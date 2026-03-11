@@ -36,7 +36,7 @@ class CanvasPainter extends CustomPainter {
 
     // Build thread lookup map once
     final threadMap = <String, Thread>{
-      for (final t in pattern.threads) t.id: t,
+      for (final t in pattern.threads) t.dmcCode: t,
     };
 
     // ── Background ───────────────────────────────────────────────────────────

@@ -152,7 +152,7 @@ class EditorToolbar extends ConsumerWidget {
                 // Colour swatch / thread picker
                 Tooltip(
                   message: state.selectedThread != null
-                      ? 'Thread: ${state.selectedThread!.code} – ${state.selectedThread!.name}'
+                      ? 'Thread: ${state.selectedThread!.dmcCode} – ${state.selectedThread!.name}'
                       : 'No thread selected',
                   child: InkWell(
                     onTap: onOpenColorPicker,
@@ -176,7 +176,7 @@ class EditorToolbar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            state.selectedThread?.code ?? '—',
+                            state.selectedThread?.dmcCode ?? '—',
                             style: const TextStyle(
                                 fontSize: 12, fontWeight: FontWeight.w600),
                           ),

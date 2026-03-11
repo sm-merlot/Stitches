@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 import '../data/dmc_colors.dart';
 import '../models/thread.dart';
 import '../providers/editor_provider.dart';
@@ -16,7 +15,6 @@ class ColorPickerScreen extends ConsumerStatefulWidget {
 class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  static const _uuid = Uuid();
 
   @override
   void dispose() {
@@ -40,20 +38,17 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
 
     // Check if this DMC code already exists in the pattern's thread list
     final existing = editorState.pattern.threads
-        .where((t) => t.code == dmcColor.code)
+        .where((t) => t.dmcCode == dmcColor.code)
         .firstOrNull;
 
     if (existing != null) {
-      notifier.setSelectedThread(existing.id);
+      notifier.setSelectedThread(existing.dmcCode);
     } else {
-      // Add this thread to the pattern
-      final thread = Thread(
-        id: _uuid.v4(),
-        code: dmcColor.code,
+      notifier.addThread(Thread(
+        dmcCode: dmcColor.code,
         color: dmcColor.color,
         name: dmcColor.name,
-      );
-      notifier.addThread(thread);
+      ));
     }
 
     Navigator.of(context).pop();
@@ -64,7 +59,7 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
     final settings = ref.watch(settingsProvider);
     final editorState = ref.watch(editorProvider);
     final usedCodes =
-        editorState.pattern.threads.map((t) => t.code).toSet();
+        editorState.pattern.threads.map((t) => t.dmcCode).toSet();
     final filtered = _filtered;
 
     return Scaffold(
@@ -110,7 +105,7 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
                 final c = filtered[index];
                 final isInPattern = usedCodes.contains(c.code);
                 final isSelected =
-                    editorState.selectedThread?.code == c.code;
+                    editorState.selectedThread?.dmcCode == c.code;
 
                 return ListTile(
                   leading: Container(

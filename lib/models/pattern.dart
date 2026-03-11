@@ -64,8 +64,8 @@ class CrossStitchPattern {
 
   static const _sentinel = Object();
 
-  Thread? threadById(String id) {
-    return threads.where((t) => t.id == id).firstOrNull;
+  Thread? threadByCode(String dmcCode) {
+    return threads.where((t) => t.dmcCode == dmcCode).firstOrNull;
   }
 
   Map<String, dynamic> toYaml() => {

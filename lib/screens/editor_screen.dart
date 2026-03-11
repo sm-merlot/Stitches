@@ -312,7 +312,7 @@ class _ThreadPaletteButton extends ConsumerWidget {
       itemBuilder: (_) => [
         ...threads.map(
           (t) => PopupMenuItem<String>(
-            value: t.id,
+            value: t.dmcCode,
             child: Row(
               children: [
                 Container(
@@ -325,8 +325,8 @@ class _ThreadPaletteButton extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('${t.code} – ${t.name}'),
-                if (state.selectedThreadId == t.id) ...[
+                Text('${t.dmcCode} – ${t.name}'),
+                if (state.selectedThreadId == t.dmcCode) ...[
                   const Spacer(),
                   Icon(Icons.check,
                       size: 16,
@@ -352,7 +352,7 @@ class _ThreadPaletteButton extends ConsumerWidget {
         if (id == '__add__') {
           onOpenColorPicker();
         } else {
-          ref.read(editorProvider.notifier).setSelectedThread(id);
+          ref.read(editorProvider.notifier).setSelectedThread(id); // id is dmcCode
         }
       },
     );
