@@ -1,0 +1,124 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/settings_provider.dart';
+
+class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final notifier = ref.read(settingsProvider.notifier);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Settings'),
+      ),
+      body: ListView(
+        children: [
+          const _SectionHeader('Thread Colours'),
+          SwitchListTile(
+            title: const Text('Colour system'),
+            subtitle: Text(settings.useDmc ? 'DMC (active)' : 'Anchor (active)'),
+            secondary: const Icon(Icons.palette_outlined),
+            value: settings.useDmc,
+            onChanged: (v) => notifier.setUseDmc(v),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Text(
+              'Switch between DMC and Anchor thread numbering. '
+              'Your pattern stores thread data in both — switching only changes '
+              'how colours are labelled.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+          const Divider(),
+          const _SectionHeader('Display'),
+          SwitchListTile(
+            title: const Text('Keep screen on'),
+            subtitle: const Text('Prevents screen from sleeping while editing'),
+            secondary: const Icon(Icons.brightness_high_outlined),
+            value: settings.keepScreenOn,
+            onChanged: (v) => notifier.setKeepScreenOn(v),
+          ),
+          const Divider(),
+          const _SectionHeader('Keyboard Shortcuts (Desktop)'),
+          const _ShortcutTile('Undo', 'Cmd/Ctrl + Z'),
+          const _ShortcutTile('Redo', 'Cmd/Ctrl + Shift + Z  or  Cmd/Ctrl + Y'),
+          const _ShortcutTile('Toggle erase mode', 'E'),
+          const _ShortcutTile('Full cross stitch', '1'),
+          const _ShortcutTile('Half diagonal /', '2'),
+          const _ShortcutTile('Half diagonal \\', '3'),
+          const _ShortcutTile('Half-cell cross (X in ½ cell)', '4'),
+          const _ShortcutTile('Quarter diagonal (auto-corner)', '5'),
+          const _ShortcutTile('Quarter-cell cross / petit point', '6'),
+          const _ShortcutTile('Backstitch', '7'),
+          const _ShortcutTile('Navigate (pan) mode', 'Space'),
+          const Divider(),
+          const _SectionHeader('Apple Pencil'),
+          const ListTile(
+            leading: Icon(Icons.draw_outlined),
+            title: Text('Hardware double-tap'),
+            subtitle: Text('Toggles between draw and erase mode'),
+          ),
+          const ListTile(
+            leading: Icon(Icons.touch_app_outlined),
+            title: Text('Finger double-tap (iPad / Android)'),
+            subtitle: Text('Undo last action'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.primary,
+          letterSpacing: 1.1,
+        ),
+      ),
+    );
+  }
+}
+
+class _ShortcutTile extends StatelessWidget {
+  final String action;
+  final String shortcut;
+  const _ShortcutTile(this.action, this.shortcut);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      title: Text(action),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Text(
+          shortcut,
+          style: const TextStyle(
+            fontSize: 12,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ),
+    );
+  }
+}
