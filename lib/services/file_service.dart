@@ -28,6 +28,19 @@ class FileService {
     return (pattern, path);
   }
 
+  /// Open a known directory path and return all .stitchx file paths within it.
+  static Future<List<String>> openFolderFromPath(String dir) async {
+    final directory = Directory(dir);
+    if (!await directory.exists()) throw Exception('Folder not found: $dir');
+    final files = await directory
+        .list(recursive: false)
+        .where((e) => e is File && e.path.endsWith('.$_ext'))
+        .map((e) => e.path)
+        .toList();
+    files.sort();
+    return files;
+  }
+
   /// Pick a directory and return all .stitchx file paths within it, or null if cancelled.
   static Future<List<String>?> openFolder() async {
     final dir = await FilePicker.platform.getDirectoryPath();

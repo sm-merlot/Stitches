@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/pattern.dart';
 import '../providers/editor_provider.dart';
+import '../providers/recent_items_provider.dart';
 import '../services/file_service.dart';
 import 'editor_screen.dart';
 import 'new_pattern_dialog.dart';
@@ -25,9 +26,10 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _openFile(BuildContext context, WidgetRef ref) async {
     try {
       final result = await FileService.openFile();
-      if (result == null || !context.mounted) return; // cancelled
+      if (result == null || !context.mounted) return;
       final (pattern, path) = result;
       ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
+      ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const EditorScreen()),
       );
@@ -40,11 +42,58 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _openFolder(BuildContext context, WidgetRef ref) async {
     try {
       final files = await FileService.openFolder();
-      if (files == null || !context.mounted) return; // cancelled
+      if (files == null || !context.mounted) return;
       if (files.isEmpty) {
         _showError(context, 'No .stitchx files found in that folder.');
         return;
       }
+      // Record the folder path (parent of first file)
+      final folderPath = files.first
+          .split('/')
+          .sublist(0, files.first.split('/').length - 1)
+          .join('/');
+      ref
+          .read(recentItemsProvider.notifier)
+          .add(folderPath, isFolder: true);
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => FolderBrowserScreen(filePaths: files),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      _showError(context, 'Could not open folder: $e');
+    }
+  }
+
+  Future<void> _openRecentFile(
+      BuildContext context, WidgetRef ref, RecentItem item) async {
+    try {
+      final (pattern, path) = await FileService.openFileFromPath(item.path);
+      if (!context.mounted) return;
+      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
+      ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const EditorScreen()),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      _showError(context, 'Could not open file: $e');
+    }
+  }
+
+  Future<void> _openRecentFolder(
+      BuildContext context, WidgetRef ref, RecentItem item) async {
+    try {
+      final files = await FileService.openFolderFromPath(item.path);
+      if (!context.mounted) return;
+      if (files.isEmpty) {
+        _showError(context, 'No .stitchx files found in that folder.');
+        return;
+      }
+      ref
+          .read(recentItemsProvider.notifier)
+          .add(item.path, isFolder: true);
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => FolderBrowserScreen(filePaths: files),
@@ -64,6 +113,8 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final recents = ref.watch(recentItemsProvider);
+
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -76,49 +127,51 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        children: [
+          // ── Logo + action buttons ────────────────────────────────────────
+          const SizedBox(height: 48),
+          Center(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    Icons.grid_4x4,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'StitchX',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Cross-stitch pattern editor',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey.shade600,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 40),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Logo / title area
-                Column(
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        Icons.grid_4x4,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'StitchX',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Cross-stitch pattern editor',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey.shade600,
-                          ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 48),
                 FilledButton.icon(
                   onPressed: () => _newPattern(context, ref),
                   icon: const Icon(Icons.add),
@@ -148,8 +201,140 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
+
+          // ── Recent items ─────────────────────────────────────────────────
+          if (recents.isNotEmpty) ...[
+            const SizedBox(height: 40),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'RECENT',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Clear Recent'),
+                        content:
+                            const Text('Remove all items from the recent list?'),
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: const Text('Cancel')),
+                          TextButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              child: const Text('Clear')),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      for (final item in [...recents]) {
+                        ref.read(recentItemsProvider.notifier).remove(item.path);
+                      }
+                    }
+                  },
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                  ),
+                  child: Text(
+                    'Clear',
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            ...recents.map((item) => _RecentItemTile(
+                  item: item,
+                  onTap: () => item.isFolder
+                      ? _openRecentFolder(context, ref, item)
+                      : _openRecentFile(context, ref, item),
+                  onRemove: () =>
+                      ref.read(recentItemsProvider.notifier).remove(item.path),
+                )),
+          ],
+
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Recent item tile ─────────────────────────────────────────────────────────
+
+class _RecentItemTile extends StatelessWidget {
+  final RecentItem item;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _RecentItemTile({
+    required this.item,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          item.isFolder
+              ? Icons.folder_outlined
+              : Icons.insert_drive_file_outlined,
+          size: 20,
+          color: theme.colorScheme.onPrimaryContainer,
         ),
       ),
+      title: Text(
+        item.displayName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+      ),
+      subtitle: Text(
+        item.displayPath,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            item.relativeTime,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.close, size: 14, color: Colors.grey.shade400),
+            ),
+          ),
+        ],
+      ),
+      onTap: onTap,
     );
   }
 }
@@ -170,6 +355,7 @@ class FolderBrowserScreen extends ConsumerWidget {
       final (pattern, filePath) = await FileService.openFileFromPath(path);
       if (!context.mounted) return;
       ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
+      ref.read(recentItemsProvider.notifier).add(filePath, isFolder: false);
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const EditorScreen()),
       );
