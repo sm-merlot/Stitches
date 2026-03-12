@@ -63,8 +63,10 @@ class FileService {
 
   /// Prompt the user for a save location; returns the chosen path or null.
   static Future<String?> saveFileAs(CrossStitchPattern pattern) async {
-    final suggestedName =
-        '${pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_')}.$_ext';
+    // Don't include the extension — FilePicker appends it automatically on
+    // macOS (via allowedExtensions), and the finalPath guard below adds it
+    // on platforms that don't.
+    final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final path = await FilePicker.platform.saveFile(
       fileName: suggestedName,
       type: FileType.custom,
