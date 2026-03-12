@@ -150,10 +150,16 @@ class EditorScreen extends ConsumerWidget {
         return KeyEventResult.ignored;
       }
 
-      // Single-key tool shortcuts
+      // Single-key shortcuts
       switch (key) {
+        case LogicalKeyboardKey.keyD:
+          notifier.setDrawingMode(DrawingMode.draw);
         case LogicalKeyboardKey.keyE:
-          notifier.toggleDrawingMode();
+          notifier.setDrawingMode(DrawingMode.erase);
+        case LogicalKeyboardKey.keyP:
+          notifier.setDrawingMode(DrawingMode.pan);
+        case LogicalKeyboardKey.space:
+          notifier.setDrawingMode(DrawingMode.pan);
         case LogicalKeyboardKey.digit1:
           notifier.setTool(DrawingTool.fullStitch);
         case LogicalKeyboardKey.digit2:
@@ -168,8 +174,6 @@ class EditorScreen extends ConsumerWidget {
           notifier.setTool(DrawingTool.quarterCross);
         case LogicalKeyboardKey.digit7:
           notifier.setTool(DrawingTool.backstitch);
-        case LogicalKeyboardKey.space:
-          notifier.setTool(DrawingTool.navigate);
         default:
           return KeyEventResult.ignored;
       }

@@ -12,10 +12,10 @@ enum DrawingTool {
   quarterDiag,   // Diagonal quarter (auto)   [5]
   quarterCross,  // Full X in quarter cell    [6]
   backstitch,    // Backstitch line           [7]
-  navigate,      // Pan/zoom                  [Space]
 }
 
-enum DrawingMode { draw, erase }
+/// Cursor mode — controls what pointer/touch interactions do.
+enum DrawingMode { draw, erase, pan }
 
 class EditorState {
   final CrossStitchPattern pattern;
@@ -144,14 +144,18 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   void setDrawingMode(DrawingMode mode) {
-    state = state.copyWith(drawingMode: mode);
+    state = state.copyWith(
+      drawingMode: mode,
+      // Cancel in-progress backstitch when switching away from draw mode
+      backstitchStartPoint: null,
+    );
   }
 
   void toggleDrawingMode() {
     final newMode = state.drawingMode == DrawingMode.draw
         ? DrawingMode.erase
         : DrawingMode.draw;
-    state = state.copyWith(drawingMode: newMode);
+    state = state.copyWith(drawingMode: newMode, backstitchStartPoint: null);
   }
 
   void setSelectedThread(String? threadId) {

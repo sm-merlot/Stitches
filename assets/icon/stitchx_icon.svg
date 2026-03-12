@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="230" ry="230" fill="#504173"/>
+  <!--
+    Material Symbols grid_4x4 path is in "0 -960 960 960" space.
+    Icon content bounding box: x 80–880, y −880–−80 (800×800).
+    Scale to fit 576×576 centred on canvas: s = 576/960 = 0.6
+    translate(224, 800) scale(0.6) maps:
+      x 80 → 272,  x 880 → 752
+      y −880 → 272, y −80  → 752   ← perfectly centred
+  -->
+  <g transform="translate(224,800) scale(0.6,0.6)">
+    <path fill="#e6d6fa" d="M200-80v-120H80v-80h120v-160H80v-80h120v-160H80v-80h120v-120h80v120h160v-120h80v120h160v-120h80v120h120v80H760v160h120v80H760v160h120v80H760v120h-80v-120H520v120h-80v-120H280v120h-80Zm80-200h160v-160H280v160Zm240 0h160v-160H520v160ZM280-520h160v-160H280v160Zm240 0h160v-160H520v160Z"/>
+  </g>
+</svg>
