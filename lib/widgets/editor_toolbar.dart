@@ -469,61 +469,166 @@ class _PaletteDialog extends ConsumerWidget {
   void _showSymbolPicker(BuildContext context, WidgetRef ref, Thread t) {
     showDialog<void>(
       context: context,
-      builder: (ctx) {
-        final primary = Theme.of(ctx).colorScheme.primary;
-        final textColor = t.color.computeLuminance() > 0.35
-            ? Colors.black
-            : Colors.white;
-        return AlertDialog(
-          title: Text('${t.dmcCode} – ${t.name}'),
-          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          content: SizedBox(
-            width: 320,
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: kPatternSymbols.map((s) {
-                final isSelected = s == t.symbol;
-                return GestureDetector(
-                  onTap: () {
-                    ref
-                        .read(editorProvider.notifier)
-                        .changeThreadSymbol(t.dmcCode, s);
-                    Navigator.of(ctx).pop();
-                  },
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: t.color,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isSelected ? primary : Colors.grey.shade300,
-                        width: isSelected ? 2.5 : 1,
+      builder: (ctx) => _SymbolPickerDialog(
+        thread: t,
+        onSelect: (s) {
+          ref.read(editorProvider.notifier).changeThreadSymbol(t.dmcCode, s);
+          Navigator.of(ctx).pop();
+        },
+      ),
+    );
+  }
+}
+
+// ─── Symbol picker dialog ─────────────────────────────────────────────────────
+
+class _SymbolPickerDialog extends StatefulWidget {
+  final Thread thread;
+  final ValueChanged<String> onSelect;
+  const _SymbolPickerDialog({required this.thread, required this.onSelect});
+
+  @override
+  State<_SymbolPickerDialog> createState() => _SymbolPickerDialogState();
+}
+
+class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill if the current symbol is a custom (non-preset) one
+    final current = widget.thread.symbol;
+    _controller = TextEditingController(
+      text: kPatternSymbols.contains(current) ? '' : current,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final t = widget.thread;
+    final textColor =
+        t.color.computeLuminance() > 0.35 ? Colors.black : Colors.white;
+    final customText = _controller.text.trim();
+
+    return AlertDialog(
+      title: Text('${t.dmcCode} – ${t.name}'),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Preset symbols grid ──────────────────────────────────────────
+            Flexible(
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: kPatternSymbols.map((s) {
+                    final isSelected =
+                        s == t.symbol && customText.isEmpty;
+                    return GestureDetector(
+                      onTap: () => widget.onSelect(s),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: t.color,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isSelected ? primary : Colors.grey.shade300,
+                            width: isSelected ? 2.5 : 1,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          s,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
                       ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            // ── Custom symbol entry ──────────────────────────────────────────
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    maxLength: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Custom symbol',
+                      counterText: '',
+                      isDense: true,
+                      border: OutlineInputBorder(),
                     ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      s,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (v) {
+                      if (v.trim().isNotEmpty) widget.onSelect(v.trim());
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Live preview in thread colour
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: customText.isNotEmpty ? t.color : Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: customText.isNotEmpty
+                          ? primary
+                          : Colors.grey.shade300,
+                      width: customText.isNotEmpty ? 2.5 : 1,
                     ),
                   ),
-                );
-              }).toList(),
+                  alignment: Alignment.center,
+                  child: Text(
+                    customText,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
+            const SizedBox(height: 12),
           ],
-        );
-      },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed:
+              customText.isNotEmpty ? () => widget.onSelect(customText) : null,
+          child: const Text('Use custom'),
+        ),
+      ],
     );
   }
 }
