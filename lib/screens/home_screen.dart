@@ -24,8 +24,9 @@ class HomeScreen extends ConsumerWidget {
 
   Future<void> _openFile(BuildContext context, WidgetRef ref) async {
     try {
-      final (pattern, path) = await FileService.openFile();
-      if (!context.mounted) return;
+      final result = await FileService.openFile();
+      if (result == null || !context.mounted) return; // cancelled
+      final (pattern, path) = result;
       ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const EditorScreen()),
@@ -39,7 +40,7 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _openFolder(BuildContext context, WidgetRef ref) async {
     try {
       final files = await FileService.openFolder();
-      if (!context.mounted) return;
+      if (files == null || !context.mounted) return; // cancelled
       if (files.isEmpty) {
         _showError(context, 'No .stitchx files found in that folder.');
         return;
