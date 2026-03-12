@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
@@ -31,6 +32,8 @@ class EditorState {
   final List<String> recentThreadIds;
   final Rect? selectionRect;
   final List<Stitch>? clipboard;
+  /// Thread data for stitches on the clipboard — needed when pasting across patterns.
+  final List<Thread>? clipboardThreads;
 
   const EditorState({
     required this.pattern,
@@ -45,6 +48,7 @@ class EditorState {
     this.recentThreadIds = const [],
     this.selectionRect,
     this.clipboard,
+    this.clipboardThreads,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -113,6 +117,7 @@ class EditorState {
     List<String>? recentThreadIds,
     Object? selectionRect = _sentinel,
     Object? clipboard = _sentinel,
+    Object? clipboardThreads = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -131,6 +136,7 @@ class EditorState {
       recentThreadIds: recentThreadIds ?? this.recentThreadIds,
       selectionRect: selectionRect == _sentinel ? this.selectionRect : selectionRect as Rect?,
       clipboard: clipboard == _sentinel ? this.clipboard : clipboard as List<Stitch>?,
+      clipboardThreads: clipboardThreads == _sentinel ? this.clipboardThreads : clipboardThreads as List<Thread>?,
     );
   }
 
@@ -253,7 +259,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
     );
   }
 
-  void copySelection() {
+  Future<void> copySelection() async {
     final rect = state.selectionRect;
     if (rect == null) return;
     final inSel =
@@ -262,10 +268,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
     final clips = inSel
         .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
         .toList();
-    state = state.copyWith(clipboard: clips);
+    final threadIds = clips.map((s) => s.threadId).toSet();
+    final threads = state.pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
+    await Clipboard.setData(ClipboardData(text: _serializeClipboard(threads, clips)));
+    state = state.copyWith(clipboard: clips, clipboardThreads: threads);
   }
 
-  void cutSelection() {
+  Future<void> cutSelection() async {
     final rect = state.selectionRect;
     if (rect == null) return;
     final inSel =
@@ -274,12 +283,16 @@ class EditorNotifier extends StateNotifier<EditorState> {
     final clips = inSel
         .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
         .toList();
+    final threadIds = clips.map((s) => s.threadId).toSet();
+    final threads = state.pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
+    await Clipboard.setData(ClipboardData(text: _serializeClipboard(threads, clips)));
     final remaining =
         state.pattern.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
     final newPattern = state.pattern.copyWith(stitches: remaining);
     state = state.copyWith(
       pattern: newPattern,
       clipboard: clips,
+      clipboardThreads: threads,
       selectionRect: null,
       undoStack: _buildUndoStack(),
       isDirty: true,
@@ -287,7 +300,24 @@ class EditorNotifier extends StateNotifier<EditorState> {
     );
   }
 
-  void enterPasteMode() {
+  /// Reads the system clipboard and enters paste mode if valid stitchx data is found.
+  /// Falls back to the in-memory clipboard if the system clipboard has other content.
+  Future<void> enterPasteMode() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null) {
+      final parsed = _parseClipboard(data!.text!);
+      if (parsed != null) {
+        final (threads, stitches) = parsed;
+        state = state.copyWith(
+          clipboard: stitches,
+          clipboardThreads: threads,
+          drawingMode: DrawingMode.paste,
+          selectionRect: null,
+        );
+        return;
+      }
+    }
+    // Fall back to in-memory clipboard (e.g. if system clipboard was overwritten)
     if (state.clipboard == null || state.clipboard!.isEmpty) return;
     state = state.copyWith(
       drawingMode: DrawingMode.paste,
@@ -296,11 +326,21 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   /// Stamps the clipboard contents at offset [dx],[dy] from origin (0,0).
+  /// Any clipboard threads not yet in the pattern are added automatically.
   void commitPaste(int dx, int dy) {
     final clips = state.clipboard;
     if (clips == null || clips.isEmpty) return;
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
+
+    // Add any clipboard threads not already in the pattern
+    var threads = [...state.pattern.threads];
+    for (final ct in state.clipboardThreads ?? <Thread>[]) {
+      if (!threads.any((t) => t.dmcCode == ct.dmcCode)) {
+        threads.add(ct);
+      }
+    }
+
     var stitches = [...state.pattern.stitches];
     for (final s in clips) {
       final placed = EditorState.offsetStitch(s, dx, dy);
@@ -308,7 +348,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
         stitches = _stitchesWithAdded(stitches, placed);
       }
     }
-    final newPattern = state.pattern.copyWith(stitches: stitches);
+    final newPattern = state.pattern.copyWith(stitches: stitches, threads: threads);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -520,6 +560,33 @@ class EditorNotifier extends StateNotifier<EditorState> {
     bool inside(double gx, double gy) =>
         gx >= cellX && gx <= cellX + 1 && gy >= cellY && gy <= cellY + 1;
     return inside(s.x1, s.y1) || inside(s.x2, s.y2);
+  }
+
+  // ─── System clipboard serialisation ───────────────────────────────────────
+
+  String _serializeClipboard(List<Thread> threads, List<Stitch> stitches) {
+    return jsonEncode({
+      'stitchx': {
+        'threads': threads.map((t) => t.toYaml()).toList(),
+        'stitches': stitches.map((s) => s.toYaml()).toList(),
+      }
+    });
+  }
+
+  (List<Thread>, List<Stitch>)? _parseClipboard(String text) {
+    try {
+      final root = (jsonDecode(text) as Map<String, dynamic>)['stitchx'];
+      if (root == null) return null;
+      final threads = (root['threads'] as List)
+          .map((t) => Thread.fromYaml(t as Map))
+          .toList();
+      final stitches = (root['stitches'] as List)
+          .map((s) => Stitch.fromYaml(s as Map))
+          .toList();
+      return (threads, stitches);
+    } catch (_) {
+      return null;
+    }
   }
 
   bool _isInBounds(Stitch s, int maxX, int maxY) {

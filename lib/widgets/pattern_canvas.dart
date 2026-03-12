@@ -555,6 +555,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             aidaColor: state.pattern.aidaColor,
             selectionRect: state.selectionRect,
             ghostStitches: ghostStitches,
+            ghostThreads: state.drawingMode == DrawingMode.paste
+                ? state.clipboardThreads
+                : null,
           ),
           size: Size.infinite,
         ),

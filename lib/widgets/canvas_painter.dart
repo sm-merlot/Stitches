@@ -18,6 +18,8 @@ class CanvasPainter extends CustomPainter {
   final Color aidaColor;
   final Rect? selectionRect;
   final List<Stitch>? ghostStitches;
+  /// Extra threads used by [ghostStitches] that may not be in [pattern] yet.
+  final List<Thread>? ghostThreads;
 
   const CanvasPainter({
     required this.pattern,
@@ -33,6 +35,7 @@ class CanvasPainter extends CustomPainter {
     this.aidaColor = const Color(0xFFFFFFFF),
     this.selectionRect,
     this.ghostStitches,
+    this.ghostThreads,
   });
 
   @override
@@ -446,12 +449,16 @@ class CanvasPainter extends CustomPainter {
 
   void _drawGhostStitches(
       Canvas canvas, List<Stitch> stitches, Map<String, Thread> threadMap) {
+    // Merge in any extra threads from the clipboard (cross-pattern paste)
+    final Map<String, Thread> map = (ghostThreads != null && ghostThreads!.isNotEmpty)
+        ? {...threadMap, for (final t in ghostThreads!) t.dmcCode: t}
+        : threadMap;
     canvas.saveLayer(
       Rect.fromLTWH(0, 0, pattern.width * cellSize, pattern.height * cellSize),
       Paint()..color = Colors.white.withValues(alpha: 0.55),
     );
     for (final stitch in stitches) {
-      final thread = threadMap[stitch.threadId];
+      final thread = map[stitch.threadId];
       if (thread == null) continue;
       _drawSingleStitch(canvas, stitch, thread.color);
     }
@@ -720,6 +727,7 @@ class CanvasPainter extends CustomPainter {
         oldDelegate.cursorScreenPos != cursorScreenPos ||
         oldDelegate.aidaColor != aidaColor ||
         oldDelegate.selectionRect != selectionRect ||
-        oldDelegate.ghostStitches != ghostStitches;
+        oldDelegate.ghostStitches != ghostStitches ||
+        oldDelegate.ghostThreads != ghostThreads;
   }
 }
