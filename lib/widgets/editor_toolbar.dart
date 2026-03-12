@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/dmc_colors.dart';
 import '../providers/editor_provider.dart';
+import '../providers/settings_provider.dart';
 
 class EditorToolbar extends ConsumerWidget {
   final VoidCallback onOpenColorPicker;
@@ -178,18 +180,27 @@ class EditorToolbar extends ConsumerWidget {
 
 // ─── Colour swatch ────────────────────────────────────────────────────────────
 
-class _ColorSwatch extends StatelessWidget {
+class _ColorSwatch extends ConsumerWidget {
   final EditorState state;
   final VoidCallback onTap;
 
   const _ColorSwatch({required this.state, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final useDmc = ref.watch(settingsProvider).useDmc;
+    final thread = state.selectedThread;
+    final displayCode = thread == null
+        ? '—'
+        : useDmc
+            ? thread.dmcCode
+            : (dmcColorByCode(thread.dmcCode)?.anchorCode ?? thread.dmcCode);
+    final tooltipLabel = thread != null
+        ? 'Thread: $displayCode – ${thread.name}'
+        : 'No thread selected';
+
     return Tooltip(
-      message: state.selectedThread != null
-          ? 'Thread: ${state.selectedThread!.dmcCode} – ${state.selectedThread!.name}'
-          : 'No thread selected',
+      message: tooltipLabel,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
@@ -202,15 +213,14 @@ class _ColorSwatch extends StatelessWidget {
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color:
-                      state.selectedThread?.color ?? Colors.grey.shade300,
+                  color: thread?.color ?? Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: Colors.grey.shade400, width: 1),
                 ),
               ),
               const SizedBox(width: 5),
               Text(
-                state.selectedThread?.dmcCode ?? '—',
+                displayCode,
                 style: const TextStyle(
                     fontSize: 12, fontWeight: FontWeight.w600),
               ),
