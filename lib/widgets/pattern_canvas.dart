@@ -25,6 +25,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   double _pinchStartDistance = 0.0;
   Offset _pinchStartCenter = Offset.zero;
 
+  // Trackpad pinch-to-zoom (macOS PointerPanZoom events)
+  double _trackpadStartScale = 1.0;
+  Offset _trackpadStartPanOffset = Offset.zero;
+
   // Double-tap detection (touch only)
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
@@ -333,6 +337,27 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_activePointers.isEmpty) _pinchStartDistance = 0;
   }
 
+  // ─── Trackpad pinch-to-zoom (macOS) ──────────────────────────────────────
+
+  void _onPointerPanZoomStart(PointerPanZoomStartEvent event) {
+    _trackpadStartScale = _scale;
+    _trackpadStartPanOffset = _panOffset;
+  }
+
+  void _onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    setState(() {
+      final newScale =
+          (_trackpadStartScale * event.scale).clamp(0.1, 20.0);
+      // Zoom around the focal point and apply cumulative pan from the gesture.
+      // event.scale and event.pan are both cumulative since the gesture started.
+      _panOffset = event.localPosition -
+          (event.localPosition - _trackpadStartPanOffset) *
+              (newScale / _trackpadStartScale) +
+          event.pan;
+      _scale = newScale;
+    });
+  }
+
   void _onPointerHover(PointerHoverEvent event) {
     if (mounted) setState(() => _mouseScreenPos = event.localPosition);
 
@@ -381,6 +406,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         onPointerMove: _onPointerMove,
         onPointerUp: _onPointerUp,
         onPointerSignal: _onPointerSignal,
+        onPointerPanZoomStart: _onPointerPanZoomStart,
+        onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
         behavior: HitTestBehavior.opaque,
         child: CustomPaint(
           painter: CanvasPainter(

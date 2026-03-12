@@ -85,7 +85,7 @@ class EditorState {
 }
 
 class EditorNotifier extends StateNotifier<EditorState> {
-  static const int _maxUndoDepth = 50;
+  static const int _maxUndoDepth = 200;
 
   EditorNotifier() : super(EditorState(pattern: CrossStitchPattern.empty()));
 
