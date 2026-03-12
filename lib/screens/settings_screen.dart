@@ -56,6 +56,7 @@ class SettingsScreen extends ConsumerWidget {
           const _ShortcutTile('Quarter diagonal (auto-corner)', '5'),
           const _ShortcutTile('Quarter-cell cross / petit point', '6'),
           const _ShortcutTile('Backstitch', '7'),
+          const _ShortcutTile('Colour picker', 'C'),
           const Divider(),
           const _SectionHeader('Apple Pencil'),
           const ListTile(
