@@ -15,7 +15,7 @@ enum DrawingTool {
 }
 
 /// Cursor mode — controls what pointer/touch interactions do.
-enum DrawingMode { draw, erase, pan }
+enum DrawingMode { draw, erase, pan, colorPicker }
 
 class EditorState {
   final CrossStitchPattern pattern;

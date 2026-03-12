@@ -173,6 +173,8 @@ class EditorScreen extends ConsumerWidget {
           notifier.setTool(DrawingTool.quarterCross);
         case LogicalKeyboardKey.digit7:
           notifier.setTool(DrawingTool.backstitch);
+        case LogicalKeyboardKey.digit8:
+          notifier.setDrawingMode(DrawingMode.colorPicker);
         default:
           return KeyEventResult.ignored;
       }

@@ -91,10 +91,48 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     });
   }
 
+  /// Returns the threadId of the topmost cell-based stitch at [cellX],[cellY].
+  String? _threadAtCell(int cellX, int cellY) {
+    final stitches = ref.read(editorProvider).pattern.stitches;
+    for (final s in stitches.reversed) {
+      final tid = switch (s) {
+        FullStitch(x: final sx, y: final sy, threadId: final t)
+            when sx == cellX && sy == cellY =>
+          t,
+        HalfStitch(x: final sx, y: final sy, threadId: final t)
+            when sx == cellX && sy == cellY =>
+          t,
+        HalfCrossStitch(x: final sx, y: final sy, threadId: final t)
+            when sx == cellX && sy == cellY =>
+          t,
+        QuarterStitch(x: final sx, y: final sy, threadId: final t)
+            when sx == cellX && sy == cellY =>
+          t,
+        QuarterCrossStitch(x: final sx, y: final sy, threadId: final t)
+            when sx == cellX && sy == cellY =>
+          t,
+        _ => null,
+      };
+      if (tid != null) return tid;
+    }
+    return null;
+  }
+
   void _handleDrawAt(Offset screenPos) {
     final state = ref.read(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
     final canvas = _screenToCanvas(screenPos);
+
+    if (state.drawingMode == DrawingMode.colorPicker) {
+      final (cellX, cellY) = _canvasToCell(canvas);
+      if (!_inBounds(cellX, cellY)) return;
+      final threadId = _threadAtCell(cellX, cellY);
+      if (threadId != null) {
+        notifier.setSelectedThread(threadId);
+        notifier.setDrawingMode(DrawingMode.draw);
+      }
+      return;
+    }
 
     if (state.currentTool == DrawingTool.backstitch) {
       final gridPt = _canvasToGridPoint(canvas);
@@ -218,6 +256,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         _pan(event.delta);
         return;
       }
+
+      if (ref.read(editorProvider).drawingMode == DrawingMode.colorPicker) return;
 
       _handleDrawAt(event.localPosition);
 
@@ -360,9 +400,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     return switch (state.drawingMode) {
       DrawingMode.pan => SystemMouseCursors.grab,
       DrawingMode.erase => SystemMouseCursors.none,
-      DrawingMode.draw => state.currentTool == DrawingTool.backstitch
-          ? SystemMouseCursors.precise
-          : SystemMouseCursors.precise,
+      DrawingMode.colorPicker => SystemMouseCursors.cell,
+      DrawingMode.draw => SystemMouseCursors.precise,
     };
   }
 }
