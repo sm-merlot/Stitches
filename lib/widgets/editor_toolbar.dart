@@ -17,6 +17,8 @@ class EditorToolbar extends ConsumerWidget {
     final onPrimary = theme.colorScheme.onPrimary;
     final surface = theme.colorScheme.surface;
 
+    final vDivider = Container(width: 1, height: 32, color: theme.dividerColor);
+
     return Container(
       decoration: BoxDecoration(
         color: surface,
@@ -32,26 +34,55 @@ class EditorToolbar extends ConsumerWidget {
       height: 56,
       child: Row(
         children: [
-          // ── LEFT: Palette + quick swatches + colour selector + tools ──────
+          // ── LEFT: Cursor modes ────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ModeButton(
+                  icon: Icons.draw_outlined,
+                  tooltip: 'Draw  [D]',
+                  active: state.drawingMode == DrawingMode.draw,
+                  activeColor: primary,
+                  onTap: () => notifier.setDrawingMode(DrawingMode.draw),
+                ),
+                const SizedBox(width: 2),
+                _ModeButton(
+                  icon: Icons.auto_fix_normal,
+                  tooltip: 'Erase  [E]',
+                  active: state.drawingMode == DrawingMode.erase,
+                  activeColor: theme.colorScheme.error,
+                  onTap: () => notifier.setDrawingMode(DrawingMode.erase),
+                ),
+                const SizedBox(width: 2),
+                _ModeButton(
+                  icon: Icons.pan_tool_outlined,
+                  tooltip: 'Pan  [P or Space]',
+                  active: state.drawingMode == DrawingMode.pan,
+                  activeColor: primary,
+                  onTap: () => notifier.setDrawingMode(DrawingMode.pan),
+                ),
+                const SizedBox(width: 2),
+                _ModeButton(
+                  icon: Icons.colorize_outlined,
+                  tooltip: 'Pick colour  [8]',
+                  active: state.drawingMode == DrawingMode.colorPicker,
+                  activeColor: primary,
+                  onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
+                ),
+              ],
+            ),
+          ),
+          vDivider,
+
+          // ── MIDDLE: Stitch tools (scrollable, fills remaining space) ──────
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 children: [
-                  // Palette popup
-                  const _PaletteButton(),
-                  const SizedBox(width: 4),
-                  // Quick swatches (last 5 used)
-                  _QuickSwatches(state: state),
-                  Container(width: 1, height: 32, color: theme.dividerColor),
-                  const SizedBox(width: 8),
-                  // Active colour swatch
-                  _ColorSwatch(state: state),
-                  const SizedBox(width: 8),
-                  Container(width: 1, height: 32, color: theme.dividerColor),
-                  const SizedBox(width: 8),
-                  // Stitch tools
                   _ToolButton(
                     label: 'X',
                     tooltip: 'Full stitch  [1]',
@@ -115,53 +146,23 @@ class EditorToolbar extends ConsumerWidget {
               ),
             ),
           ),
+          vDivider,
 
-          // ── RIGHT: Cursor modes + undo/redo ───────────────────────────────
-          Container(width: 1, height: 32, color: theme.dividerColor),
+          // ── RIGHT: Colour + swatches + palette + undo/redo ────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Draw mode
-                _ModeButton(
-                  icon: Icons.edit_outlined,
-                  tooltip: 'Draw  [D]',
-                  active: state.drawingMode == DrawingMode.draw,
-                  activeColor: primary,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.draw),
-                ),
-                const SizedBox(width: 2),
-                // Erase mode
-                _ModeButton(
-                  icon: Icons.auto_fix_normal,
-                  tooltip: 'Erase  [E]',
-                  active: state.drawingMode == DrawingMode.erase,
-                  activeColor: theme.colorScheme.error,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.erase),
-                ),
-                const SizedBox(width: 2),
-                // Pan mode
-                _ModeButton(
-                  icon: Icons.pan_tool_outlined,
-                  tooltip: 'Pan  [P or Space]',
-                  active: state.drawingMode == DrawingMode.pan,
-                  activeColor: primary,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.pan),
-                ),
-                const SizedBox(width: 2),
-                // Pick colour
-                _ModeButton(
-                  icon: Icons.colorize,
-                  tooltip: 'Pick colour  [8]',
-                  active: state.drawingMode == DrawingMode.colorPicker,
-                  activeColor: primary,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
-                ),
-                const SizedBox(width: 6),
-                Container(width: 1, height: 32, color: theme.dividerColor),
+                _QuickSwatches(state: state),
+                _ColorSwatch(state: state),
                 const SizedBox(width: 4),
-                // Undo
+                vDivider,
+                const SizedBox(width: 4),
+                const _PaletteButton(),
+                const SizedBox(width: 4),
+                vDivider,
+                const SizedBox(width: 2),
                 Tooltip(
                   message: 'Undo  [Cmd+Z]',
                   child: IconButton(
@@ -171,7 +172,6 @@ class EditorToolbar extends ConsumerWidget {
                     onPressed: state.canUndo ? () => notifier.undo() : null,
                   ),
                 ),
-                // Redo
                 Tooltip(
                   message: 'Redo  [Cmd+Shift+Z]',
                   child: IconButton(
@@ -373,7 +373,7 @@ class _QuickSwatches extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Exclude the currently selected thread, then reverse so most recent is rightmost.
+    // Exclude the currently selected thread; most recent rightmost (left-to-right order).
     final displayIds = state.recentThreadIds
         .where((id) => id != state.selectedThreadId)
         .toList()
@@ -384,6 +384,7 @@ class _QuickSwatches extends ConsumerWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        const SizedBox(width: 4),
         ...displayIds.map((id) {
           final thread = state.pattern.threadByCode(id);
           if (thread == null) return const SizedBox.shrink();
@@ -410,7 +411,6 @@ class _QuickSwatches extends ConsumerWidget {
             ),
           );
         }),
-        const SizedBox(width: 4),
       ],
     );
   }
