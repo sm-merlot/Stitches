@@ -12,7 +12,10 @@ class CanvasPainter extends CustomPainter {
   final Offset? backstitchStartPoint;
   final Offset? backstitchCurrentPoint;
   final bool isErasing;
+  final bool isDrawCursor;
+  final bool isColorPickerCursor;
   final Offset? cursorScreenPos;
+  final Color aidaColor;
 
   const CanvasPainter({
     required this.pattern,
@@ -22,7 +25,10 @@ class CanvasPainter extends CustomPainter {
     this.backstitchStartPoint,
     this.backstitchCurrentPoint,
     this.isErasing = false,
+    this.isDrawCursor = false,
+    this.isColorPickerCursor = false,
     this.cursorScreenPos,
+    this.aidaColor = const Color(0xFFFFFFFF),
   });
 
   @override
@@ -42,7 +48,7 @@ class CanvasPainter extends CustomPainter {
     // ── Background ───────────────────────────────────────────────────────────
     canvas.drawRect(
       Rect.fromLTWH(0, 0, w, h),
-      Paint()..color = Colors.white,
+      Paint()..color = aidaColor,
     );
 
     // ── Stitches ─────────────────────────────────────────────────────────────
@@ -91,19 +97,22 @@ class CanvasPainter extends CustomPainter {
     }
 
     // ── Pattern border ───────────────────────────────────────────────────────
+    final borderBase = aidaColor.computeLuminance() > 0.4 ? Colors.black : Colors.white;
     canvas.drawRect(
       Rect.fromLTWH(0, 0, w, h),
       Paint()
-        ..color = const Color(0xFF666666)
+        ..color = borderBase.withValues(alpha: 0.55)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5 / scale,
     );
 
     canvas.restore();
 
-    // ── Eraser cursor (drawn in screen space, after restore) ─────────────────
-    if (isErasing && cursorScreenPos != null) {
-      _drawEraserCursor(canvas, cursorScreenPos!);
+    // ── Custom cursors (drawn in screen space, after restore) ────────────────
+    if (cursorScreenPos != null) {
+      if (isErasing) _drawEraserCursor(canvas, cursorScreenPos!);
+      if (isDrawCursor) _drawPencilCursor(canvas, cursorScreenPos!);
+      if (isColorPickerCursor) _drawEyedropperCursor(canvas, cursorScreenPos!);
     }
   }
 
@@ -336,12 +345,14 @@ class CanvasPainter extends CustomPainter {
   // ─── Grid ─────────────────────────────────────────────────────────────────
 
   void _drawGrid(Canvas canvas, double w, double h) {
+    // Choose black or white grid lines depending on aida luminance.
+    final base = aidaColor.computeLuminance() > 0.4 ? Colors.black : Colors.white;
     final minorPaint = Paint()
-      ..color = const Color(0xFFCCCCCC)
+      ..color = base.withValues(alpha: 0.18)
       ..strokeWidth = 0.5;
 
     final majorPaint = Paint()
-      ..color = const Color(0xFF999999)
+      ..color = base.withValues(alpha: 0.38)
       ..strokeWidth = 1.0;
 
     for (int x = 0; x <= pattern.width; x++) {
@@ -362,20 +373,22 @@ class CanvasPainter extends CustomPainter {
   void _drawEraserCursor(Canvas canvas, Offset pos) {
     canvas.save();
     canvas.translate(pos.dx, pos.dy);
-    canvas.rotate(-0.35);
+    // Same 45° angle as pencil/eyedropper: active face at origin (upper-left),
+    // body extends toward lower-right.
+    canvas.rotate(-math.pi / 4);
 
-    const w = 18.0;
-    const h = 11.0;
+    const w = 11.0;
+    const h = 18.0;
 
-    // Eraser body
-    final bodyRect =
-        RRect.fromRectAndRadius(Rect.fromCenter(center: Offset.zero, width: w, height: h), const Radius.circular(2));
+    // Eraser body — active face (erasing edge) at origin, body goes down (+y)
+    final bodyRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(-w / 2, 0, w, h), const Radius.circular(2));
     canvas.drawRRect(bodyRect, Paint()..color = const Color(0xFFF4A0B0));
 
-    // White band (top portion of eraser)
+    // White stripe at active face
     canvas.save();
     canvas.clipRRect(bodyRect);
-    canvas.drawRect(Rect.fromLTWH(-w / 2, -h / 2, w, h * 0.35),
+    canvas.drawRect(Rect.fromLTWH(-w / 2, 0, w, h * 0.25),
         Paint()..color = Colors.white.withValues(alpha: 0.55));
     canvas.restore();
 
@@ -390,6 +403,115 @@ class CanvasPainter extends CustomPainter {
     canvas.restore();
   }
 
+  // ─── Pencil cursor (screen-space) ─────────────────────────────────────────
+
+  void _drawPencilCursor(Canvas canvas, Offset pos) {
+    canvas.save();
+    canvas.translate(pos.dx, pos.dy);
+    // Tip at origin (upper-left hotspot); body extends toward lower-right.
+    canvas.rotate(-math.pi / 4);
+
+    const halfW = 2.5;
+
+    final outlinePaint = Paint()
+      ..color = const Color(0xFF333333)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+
+    // Graphite tip — at origin, body goes down (+y → lower-right on screen)
+    final graphitePath = Path()
+      ..moveTo(0, 0)
+      ..lineTo(-1.0, 2.5)
+      ..lineTo(1.0, 2.5)
+      ..close();
+    canvas.drawPath(graphitePath, Paint()..color = const Color(0xFF555555));
+    canvas.drawPath(graphitePath, outlinePaint);
+
+    // Wood (sharpening cone)
+    final woodPath = Path()
+      ..moveTo(-1.0, 2.5)
+      ..lineTo(1.0, 2.5)
+      ..lineTo(halfW, 7.0)
+      ..lineTo(-halfW, 7.0)
+      ..close();
+    canvas.drawPath(woodPath, Paint()..color = const Color(0xFFD4A04A));
+    canvas.drawPath(woodPath, outlinePaint);
+
+    // Body
+    canvas.drawRect(Rect.fromLTWH(-halfW, 7.0, halfW * 2, 12.0),
+        Paint()..color = const Color(0xFFFFD700));
+    canvas.drawRect(Rect.fromLTWH(-halfW, 7.0, halfW * 2, 12.0), outlinePaint);
+
+    // Metal ferrule
+    canvas.drawRect(Rect.fromLTWH(-halfW, 19.0, halfW * 2, 2.0),
+        Paint()..color = const Color(0xFFAAAAAA));
+    canvas.drawRect(
+        Rect.fromLTWH(-halfW, 19.0, halfW * 2, 2.0), outlinePaint);
+
+    // Eraser
+    canvas.drawRect(Rect.fromLTWH(-halfW, 21.0, halfW * 2, 3.5),
+        Paint()..color = const Color(0xFFF4A0B0));
+    canvas.drawRect(
+        Rect.fromLTWH(-halfW, 21.0, halfW * 2, 3.5), outlinePaint);
+
+    // Divider line between wood and body
+    canvas.drawLine(Offset(-halfW, 7.0), Offset(halfW, 7.0), outlinePaint);
+
+    canvas.restore();
+  }
+
+  // ─── Eyedropper cursor (screen-space) ─────────────────────────────────────
+
+  void _drawEyedropperCursor(Canvas canvas, Offset pos) {
+    canvas.save();
+    canvas.translate(pos.dx, pos.dy);
+    // Tip at origin (upper-left hotspot); body extends toward lower-right.
+    canvas.rotate(-math.pi / 4);
+
+    final outlinePaint = Paint()
+      ..color = const Color(0xFF333333)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+
+    // Tip dot
+    canvas.drawCircle(Offset.zero, 1.5, Paint()..color = const Color(0xFF333333));
+
+    // Narrow metal rod — goes down (+y → lower-right on screen)
+    final rodPath = Path()
+      ..moveTo(-1.0, 1.5)
+      ..lineTo(1.0, 1.5)
+      ..lineTo(1.5, 6.0)
+      ..lineTo(-1.5, 6.0)
+      ..close();
+    canvas.drawPath(rodPath, Paint()..color = const Color(0xFF888888));
+    canvas.drawPath(rodPath, outlinePaint);
+
+    // Collar
+    canvas.drawRect(Rect.fromLTWH(-2.0, 6.0, 4.0, 1.5),
+        Paint()..color = const Color(0xFF666666));
+    canvas.drawRect(Rect.fromLTWH(-2.0, 6.0, 4.0, 1.5), outlinePaint);
+
+    // Barrel/body
+    canvas.drawRect(Rect.fromLTWH(-2.5, 7.5, 5.0, 9.5),
+        Paint()..color = const Color(0xFFDDDDDD));
+    canvas.drawRect(Rect.fromLTWH(-2.5, 7.5, 5.0, 9.5), outlinePaint);
+
+    // Rubber bulb
+    canvas.drawCircle(const Offset(0, 22.0), 5.0,
+        Paint()..color = const Color(0xFF888888));
+    canvas.drawCircle(const Offset(0, 22.0), 5.0, outlinePaint);
+
+    // Highlight on bulb
+    canvas.drawCircle(const Offset(-1.5, 20.5), 1.5,
+        Paint()..color = Colors.white.withValues(alpha: 0.45));
+
+    canvas.restore();
+  }
+
   @override
   bool shouldRepaint(CanvasPainter oldDelegate) {
     return oldDelegate.pattern != pattern ||
@@ -399,6 +521,9 @@ class CanvasPainter extends CustomPainter {
         oldDelegate.backstitchStartPoint != backstitchStartPoint ||
         oldDelegate.backstitchCurrentPoint != backstitchCurrentPoint ||
         oldDelegate.isErasing != isErasing ||
-        oldDelegate.cursorScreenPos != cursorScreenPos;
+        oldDelegate.isDrawCursor != isDrawCursor ||
+        oldDelegate.isColorPickerCursor != isColorPickerCursor ||
+        oldDelegate.cursorScreenPos != cursorScreenPos ||
+        oldDelegate.aidaColor != aidaColor;
   }
 }

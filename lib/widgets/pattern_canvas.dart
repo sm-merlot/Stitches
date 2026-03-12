@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stitch.dart';
 import '../providers/editor_provider.dart';
+import '../providers/settings_provider.dart';
 import 'canvas_painter.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {
@@ -368,7 +369,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
+    final aidaColor = ref.watch(settingsProvider).aidaColor;
     final isErasing = state.drawingMode == DrawingMode.erase;
+    final isDrawCursor = state.drawingMode == DrawingMode.draw;
+    final isColorPickerCursor = state.drawingMode == DrawingMode.colorPicker;
 
     return MouseRegion(
       cursor: _cursor(state),
@@ -389,7 +393,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             backstitchStartPoint: state.backstitchStartPoint,
             backstitchCurrentPoint: _backstitchHoverPoint,
             isErasing: isErasing,
-            cursorScreenPos: isErasing ? _mouseScreenPos : null,
+            isDrawCursor: isDrawCursor,
+            isColorPickerCursor: isColorPickerCursor,
+            cursorScreenPos: _mouseScreenPos,
+            aidaColor: aidaColor,
           ),
           size: Size.infinite,
         ),
@@ -401,8 +408,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     return switch (state.drawingMode) {
       DrawingMode.pan => SystemMouseCursors.grab,
       DrawingMode.erase => SystemMouseCursors.none,
-      DrawingMode.colorPicker => SystemMouseCursors.cell,
-      DrawingMode.draw => SystemMouseCursors.precise,
+      DrawingMode.colorPicker => SystemMouseCursors.none,
+      DrawingMode.draw => SystemMouseCursors.none,
     };
   }
 }
