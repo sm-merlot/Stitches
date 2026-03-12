@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/symbols.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -164,15 +165,17 @@ class EditorNotifier extends StateNotifier<EditorState> {
       } catch (_) {}
     }
 
+    // Ensure all threads have symbols (handles files saved before this feature)
+    final withSymbols = pattern.copyWith(threads: _assignSymbols(pattern.threads));
+
     // Restore saved thread, falling back to first thread
-    String? threadId = pattern.editorSelectedThreadId;
-    if (threadId == null || pattern.threadByCode(threadId) == null) {
-      threadId =
-          pattern.threads.isNotEmpty ? pattern.threads.first.dmcCode : null;
+    String? threadId = withSymbols.editorSelectedThreadId;
+    if (threadId == null || withSymbols.threadByCode(threadId) == null) {
+      threadId = withSymbols.threads.isNotEmpty ? withSymbols.threads.first.dmcCode : null;
     }
 
     state = EditorState(
-      pattern: pattern,
+      pattern: withSymbols,
       filePath: filePath,
       currentTool: tool,
       selectedThreadId: threadId,
@@ -181,10 +184,9 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   void newPattern(CrossStitchPattern pattern) {
-    // Seed with DMC 310 Black if no threads provided
-    final threads = pattern.threads.isNotEmpty
-        ? pattern.threads
-        : [_defaultBlackThread];
+    // Seed with DMC 310 Black if no threads provided, then assign symbols
+    final threads = _assignSymbols(
+        pattern.threads.isNotEmpty ? pattern.threads : [_defaultBlackThread]);
     final seeded = pattern.copyWith(threads: threads);
 
     state = EditorState(
@@ -333,11 +335,15 @@ class EditorNotifier extends StateNotifier<EditorState> {
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
 
-    // Add any clipboard threads not already in the pattern
+    // Add any clipboard threads not already in the pattern, resolving symbol conflicts
     var threads = [...state.pattern.threads];
     for (final ct in state.clipboardThreads ?? <Thread>[]) {
       if (!threads.any((t) => t.dmcCode == ct.dmcCode)) {
-        threads.add(ct);
+        final usedSymbols = threads.map((t) => t.symbol).toSet();
+        final resolved = usedSymbols.contains(ct.symbol)
+            ? ct.copyWith(symbol: _nextSymbol(usedSymbols))
+            : ct;
+        threads.add(resolved);
       }
     }
 
@@ -420,16 +426,31 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   void addThread(Thread thread) {
-    final newThreads = [...state.pattern.threads, thread];
+    // Auto-assign a symbol if the thread doesn't have one
+    final usedSymbols = state.pattern.threads.map((t) => t.symbol).toSet();
+    final t = thread.symbol.isEmpty
+        ? thread.copyWith(symbol: _nextSymbol(usedSymbols))
+        : thread;
+    final newThreads = [...state.pattern.threads, t];
     final newPattern = state.pattern.copyWith(threads: newThreads);
     final recents = [
-      thread.dmcCode,
-      ...state.recentThreadIds.where((id) => id != thread.dmcCode),
+      t.dmcCode,
+      ...state.recentThreadIds.where((id) => id != t.dmcCode),
     ].take(5).toList();
     state = state.copyWith(
       pattern: newPattern,
-      selectedThreadId: thread.dmcCode,
+      selectedThreadId: t.dmcCode,
       recentThreadIds: recents,
+      isDirty: true,
+    );
+  }
+
+  void changeThreadSymbol(String dmcCode, String symbol) {
+    final newThreads = state.pattern.threads
+        .map((t) => t.dmcCode == dmcCode ? t.copyWith(symbol: symbol) : t)
+        .toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(threads: newThreads),
       isDirty: true,
     );
   }
@@ -560,6 +581,31 @@ class EditorNotifier extends StateNotifier<EditorState> {
     bool inside(double gx, double gy) =>
         gx >= cellX && gx <= cellX + 1 && gy >= cellY && gy <= cellY + 1;
     return inside(s.x1, s.y1) || inside(s.x2, s.y2);
+  }
+
+  // ─── Symbol assignment ────────────────────────────────────────────────────
+
+  /// Returns the first symbol from [kPatternSymbols] not already in [used], or '' if exhausted.
+  String _nextSymbol(Set<String> used) {
+    for (final s in kPatternSymbols) {
+      if (!used.contains(s)) return s;
+    }
+    return '';
+  }
+
+  /// Ensures every thread in [threads] has a symbol, assigning from [kPatternSymbols]
+  /// in order for any that are missing one.  Already-assigned symbols are preserved.
+  List<Thread> _assignSymbols(List<Thread> threads) {
+    final assigned = <String>{};
+    return threads.map((t) {
+      if (t.symbol.isNotEmpty) {
+        assigned.add(t.symbol);
+        return t;
+      }
+      final s = _nextSymbol(assigned);
+      if (s.isNotEmpty) assigned.add(s);
+      return t.copyWith(symbol: s);
+    }).toList();
   }
 
   // ─── System clipboard serialisation ───────────────────────────────────────
