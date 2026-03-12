@@ -197,6 +197,7 @@ class EditorScreen extends ConsumerWidget {
         case LogicalKeyboardKey.escape:
           notifier.cancelSelection();
         case LogicalKeyboardKey.delete:
+        case LogicalKeyboardKey.backspace:
           notifier.deleteSelection();
         default:
           return KeyEventResult.ignored;
