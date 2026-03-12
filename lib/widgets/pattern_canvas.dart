@@ -138,6 +138,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
+    // Erase mode is handled uniformly regardless of the current drawing tool.
+    if (state.drawingMode == DrawingMode.erase) {
+      final (cellX, cellY) = _canvasToCell(canvas);
+      if (_inBounds(cellX, cellY)) notifier.removeStitchesAt(cellX, cellY);
+      return;
+    }
+
     if (state.currentTool == DrawingTool.backstitch) {
       final gridPt = _canvasToGridPoint(canvas);
       final p = state.pattern;
@@ -155,17 +162,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         if (sx == gx && sy == gy) {
           notifier.setBackstitchStart(null);
         } else if (state.selectedThreadId != null) {
-          if (state.drawingMode == DrawingMode.erase) {
-            notifier.removeBackstitchAt(sx, sy, gx, gy);
-          } else {
-            notifier.addStitch(BackStitch(
-              x1: sx,
-              y1: sy,
-              x2: gx,
-              y2: gy,
-              threadId: state.selectedThreadId!,
-            ));
-          }
+          notifier.addStitch(BackStitch(
+            x1: sx,
+            y1: sy,
+            x2: gx,
+            y2: gy,
+            threadId: state.selectedThreadId!,
+          ));
           notifier.setBackstitchStart(null);
         }
       }
@@ -174,11 +177,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     final (cellX, cellY) = _canvasToCell(canvas);
     if (!_inBounds(cellX, cellY)) return;
-
-    if (state.drawingMode == DrawingMode.erase) {
-      notifier.removeStitchesAt(cellX, cellY);
-      return;
-    }
 
     if (state.selectedThreadId == null) return;
 
