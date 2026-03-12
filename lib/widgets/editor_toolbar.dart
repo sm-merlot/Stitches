@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
+import '../data/symbols.dart';
+import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/color_picker_screen.dart';
@@ -302,15 +304,7 @@ class _ColorSwatch extends ConsumerWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: thread?.color ?? Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.grey.shade400, width: 1),
-                ),
-              ),
+              _ThreadSwatch(thread: thread, size: 24),
               const SizedBox(width: 5),
               Text(
                 displayCode,
@@ -407,20 +401,46 @@ class _PaletteDialog extends ConsumerWidget {
                     final isSelected = state.selectedThreadId == t.dmcCode;
                     return ListTile(
                       dense: true,
-                      leading: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: t.color,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.grey.shade400),
-                        ),
+                      leading: GestureDetector(
+                        onTap: () => _showSymbolPicker(context, ref, t),
+                        child: _ThreadSwatch(thread: t, size: 24),
                       ),
                       title: Text('$displayCode – ${t.name}'),
-                      trailing: isSelected
-                          ? Icon(Icons.check,
-                              size: 16, color: theme.colorScheme.primary)
-                          : null,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isSelected)
+                            Icon(Icons.check,
+                                size: 16, color: theme.colorScheme.primary),
+                          const SizedBox(width: 4),
+                          Tooltip(
+                            message: 'Change symbol',
+                            child: GestureDetector(
+                              onTap: () => _showSymbolPicker(context, ref, t),
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: t.color,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  t.symbol.isNotEmpty ? t.symbol : '?',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: t.color.computeLuminance() > 0.35
+                                        ? Colors.black
+                                        : Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       selected: isSelected,
                       onTap: () {
                         ref
@@ -443,6 +463,67 @@ class _PaletteDialog extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _showSymbolPicker(BuildContext context, WidgetRef ref, Thread t) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final primary = Theme.of(ctx).colorScheme.primary;
+        final textColor = t.color.computeLuminance() > 0.35
+            ? Colors.black
+            : Colors.white;
+        return AlertDialog(
+          title: Text('${t.dmcCode} – ${t.name}'),
+          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          content: SizedBox(
+            width: 320,
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: kPatternSymbols.map((s) {
+                final isSelected = s == t.symbol;
+                return GestureDetector(
+                  onTap: () {
+                    ref
+                        .read(editorProvider.notifier)
+                        .changeThreadSymbol(t.dmcCode, s);
+                    Navigator.of(ctx).pop();
+                  },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: t.color,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isSelected ? primary : Colors.grey.shade300,
+                        width: isSelected ? 2.5 : 1,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      s,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -477,23 +558,51 @@ class _QuickSwatches extends ConsumerWidget {
               child: GestureDetector(
                 onTap: () =>
                     ref.read(editorProvider.notifier).setSelectedThread(id),
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: thread.color,
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(
-                      color: Colors.grey.shade400,
-                      width: 1,
-                    ),
-                  ),
-                ),
+                child: _ThreadSwatch(thread: thread, size: 28),
               ),
             ),
           );
         }),
       ],
+    );
+  }
+}
+
+// ─── Thread colour swatch with symbol overlay ─────────────────────────────────
+
+class _ThreadSwatch extends StatelessWidget {
+  final Thread? thread;
+  final double size;
+
+  const _ThreadSwatch({required this.thread, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = thread;
+    final color = t?.color ?? Colors.grey.shade300;
+    final symbol = t?.symbol ?? '';
+    final textColor = color.computeLuminance() > 0.35 ? Colors.black : Colors.white;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(size * 0.17),
+        border: Border.all(color: Colors.grey.shade400, width: 1),
+      ),
+      alignment: Alignment.center,
+      child: symbol.isNotEmpty
+          ? Text(
+              symbol,
+              style: TextStyle(
+                fontSize: size * 0.46,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+                height: 1.0,
+              ),
+            )
+          : null,
     );
   }
 }

@@ -4,11 +4,14 @@ class Thread {
   final String dmcCode;
   final Color color;
   final String name;
+  /// Single character or symbol displayed inside stitch cells on the pattern grid.
+  final String symbol;
 
   const Thread({
     required this.dmcCode,
     required this.color,
     required this.name,
+    this.symbol = '',
   });
 
   Map<String, dynamic> toYaml() => {
@@ -17,6 +20,7 @@ class Thread {
             '${color.g.round().toRadixString(16).padLeft(2, '0')}'
             '${color.b.round().toRadixString(16).padLeft(2, '0')}',
         'name': name,
+        'symbol': symbol,
       };
 
   factory Thread.fromYaml(Map yaml) {
@@ -29,14 +33,16 @@ class Thread {
       dmcCode: yaml['dmcCode'] as String,
       color: Color.fromARGB(255, r, g, b),
       name: yaml['name'] as String,
+      symbol: (yaml['symbol'] as String?) ?? '',
     );
   }
 
-  Thread copyWith({String? dmcCode, Color? color, String? name}) {
+  Thread copyWith({String? dmcCode, Color? color, String? name, String? symbol}) {
     return Thread(
       dmcCode: dmcCode ?? this.dmcCode,
       color: color ?? this.color,
       name: name ?? this.name,
+      symbol: symbol ?? this.symbol,
     );
   }
 }

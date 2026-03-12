@@ -108,6 +108,7 @@ class FileService {
       buf.writeln('  - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
       buf.writeln('    color: ${_yamlStr(m['color'] as String)}');
       buf.writeln('    name: ${_yamlStr(m['name'] as String)}');
+      buf.writeln('    symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
     }
 
     buf.writeln('stitches:');

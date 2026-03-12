@@ -92,6 +92,16 @@ class CanvasPainter extends CustomPainter {
           canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, thread.color);
     }
 
+    // ── Stitch symbols (drawn after grid so they sit on top of grid lines) ──
+    if (cellSize * scale >= 8) {
+      for (final stitch in pattern.stitches) {
+        if (stitch is BackStitch) continue;
+        final thread = threadMap[stitch.threadId];
+        if (thread == null || thread.symbol.isEmpty) continue;
+        _drawStitchSymbol(canvas, stitch, thread.symbol, thread.color);
+      }
+    }
+
     // ── Backstitch in-progress preview ───────────────────────────────────────
     if (backstitchStartPoint != null) {
       _drawGridPointIndicator(canvas, backstitchStartPoint!);
@@ -310,6 +320,95 @@ class CanvasPainter extends CustomPainter {
       drawing = !drawing;
     }
     canvas.drawPath(path, p);
+  }
+
+  // ─── Stitch symbols ───────────────────────────────────────────────────────
+
+  void _drawStitchSymbol(
+      Canvas canvas, Stitch stitch, String symbol, Color threadColor) {
+    final center = _symbolCenter(stitch);
+    final fontSize = math.max(4.0, cellSize * 0.46);
+
+    // Text contrasts with the thread colour badge background
+    final textColor = threadColor.computeLuminance() > 0.35
+        ? const Color(0xFF1A1A1A)
+        : const Color(0xFFFFFFFF);
+
+    final tp = TextPainter(
+      text: TextSpan(
+        text: symbol,
+        style: TextStyle(
+          fontSize: fontSize,
+          color: textColor,
+          fontWeight: FontWeight.bold,
+          height: 1.0,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // Solid thread-colour badge behind text — covers stitch marks so the
+    // symbol is always readable, and keeps the colour identity clear.
+    final bgRect = Rect.fromCenter(
+      center: center,
+      width: tp.width + 4,
+      height: tp.height + 3,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bgRect, const Radius.circular(2)),
+      Paint()..color = threadColor,
+    );
+    // Subtle border so the badge has a clean edge against the aida/grid
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bgRect, const Radius.circular(2)),
+      Paint()
+        ..color = textColor.withValues(alpha: 0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.5 / scale,
+    );
+
+    tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
+  }
+
+  Offset _symbolCenter(Stitch stitch) {
+    return switch (stitch) {
+      FullStitch(:final x, :final y) =>
+        Offset((x + 0.5) * cellSize, (y + 0.5) * cellSize),
+      HalfStitch(:final x, :final y) =>
+        Offset((x + 0.5) * cellSize, (y + 0.5) * cellSize),
+      QuarterStitch(:final x, :final y, :final quadrant) =>
+        _quadrantCenter(x, y, quadrant),
+      HalfCrossStitch(:final x, :final y, :final half) =>
+        _halfOrientCenter(x, y, half),
+      QuarterCrossStitch(:final x, :final y, :final quadrant) =>
+        _quadrantCenter(x, y, quadrant),
+      BackStitch() => Offset.zero,
+    };
+  }
+
+  Offset _quadrantCenter(int x, int y, QuadrantPosition q) {
+    final l = x * cellSize;
+    final t = y * cellSize;
+    final q4 = cellSize / 4;
+    return switch (q) {
+      QuadrantPosition.topLeft     => Offset(l + q4,         t + q4),
+      QuadrantPosition.topRight    => Offset(l + 3 * q4,     t + q4),
+      QuadrantPosition.bottomLeft  => Offset(l + q4,         t + 3 * q4),
+      QuadrantPosition.bottomRight => Offset(l + 3 * q4,     t + 3 * q4),
+    };
+  }
+
+  Offset _halfOrientCenter(int x, int y, HalfOrientation h) {
+    final l = x * cellSize;
+    final t = y * cellSize;
+    final q4 = cellSize / 4;
+    final half = cellSize / 2;
+    return switch (h) {
+      HalfOrientation.left   => Offset(l + q4,    t + half),
+      HalfOrientation.right  => Offset(l + 3 * q4, t + half),
+      HalfOrientation.top    => Offset(l + half,   t + q4),
+      HalfOrientation.bottom => Offset(l + half,   t + 3 * q4),
+    };
   }
 
   void _drawGridPointIndicator(Canvas canvas, Offset gridPoint) {
