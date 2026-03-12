@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/pattern.dart';
 import '../providers/editor_provider.dart';
 import '../services/file_service.dart';
+import '../services/pdf_service.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
 import 'resize_canvas_dialog.dart';
@@ -228,6 +229,11 @@ class EditorScreen extends ConsumerWidget {
               onPressed: () => _saveAs(context, ref),
             ),
             IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: 'Export PDF…',
+              onPressed: () => _exportPdf(context, state),
+            ),
+            IconButton(
               icon: const Icon(Icons.crop_outlined),
               tooltip: 'Resize Aida',
               onPressed: () => _showResizeDialog(context, ref, state),
@@ -251,6 +257,20 @@ class EditorScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _exportPdf(BuildContext context, EditorState state) async {
+    try {
+      await PdfService.exportPattern(state.pattern);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('PDF export failed: $e'),
+              backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
   }
 
   Future<void> _showResizeDialog(
