@@ -234,13 +234,14 @@ class EditorNotifier extends StateNotifier<EditorState> {
     );
   }
 
-  /// Removes all cell-based stitches at [x],[y] (ignores backstitches).
+  /// Removes all stitches at [x],[y]: cell-based stitches and any backstitch
+  /// with at least one endpoint inside the cell boundaries.
   void removeStitchesAt(int x, int y) {
-    // Skip if nothing to erase at this cell
-    if (!state.pattern.stitches.any((s) => _stitchAtCell(s, x, y))) return;
+    bool hit(Stitch s) => _stitchAtCell(s, x, y) || _backstitchInCell(s, x, y);
+    if (!state.pattern.stitches.any(hit)) return;
 
     final newStitches =
-        state.pattern.stitches.where((s) => !_stitchAtCell(s, x, y)).toList();
+        state.pattern.stitches.where((s) => !hit(s)).toList();
     final newPattern = state.pattern.copyWith(stitches: newStitches);
     state = state.copyWith(
       pattern: newPattern,
@@ -317,6 +318,15 @@ class EditorNotifier extends StateNotifier<EditorState> {
         sx == cellX && sy == cellY,
       BackStitch() => false,
     };
+  }
+
+  /// A backstitch is "in" a cell if either endpoint lies within its bounds
+  /// (inclusive, so border-shared endpoints are caught by both adjacent cells).
+  bool _backstitchInCell(Stitch s, int cellX, int cellY) {
+    if (s is! BackStitch) return false;
+    bool inside(double gx, double gy) =>
+        gx >= cellX && gx <= cellX + 1 && gy >= cellY && gy <= cellY + 1;
+    return inside(s.x1, s.y1) || inside(s.x2, s.y2);
   }
 }
 
