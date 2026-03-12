@@ -220,6 +220,48 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     };
   }
 
+  // ─── Paste centering ─────────────────────────────────────────────────────
+
+  /// Returns the (minX, maxX, minY, maxY) cell-space bounding box of a stitch.
+  (double, double, double, double) _stitchBounds(Stitch s) {
+    return switch (s) {
+      FullStitch(:final x, :final y) =>
+        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
+      HalfStitch(:final x, :final y) =>
+        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
+      QuarterStitch(:final x, :final y) =>
+        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
+      HalfCrossStitch(:final x, :final y) =>
+        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
+      QuarterCrossStitch(:final x, :final y) =>
+        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
+      BackStitch(:final x1, :final y1, :final x2, :final y2) => (
+          math.min(x1, x2), math.max(x1, x2),
+          math.min(y1, y2), math.max(y1, y2),
+        ),
+    };
+  }
+
+  /// Computes the (dx, dy) offset so the clipboard is centered on [cursorCell].
+  (int, int) _centeredPasteOffset(Offset cursorCell, List<Stitch> clips) {
+    if (clips.isEmpty) return (cursorCell.dx.toInt(), cursorCell.dy.toInt());
+    var minX = double.infinity, maxX = double.negativeInfinity;
+    var minY = double.infinity, maxY = double.negativeInfinity;
+    for (final s in clips) {
+      final (bx0, bx1, by0, by1) = _stitchBounds(s);
+      if (bx0 < minX) minX = bx0;
+      if (bx1 > maxX) maxX = bx1;
+      if (by0 < minY) minY = by0;
+      if (by1 > maxY) maxY = by1;
+    }
+    final centerX = (minX + maxX) / 2;
+    final centerY = (minY + maxY) / 2;
+    return (
+      (cursorCell.dx + 0.5 - centerX).round(),
+      (cursorCell.dy + 0.5 - centerY).round(),
+    );
+  }
+
   // ─── Selection helpers ────────────────────────────────────────────────────
 
   Rect _buildSelRect(Offset a, Offset b) {
@@ -286,8 +328,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
       if (mode == DrawingMode.paste) {
         final origin = _pasteOrigin;
-        if (origin != null) {
-          ref.read(editorProvider.notifier).commitPaste(origin.dx.toInt(), origin.dy.toInt());
+        final clips = ref.read(editorProvider).clipboard;
+        if (origin != null && clips != null) {
+          final (dx, dy) = _centeredPasteOffset(origin, clips);
+          ref.read(editorProvider.notifier).commitPaste(dx, dy);
         }
         return;
       }
@@ -517,8 +561,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (state.drawingMode == DrawingMode.paste &&
         _pasteOrigin != null &&
         state.clipboard != null) {
-      final dx = _pasteOrigin!.dx.toInt();
-      final dy = _pasteOrigin!.dy.toInt();
+      final (dx, dy) = _centeredPasteOffset(_pasteOrigin!, state.clipboard!);
       ghostStitches =
           state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
     } else if (_isMovingSelection && state.selectionRect != null) {
