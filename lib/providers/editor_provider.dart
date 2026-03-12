@@ -175,6 +175,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
     state = state.copyWith(selectedThreadId: threadId, recentThreadIds: recents);
   }
 
+  void setAidaColor(Color color) {
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(aidaColor: color),
+      isDirty: true,
+    );
+  }
+
   void setBackstitchStart(Offset? point) {
     state = state.copyWith(backstitchStartPoint: point);
   }

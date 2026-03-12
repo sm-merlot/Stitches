@@ -78,6 +78,7 @@ class FileService {
     buf.writeln('name: ${_yamlStr(pattern.name)}');
     buf.writeln('width: ${pattern.width}');
     buf.writeln('height: ${pattern.height}');
+    buf.writeln('aidaColor: ${_yamlStr(pattern.aidaColorHex)}');
 
     if (pattern.editorSelectedThreadId != null || pattern.editorTool != null) {
       buf.writeln('editor:');
