@@ -304,12 +304,40 @@ class CanvasPainter extends CustomPainter {
     );
   }
 
+  // ─── Contrast helper ──────────────────────────────────────────────────────
+
+  /// WCAG contrast ratio between two colours (1–21).
+  double _contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final lighter = math.max(la, lb);
+    final darker = math.min(la, lb);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
   // ─── Thread line with highlight effect ────────────────────────────────────
 
   /// Draws a line with a subtle perpendicular highlight to simulate thread roundness.
   void _drawThreadLine(Canvas canvas, Offset from, Offset to, Color color,
       {double widthFactor = 0.12, double minWidth = 1.2}) {
     final width = math.max(minWidth, cellSize * widthFactor);
+
+    // Contrast outline — drawn first (behind thread) so low-contrast stitches
+    // stay visible against the aida colour. Fades out as contrast improves.
+    final contrast = _contrastRatio(color, aidaColor);
+    if (contrast < 3.5) {
+      final outlineBase =
+          aidaColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+      final alpha = ((3.5 - contrast.clamp(1.0, 3.5)) / 2.5) * 0.7;
+      canvas.drawLine(
+          from,
+          to,
+          Paint()
+            ..color = outlineBase.withValues(alpha: alpha)
+            ..strokeWidth = width * 1.8
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke);
+    }
 
     // Base stroke
     canvas.drawLine(
