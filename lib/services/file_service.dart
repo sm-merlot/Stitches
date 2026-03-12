@@ -6,16 +6,14 @@ import '../models/pattern.dart';
 class FileService {
   static const String _ext = 'stitchx';
 
-  /// Pick a .stitchx file and return (pattern, filePath).
-  static Future<(CrossStitchPattern, String)> openFile() async {
+  /// Pick a .stitchx file and return (pattern, filePath), or null if cancelled.
+  static Future<(CrossStitchPattern, String)?> openFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [_ext],
       allowMultiple: false,
     );
-    if (result == null || result.files.isEmpty) {
-      throw Exception('No file selected');
-    }
+    if (result == null || result.files.isEmpty) return null;
     final path = result.files.single.path!;
     return openFileFromPath(path);
   }
@@ -30,10 +28,10 @@ class FileService {
     return (pattern, path);
   }
 
-  /// Pick a directory and return all .stitchx file paths within it.
-  static Future<List<String>> openFolder() async {
+  /// Pick a directory and return all .stitchx file paths within it, or null if cancelled.
+  static Future<List<String>?> openFolder() async {
     final dir = await FilePicker.platform.getDirectoryPath();
-    if (dir == null) throw Exception('No folder selected');
+    if (dir == null) return null;
     final directory = Directory(dir);
     final files = await directory
         .list(recursive: false)
