@@ -455,6 +455,46 @@ class EditorNotifier extends StateNotifier<EditorState> {
     );
   }
 
+  void resizePattern(int newWidth, int newHeight, int anchorX, int anchorY) {
+    final old = state.pattern;
+    final dx = (anchorX / 2.0 * (newWidth - old.width)).round();
+    final dy = (anchorY / 2.0 * (newHeight - old.height)).round();
+
+    bool inBounds(Stitch s) => switch (s) {
+      FullStitch(x: final x, y: final y) =>
+        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
+      HalfStitch(x: final x, y: final y) =>
+        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
+      QuarterStitch(x: final x, y: final y) =>
+        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
+      HalfCrossStitch(x: final x, y: final y) =>
+        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
+      QuarterCrossStitch(x: final x, y: final y) =>
+        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
+      BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2) =>
+        x1 >= 0 && x1 <= newWidth && y1 >= 0 && y1 <= newHeight &&
+        x2 >= 0 && x2 <= newWidth && y2 >= 0 && y2 <= newHeight,
+    };
+
+    final newStitches = old.stitches
+        .map((s) => EditorState.offsetStitch(s, dx, dy))
+        .where(inBounds)
+        .toList();
+
+    final newPattern = old.copyWith(
+      width: newWidth,
+      height: newHeight,
+      stitches: newStitches,
+    );
+
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      redoStack: [],
+      isDirty: true,
+    );
+  }
+
   void removeThread(String dmcCode) {
     final newThreads =
         state.pattern.threads.where((t) => t.dmcCode != dmcCode).toList();
