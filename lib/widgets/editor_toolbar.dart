@@ -220,9 +220,7 @@ class EditorToolbar extends ConsumerWidget {
                     iconSize: 20,
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.paste_outlined),
-                    onPressed: state.clipboard != null && state.clipboard!.isNotEmpty
-                        ? () => notifier.enterPasteMode()
-                        : null,
+                    onPressed: () => notifier.enterPasteMode(),
                   ),
                 ),
                 Tooltip(
