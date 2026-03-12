@@ -6,6 +6,7 @@ import '../providers/editor_provider.dart';
 import '../services/file_service.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
+import 'resize_canvas_dialog.dart';
 
 
 class EditorScreen extends ConsumerWidget {
@@ -227,6 +228,11 @@ class EditorScreen extends ConsumerWidget {
               onPressed: () => _saveAs(context, ref),
             ),
             IconButton(
+              icon: const Icon(Icons.crop_outlined),
+              tooltip: 'Resize Aida',
+              onPressed: () => _showResizeDialog(context, ref, state),
+            ),
+            IconButton(
               icon: const Icon(Icons.info_outline),
               tooltip: 'Pattern Info',
               onPressed: () => _showPatternInfo(context, state),
@@ -245,6 +251,24 @@ class EditorScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showResizeDialog(
+      BuildContext context, WidgetRef ref, EditorState state) async {
+    final result = await showDialog<ResizeResult>(
+      context: context,
+      builder: (_) => ResizeCanvasDialog(
+        currentWidth: state.pattern.width,
+        currentHeight: state.pattern.height,
+      ),
+    );
+    if (result == null) return;
+    ref.read(editorProvider.notifier).resizePattern(
+          result.width,
+          result.height,
+          result.anchorX,
+          result.anchorY,
+        );
   }
 
   void _showPatternInfo(BuildContext context, EditorState state) {
