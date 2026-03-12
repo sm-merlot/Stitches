@@ -81,7 +81,7 @@ class EditorToolbar extends ConsumerWidget {
                 const SizedBox(width: 2),
                 _ModeButton(
                   icon: Icons.colorize_outlined,
-                  tooltip: 'Pick colour  [8]',
+                  tooltip: 'Pick colour  [C]',
                   active: state.drawingMode == DrawingMode.colorPicker,
                   activeColor: primary,
                   onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
