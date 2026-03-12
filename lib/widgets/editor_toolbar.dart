@@ -100,55 +100,58 @@ class EditorToolbar extends ConsumerWidget {
                 final isDrawMode = state.drawingMode == DrawingMode.draw;
                 return Row(
                   children: [
-                    _ToolButton(
-                      label: 'X',
+                    _StitchIconButton(
                       tooltip: 'Full stitch  [1]',
                       selected: state.currentTool == DrawingTool.fullStitch,
                       onTap: isDrawMode ? () => notifier.setTool(DrawingTool.fullStitch) : null,
                       primary: primary,
                       onPrimary: onPrimary,
+                      painterBuilder: (c) => _FullStitchIconPainter(color: c),
                     ),
                     const SizedBox(width: 4),
-                    _ToolButton(
-                      label: '/',
+                    _StitchIconButton(
                       tooltip: 'Half diagonal /  [2]',
                       selected: state.currentTool == DrawingTool.halfForward,
                       onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfForward) : null,
                       primary: primary,
                       onPrimary: onPrimary,
+                      painterBuilder: (c) => _HalfForwardIconPainter(color: c),
                     ),
                     const SizedBox(width: 4),
-                    _ToolButton(
-                      label: '\\',
+                    _StitchIconButton(
                       tooltip: 'Half diagonal \\  [3]',
                       selected: state.currentTool == DrawingTool.halfBackward,
                       onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfBackward) : null,
                       primary: primary,
                       onPrimary: onPrimary,
+                      painterBuilder: (c) => _HalfBackwardIconPainter(color: c),
                     ),
                     const SizedBox(width: 4),
-                    _HalfCrossToolButton(
+                    _StitchIconButton(
                       tooltip: 'Half-cell cross (X in ½ cell)  [4]',
                       selected: state.currentTool == DrawingTool.halfCross,
                       onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfCross) : null,
                       primary: primary,
                       onPrimary: onPrimary,
+                      painterBuilder: (c) => _HalfCrossIconPainter(color: c),
                     ),
                     const SizedBox(width: 4),
-                    _QuarterDiagToolButton(
+                    _StitchIconButton(
                       tooltip: 'Quarter diagonal (auto-corner)  [5]',
                       selected: state.currentTool == DrawingTool.quarterDiag,
                       onTap: isDrawMode ? () => notifier.setTool(DrawingTool.quarterDiag) : null,
                       primary: primary,
                       onPrimary: onPrimary,
+                      painterBuilder: (c) => _QuarterDiagIconPainter(color: c),
                     ),
                     const SizedBox(width: 4),
-                    _QuarterCrossToolButton(
+                    _StitchIconButton(
                       tooltip: 'Quarter-cell cross / petit point  [6]',
                       selected: state.currentTool == DrawingTool.quarterCross,
                       onTap: isDrawMode ? () => notifier.setTool(DrawingTool.quarterCross) : null,
                       primary: primary,
                       onPrimary: onPrimary,
+                      painterBuilder: (c) => _QuarterCrossIconPainter(color: c),
                     ),
                     const SizedBox(width: 4),
                     _ToolButton(
@@ -634,26 +637,33 @@ class _ToolButton extends StatelessWidget {
   }
 }
 
-// ─── Custom painted stitch tool buttons ──────────────────────────────────────
+// ─── Custom painted stitch tool button (shared) ──────────────────────────────
 
-class _HalfCrossToolButton extends StatelessWidget {
+class _StitchIconButton extends StatelessWidget {
   final String tooltip;
   final bool selected;
   final VoidCallback? onTap;
   final Color primary;
   final Color onPrimary;
+  final CustomPainter Function(Color color) painterBuilder;
 
-  const _HalfCrossToolButton({
+  const _StitchIconButton({
     required this.tooltip,
     required this.selected,
     required this.onTap,
     required this.primary,
     required this.onPrimary,
+    required this.painterBuilder,
   });
 
   @override
   Widget build(BuildContext context) {
     final disabled = onTap == null;
+    final iconColor = disabled
+        ? Colors.grey.shade400
+        : selected
+            ? onPrimary
+            : Colors.grey.shade700;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -674,19 +684,98 @@ class _HalfCrossToolButton extends StatelessWidget {
               width: 1,
             ),
           ),
-          child: CustomPaint(
-            painter: _HalfCrossIconPainter(
-              color: disabled
-                  ? Colors.grey.shade400
-                  : selected
-                      ? onPrimary
-                      : Colors.grey.shade700,
-            ),
-          ),
+          child: CustomPaint(painter: painterBuilder(iconColor)),
         ),
       ),
     );
   }
+}
+
+// ─── Stitch icon painters ─────────────────────────────────────────────────────
+
+class _FullStitchIconPainter extends CustomPainter {
+  final Color color;
+  const _FullStitchIconPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const pad = 5.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    // Full X
+    canvas.drawLine(Offset(pad, pad), Offset(size.width - pad, size.height - pad), paint);
+    canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), paint);
+    // Cell outline
+    canvas.drawRect(
+      Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+      Paint()
+        ..color = color.withValues(alpha: 0.25)
+        ..strokeWidth = 0.8
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_FullStitchIconPainter old) => old.color != color;
+}
+
+class _HalfForwardIconPainter extends CustomPainter {
+  final Color color;
+  const _HalfForwardIconPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const pad = 5.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    // Forward diagonal /
+    canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), paint);
+    // Cell outline
+    canvas.drawRect(
+      Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+      Paint()
+        ..color = color.withValues(alpha: 0.25)
+        ..strokeWidth = 0.8
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HalfForwardIconPainter old) => old.color != color;
+}
+
+class _HalfBackwardIconPainter extends CustomPainter {
+  final Color color;
+  const _HalfBackwardIconPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const pad = 5.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    // Backward diagonal \
+    canvas.drawLine(Offset(pad, pad), Offset(size.width - pad, size.height - pad), paint);
+    // Cell outline
+    canvas.drawRect(
+      Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+      Paint()
+        ..color = color.withValues(alpha: 0.25)
+        ..strokeWidth = 0.8
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HalfBackwardIconPainter old) => old.color != color;
 }
 
 class _HalfCrossIconPainter extends CustomPainter {
@@ -695,12 +784,12 @@ class _HalfCrossIconPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    const pad = 5.0;
     final paint = Paint()
       ..color = color
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-    const pad = 5.0;
     final midX = size.width / 2;
     canvas.drawLine(Offset(pad, pad), Offset(midX, size.height - pad), paint);
     canvas.drawLine(Offset(midX, pad), Offset(pad, size.height - pad), paint);
@@ -716,71 +805,18 @@ class _HalfCrossIconPainter extends CustomPainter {
   bool shouldRepaint(_HalfCrossIconPainter old) => old.color != color;
 }
 
-class _QuarterDiagToolButton extends StatelessWidget {
-  final String tooltip;
-  final bool selected;
-  final VoidCallback? onTap;
-  final Color primary;
-  final Color onPrimary;
-
-  const _QuarterDiagToolButton({
-    required this.tooltip,
-    required this.selected,
-    required this.onTap,
-    required this.primary,
-    required this.onPrimary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: !disabled && selected ? primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: disabled
-                  ? Colors.grey.shade200
-                  : selected
-                      ? primary
-                      : Colors.grey.shade300,
-              width: 1,
-            ),
-          ),
-          child: CustomPaint(
-            painter: _QuarterDiagIconPainter(
-              color: disabled
-                  ? Colors.grey.shade400
-                  : selected
-                      ? onPrimary
-                      : Colors.grey.shade700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _QuarterDiagIconPainter extends CustomPainter {
   final Color color;
   const _QuarterDiagIconPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
+    const pad = 5.0;
     final paint = Paint()
       ..color = color
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-    const pad = 5.0;
     final cx = size.width / 2;
     final cy = size.height / 2;
     canvas.drawLine(Offset(pad, pad), Offset(cx, cy), paint);
@@ -795,71 +831,18 @@ class _QuarterDiagIconPainter extends CustomPainter {
   bool shouldRepaint(_QuarterDiagIconPainter old) => old.color != color;
 }
 
-class _QuarterCrossToolButton extends StatelessWidget {
-  final String tooltip;
-  final bool selected;
-  final VoidCallback? onTap;
-  final Color primary;
-  final Color onPrimary;
-
-  const _QuarterCrossToolButton({
-    required this.tooltip,
-    required this.selected,
-    required this.onTap,
-    required this.primary,
-    required this.onPrimary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: !disabled && selected ? primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: disabled
-                  ? Colors.grey.shade200
-                  : selected
-                      ? primary
-                      : Colors.grey.shade300,
-              width: 1,
-            ),
-          ),
-          child: CustomPaint(
-            painter: _QuarterCrossIconPainter(
-              color: disabled
-                  ? Colors.grey.shade400
-                  : selected
-                      ? onPrimary
-                      : Colors.grey.shade700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _QuarterCrossIconPainter extends CustomPainter {
   final Color color;
   const _QuarterCrossIconPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
+    const pad = 5.0;
     final paint = Paint()
       ..color = color
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-    const pad = 5.0;
     final cx = size.width / 2;
     final cy = size.height / 2;
     canvas.drawLine(Offset(pad, pad), Offset(cx - 1, cy - 1), paint);
@@ -867,10 +850,8 @@ class _QuarterCrossIconPainter extends CustomPainter {
     final gridPaint = Paint()
       ..color = color.withValues(alpha: 0.25)
       ..strokeWidth = 0.8;
-    canvas.drawLine(
-        Offset(cx, pad), Offset(cx, size.height - pad), gridPaint);
-    canvas.drawLine(
-        Offset(pad, cy), Offset(size.width - pad, cy), gridPaint);
+    canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gridPaint);
+    canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gridPaint);
   }
 
   @override
