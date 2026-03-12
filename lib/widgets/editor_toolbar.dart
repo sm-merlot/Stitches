@@ -149,6 +149,15 @@ class EditorToolbar extends ConsumerWidget {
                   activeColor: primary,
                   onTap: () => notifier.setDrawingMode(DrawingMode.pan),
                 ),
+                const SizedBox(width: 2),
+                // Pick colour
+                _ModeButton(
+                  icon: Icons.colorize,
+                  tooltip: 'Pick colour  [8]',
+                  active: state.drawingMode == DrawingMode.colorPicker,
+                  activeColor: primary,
+                  onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
+                ),
                 const SizedBox(width: 6),
                 Container(width: 1, height: 32, color: theme.dividerColor),
                 const SizedBox(width: 4),
