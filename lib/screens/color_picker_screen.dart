@@ -22,13 +22,15 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
     super.dispose();
   }
 
-  List<DmcColor> get _filtered {
+  List<DmcColor> _filteredFor(bool useDmc) {
     final q = _searchQuery.toLowerCase();
     if (q.isEmpty) return dmcColors;
     return dmcColors
-        .where((c) =>
-            c.code.toLowerCase().contains(q) ||
-            c.name.toLowerCase().contains(q))
+        .where((c) {
+          final displayCode = (useDmc ? c.code : c.anchorCode) ?? c.code;
+          return displayCode.toLowerCase().contains(q) ||
+              c.name.toLowerCase().contains(q);
+        })
         .toList();
   }
 
@@ -60,7 +62,7 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
     final editorState = ref.watch(editorProvider);
     final usedCodes =
         editorState.pattern.threads.map((t) => t.dmcCode).toSet();
-    final filtered = _filtered;
+    final filtered = _filteredFor(settings.useDmc);
 
     return Scaffold(
       appBar: AppBar(
@@ -107,6 +109,9 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
                 final isSelected =
                     editorState.selectedThread?.dmcCode == c.code;
 
+                final displayCode = settings.useDmc
+                    ? c.code
+                    : (c.anchorCode ?? c.code);
                 return ListTile(
                   leading: Container(
                     width: 36,
@@ -121,7 +126,7 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
                     ),
                   ),
                   title: Text(
-                    c.code,
+                    displayCode,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(c.name),
