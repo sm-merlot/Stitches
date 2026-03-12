@@ -1,9 +1,32 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../providers/settings_provider.dart';
+
+/// Opens the colour picker as a modal dialog on desktop, full-screen push on mobile.
+void showColorPicker(BuildContext context) {
+  final isDesktop = defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.linux;
+
+  if (isDesktop) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        clipBehavior: Clip.hardEdge,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+        child: const SizedBox(width: 440, height: 600, child: ColorPickerScreen()),
+      ),
+    );
+  } else {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ColorPickerScreen()),
+    );
+  }
+}
 
 class ColorPickerScreen extends ConsumerStatefulWidget {
   const ColorPickerScreen({super.key});
