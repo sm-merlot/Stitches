@@ -191,35 +191,20 @@ class EditorScreen extends ConsumerWidget {
         appBar: AppBar(
           title: Text(_title(state)),
           actions: [
-            // Thread palette button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _ThreadPaletteButton(onOpenColorPicker: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const ColorPickerScreen()),
-                );
-              }),
-            ),
             IconButton(
               icon: const Icon(Icons.save_outlined),
               tooltip: 'Save  (Cmd+S)',
               onPressed: () => _save(context, ref),
             ),
-            PopupMenuButton<String>(
-              onSelected: (v) {
-                switch (v) {
-                  case 'save_as':
-                    _saveAs(context, ref);
-                  case 'pattern_info':
-                    _showPatternInfo(context, state);
-                }
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'save_as', child: Text('Save As…')),
-                PopupMenuItem(
-                    value: 'pattern_info', child: Text('Pattern Info')),
-              ],
+            IconButton(
+              icon: const Icon(Icons.save_as_outlined),
+              tooltip: 'Save As…',
+              onPressed: () => _saveAs(context, ref),
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              tooltip: 'Pattern Info',
+              onPressed: () => _showPatternInfo(context, state),
             ),
           ],
         ),
@@ -299,66 +284,3 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-// ─── Thread Palette Button ────────────────────────────────────────────────────
-
-class _ThreadPaletteButton extends ConsumerWidget {
-  final VoidCallback onOpenColorPicker;
-  const _ThreadPaletteButton({required this.onOpenColorPicker});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(editorProvider);
-    final threads = state.pattern.threads;
-
-    return PopupMenuButton<String>(
-      tooltip: 'Thread palette',
-      icon: const Icon(Icons.palette_outlined),
-      itemBuilder: (_) => [
-        ...threads.map(
-          (t) => PopupMenuItem<String>(
-            value: t.dmcCode,
-            child: Row(
-              children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: t.color,
-                    borderRadius: BorderRadius.circular(3),
-                    border: Border.all(color: Colors.grey.shade400),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text('${t.dmcCode} – ${t.name}'),
-                if (state.selectedThreadId == t.dmcCode) ...[
-                  const Spacer(),
-                  Icon(Icons.check,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary),
-                ],
-              ],
-            ),
-          ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem<String>(
-          value: '__add__',
-          child: Row(
-            children: [
-              Icon(Icons.add, size: 20),
-              SizedBox(width: 8),
-              Text('Add colour…'),
-            ],
-          ),
-        ),
-      ],
-      onSelected: (id) {
-        if (id == '__add__') {
-          onOpenColorPicker();
-        } else {
-          ref.read(editorProvider.notifier).setSelectedThread(id); // id is dmcCode
-        }
-      },
-    );
-  }
-}
