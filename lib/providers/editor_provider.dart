@@ -27,6 +27,8 @@ class EditorState {
   final List<CrossStitchPattern> _redoStack;
   final bool isDirty;
   final Offset? backstitchStartPoint;
+  /// Most-recently-used thread IDs, most recent first. Max 5. Session-only.
+  final List<String> recentThreadIds;
 
   const EditorState({
     required this.pattern,
@@ -38,6 +40,7 @@ class EditorState {
     List<CrossStitchPattern> redoStack = const [],
     this.isDirty = false,
     this.backstitchStartPoint,
+    this.recentThreadIds = const [],
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -58,6 +61,7 @@ class EditorState {
     List<CrossStitchPattern>? redoStack,
     bool? isDirty,
     Object? backstitchStartPoint = _sentinel,
+    List<String>? recentThreadIds,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -73,6 +77,7 @@ class EditorState {
       backstitchStartPoint: backstitchStartPoint == _sentinel
           ? this.backstitchStartPoint
           : backstitchStartPoint as Offset?,
+      recentThreadIds: recentThreadIds ?? this.recentThreadIds,
     );
   }
 
@@ -112,6 +117,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
       filePath: filePath,
       currentTool: tool,
       selectedThreadId: threadId,
+      recentThreadIds: threadId != null ? [threadId] : [],
     );
   }
 
@@ -125,6 +131,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
     state = EditorState(
       pattern: seeded,
       selectedThreadId: threads.first.dmcCode,
+      recentThreadIds: [threads.first.dmcCode],
     );
   }
 
@@ -159,7 +166,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   void setSelectedThread(String? threadId) {
-    state = state.copyWith(selectedThreadId: threadId);
+    final recents = threadId == null
+        ? state.recentThreadIds
+        : [
+            threadId,
+            ...state.recentThreadIds.where((id) => id != threadId),
+          ].take(5).toList();
+    state = state.copyWith(selectedThreadId: threadId, recentThreadIds: recents);
   }
 
   void setBackstitchStart(Offset? point) {
@@ -169,9 +182,14 @@ class EditorNotifier extends StateNotifier<EditorState> {
   void addThread(Thread thread) {
     final newThreads = [...state.pattern.threads, thread];
     final newPattern = state.pattern.copyWith(threads: newThreads);
+    final recents = [
+      thread.dmcCode,
+      ...state.recentThreadIds.where((id) => id != thread.dmcCode),
+    ].take(5).toList();
     state = state.copyWith(
       pattern: newPattern,
       selectedThreadId: thread.dmcCode,
+      recentThreadIds: recents,
       isDirty: true,
     );
   }
