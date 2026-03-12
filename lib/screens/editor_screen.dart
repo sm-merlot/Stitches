@@ -6,7 +6,6 @@ import '../providers/editor_provider.dart';
 import '../services/file_service.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
-import 'color_picker_screen.dart';
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -214,14 +213,7 @@ class EditorScreen extends ConsumerWidget {
           child: Column(
             children: [
               const Expanded(child: PatternCanvas()),
-              EditorToolbar(
-                onOpenColorPicker: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) => const ColorPickerScreen()),
-                  );
-                },
-              ),
+              const EditorToolbar(),
             ],
           ),
         ),

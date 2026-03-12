@@ -3,11 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../providers/editor_provider.dart';
 import '../providers/settings_provider.dart';
+import '../screens/color_picker_screen.dart';
 
 class EditorToolbar extends ConsumerWidget {
-  final VoidCallback onOpenColorPicker;
-
-  const EditorToolbar({super.key, required this.onOpenColorPicker});
+  const EditorToolbar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,17 +40,14 @@ class EditorToolbar extends ConsumerWidget {
               child: Row(
                 children: [
                   // Palette popup
-                  _PaletteButton(onOpenColorPicker: onOpenColorPicker),
+                  const _PaletteButton(),
                   const SizedBox(width: 4),
                   // Quick swatches (last 5 used)
                   _QuickSwatches(state: state),
                   Container(width: 1, height: 32, color: theme.dividerColor),
                   const SizedBox(width: 8),
                   // Active colour swatch
-                  _ColorSwatch(
-                    state: state,
-                    onTap: onOpenColorPicker,
-                  ),
+                  _ColorSwatch(state: state),
                   const SizedBox(width: 8),
                   Container(width: 1, height: 32, color: theme.dividerColor),
                   const SizedBox(width: 8),
@@ -189,9 +185,8 @@ class EditorToolbar extends ConsumerWidget {
 
 class _ColorSwatch extends ConsumerWidget {
   final EditorState state;
-  final VoidCallback onTap;
 
-  const _ColorSwatch({required this.state, required this.onTap});
+  const _ColorSwatch({required this.state});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -209,7 +204,7 @@ class _ColorSwatch extends ConsumerWidget {
     return Tooltip(
       message: tooltipLabel,
       child: InkWell(
-        onTap: onTap,
+        onTap: () => showColorPicker(context),
         borderRadius: BorderRadius.circular(6),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -239,68 +234,124 @@ class _ColorSwatch extends ConsumerWidget {
   }
 }
 
-// ─── Palette popup button ─────────────────────────────────────────────────────
+// ─── Palette button ───────────────────────────────────────────────────────────
 
-class _PaletteButton extends ConsumerWidget {
-  final VoidCallback onOpenColorPicker;
-  const _PaletteButton({required this.onOpenColorPicker});
+class _PaletteButton extends StatelessWidget {
+  const _PaletteButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Thread palette',
+      child: IconButton(
+        icon: const Icon(Icons.palette_outlined, size: 20),
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => const _PaletteDialog(),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Palette dialog ───────────────────────────────────────────────────────────
+
+class _PaletteDialog extends ConsumerWidget {
+  const _PaletteDialog();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
     final useDmc = ref.watch(settingsProvider).useDmc;
     final threads = state.pattern.threads;
+    final theme = Theme.of(context);
 
-    return PopupMenuButton<String>(
-      tooltip: 'Thread palette',
-      icon: const Icon(Icons.palette_outlined, size: 20),
-      padding: EdgeInsets.zero,
-      itemBuilder: (_) => [
-        ...threads.map((t) {
-          final displayCode =
-              useDmc ? t.dmcCode : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
-          return PopupMenuItem<String>(
-            value: t.dmcCode,
-            child: Row(
-              children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: t.color,
-                    borderRadius: BorderRadius.circular(3),
-                    border: Border.all(color: Colors.grey.shade400),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text('$displayCode – ${t.name}'),
-                if (state.selectedThreadId == t.dmcCode) ...[
+    return Dialog(
+      clipBehavior: Clip.hardEdge,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+      child: SizedBox(
+        width: 340,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
+                children: [
+                  Text('Threads in Pattern', style: theme.textTheme.titleMedium),
                   const Spacer(),
-                  Icon(Icons.check,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
                 ],
-              ],
+              ),
             ),
-          );
-        }),
-        const PopupMenuDivider(),
-        const PopupMenuItem<String>(
-          value: '__add__',
-          child: Row(children: [
-            Icon(Icons.add, size: 20),
-            SizedBox(width: 8),
-            Text('Add colour…'),
-          ]),
+            const Divider(height: 1),
+            // Thread list
+            if (threads.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('No threads yet.',
+                    style: TextStyle(color: Colors.grey)),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: threads.length,
+                  itemExtent: 48,
+                  itemBuilder: (_, i) {
+                    final t = threads[i];
+                    final displayCode = useDmc
+                        ? t.dmcCode
+                        : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
+                    final isSelected = state.selectedThreadId == t.dmcCode;
+                    return ListTile(
+                      dense: true,
+                      leading: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: t.color,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.grey.shade400),
+                        ),
+                      ),
+                      title: Text('$displayCode – ${t.name}'),
+                      trailing: isSelected
+                          ? Icon(Icons.check,
+                              size: 16, color: theme.colorScheme.primary)
+                          : null,
+                      selected: isSelected,
+                      onTap: () {
+                        ref
+                            .read(editorProvider.notifier)
+                            .setSelectedThread(t.dmcCode);
+                        Navigator.of(context).pop();
+                      },
+                    );
+                  },
+                ),
+              ),
+            const Divider(height: 1),
+            // Add colour — opens picker on top without closing this dialog
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.add, size: 20),
+              title: const Text('Add colour…'),
+              onTap: () => showColorPicker(context),
+            ),
+          ],
         ),
-      ],
-      onSelected: (id) {
-        if (id == '__add__') {
-          onOpenColorPicker();
-        } else {
-          ref.read(editorProvider.notifier).setSelectedThread(id);
-        }
-      },
+      ),
     );
   }
 }
@@ -313,18 +364,20 @@ class _QuickSwatches extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final recentIds = state.recentThreadIds;
-    if (recentIds.isEmpty) return const SizedBox.shrink();
-
-    final primary = Theme.of(context).colorScheme.primary;
+    // Exclude the currently selected thread, then reverse so most recent is rightmost.
+    final displayIds = state.recentThreadIds
+        .where((id) => id != state.selectedThreadId)
+        .toList()
+        .reversed
+        .toList();
+    if (displayIds.isEmpty) return const SizedBox.shrink();
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ...recentIds.map((id) {
+        ...displayIds.map((id) {
           final thread = state.pattern.threadByCode(id);
           if (thread == null) return const SizedBox.shrink();
-          final isSelected = state.selectedThreadId == id;
           return Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Tooltip(
@@ -339,8 +392,8 @@ class _QuickSwatches extends ConsumerWidget {
                     color: thread.color,
                     borderRadius: BorderRadius.circular(5),
                     border: Border.all(
-                      color: isSelected ? primary : Colors.grey.shade400,
-                      width: isSelected ? 2.5 : 1,
+                      color: Colors.grey.shade400,
+                      width: 1,
                     ),
                   ),
                 ),
