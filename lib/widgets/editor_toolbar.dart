@@ -96,69 +96,72 @@ class EditorToolbar extends ConsumerWidget {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Row(
-                children: [
-                  _ToolButton(
-                    label: 'X',
-                    tooltip: 'Full stitch  [1]',
-                    selected: state.currentTool == DrawingTool.fullStitch,
-                    onTap: () => notifier.setTool(DrawingTool.fullStitch),
-                    primary: primary,
-                    onPrimary: onPrimary,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolButton(
-                    label: '/',
-                    tooltip: 'Half diagonal /  [2]',
-                    selected: state.currentTool == DrawingTool.halfForward,
-                    onTap: () => notifier.setTool(DrawingTool.halfForward),
-                    primary: primary,
-                    onPrimary: onPrimary,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolButton(
-                    label: '\\',
-                    tooltip: 'Half diagonal \\  [3]',
-                    selected: state.currentTool == DrawingTool.halfBackward,
-                    onTap: () => notifier.setTool(DrawingTool.halfBackward),
-                    primary: primary,
-                    onPrimary: onPrimary,
-                  ),
-                  const SizedBox(width: 4),
-                  _HalfCrossToolButton(
-                    tooltip: 'Half-cell cross (X in ½ cell)  [4]',
-                    selected: state.currentTool == DrawingTool.halfCross,
-                    onTap: () => notifier.setTool(DrawingTool.halfCross),
-                    primary: primary,
-                    onPrimary: onPrimary,
-                  ),
-                  const SizedBox(width: 4),
-                  _QuarterDiagToolButton(
-                    tooltip: 'Quarter diagonal (auto-corner)  [5]',
-                    selected: state.currentTool == DrawingTool.quarterDiag,
-                    onTap: () => notifier.setTool(DrawingTool.quarterDiag),
-                    primary: primary,
-                    onPrimary: onPrimary,
-                  ),
-                  const SizedBox(width: 4),
-                  _QuarterCrossToolButton(
-                    tooltip: 'Quarter-cell cross / petit point  [6]',
-                    selected: state.currentTool == DrawingTool.quarterCross,
-                    onTap: () => notifier.setTool(DrawingTool.quarterCross),
-                    primary: primary,
-                    onPrimary: onPrimary,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolButton(
-                    icon: Icons.gesture,
-                    tooltip: 'Backstitch  [7]',
-                    selected: state.currentTool == DrawingTool.backstitch,
-                    onTap: () => notifier.setTool(DrawingTool.backstitch),
-                    primary: primary,
-                    onPrimary: onPrimary,
-                  ),
-                ],
-              ),
+              child: Builder(builder: (context) {
+                final isDrawMode = state.drawingMode == DrawingMode.draw;
+                return Row(
+                  children: [
+                    _ToolButton(
+                      label: 'X',
+                      tooltip: 'Full stitch  [1]',
+                      selected: state.currentTool == DrawingTool.fullStitch,
+                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.fullStitch) : null,
+                      primary: primary,
+                      onPrimary: onPrimary,
+                    ),
+                    const SizedBox(width: 4),
+                    _ToolButton(
+                      label: '/',
+                      tooltip: 'Half diagonal /  [2]',
+                      selected: state.currentTool == DrawingTool.halfForward,
+                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfForward) : null,
+                      primary: primary,
+                      onPrimary: onPrimary,
+                    ),
+                    const SizedBox(width: 4),
+                    _ToolButton(
+                      label: '\\',
+                      tooltip: 'Half diagonal \\  [3]',
+                      selected: state.currentTool == DrawingTool.halfBackward,
+                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfBackward) : null,
+                      primary: primary,
+                      onPrimary: onPrimary,
+                    ),
+                    const SizedBox(width: 4),
+                    _HalfCrossToolButton(
+                      tooltip: 'Half-cell cross (X in ½ cell)  [4]',
+                      selected: state.currentTool == DrawingTool.halfCross,
+                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfCross) : null,
+                      primary: primary,
+                      onPrimary: onPrimary,
+                    ),
+                    const SizedBox(width: 4),
+                    _QuarterDiagToolButton(
+                      tooltip: 'Quarter diagonal (auto-corner)  [5]',
+                      selected: state.currentTool == DrawingTool.quarterDiag,
+                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.quarterDiag) : null,
+                      primary: primary,
+                      onPrimary: onPrimary,
+                    ),
+                    const SizedBox(width: 4),
+                    _QuarterCrossToolButton(
+                      tooltip: 'Quarter-cell cross / petit point  [6]',
+                      selected: state.currentTool == DrawingTool.quarterCross,
+                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.quarterCross) : null,
+                      primary: primary,
+                      onPrimary: onPrimary,
+                    ),
+                    const SizedBox(width: 4),
+                    _ToolButton(
+                      icon: Icons.gesture,
+                      tooltip: 'Backstitch  [7]',
+                      selected: state.currentTool == DrawingTool.backstitch,
+                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.backstitch) : null,
+                      primary: primary,
+                      onPrimary: onPrimary,
+                    ),
+                  ],
+                );
+              }),
             ),
           ),
           vDivider,
@@ -571,7 +574,7 @@ class _ToolButton extends StatelessWidget {
   final IconData? icon;
   final String tooltip;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color primary;
   final Color onPrimary;
 
@@ -587,6 +590,19 @@ class _ToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    final bgColor = !disabled && selected ? primary : Colors.transparent;
+    final borderColor = disabled
+        ? Colors.grey.shade200
+        : selected
+            ? primary
+            : Colors.grey.shade300;
+    final contentColor = disabled
+        ? Colors.grey.shade400
+        : selected
+            ? onPrimary
+            : Colors.grey.shade700;
+
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -596,24 +612,19 @@ class _ToolButton extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: selected ? primary : Colors.transparent,
+            color: bgColor,
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: selected ? primary : Colors.grey.shade300,
-              width: 1,
-            ),
+            border: Border.all(color: borderColor, width: 1),
           ),
           child: Center(
             child: icon != null
-                ? Icon(icon,
-                    size: 17,
-                    color: selected ? onPrimary : Colors.grey.shade700)
+                ? Icon(icon, size: 17, color: contentColor)
                 : Text(
                     label!,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: selected ? onPrimary : Colors.grey.shade700,
+                      color: contentColor,
                     ),
                   ),
           ),
@@ -628,7 +639,7 @@ class _ToolButton extends StatelessWidget {
 class _HalfCrossToolButton extends StatelessWidget {
   final String tooltip;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color primary;
   final Color onPrimary;
 
@@ -642,6 +653,7 @@ class _HalfCrossToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final disabled = onTap == null;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -651,16 +663,25 @@ class _HalfCrossToolButton extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: selected ? primary : Colors.transparent,
+            color: !disabled && selected ? primary : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: selected ? primary : Colors.grey.shade300,
+              color: disabled
+                  ? Colors.grey.shade200
+                  : selected
+                      ? primary
+                      : Colors.grey.shade300,
               width: 1,
             ),
           ),
           child: CustomPaint(
             painter: _HalfCrossIconPainter(
-                color: selected ? onPrimary : Colors.grey.shade700),
+              color: disabled
+                  ? Colors.grey.shade400
+                  : selected
+                      ? onPrimary
+                      : Colors.grey.shade700,
+            ),
           ),
         ),
       ),
@@ -698,7 +719,7 @@ class _HalfCrossIconPainter extends CustomPainter {
 class _QuarterDiagToolButton extends StatelessWidget {
   final String tooltip;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color primary;
   final Color onPrimary;
 
@@ -712,6 +733,7 @@ class _QuarterDiagToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final disabled = onTap == null;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -721,16 +743,25 @@ class _QuarterDiagToolButton extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: selected ? primary : Colors.transparent,
+            color: !disabled && selected ? primary : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: selected ? primary : Colors.grey.shade300,
+              color: disabled
+                  ? Colors.grey.shade200
+                  : selected
+                      ? primary
+                      : Colors.grey.shade300,
               width: 1,
             ),
           ),
           child: CustomPaint(
             painter: _QuarterDiagIconPainter(
-                color: selected ? onPrimary : Colors.grey.shade700),
+              color: disabled
+                  ? Colors.grey.shade400
+                  : selected
+                      ? onPrimary
+                      : Colors.grey.shade700,
+            ),
           ),
         ),
       ),
@@ -767,7 +798,7 @@ class _QuarterDiagIconPainter extends CustomPainter {
 class _QuarterCrossToolButton extends StatelessWidget {
   final String tooltip;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color primary;
   final Color onPrimary;
 
@@ -781,6 +812,7 @@ class _QuarterCrossToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final disabled = onTap == null;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -790,16 +822,25 @@ class _QuarterCrossToolButton extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: selected ? primary : Colors.transparent,
+            color: !disabled && selected ? primary : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: selected ? primary : Colors.grey.shade300,
+              color: disabled
+                  ? Colors.grey.shade200
+                  : selected
+                      ? primary
+                      : Colors.grey.shade300,
               width: 1,
             ),
           ),
           child: CustomPaint(
             painter: _QuarterCrossIconPainter(
-                color: selected ? onPrimary : Colors.grey.shade700),
+              color: disabled
+                  ? Colors.grey.shade400
+                  : selected
+                      ? onPrimary
+                      : Colors.grey.shade700,
+            ),
           ),
         ),
       ),
