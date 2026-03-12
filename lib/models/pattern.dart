@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'stitch.dart';
 import 'thread.dart';
 
@@ -7,6 +8,7 @@ class CrossStitchPattern {
   final int height;
   final List<Thread> threads;
   final List<Stitch> stitches;
+  final Color aidaColor;
 
   /// Last-saved editor state — which thread was active.
   final String? editorSelectedThreadId;
@@ -20,6 +22,7 @@ class CrossStitchPattern {
     required this.height,
     required this.threads,
     required this.stitches,
+    this.aidaColor = Colors.white,
     this.editorSelectedThreadId,
     this.editorTool,
   });
@@ -44,6 +47,7 @@ class CrossStitchPattern {
     int? height,
     List<Thread>? threads,
     List<Stitch>? stitches,
+    Color? aidaColor,
     Object? editorSelectedThreadId = _sentinel,
     Object? editorTool = _sentinel,
   }) {
@@ -53,6 +57,7 @@ class CrossStitchPattern {
       height: height ?? this.height,
       threads: threads ?? this.threads,
       stitches: stitches ?? this.stitches,
+      aidaColor: aidaColor ?? this.aidaColor,
       editorSelectedThreadId: editorSelectedThreadId == _sentinel
           ? this.editorSelectedThreadId
           : editorSelectedThreadId as String?,
@@ -68,26 +73,25 @@ class CrossStitchPattern {
     return threads.where((t) => t.dmcCode == dmcCode).firstOrNull;
   }
 
-  Map<String, dynamic> toYaml() => {
-        'name': name,
-        'width': width,
-        'height': height,
-        if (editorSelectedThreadId != null || editorTool != null)
-          'editor': {
-            if (editorSelectedThreadId != null)
-              'selectedThread': editorSelectedThreadId,
-            if (editorTool != null) 'tool': editorTool,
-          },
-        'threads': threads.map((t) => t.toYaml()).toList(),
-        'stitches': stitches.map((s) => s.toYaml()).toList(),
-      };
+  /// Hex string representation of [aidaColor], e.g. `'#FFFFFF'`.
+  String get aidaColorHex {
+    final argb = aidaColor.toARGB32();
+    return '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  }
+
+  static Color _parseHex(String hex) {
+    final h = hex.startsWith('#') ? hex.substring(1) : hex;
+    return Color(int.parse('FF$h', radix: 16));
+  }
 
   factory CrossStitchPattern.fromYaml(Map yaml) {
     final editor = yaml['editor'] as Map?;
+    final aidaHex = yaml['aidaColor'] as String?;
     return CrossStitchPattern(
       name: yaml['name'] as String,
       width: yaml['width'] as int,
       height: yaml['height'] as int,
+      aidaColor: aidaHex != null ? _parseHex(aidaHex) : Colors.white,
       editorSelectedThreadId: editor?['selectedThread'] as String?,
       editorTool: editor?['tool'] as String?,
       threads: (yaml['threads'] as List?)
