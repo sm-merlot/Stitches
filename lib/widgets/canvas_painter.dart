@@ -16,6 +16,8 @@ class CanvasPainter extends CustomPainter {
   final bool isColorPickerCursor;
   final Offset? cursorScreenPos;
   final Color aidaColor;
+  final Rect? selectionRect;
+  final List<Stitch>? ghostStitches;
 
   const CanvasPainter({
     required this.pattern,
@@ -29,6 +31,8 @@ class CanvasPainter extends CustomPainter {
     this.isColorPickerCursor = false,
     this.cursorScreenPos,
     this.aidaColor = const Color(0xFFFFFFFF),
+    this.selectionRect,
+    this.ghostStitches,
   });
 
   @override
@@ -95,6 +99,14 @@ class CanvasPainter extends CustomPainter {
             canvas, backstitchStartPoint!, backstitchCurrentPoint!);
       }
     }
+
+    // ── Ghost stitches (paste preview / move preview) ─────────────────────
+    if (ghostStitches != null && ghostStitches!.isNotEmpty) {
+      _drawGhostStitches(canvas, ghostStitches!, threadMap);
+    }
+
+    // ── Selection rect ───────────────────────────────────────────────────────
+    if (selectionRect != null) _drawSelectionRect(canvas, selectionRect!);
 
     // ── Pattern border ───────────────────────────────────────────────────────
     final borderBase = aidaColor.computeLuminance() > 0.4 ? Colors.black : Colors.white;
@@ -373,6 +385,79 @@ class CanvasPainter extends CustomPainter {
           ..style = PaintingStyle.stroke);
   }
 
+  // ─── Single stitch dispatcher ─────────────────────────────────────────────
+
+  void _drawSingleStitch(Canvas canvas, Stitch stitch, Color color) {
+    switch (stitch) {
+      case FullStitch(:final x, :final y):
+        _drawFullStitch(canvas, x, y, color);
+      case HalfStitch(:final x, :final y, :final isForward):
+        _drawHalfStitch(canvas, x, y, isForward, color);
+      case QuarterStitch(:final x, :final y, :final quadrant):
+        _drawQuarterStitch(canvas, x, y, quadrant, color);
+      case HalfCrossStitch(:final x, :final y, :final half):
+        _drawHalfCrossStitch(canvas, x, y, half, color);
+      case QuarterCrossStitch(:final x, :final y, :final quadrant):
+        _drawQuarterCrossStitch(canvas, x, y, quadrant, color);
+      case BackStitch(:final x1, :final y1, :final x2, :final y2):
+        _drawBackstitch(canvas, x1, y1, x2, y2, color);
+    }
+  }
+
+  // ─── Selection rect ───────────────────────────────────────────────────────
+
+  void _drawSelectionRect(Canvas canvas, Rect rect) {
+    final px = Rect.fromLTRB(
+      rect.left * cellSize,
+      rect.top * cellSize,
+      rect.right * cellSize,
+      rect.bottom * cellSize,
+    );
+
+    // Semi-transparent fill
+    canvas.drawRect(px, Paint()..color = const Color(0x264D90FE));
+
+    // Solid border
+    canvas.drawRect(
+      px,
+      Paint()
+        ..color = const Color(0xFF4D90FE)
+        ..strokeWidth = 1.5 / scale
+        ..style = PaintingStyle.stroke,
+    );
+
+    // Corner handles
+    final h = math.max(4.0, 8.0 / scale);
+    final hp = Paint()
+      ..color = const Color(0xFF4D90FE)
+      ..strokeWidth = 2.0 / scale
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square;
+
+    for (final corner in [px.topLeft, px.topRight, px.bottomLeft, px.bottomRight]) {
+      final dx = corner.dx == px.left ? h : -h;
+      final dy = corner.dy == px.top ? h : -h;
+      canvas.drawLine(corner, Offset(corner.dx + dx, corner.dy), hp);
+      canvas.drawLine(corner, Offset(corner.dx, corner.dy + dy), hp);
+    }
+  }
+
+  // ─── Ghost stitches (paste/move preview) ─────────────────────────────────
+
+  void _drawGhostStitches(
+      Canvas canvas, List<Stitch> stitches, Map<String, Thread> threadMap) {
+    canvas.saveLayer(
+      Rect.fromLTWH(0, 0, pattern.width * cellSize, pattern.height * cellSize),
+      Paint()..color = Colors.white.withValues(alpha: 0.55),
+    );
+    for (final stitch in stitches) {
+      final thread = threadMap[stitch.threadId];
+      if (thread == null) continue;
+      _drawSingleStitch(canvas, stitch, thread.color);
+    }
+    canvas.restore();
+  }
+
   // ─── Grid ─────────────────────────────────────────────────────────────────
 
   void _drawGrid(Canvas canvas, double w, double h) {
@@ -633,6 +718,8 @@ class CanvasPainter extends CustomPainter {
         oldDelegate.isDrawCursor != isDrawCursor ||
         oldDelegate.isColorPickerCursor != isColorPickerCursor ||
         oldDelegate.cursorScreenPos != cursorScreenPos ||
-        oldDelegate.aidaColor != aidaColor;
+        oldDelegate.aidaColor != aidaColor ||
+        oldDelegate.selectionRect != selectionRect ||
+        oldDelegate.ghostStitches != ghostStitches;
   }
 }

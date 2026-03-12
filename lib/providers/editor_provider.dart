@@ -15,7 +15,7 @@ enum DrawingTool {
 }
 
 /// Cursor mode — controls what pointer/touch interactions do.
-enum DrawingMode { draw, erase, pan, colorPicker }
+enum DrawingMode { draw, erase, pan, colorPicker, select, paste }
 
 class EditorState {
   final CrossStitchPattern pattern;
@@ -29,6 +29,8 @@ class EditorState {
   final Offset? backstitchStartPoint;
   /// Most-recently-used thread IDs, most recent first. Max 5. Session-only.
   final List<String> recentThreadIds;
+  final Rect? selectionRect;
+  final List<Stitch>? clipboard;
 
   const EditorState({
     required this.pattern,
@@ -41,6 +43,8 @@ class EditorState {
     this.isDirty = false,
     this.backstitchStartPoint,
     this.recentThreadIds = const [],
+    this.selectionRect,
+    this.clipboard,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -50,6 +54,51 @@ class EditorState {
   Thread? get selectedThread => selectedThreadId != null
       ? pattern.threadByCode(selectedThreadId!)
       : null;
+
+  /// Stitches that fall inside the current selectionRect.
+  List<Stitch> get selectedStitches {
+    final rect = selectionRect;
+    if (rect == null) return [];
+    return pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+  }
+
+  /// Whether a stitch falls within [rect] (for cell stitches: whole-cell containment;
+  /// for backstitches: both endpoints must be within the rect).
+  static bool isStitchInRect(Stitch s, Rect rect) {
+    bool cellIn(int x, int y) =>
+        x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
+    return switch (s) {
+      FullStitch(x: final x, y: final y) => cellIn(x, y),
+      HalfStitch(x: final x, y: final y) => cellIn(x, y),
+      QuarterStitch(x: final x, y: final y) => cellIn(x, y),
+      HalfCrossStitch(x: final x, y: final y) => cellIn(x, y),
+      QuarterCrossStitch(x: final x, y: final y) => cellIn(x, y),
+      BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2) =>
+        x1 >= rect.left && x1 <= rect.right &&
+        y1 >= rect.top && y1 <= rect.bottom &&
+        x2 >= rect.left && x2 <= rect.right &&
+        y2 >= rect.top && y2 <= rect.bottom,
+    };
+  }
+
+  /// Creates a new stitch with coordinates shifted by [dx],[dy].
+  /// Cell-based stitches use integer offsets; BackStitch uses double offsets.
+  static Stitch offsetStitch(Stitch s, int dx, int dy) {
+    return switch (s) {
+      FullStitch(x: final x, y: final y, threadId: final t) =>
+        FullStitch(x: x + dx, y: y + dy, threadId: t),
+      HalfStitch(x: final x, y: final y, isForward: final f, threadId: final t) =>
+        HalfStitch(x: x + dx, y: y + dy, isForward: f, threadId: t),
+      QuarterStitch(x: final x, y: final y, quadrant: final q, threadId: final t) =>
+        QuarterStitch(x: x + dx, y: y + dy, quadrant: q, threadId: t),
+      HalfCrossStitch(x: final x, y: final y, half: final h, threadId: final t) =>
+        HalfCrossStitch(x: x + dx, y: y + dy, half: h, threadId: t),
+      QuarterCrossStitch(x: final x, y: final y, quadrant: final q, threadId: final t) =>
+        QuarterCrossStitch(x: x + dx, y: y + dy, quadrant: q, threadId: t),
+      BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2, threadId: final t) =>
+        BackStitch(x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy, threadId: t),
+    };
+  }
 
   EditorState copyWith({
     CrossStitchPattern? pattern,
@@ -62,6 +111,8 @@ class EditorState {
     bool? isDirty,
     Object? backstitchStartPoint = _sentinel,
     List<String>? recentThreadIds,
+    Object? selectionRect = _sentinel,
+    Object? clipboard = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -78,6 +129,8 @@ class EditorState {
           ? this.backstitchStartPoint
           : backstitchStartPoint as Offset?,
       recentThreadIds: recentThreadIds ?? this.recentThreadIds,
+      selectionRect: selectionRect == _sentinel ? this.selectionRect : selectionRect as Rect?,
+      clipboard: clipboard == _sentinel ? this.clipboard : clipboard as List<Stitch>?,
     );
   }
 
@@ -151,10 +204,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   void setDrawingMode(DrawingMode mode) {
+    final leavingSelection =
+        state.drawingMode == DrawingMode.select || state.drawingMode == DrawingMode.paste;
     state = state.copyWith(
       drawingMode: mode,
-      // Cancel in-progress backstitch when switching away from draw mode
       backstitchStartPoint: null,
+      // Clear selection rect and paste mode when leaving select/paste modes
+      selectionRect: leavingSelection ? null : state.selectionRect,
     );
   }
 
@@ -180,6 +236,143 @@ class EditorNotifier extends StateNotifier<EditorState> {
       pattern: state.pattern.copyWith(aidaColor: color),
       isDirty: true,
     );
+  }
+
+  // ─── Selection ────────────────────────────────────────────────────────────
+
+  void setSelectionRect(Rect? rect) {
+    state = state.copyWith(selectionRect: rect);
+  }
+
+  void selectAll() {
+    state = state.copyWith(
+      selectionRect: Rect.fromLTWH(
+          0, 0, state.pattern.width.toDouble(), state.pattern.height.toDouble()),
+      drawingMode: DrawingMode.select,
+      backstitchStartPoint: null,
+    );
+  }
+
+  void copySelection() {
+    final rect = state.selectionRect;
+    if (rect == null) return;
+    final inSel =
+        state.pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+    if (inSel.isEmpty) return;
+    final clips = inSel
+        .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
+        .toList();
+    state = state.copyWith(clipboard: clips);
+  }
+
+  void cutSelection() {
+    final rect = state.selectionRect;
+    if (rect == null) return;
+    final inSel =
+        state.pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+    if (inSel.isEmpty) return;
+    final clips = inSel
+        .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
+        .toList();
+    final remaining =
+        state.pattern.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
+    final newPattern = state.pattern.copyWith(stitches: remaining);
+    state = state.copyWith(
+      pattern: newPattern,
+      clipboard: clips,
+      selectionRect: null,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  void enterPasteMode() {
+    if (state.clipboard == null || state.clipboard!.isEmpty) return;
+    state = state.copyWith(
+      drawingMode: DrawingMode.paste,
+      selectionRect: null,
+    );
+  }
+
+  /// Stamps the clipboard contents at offset [dx],[dy] from origin (0,0).
+  void commitPaste(int dx, int dy) {
+    final clips = state.clipboard;
+    if (clips == null || clips.isEmpty) return;
+    final maxX = state.pattern.width;
+    final maxY = state.pattern.height;
+    var stitches = [...state.pattern.stitches];
+    for (final s in clips) {
+      final placed = EditorState.offsetStitch(s, dx, dy);
+      if (_isInBounds(placed, maxX, maxY)) {
+        stitches = _stitchesWithAdded(stitches, placed);
+      }
+    }
+    final newPattern = state.pattern.copyWith(stitches: stitches);
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  /// Moves the selected stitches by [dx],[dy] cells. Updates selectionRect too.
+  void moveSelection(int dx, int dy) {
+    final rect = state.selectionRect;
+    if (rect == null) return;
+    final maxX = state.pattern.width;
+    final maxY = state.pattern.height;
+    final inSel =
+        state.pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+    if (inSel.isEmpty) return;
+    var remaining =
+        state.pattern.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
+    for (final s in inSel) {
+      final moved = EditorState.offsetStitch(s, dx, dy);
+      if (_isInBounds(moved, maxX, maxY)) {
+        remaining = _stitchesWithAdded(remaining, moved);
+      }
+    }
+    final newRect = Rect.fromLTWH(
+      (rect.left + dx).clamp(0, maxX.toDouble()),
+      (rect.top + dy).clamp(0, maxY.toDouble()),
+      rect.width,
+      rect.height,
+    );
+    final newPattern = state.pattern.copyWith(stitches: remaining);
+    state = state.copyWith(
+      pattern: newPattern,
+      selectionRect: newRect,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  void deleteSelection() {
+    final rect = state.selectionRect;
+    if (rect == null) return;
+    if (!state.pattern.stitches.any((s) => EditorState.isStitchInRect(s, rect))) return;
+    final remaining =
+        state.pattern.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
+    final newPattern = state.pattern.copyWith(stitches: remaining);
+    state = state.copyWith(
+      pattern: newPattern,
+      selectionRect: null,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  /// Escape: if in paste mode, exit back to select; otherwise clear selection rect.
+  void cancelSelection() {
+    if (state.drawingMode == DrawingMode.paste) {
+      state = state.copyWith(drawingMode: DrawingMode.select);
+    } else {
+      state = state.copyWith(selectionRect: null);
+    }
   }
 
   void setBackstitchStart(Offset? point) {
@@ -327,6 +520,20 @@ class EditorNotifier extends StateNotifier<EditorState> {
     bool inside(double gx, double gy) =>
         gx >= cellX && gx <= cellX + 1 && gy >= cellY && gy <= cellY + 1;
     return inside(s.x1, s.y1) || inside(s.x2, s.y2);
+  }
+
+  bool _isInBounds(Stitch s, int maxX, int maxY) {
+    bool cellOk(int x, int y) => x >= 0 && x < maxX && y >= 0 && y < maxY;
+    return switch (s) {
+      FullStitch(x: final x, y: final y) => cellOk(x, y),
+      HalfStitch(x: final x, y: final y) => cellOk(x, y),
+      QuarterStitch(x: final x, y: final y) => cellOk(x, y),
+      HalfCrossStitch(x: final x, y: final y) => cellOk(x, y),
+      QuarterCrossStitch(x: final x, y: final y) => cellOk(x, y),
+      BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2) =>
+        x1 >= 0 && x1 <= maxX && y1 >= 0 && y1 <= maxY &&
+        x2 >= 0 && x2 <= maxX && y2 >= 0 && y2 <= maxY,
+    };
   }
 }
 
