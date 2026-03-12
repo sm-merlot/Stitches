@@ -108,6 +108,9 @@ class CanvasPainter extends CustomPainter {
 
     canvas.restore();
 
+    // ── Grid labels (screen-space, sticky at viewport edges) ─────────────────
+    _drawGridLabels(canvas, size);
+
     // ── Custom cursors (drawn in screen space, after restore) ────────────────
     if (cursorScreenPos != null) {
       if (isErasing) _drawEraserCursor(canvas, cursorScreenPos!);
@@ -538,6 +541,84 @@ class CanvasPainter extends CustomPainter {
         Paint()..color = Colors.white.withValues(alpha: 0.45));
 
     canvas.restore();
+  }
+
+  // ─── Grid labels (screen-space, sticky) ───────────────────────────────────
+
+  /// Minimum step size so labels are at least ~35 px apart.
+  int _labelStep(double effectiveCellPx) {
+    const minSpacing = 35.0;
+    for (final s in [5, 10, 20, 50, 100]) {
+      if (s * effectiveCellPx >= minSpacing) return s;
+    }
+    return 100;
+  }
+
+  void _drawGridLabels(Canvas canvas, Size size) {
+    final effectiveCellPx = cellSize * scale;
+    final step = _labelStep(effectiveCellPx);
+
+    const fontSize = 10.0;
+    const textColor = Color(0xFF666666);
+    final bgColor = Colors.white.withValues(alpha: 0.82);
+
+    // Label pill is ~(fontSize + 4) px tall and ~24 px wide at most.
+    const halfH = (fontSize + 4) / 2; // ≈ 7
+    const halfW = 14.0; // conservative half-width for 2–3 digit numbers
+
+    // Column label Y: sit just ABOVE the grid top edge when it's on screen.
+    // When the grid top scrolls off the top, clamp to stay visible.
+    final colLabelY =
+        (panOffset.dy - halfH - 3).clamp(halfH + 2, size.height - halfH - 2);
+
+    // Row label X: sit just LEFT of the grid left edge when it's on screen.
+    // When the grid left scrolls off the left, clamp to stay visible.
+    final rowLabelX =
+        (panOffset.dx - halfW - 4).clamp(halfW + 2, size.width - halfW - 2);
+
+    // Column numbers (top of grid, sticky at top of viewport)
+    for (int x = step; x <= pattern.width; x += step) {
+      final screenX = x * effectiveCellPx + panOffset.dx;
+      if (screenX < 0 || screenX > size.width) continue;
+      _drawNumberLabel(
+          canvas, '$x', Offset(screenX, colLabelY), fontSize, textColor, bgColor);
+    }
+
+    // Row numbers (left of grid, sticky at left of viewport)
+    for (int y = step; y <= pattern.height; y += step) {
+      final screenY = y * effectiveCellPx + panOffset.dy;
+      if (screenY < 0 || screenY > size.height) continue;
+      _drawNumberLabel(
+          canvas, '$y', Offset(rowLabelX, screenY), fontSize, textColor, bgColor);
+    }
+  }
+
+  void _drawNumberLabel(Canvas canvas, String text, Offset center,
+      double fontSize, Color textColor, Color bgColor) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          color: textColor,
+          fontWeight: FontWeight.w500,
+          height: 1.0,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final bgRect = Rect.fromCenter(
+      center: center,
+      width: tp.width + 6,
+      height: tp.height + 4,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bgRect, const Radius.circular(3)),
+      Paint()..color = bgColor,
+    );
+    tp.paint(canvas,
+        Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
   }
 
   @override
