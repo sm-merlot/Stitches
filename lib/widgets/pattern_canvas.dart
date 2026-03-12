@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
   Offset? _mouseScreenPos;
+
+  // Selection / move state
+  Offset? _selectionAnchor;      // grid cell where rubber-band drag started
+  bool _isMovingSelection = false;
+  Offset? _moveDragStartCell;
+  Offset _moveDelta = Offset.zero;
+
+  // Paste preview origin (grid cell coords, top-left of where clipboard will land)
+  Offset? _pasteOrigin;
 
   double get _cellSize => _baseCellSize;
 
@@ -210,6 +220,28 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     };
   }
 
+  // ─── Selection helpers ────────────────────────────────────────────────────
+
+  Rect _buildSelRect(Offset a, Offset b) {
+    return Rect.fromLTRB(
+      math.min(a.dx, b.dx),
+      math.min(a.dy, b.dy),
+      math.max(a.dx, b.dx) + 1,
+      math.max(a.dy, b.dy) + 1,
+    );
+  }
+
+  bool _cellInSelRect(int cellX, int cellY, Rect rect) =>
+      cellX >= rect.left && cellX < rect.right &&
+      cellY >= rect.top && cellY < rect.bottom;
+
+  Offset _screenToSelCell(Offset screenPos) {
+    final c = _screenToCanvas(screenPos);
+    final (x, y) = _canvasToCell(c);
+    final p = ref.read(editorProvider).pattern;
+    return Offset(x.clamp(0, p.width - 1).toDouble(), y.clamp(0, p.height - 1).toDouble());
+  }
+
   // ─── Pointer event handling ───────────────────────────────────────────────
 
   bool get _isPanMode =>
@@ -229,7 +261,37 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (event.kind == PointerDeviceKind.stylus ||
         event.kind == PointerDeviceKind.invertedStylus ||
         event.kind == PointerDeviceKind.mouse) {
-      if (_isPanMode) return; // pointer-move will handle panning
+      if (_isPanMode) return;
+
+      final mode = ref.read(editorProvider).drawingMode;
+
+      if (mode == DrawingMode.select) {
+        final cell = _screenToSelCell(event.localPosition);
+        final sel = ref.read(editorProvider).selectionRect;
+        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+          setState(() {
+            _isMovingSelection = true;
+            _moveDragStartCell = cell;
+            _moveDelta = Offset.zero;
+          });
+        } else {
+          ref.read(editorProvider.notifier).setSelectionRect(null);
+          setState(() {
+            _selectionAnchor = cell;
+            _isMovingSelection = false;
+          });
+        }
+        return;
+      }
+
+      if (mode == DrawingMode.paste) {
+        final origin = _pasteOrigin;
+        if (origin != null) {
+          ref.read(editorProvider.notifier).commitPaste(origin.dx.toInt(), origin.dy.toInt());
+        }
+        return;
+      }
+
       _handleDrawAt(event.localPosition);
       return;
     }
@@ -259,7 +321,27 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         return;
       }
 
-      if (ref.read(editorProvider).drawingMode == DrawingMode.colorPicker) return;
+      final mode = ref.read(editorProvider).drawingMode;
+
+      if (mode == DrawingMode.select) {
+        final cell = _screenToSelCell(event.localPosition);
+        if (_isMovingSelection && _moveDragStartCell != null) {
+          setState(() => _moveDelta = cell - _moveDragStartCell!);
+        } else if (_selectionAnchor != null) {
+          ref.read(editorProvider.notifier).setSelectionRect(
+              _buildSelRect(_selectionAnchor!, cell));
+        }
+        return;
+      }
+
+      if (mode == DrawingMode.paste) {
+        final c = _screenToCanvas(event.localPosition);
+        final (cx, cy) = _canvasToCell(c);
+        setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+        return;
+      }
+
+      if (mode == DrawingMode.colorPicker) return;
 
       _handleDrawAt(event.localPosition);
 
@@ -307,6 +389,33 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final pos = event.localPosition;
     final now = DateTime.now();
     final wasSinglePointer = _activePointers.length == 1;
+
+    // Commit move drag
+    if (_isMovingSelection) {
+      final dx = _moveDelta.dx.round();
+      final dy = _moveDelta.dy.round();
+      if (dx != 0 || dy != 0) {
+        ref.read(editorProvider.notifier).moveSelection(dx, dy);
+      }
+      setState(() {
+        _isMovingSelection = false;
+        _moveDragStartCell = null;
+        _moveDelta = Offset.zero;
+      });
+      _activePointers.remove(event.pointer);
+      return;
+    }
+
+    // Finalize rubber-band selection
+    if (_selectionAnchor != null) {
+      final cell = _screenToSelCell(pos);
+      final rect = _buildSelRect(_selectionAnchor!, cell);
+      ref.read(editorProvider.notifier).setSelectionRect(
+          rect.width >= 1 && rect.height >= 1 ? rect : null);
+      setState(() => _selectionAnchor = null);
+      _activePointers.remove(event.pointer);
+      return;
+    }
 
     // Double-tap (touch only) → undo
     if (event.kind == PointerDeviceKind.touch && wasSinglePointer) {
@@ -360,6 +469,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (mounted) setState(() => _mouseScreenPos = event.localPosition);
 
     final state = ref.read(editorProvider);
+
+    if (state.drawingMode == DrawingMode.paste) {
+      final c = _screenToCanvas(event.localPosition);
+      final (cx, cy) = _canvasToCell(c);
+      if (mounted) setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+      return;
+    }
+
     if (state.currentTool == DrawingTool.backstitch &&
         state.backstitchStartPoint != null) {
       final canvas = _screenToCanvas(event.localPosition);
@@ -395,6 +512,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final isDrawCursor = state.drawingMode == DrawingMode.draw;
     final isColorPickerCursor = state.drawingMode == DrawingMode.colorPicker;
 
+    // Compute ghost stitches for paste preview or move drag
+    List<Stitch>? ghostStitches;
+    if (state.drawingMode == DrawingMode.paste &&
+        _pasteOrigin != null &&
+        state.clipboard != null) {
+      final dx = _pasteOrigin!.dx.toInt();
+      final dy = _pasteOrigin!.dy.toInt();
+      ghostStitches =
+          state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
+    } else if (_isMovingSelection && state.selectionRect != null) {
+      final dx = _moveDelta.dx.round();
+      final dy = _moveDelta.dy.round();
+      ghostStitches =
+          state.selectedStitches.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
+    }
+
     return MouseRegion(
       cursor: _cursor(state),
       onHover: _onPointerHover,
@@ -420,6 +553,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             isColorPickerCursor: isColorPickerCursor,
             cursorScreenPos: _mouseScreenPos,
             aidaColor: state.pattern.aidaColor,
+            selectionRect: state.selectionRect,
+            ghostStitches: ghostStitches,
           ),
           size: Size.infinite,
         ),
@@ -433,6 +568,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       DrawingMode.erase => SystemMouseCursors.none,
       DrawingMode.colorPicker => SystemMouseCursors.none,
       DrawingMode.draw => SystemMouseCursors.none,
+      DrawingMode.select => SystemMouseCursors.precise,
+      DrawingMode.paste => SystemMouseCursors.precise,
     };
   }
 }

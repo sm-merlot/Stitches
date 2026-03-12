@@ -86,6 +86,15 @@ class EditorToolbar extends ConsumerWidget {
                   activeColor: primary,
                   onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
                 ),
+                const SizedBox(width: 2),
+                _ModeButton(
+                  icon: Icons.select_all_outlined,
+                  tooltip: 'Select  [S]',
+                  active: state.drawingMode == DrawingMode.select ||
+                      state.drawingMode == DrawingMode.paste,
+                  activeColor: primary,
+                  onTap: () => notifier.setDrawingMode(DrawingMode.select),
+                ),
               ],
             ),
           ),
@@ -181,6 +190,57 @@ class EditorToolbar extends ConsumerWidget {
                 const SizedBox(width: 4),
                 const _PaletteButton(),
                 const SizedBox(width: 4),
+                vDivider,
+                const SizedBox(width: 2),
+                Tooltip(
+                  message: 'Copy  [Cmd+C]',
+                  child: IconButton(
+                    iconSize: 20,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.copy_outlined),
+                    onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                        ? () => notifier.copySelection()
+                        : null,
+                  ),
+                ),
+                Tooltip(
+                  message: 'Cut  [Cmd+X]',
+                  child: IconButton(
+                    iconSize: 20,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.cut_outlined),
+                    onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                        ? () => notifier.cutSelection()
+                        : null,
+                  ),
+                ),
+                Tooltip(
+                  message: 'Paste  [Cmd+V]',
+                  child: IconButton(
+                    iconSize: 20,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.paste_outlined),
+                    onPressed: state.clipboard != null && state.clipboard!.isNotEmpty
+                        ? () => notifier.enterPasteMode()
+                        : null,
+                  ),
+                ),
+                Tooltip(
+                  message: 'Delete selection  [Del]',
+                  child: IconButton(
+                    iconSize: 20,
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                          ? theme.colorScheme.error
+                          : null,
+                    ),
+                    onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                        ? () => notifier.deleteSelection()
+                        : null,
+                  ),
+                ),
                 vDivider,
                 const SizedBox(width: 2),
                 Tooltip(

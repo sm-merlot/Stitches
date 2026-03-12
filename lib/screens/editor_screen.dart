@@ -147,6 +147,22 @@ class EditorScreen extends ConsumerWidget {
           _save(context, ref);
           return KeyEventResult.handled;
         }
+        if (key == LogicalKeyboardKey.keyA) {
+          notifier.selectAll();
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.keyC) {
+          notifier.copySelection();
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.keyX) {
+          notifier.cutSelection();
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.keyV) {
+          notifier.enterPasteMode();
+          return KeyEventResult.handled;
+        }
         return KeyEventResult.ignored;
       }
 
@@ -176,6 +192,12 @@ class EditorScreen extends ConsumerWidget {
           notifier.setTool(DrawingTool.backstitch);
         case LogicalKeyboardKey.digit8:
           notifier.setDrawingMode(DrawingMode.colorPicker);
+        case LogicalKeyboardKey.keyS:
+          notifier.setDrawingMode(DrawingMode.select);
+        case LogicalKeyboardKey.escape:
+          notifier.cancelSelection();
+        case LogicalKeyboardKey.delete:
+          notifier.deleteSelection();
         default:
           return KeyEventResult.ignored;
       }
