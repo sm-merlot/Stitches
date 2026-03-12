@@ -65,7 +65,6 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('StitchX'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
