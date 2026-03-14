@@ -1,20 +1,25 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/pattern.dart';
 
 class FileService {
   static const String _ext = 'stitchx';
 
+  static bool get _isMobile =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   /// Pick a .stitchx file and return (pattern, filePath), or null if cancelled.
   static Future<(CrossStitchPattern, String)?> openFile() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: [_ext],
+      type: _isMobile ? FileType.any : FileType.custom,
+      allowedExtensions: _isMobile ? null : [_ext],
       allowMultiple: false,
     );
     if (result == null || result.files.isEmpty) return null;
-    final path = result.files.single.path!;
+    final path = result.files.single.path;
+    if (path == null) return null;
     return openFileFromPath(path);
   }
 
@@ -63,14 +68,11 @@ class FileService {
 
   /// Prompt the user for a save location; returns the chosen path or null.
   static Future<String?> saveFileAs(CrossStitchPattern pattern) async {
-    // Don't include the extension — FilePicker appends it automatically on
-    // macOS (via allowedExtensions), and the finalPath guard below adds it
-    // on platforms that don't.
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final path = await FilePicker.platform.saveFile(
-      fileName: suggestedName,
-      type: FileType.custom,
-      allowedExtensions: [_ext],
+      fileName: _isMobile ? '$suggestedName.$_ext' : suggestedName,
+      type: _isMobile ? FileType.any : FileType.custom,
+      allowedExtensions: _isMobile ? null : [_ext],
     );
     if (path == null) return null;
     final finalPath = path.endsWith('.$_ext') ? path : '$path.$_ext';

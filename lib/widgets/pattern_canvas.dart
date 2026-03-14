@@ -1,4 +1,6 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -421,10 +423,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (_isPanMode) {
         _pan(event.delta);
       } else {
-        final moved = (event.localPosition -
-                (_activePointers.values.firstOrNull ?? event.localPosition))
-            .distance;
-        if (moved > 2.0) _handleDrawAt(event.localPosition);
+        _handleDrawAt(event.localPosition);
       }
     }
   }
@@ -609,6 +608,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   MouseCursor _cursor(EditorState state) {
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      return MouseCursor.defer;
+    }
     return switch (state.drawingMode) {
       DrawingMode.pan => SystemMouseCursors.grab,
       DrawingMode.erase => SystemMouseCursors.none,

@@ -49,8 +49,10 @@ class EditorToolbar extends ConsumerWidget {
         ],
       ),
       height: 56,
-      child: Row(
-        children: [
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
           // ── LEFT: Cursor modes ────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
@@ -102,15 +104,14 @@ class EditorToolbar extends ConsumerWidget {
           ),
           vDivider,
 
-          // ── MIDDLE: Stitch tools (scrollable, fills remaining space) ──────
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Builder(builder: (context) {
-                final isDrawMode = state.drawingMode == DrawingMode.draw;
-                return Row(
-                  children: [
+          // ── MIDDLE: Stitch tools ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Builder(builder: (context) {
+              final isDrawMode = state.drawingMode == DrawingMode.draw;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                     _StitchIconButton(
                       tooltip: 'Full stitch  [1]',
                       selected: state.currentTool == DrawingTool.fullStitch,
@@ -173,10 +174,9 @@ class EditorToolbar extends ConsumerWidget {
                       primary: primary,
                       onPrimary: onPrimary,
                     ),
-                  ],
-                );
-              }),
-            ),
+                ],
+              );
+            }),
           ),
           vDivider,
 
@@ -268,7 +268,8 @@ class EditorToolbar extends ConsumerWidget {
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
