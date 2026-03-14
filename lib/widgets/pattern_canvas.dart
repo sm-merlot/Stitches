@@ -43,6 +43,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Selection / move state
   Offset? _selectionAnchor;      // grid cell where rubber-band drag started
   bool _isMovingSelection = false;
+  bool _selectionHasDragged = false; // true once pointer moves during a rubber-band
   Offset? _moveDragStartCell;
   Offset _moveDelta = Offset.zero;
 
@@ -323,6 +324,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           setState(() {
             _selectionAnchor = cell;
             _isMovingSelection = false;
+            _selectionHasDragged = false;
           });
         }
         return;
@@ -374,6 +376,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         if (_isMovingSelection && _moveDragStartCell != null) {
           setState(() => _moveDelta = cell - _moveDragStartCell!);
         } else if (_selectionAnchor != null) {
+          setState(() => _selectionHasDragged = true);
           ref.read(editorProvider.notifier).setSelectionRect(
               _buildSelRect(_selectionAnchor!, cell));
         }
@@ -439,6 +442,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final dy = _moveDelta.dy.round();
       if (dx != 0 || dy != 0) {
         ref.read(editorProvider.notifier).moveSelection(dx, dy);
+      } else {
+        // Single click inside selection with no movement → deselect
+        ref.read(editorProvider.notifier).setSelectionRect(null);
       }
       setState(() {
         _isMovingSelection = false;
@@ -453,9 +459,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_selectionAnchor != null) {
       final cell = _screenToSelCell(pos);
       final rect = _buildSelRect(_selectionAnchor!, cell);
+      // Only keep selection if the user actually dragged; a bare click deselects
       ref.read(editorProvider.notifier).setSelectionRect(
-          rect.width >= 1 && rect.height >= 1 ? rect : null);
-      setState(() => _selectionAnchor = null);
+          _selectionHasDragged && rect.width >= 1 && rect.height >= 1 ? rect : null);
+      setState(() {
+        _selectionAnchor = null;
+        _selectionHasDragged = false;
+      });
       _activePointers.remove(event.pointer);
       return;
     }
