@@ -593,7 +593,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             isErasing: isErasing,
             isDrawCursor: isDrawCursor,
             isColorPickerCursor: isColorPickerCursor,
-            cursorScreenPos: _mouseScreenPos,
+            cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+                ? null
+                : _mouseScreenPos,
             aidaColor: state.pattern.aidaColor,
             selectionRect: state.selectionRect,
             ghostStitches: ghostStitches,
