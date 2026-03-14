@@ -49,138 +49,207 @@ class EditorToolbar extends ConsumerWidget {
         ],
       ),
       height: 56,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-          // ── LEFT: Cursor modes ────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ModeButton(
-                  icon: Icons.draw_outlined,
-                  tooltip: 'Draw  [D]',
-                  active: state.drawingMode == DrawingMode.draw,
-                  activeColor: primary,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.draw),
-                ),
-                const SizedBox(width: 2),
-                _ModeButton(
-                  icon: Icons.auto_fix_normal,
-                  tooltip: 'Erase  [E]',
-                  active: state.drawingMode == DrawingMode.erase,
-                  activeColor: theme.colorScheme.error,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.erase),
-                ),
-                const SizedBox(width: 2),
-                _ModeButton(
-                  icon: Icons.pan_tool_outlined,
-                  tooltip: 'Pan  [P or Space]',
-                  active: state.drawingMode == DrawingMode.pan,
-                  activeColor: primary,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.pan),
-                ),
-                const SizedBox(width: 2),
-                _ModeButton(
-                  icon: Icons.colorize_outlined,
-                  tooltip: 'Pick colour  [C]',
-                  active: state.drawingMode == DrawingMode.colorPicker,
-                  activeColor: primary,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
-                ),
-                const SizedBox(width: 2),
-                _ModeButton(
-                  icon: Icons.select_all_outlined,
-                  tooltip: 'Select  [S]',
-                  active: state.drawingMode == DrawingMode.select ||
-                      state.drawingMode == DrawingMode.paste,
-                  activeColor: primary,
-                  onTap: () => notifier.setDrawingMode(DrawingMode.select),
-                ),
-              ],
-            ),
-          ),
-          vDivider,
-
-          // ── MIDDLE: Stitch tools ──────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Builder(builder: (context) {
-              final isDrawMode = state.drawingMode == DrawingMode.draw;
-              return Row(
+      child: Row(
+        children: [
+          // ── LEFT (scrollable): Cursor modes + context-sensitive tools ─────
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                    _StitchIconButton(
-                      tooltip: 'Full stitch  [1]',
-                      selected: state.currentTool == DrawingTool.fullStitch,
-                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.fullStitch) : null,
-                      primary: primary,
-                      onPrimary: onPrimary,
-                      painterBuilder: (c) => _FullStitchIconPainter(color: c),
+                  // Cursor modes
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ModeButton(
+                          icon: Icons.draw_outlined,
+                          tooltip: 'Draw  [D]',
+                          active: state.drawingMode == DrawingMode.draw,
+                          activeColor: primary,
+                          onTap: () => notifier.setDrawingMode(DrawingMode.draw),
+                        ),
+                        const SizedBox(width: 2),
+                        _ModeButton(
+                          icon: Icons.auto_fix_normal,
+                          tooltip: 'Erase  [E]',
+                          active: state.drawingMode == DrawingMode.erase,
+                          activeColor: theme.colorScheme.error,
+                          onTap: () => notifier.setDrawingMode(DrawingMode.erase),
+                        ),
+                        const SizedBox(width: 2),
+                        _ModeButton(
+                          icon: Icons.pan_tool_outlined,
+                          tooltip: 'Pan  [P or Space]',
+                          active: state.drawingMode == DrawingMode.pan,
+                          activeColor: primary,
+                          onTap: () => notifier.setDrawingMode(DrawingMode.pan),
+                        ),
+                        const SizedBox(width: 2),
+                        _ModeButton(
+                          icon: Icons.colorize_outlined,
+                          tooltip: 'Pick colour  [C]',
+                          active: state.drawingMode == DrawingMode.colorPicker,
+                          activeColor: primary,
+                          onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
+                        ),
+                        const SizedBox(width: 2),
+                        _ModeButton(
+                          icon: Icons.select_all_outlined,
+                          tooltip: 'Select  [S]',
+                          active: state.drawingMode == DrawingMode.select ||
+                              state.drawingMode == DrawingMode.paste,
+                          activeColor: primary,
+                          onTap: () => notifier.setDrawingMode(DrawingMode.select),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    _StitchIconButton(
-                      tooltip: 'Half diagonal /  [2]',
-                      selected: state.currentTool == DrawingTool.halfForward,
-                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfForward) : null,
-                      primary: primary,
-                      onPrimary: onPrimary,
-                      painterBuilder: (c) => _HalfForwardIconPainter(color: c),
-                    ),
-                    const SizedBox(width: 4),
-                    _StitchIconButton(
-                      tooltip: 'Half diagonal \\  [3]',
-                      selected: state.currentTool == DrawingTool.halfBackward,
-                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfBackward) : null,
-                      primary: primary,
-                      onPrimary: onPrimary,
-                      painterBuilder: (c) => _HalfBackwardIconPainter(color: c),
-                    ),
-                    const SizedBox(width: 4),
-                    _StitchIconButton(
-                      tooltip: 'Half-cell cross (X in ½ cell)  [4]',
-                      selected: state.currentTool == DrawingTool.halfCross,
-                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.halfCross) : null,
-                      primary: primary,
-                      onPrimary: onPrimary,
-                      painterBuilder: (c) => _HalfCrossIconPainter(color: c),
-                    ),
-                    const SizedBox(width: 4),
-                    _StitchIconButton(
-                      tooltip: 'Quarter diagonal (auto-corner)  [5]',
-                      selected: state.currentTool == DrawingTool.quarterDiag,
-                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.quarterDiag) : null,
-                      primary: primary,
-                      onPrimary: onPrimary,
-                      painterBuilder: (c) => _QuarterDiagIconPainter(color: c),
-                    ),
-                    const SizedBox(width: 4),
-                    _StitchIconButton(
-                      tooltip: 'Quarter-cell cross / petit point  [6]',
-                      selected: state.currentTool == DrawingTool.quarterCross,
-                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.quarterCross) : null,
-                      primary: primary,
-                      onPrimary: onPrimary,
-                      painterBuilder: (c) => _QuarterCrossIconPainter(color: c),
-                    ),
-                    const SizedBox(width: 4),
-                    _ToolButton(
-                      icon: Icons.gesture,
-                      tooltip: 'Backstitch  [7]',
-                      selected: state.currentTool == DrawingTool.backstitch,
-                      onTap: isDrawMode ? () => notifier.setTool(DrawingTool.backstitch) : null,
-                      primary: primary,
-                      onPrimary: onPrimary,
-                    ),
-                ],
-              );
-            }),
-          ),
-          vDivider,
+                  ),
+                  vDivider,
 
-          // ── RIGHT: Colour + swatches + palette + undo/redo ────────────────
+                  // Stitch tools (draw mode only)
+                  if (state.drawingMode == DrawingMode.draw) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _StitchIconButton(
+                            tooltip: 'Full stitch  [1]',
+                            selected: state.currentTool == DrawingTool.fullStitch,
+                            onTap: () => notifier.setTool(DrawingTool.fullStitch),
+                            primary: primary,
+                            onPrimary: onPrimary,
+                            painterBuilder: (c) => _FullStitchIconPainter(color: c),
+                          ),
+                          const SizedBox(width: 4),
+                          _StitchIconButton(
+                            tooltip: 'Half diagonal /  [2]',
+                            selected: state.currentTool == DrawingTool.halfForward,
+                            onTap: () => notifier.setTool(DrawingTool.halfForward),
+                            primary: primary,
+                            onPrimary: onPrimary,
+                            painterBuilder: (c) => _HalfForwardIconPainter(color: c),
+                          ),
+                          const SizedBox(width: 4),
+                          _StitchIconButton(
+                            tooltip: 'Half diagonal \\  [3]',
+                            selected: state.currentTool == DrawingTool.halfBackward,
+                            onTap: () => notifier.setTool(DrawingTool.halfBackward),
+                            primary: primary,
+                            onPrimary: onPrimary,
+                            painterBuilder: (c) => _HalfBackwardIconPainter(color: c),
+                          ),
+                          const SizedBox(width: 4),
+                          _StitchIconButton(
+                            tooltip: 'Half-cell cross (X in ½ cell)  [4]',
+                            selected: state.currentTool == DrawingTool.halfCross,
+                            onTap: () => notifier.setTool(DrawingTool.halfCross),
+                            primary: primary,
+                            onPrimary: onPrimary,
+                            painterBuilder: (c) => _HalfCrossIconPainter(color: c),
+                          ),
+                          const SizedBox(width: 4),
+                          _StitchIconButton(
+                            tooltip: 'Quarter diagonal (auto-corner)  [5]',
+                            selected: state.currentTool == DrawingTool.quarterDiag,
+                            onTap: () => notifier.setTool(DrawingTool.quarterDiag),
+                            primary: primary,
+                            onPrimary: onPrimary,
+                            painterBuilder: (c) => _QuarterDiagIconPainter(color: c),
+                          ),
+                          const SizedBox(width: 4),
+                          _StitchIconButton(
+                            tooltip: 'Quarter-cell cross / petit point  [6]',
+                            selected: state.currentTool == DrawingTool.quarterCross,
+                            onTap: () => notifier.setTool(DrawingTool.quarterCross),
+                            primary: primary,
+                            onPrimary: onPrimary,
+                            painterBuilder: (c) => _QuarterCrossIconPainter(color: c),
+                          ),
+                          const SizedBox(width: 4),
+                          _ToolButton(
+                            icon: Icons.gesture,
+                            tooltip: 'Backstitch  [7]',
+                            selected: state.currentTool == DrawingTool.backstitch,
+                            onTap: () => notifier.setTool(DrawingTool.backstitch),
+                            primary: primary,
+                            onPrimary: onPrimary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    vDivider,
+                  ],
+
+                  // Copy/cut/paste/delete (select/paste mode only)
+                  if (state.drawingMode == DrawingMode.select ||
+                      state.drawingMode == DrawingMode.paste) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Tooltip(
+                            message: 'Copy  [Cmd+C]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.copy_outlined),
+                              onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                  ? () => notifier.copySelection()
+                                  : null,
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Cut  [Cmd+X]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.cut_outlined),
+                              onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                  ? () => notifier.cutSelection()
+                                  : null,
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Paste  [Cmd+V]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.paste_outlined),
+                              onPressed: () => notifier.enterPasteMode(),
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Delete selection  [Del]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: Icon(
+                                Icons.delete_outline,
+                                color: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                    ? theme.colorScheme.error
+                                    : null,
+                              ),
+                              onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                  ? () => notifier.deleteSelection()
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    vDivider,
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // ── RIGHT (fixed): Colour + swatches + palette + undo/redo ────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
             child: Row(
@@ -192,55 +261,6 @@ class EditorToolbar extends ConsumerWidget {
                 const SizedBox(width: 4),
                 const _PaletteButton(),
                 const SizedBox(width: 4),
-                vDivider,
-                const SizedBox(width: 2),
-                Tooltip(
-                  message: 'Copy  [Cmd+C]',
-                  child: IconButton(
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.copy_outlined),
-                    onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                        ? () => notifier.copySelection()
-                        : null,
-                  ),
-                ),
-                Tooltip(
-                  message: 'Cut  [Cmd+X]',
-                  child: IconButton(
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.cut_outlined),
-                    onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                        ? () => notifier.cutSelection()
-                        : null,
-                  ),
-                ),
-                Tooltip(
-                  message: 'Paste  [Cmd+V]',
-                  child: IconButton(
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.paste_outlined),
-                    onPressed: () => notifier.enterPasteMode(),
-                  ),
-                ),
-                Tooltip(
-                  message: 'Delete selection  [Del]',
-                  child: IconButton(
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    icon: Icon(
-                      Icons.delete_outline,
-                      color: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                          ? theme.colorScheme.error
-                          : null,
-                    ),
-                    onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                        ? () => notifier.deleteSelection()
-                        : null,
-                  ),
-                ),
                 vDivider,
                 const SizedBox(width: 2),
                 Tooltip(
@@ -268,8 +288,7 @@ class EditorToolbar extends ConsumerWidget {
               ],
             ),
           ),
-          ],
-        ),
+        ],
       ),
     );
   }
