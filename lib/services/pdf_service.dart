@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Color;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -113,10 +114,11 @@ class PdfService {
 
     final bytes = await doc.save();
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     final path = await FilePicker.platform.saveFile(
-      fileName: suggestedName,
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      fileName: isMobile ? '$suggestedName.pdf' : suggestedName,
+      type: isMobile ? FileType.any : FileType.custom,
+      allowedExtensions: isMobile ? null : ['pdf'],
     );
     if (path == null) return;
     final finalPath = path.endsWith('.pdf') ? path : '$path.pdf';
