@@ -19,6 +19,16 @@ enum DrawingTool {
 /// Cursor mode — controls what pointer/touch interactions do.
 enum DrawingMode { draw, erase, pan, colorPicker, select, paste }
 
+/// Controls how stitches are rendered in stitch mode.
+enum StitchViewMode {
+  /// Stitches shown at full colour (default).
+  normal,
+  /// Cross stitches are hidden; only backstitches visible.
+  hidden,
+  /// Cross stitches rendered in greyscale.
+  greyed,
+}
+
 class EditorState {
   final CrossStitchPattern pattern;
   final String? filePath;
@@ -36,6 +46,14 @@ class EditorState {
   /// Thread data for stitches on the clipboard — needed when pasting across patterns.
   final List<Thread>? clipboardThreads;
 
+  // ── Stitch mode ───────────────────────────────────────────────────────────
+  /// Whether stitch mode is active (canvas readonly, simplified toolbar).
+  final bool stitchMode;
+  /// How cross stitches are rendered in stitch mode.
+  final StitchViewMode stitchViewMode;
+  /// If set, only this thread is shown at full colour; all others are greyed.
+  final String? stitchFocusThreadId;
+
   const EditorState({
     required this.pattern,
     this.filePath,
@@ -50,6 +68,9 @@ class EditorState {
     this.selectionRect,
     this.clipboard,
     this.clipboardThreads,
+    this.stitchMode = false,
+    this.stitchViewMode = StitchViewMode.normal,
+    this.stitchFocusThreadId,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -119,6 +140,9 @@ class EditorState {
     Object? selectionRect = _sentinel,
     Object? clipboard = _sentinel,
     Object? clipboardThreads = _sentinel,
+    bool? stitchMode,
+    StitchViewMode? stitchViewMode,
+    Object? stitchFocusThreadId = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -138,6 +162,11 @@ class EditorState {
       selectionRect: selectionRect == _sentinel ? this.selectionRect : selectionRect as Rect?,
       clipboard: clipboard == _sentinel ? this.clipboard : clipboard as List<Stitch>?,
       clipboardThreads: clipboardThreads == _sentinel ? this.clipboardThreads : clipboardThreads as List<Thread>?,
+      stitchMode: stitchMode ?? this.stitchMode,
+      stitchViewMode: stitchViewMode ?? this.stitchViewMode,
+      stitchFocusThreadId: stitchFocusThreadId == _sentinel
+          ? this.stitchFocusThreadId
+          : stitchFocusThreadId as String?,
     );
   }
 
@@ -244,6 +273,29 @@ class EditorNotifier extends StateNotifier<EditorState> {
       pattern: state.pattern.copyWith(aidaColor: color),
       isDirty: true,
     );
+  }
+
+  // ─── Stitch mode ──────────────────────────────────────────────────────────
+
+  /// Toggle stitch mode on/off. Entering stitch mode switches to pan.
+  void toggleStitchMode() {
+    final entering = !state.stitchMode;
+    state = state.copyWith(
+      stitchMode: entering,
+      // Switch to pan so the canvas isn't accidentally edited
+      drawingMode: entering ? DrawingMode.pan : DrawingMode.draw,
+      selectionRect: null,
+      backstitchStartPoint: null,
+    );
+  }
+
+  void setStitchViewMode(StitchViewMode mode) {
+    state = state.copyWith(stitchViewMode: mode);
+  }
+
+  /// Set or clear the focus thread. Pass [null] to show all threads normally.
+  void setStitchFocusThread(String? threadId) {
+    state = state.copyWith(stitchFocusThreadId: threadId);
   }
 
   // ─── Selection ────────────────────────────────────────────────────────────
