@@ -28,6 +28,12 @@ class EditorToolbar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
+
+    // In stitch mode show the simplified stitch toolbar
+    if (state.stitchMode) {
+      return const _StitchModeToolbar();
+    }
+
     final notifier = ref.read(editorProvider.notifier);
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
@@ -812,6 +818,232 @@ class _AidaButton extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Stitch mode toolbar ──────────────────────────────────────────────────────
+
+class _StitchModeToolbar extends ConsumerWidget {
+  const _StitchModeToolbar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(editorProvider);
+    final notifier = ref.read(editorProvider.notifier);
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final surface = theme.colorScheme.surface;
+
+    final vDivider = Container(width: 1, height: 32, color: theme.dividerColor);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(top: BorderSide(color: theme.dividerColor, width: 1)),
+        // Tinted border top to indicate mode
+        boxShadow: [
+          BoxShadow(
+            color: primary.withValues(alpha: 0.18),
+            blurRadius: 6,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      height: 56,
+      child: Row(
+        children: [
+          // ── LEFT: View mode toggles + focus thread list ───────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // View mode: Normal / Hidden / Greyed
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _StitchViewModeButton(
+                          icon: Icons.visibility_outlined,
+                          label: 'Show all',
+                          active: state.stitchViewMode == StitchViewMode.normal,
+                          onTap: () => notifier.setStitchViewMode(StitchViewMode.normal),
+                        ),
+                        const SizedBox(width: 2),
+                        _StitchViewModeButton(
+                          icon: Icons.visibility_off_outlined,
+                          label: 'Hide backstitches',
+                          active: state.stitchViewMode == StitchViewMode.hidden,
+                          onTap: () => notifier.setStitchViewMode(StitchViewMode.hidden),
+                        ),
+                        const SizedBox(width: 2),
+                        _StitchViewModeButton(
+                          icon: Icons.invert_colors_outlined,
+                          label: 'Grey stitches',
+                          active: state.stitchViewMode == StitchViewMode.greyed,
+                          onTap: () => notifier.setStitchViewMode(StitchViewMode.greyed),
+                        ),
+                      ],
+                    ),
+                  ),
+                  vDivider,
+
+                  // Focus thread selector: tap a thread to highlight only it
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Focus:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Per-thread swatches
+                        ...state.pattern.threads.map((t) {
+                          final isFocused = state.stitchFocusThreadId == t.dmcCode;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Tooltip(
+                              message: '${t.dmcCode} – ${t.name}',
+                              child: GestureDetector(
+                                onTap: () => notifier.setStitchFocusThread(
+                                    isFocused ? null : t.dmcCode),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 120),
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: t.color,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isFocused
+                                          ? primary
+                                          : Colors.grey.shade400,
+                                      width: isFocused ? 2.5 : 1,
+                                    ),
+                                    boxShadow: isFocused
+                                        ? [
+                                            BoxShadow(
+                                              color: primary.withValues(alpha: 0.4),
+                                              blurRadius: 4,
+                                              spreadRadius: 1,
+                                            )
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Center(
+                                    child: t.symbol.isNotEmpty
+                                        ? Text(
+                                            t.symbol,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: t.color.computeLuminance() > 0.35
+                                                  ? Colors.black
+                                                  : Colors.white,
+                                              height: 1.0,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── RIGHT: Palette button (opens side panel) ─────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                vDivider,
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: 'Thread palette',
+                  child: IconButton(
+                    icon: const Icon(Icons.palette_outlined, size: 20),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Scaffold.of(context).openEndDrawer(),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Stitch view mode button ──────────────────────────────────────────────────
+
+class _StitchViewModeButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _StitchViewModeButton({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Tooltip(
+      message: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: active ? primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: active ? primary : Colors.grey.shade300,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: active ? Colors.white : Colors.grey.shade600),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: active ? Colors.white : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
+import '../providers/editor_provider.dart' show StitchViewMode;
 
 class CanvasPainter extends CustomPainter {
   final CrossStitchPattern pattern;
@@ -21,6 +22,12 @@ class CanvasPainter extends CustomPainter {
   /// Extra threads used by [ghostStitches] that may not be in [pattern] yet.
   final List<Thread>? ghostThreads;
 
+  // ── Stitch mode ───────────────────────────────────────────────────────────
+  final bool stitchMode;
+  final StitchViewMode stitchViewMode;
+  /// If set, only this thread ID is shown at full colour; all others are greyed.
+  final String? stitchFocusThreadId;
+
   const CanvasPainter({
     required this.pattern,
     required this.cellSize,
@@ -36,6 +43,9 @@ class CanvasPainter extends CustomPainter {
     this.selectionRect,
     this.ghostStitches,
     this.ghostThreads,
+    this.stitchMode = false,
+    this.stitchViewMode = StitchViewMode.normal,
+    this.stitchFocusThreadId,
   });
 
   @override
@@ -66,15 +76,20 @@ class CanvasPainter extends CustomPainter {
 
       switch (stitch) {
         case FullStitch(:final x, :final y):
-          _drawFullStitch(canvas, x, y, thread.color);
+          final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
+          if (c != null) _drawFullStitch(canvas, x, y, c);
         case HalfStitch(:final x, :final y, :final isForward):
-          _drawHalfStitch(canvas, x, y, isForward, thread.color);
+          final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
+          if (c != null) _drawHalfStitch(canvas, x, y, isForward, c);
         case QuarterStitch(:final x, :final y, :final quadrant):
-          _drawQuarterStitch(canvas, x, y, quadrant, thread.color);
+          final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
+          if (c != null) _drawQuarterStitch(canvas, x, y, quadrant, c);
         case HalfCrossStitch(:final x, :final y, :final half):
-          _drawHalfCrossStitch(canvas, x, y, half, thread.color);
+          final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
+          if (c != null) _drawHalfCrossStitch(canvas, x, y, half, c);
         case QuarterCrossStitch(:final x, :final y, :final quadrant):
-          _drawQuarterCrossStitch(canvas, x, y, quadrant, thread.color);
+          final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
+          if (c != null) _drawQuarterCrossStitch(canvas, x, y, quadrant, c);
         case BackStitch():
           break; // drawn after grid
       }
@@ -88,8 +103,10 @@ class CanvasPainter extends CustomPainter {
       if (stitch is! BackStitch) continue;
       final thread = threadMap[stitch.threadId];
       if (thread == null) continue;
-      _drawBackstitch(
-          canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, thread.color);
+      final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: false);
+      if (c != null) {
+        _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
+      }
     }
 
     // ── Stitch symbols (drawn after grid so they sit on top of grid lines) ──
@@ -98,7 +115,8 @@ class CanvasPainter extends CustomPainter {
         if (stitch is BackStitch) continue;
         final thread = threadMap[stitch.threadId];
         if (thread == null || thread.symbol.isEmpty) continue;
-        _drawStitchSymbol(canvas, stitch, thread.symbol, thread.color);
+        final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
+        if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
       }
     }
 
@@ -812,6 +830,52 @@ class CanvasPainter extends CustomPainter {
         Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
   }
 
+  // ─── Stitch mode colour resolution ───────────────────────────────────────
+
+  /// Returns the colour to use for a stitch in the current stitch mode.
+  /// Returns [null] if the stitch should be skipped (hidden mode).
+  Color? _resolveStitchColor(String threadId, Color original, {required bool isCrossStitch}) {
+    if (!stitchMode) return original;
+
+    // Grey mode: cross stitches are always greyed regardless of focus.
+    // Backstitches follow the focus filter (full colour when focused / no focus set).
+    if (stitchViewMode == StitchViewMode.greyed) {
+      if (isCrossStitch) return _greyColor(original);
+      // Backstitch — apply focus
+      final hasFocus = stitchFocusThreadId != null;
+      if (!hasFocus || stitchFocusThreadId == threadId) return original;
+      return _greyColor(original);
+    }
+
+    final hasFocus = stitchFocusThreadId != null;
+    final isFocused = !hasFocus || stitchFocusThreadId == threadId;
+
+    if (hasFocus && !isFocused) {
+      // Non-focused thread: grey it out (never hidden, so you can see placement context).
+      return _greyColor(original);
+    }
+
+    if (hasFocus && isFocused) {
+      // Focused thread at full colour, but still respect hide-backstitches mode.
+      if (stitchViewMode == StitchViewMode.hidden && !isCrossStitch) return null;
+      return original;
+    }
+
+    // No focus set — apply view mode.
+    return switch (stitchViewMode) {
+      StitchViewMode.normal => original,
+      StitchViewMode.hidden => isCrossStitch ? original : null,
+      StitchViewMode.greyed => original, // unreachable — handled above
+    };
+  }
+
+  /// Converts a colour to a desaturated grey, preserving approximate luminance.
+  static Color _greyColor(Color c) {
+    final lum = 0.299 * (c.r * 255) + 0.587 * (c.g * 255) + 0.114 * (c.b * 255);
+    final g = lum.round().clamp(80, 210);
+    return Color.fromARGB(160, g, g, g);
+  }
+
   @override
   bool shouldRepaint(CanvasPainter oldDelegate) {
     return oldDelegate.pattern != pattern ||
@@ -827,6 +891,9 @@ class CanvasPainter extends CustomPainter {
         oldDelegate.aidaColor != aidaColor ||
         oldDelegate.selectionRect != selectionRect ||
         oldDelegate.ghostStitches != ghostStitches ||
-        oldDelegate.ghostThreads != ghostThreads;
+        oldDelegate.ghostThreads != ghostThreads ||
+        oldDelegate.stitchMode != stitchMode ||
+        oldDelegate.stitchViewMode != stitchViewMode ||
+        oldDelegate.stitchFocusThreadId != stitchFocusThreadId;
   }
 }

@@ -296,10 +296,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     _activePointers[event.pointer] = event.localPosition;
     if (mounted) setState(() => _mouseScreenPos = event.localPosition);
 
-    // Apple Pencil double-tap → toggle erase/draw
+    // Apple Pencil double-tap → toggle erase/draw (disabled in stitch mode)
     if (event.kind == PointerDeviceKind.stylus &&
         event.buttons == kSecondaryStylusButton) {
-      ref.read(editorProvider.notifier).toggleDrawingMode();
+      if (!ref.read(editorProvider).stitchMode) {
+        ref.read(editorProvider.notifier).toggleDrawingMode();
+      }
       return;
     }
 
@@ -612,6 +614,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             ghostThreads: state.drawingMode == DrawingMode.paste
                 ? state.clipboardThreads
                 : null,
+            stitchMode: state.stitchMode,
+            stitchViewMode: state.stitchViewMode,
+            stitchFocusThreadId: state.stitchFocusThreadId,
           ),
           size: Size.infinite,
         ),

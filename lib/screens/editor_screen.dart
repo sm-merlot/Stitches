@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
 import '../providers/editor_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/file_service.dart';
 import '../services/pdf_service.dart';
 import '../widgets/editor_toolbar.dart';
@@ -131,6 +133,19 @@ class EditorScreen extends ConsumerWidget {
 
       final key = event.logicalKey;
 
+      // In stitch mode only allow save and the stitch mode toggle (Escape)
+      if (state.stitchMode) {
+        if ((meta || ctrl) && key == LogicalKeyboardKey.keyS) {
+          _save(context, ref);
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.escape) {
+          notifier.toggleStitchMode();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      }
+
       // Modifier shortcuts
       if (meta || ctrl) {
         if (key == LogicalKeyboardKey.keyZ && !shift) {
@@ -217,31 +232,45 @@ class EditorScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: Text(_title(state)),
+          backgroundColor: state.stitchMode
+              ? Theme.of(context).colorScheme.primaryContainer
+              : null,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.save_outlined),
-              tooltip: 'Save  (Cmd+S)',
-              onPressed: () => _save(context, ref),
-            ),
-            IconButton(
-              icon: const Icon(Icons.save_as_outlined),
-              tooltip: 'Save As…',
-              onPressed: () => _saveAs(context, ref),
-            ),
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: 'Export PDF…',
-              onPressed: () => _exportPdf(context, state),
-            ),
-            IconButton(
-              icon: const Icon(Icons.crop_outlined),
-              tooltip: 'Resize Aida',
-              onPressed: () => _showResizeDialog(context, ref, state),
-            ),
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              tooltip: 'Pattern Info',
-              onPressed: () => _showPatternInfo(context, state),
+            if (!state.stitchMode) ...[
+              IconButton(
+                icon: const Icon(Icons.save_outlined),
+                tooltip: 'Save  (Cmd+S)',
+                onPressed: () => _save(context, ref),
+              ),
+              IconButton(
+                icon: const Icon(Icons.save_as_outlined),
+                tooltip: 'Save As…',
+                onPressed: () => _saveAs(context, ref),
+              ),
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: 'Export PDF…',
+                onPressed: () => _exportPdf(context, state),
+              ),
+              IconButton(
+                icon: const Icon(Icons.crop_outlined),
+                tooltip: 'Resize Aida',
+                onPressed: () => _showResizeDialog(context, ref, state),
+              ),
+              IconButton(
+                icon: const Icon(Icons.info_outline),
+                tooltip: 'Pattern Info',
+                onPressed: () => _showPatternInfo(context, state),
+              ),
+            ],
+            // Stitch mode toggle — always visible, pinned to right edge
+            Tooltip(
+              message: state.stitchMode ? 'Exit Stitch Mode' : 'Stitch Mode',
+              child: Switch(
+                value: state.stitchMode,
+                onChanged: (_) =>
+                    ref.read(editorProvider.notifier).toggleStitchMode(),
+              ),
             ),
           ],
         ),
@@ -255,6 +284,8 @@ class EditorScreen extends ConsumerWidget {
             ],
           ),
         ),
+        endDrawer: const _StitchPalettePanel(),
+        endDrawerEnableOpenDragGesture: false,
       ),
     );
   }
@@ -318,6 +349,96 @@ class EditorScreen extends ConsumerWidget {
     );
   }
 }
+
+// ─── Stitch mode palette side panel ─────────────────────────────────────────
+
+class _StitchPalettePanel extends ConsumerWidget {
+  const _StitchPalettePanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(editorProvider);
+    final useDmc = ref.watch(settingsProvider).useDmc;
+    final threads = state.pattern.threads;
+    final theme = Theme.of(context);
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
+                children: [
+                  Text('Threads', style: theme.textTheme.titleMedium),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            if (threads.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('No threads yet.',
+                    style: TextStyle(color: Colors.grey)),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  itemCount: threads.length,
+                  itemBuilder: (_, i) {
+                    final t = threads[i];
+                    final displayCode = useDmc
+                        ? t.dmcCode
+                        : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
+                    final textColor = t.color.computeLuminance() > 0.35
+                        ? Colors.black
+                        : Colors.white;
+                    return ListTile(
+                      dense: true,
+                      leading: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: t.color,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: Colors.grey.shade400, width: 1),
+                        ),
+                        alignment: Alignment.center,
+                        child: t.symbol.isNotEmpty
+                            ? Text(
+                                t.symbol,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                  height: 1.0,
+                                ),
+                              )
+                            : null,
+                      ),
+                      title: Text('$displayCode – ${t.name}',
+                          style: const TextStyle(fontSize: 13)),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {
   final String label;
