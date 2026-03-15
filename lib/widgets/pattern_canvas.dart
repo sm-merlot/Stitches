@@ -582,12 +582,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     return MouseRegion(
       cursor: _cursor(state),
-      onHover: _onPointerHover,
       onExit: (_) { if (mounted) setState(() => _mouseScreenPos = null); },
       child: Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: _onPointerMove,
         onPointerUp: _onPointerUp,
+        onPointerHover: _onPointerHover,
         onPointerSignal: _onPointerSignal,
         onPointerPanZoomStart: _onPointerPanZoomStart,
         onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
