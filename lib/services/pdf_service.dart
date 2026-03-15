@@ -18,97 +18,162 @@ class PdfService {
 
     // ── Data prep ──────────────────────────────────────────────────────────
 
-    // Per-thread approximate full-stitch equivalents
-    final stitchEquiv = <String, double>{};
+    // Per-thread stitch equivalents split into cross-type and backstitch
+    final crossStitchEquiv = <String, double>{};
+    final backStitchEquiv = <String, double>{};
     for (final s in pattern.stitches) {
-      final v = switch (s) {
-        FullStitch() => 1.0,
-        HalfStitch() => 0.5,
-        QuarterStitch() => 0.25,
-        HalfCrossStitch() => 0.5,
-        QuarterCrossStitch() => 0.25,
-        BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2) =>
-          math.sqrt(math.pow(x2 - x1, 2) + math.pow(y2 - y1, 2)),
-      };
-      stitchEquiv[s.threadId] = (stitchEquiv[s.threadId] ?? 0) + v;
+      if (s is BackStitch) {
+        final v = math.sqrt(
+            math.pow(s.x2 - s.x1, 2) + math.pow(s.y2 - s.y1, 2));
+        backStitchEquiv[s.threadId] = (backStitchEquiv[s.threadId] ?? 0) + v;
+      } else {
+        final v = switch (s) {
+          FullStitch() => 1.0,
+          HalfStitch() => 0.5,
+          QuarterStitch() => 0.25,
+          HalfCrossStitch() => 0.5,
+          QuarterCrossStitch() => 0.25,
+          BackStitch() => 0.0,
+        };
+        crossStitchEquiv[s.threadId] =
+            (crossStitchEquiv[s.threadId] ?? 0) + v;
+      }
     }
 
     final backstitches = pattern.stitches.whereType<BackStitch>().toList();
     final nonBack = pattern.stitches.where((s) => s is! BackStitch).toList();
     final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
 
-    // Symbol map: last non-backstitch stitch drawn per cell -> thread
-    final symbolMap = <(int, int), Thread>{};
-    for (final s in nonBack) {
-      final cx = _stitchX(s), cy = _stitchY(s);
-      final t = threadMap[s.threadId];
-      if (t != null) symbolMap[(cx, cy)] = t;
-    }
+    // Threads that have cross-type stitches / backstitches respectively
+    final crossThreads = pattern.threads
+        .where((t) => crossStitchEquiv.containsKey(t.dmcCode))
+        .toList();
+    final backThreads = pattern.threads
+        .where((t) => backStitchEquiv.containsKey(t.dmcCode))
+        .toList();
 
-    // ── Grid layout ────────────────────────────────────────────────────────
+    // ── Page layout constants ───────────────────────────────────────────────
+    const pageFormat = PdfPageFormat.a4; // portrait
+    const margin = 40.0;
+    const rulerW = 24.0;
+    const rulerH = 16.0;
+    const headerH = 44.0;
+    const footerH = 20.0;
 
-    final landscapeFormat = PdfPageFormat.a4.landscape;
-    const margin = 36.0;
-    const headerH = 18.0;
-    final usableW = landscapeFormat.width - 2 * margin;
-    final usableH = landscapeFormat.height - 2 * margin - headerH - 6;
+    final usableW = pageFormat.width - 2 * margin - rulerW;
+    final usableH = pageFormat.height - 2 * margin - headerH - footerH - rulerH;
 
     final cellByW = usableW / pattern.width;
     final cellByH = usableH / pattern.height;
-    final cellSize = math.min(18.0, math.max(3.0, math.min(cellByW, cellByH)));
+    // Target: fill the page comfortably. Clamp 4–12 pt per cell.
+    final cellSize = math.min(12.0, math.max(4.0, math.min(cellByW, cellByH)));
 
     final colsPerPage = (usableW / cellSize).floor().clamp(1, pattern.width);
     final rowsPerPage = (usableH / cellSize).floor().clamp(1, pattern.height);
     final pagesCols = (pattern.width / colsPerPage).ceil();
     final pagesRows = (pattern.height / rowsPerPage).ceil();
     final totalGridPages = pagesCols * pagesRows;
+    // Page 1 = title, page 2 = cross colour table,
+    // page 3 = backstitch table (optional), then chart pages.
+    final colourTablePages = 1 + (backThreads.isEmpty ? 0 : 1);
+    final totalPages = 1 + colourTablePages + totalGridPages;
 
-    // ── Grid pages ─────────────────────────────────────────────────────────
+    // ── Page 1: Title page ────────────────────────────────────────────────
 
+    final titlePage = PdfPage(doc.document, pageFormat: pageFormat);
+    _drawTitlePage(
+      titlePage.getGraphics(),
+      format: pageFormat,
+      pattern: pattern,
+      nonBack: nonBack,
+      backstitches: backstitches,
+      threadMap: threadMap,
+      margin: margin,
+      footerH: footerH,
+      pageNum: 1,
+      totalPages: totalPages,
+      pdfFont: pdfFont,
+      pdfFontBold: pdfFontBold,
+    );
+
+    // ── Page 2: Cross stitch colour table ─────────────────────────────────
+
+    final crossTablePage = PdfPage(doc.document, pageFormat: pageFormat);
+    _drawColourTablePage(
+      crossTablePage.getGraphics(),
+      format: pageFormat,
+      pattern: pattern,
+      threads: crossThreads,
+      stitchEquiv: crossStitchEquiv,
+      isBackstitch: false,
+      margin: margin,
+      headerH: headerH,
+      footerH: footerH,
+      pageNum: 2,
+      totalPages: totalPages,
+      pdfFont: pdfFont,
+      pdfFontBold: pdfFontBold,
+    );
+
+    // ── Page 3 (optional): Backstitch colour table ────────────────────────
+
+    if (backThreads.isNotEmpty) {
+      final backTablePage = PdfPage(doc.document, pageFormat: pageFormat);
+      _drawColourTablePage(
+        backTablePage.getGraphics(),
+        format: pageFormat,
+        pattern: pattern,
+        threads: backThreads,
+        stitchEquiv: backStitchEquiv,
+        isBackstitch: true,
+        margin: margin,
+        headerH: headerH,
+        footerH: footerH,
+        pageNum: 3,
+        totalPages: totalPages,
+        pdfFont: pdfFont,
+        pdfFontBold: pdfFontBold,
+      );
+    }
+
+    // ── Chart pages ───────────────────────────────────────────────────────
+
+    final chartPageOffset = 1 + colourTablePages + 1; // 1-based
     for (int pr = 0; pr < pagesRows; pr++) {
       for (int pc = 0; pc < pagesCols; pc++) {
         final startX = pc * colsPerPage;
         final startY = pr * rowsPerPage;
         final endX = math.min(startX + colsPerPage, pattern.width);
         final endY = math.min(startY + rowsPerPage, pattern.height);
-        final pageNum = pr * pagesCols + pc + 1;
+        final pageNum = chartPageOffset + pr * pagesCols + pc;
 
-        final page = PdfPage(doc.document, pageFormat: landscapeFormat);
+        final page = PdfPage(doc.document, pageFormat: pageFormat);
         final canvas = page.getGraphics();
 
-        _drawGridPage(
+        _drawChartPage(
           canvas,
-          format: landscapeFormat,
+          format: pageFormat,
           pattern: pattern,
           nonBack: nonBack,
           backstitches: backstitches,
           threadMap: threadMap,
-          symbolMap: symbolMap,
           cellSize: cellSize,
           startX: startX,
           startY: startY,
           endX: endX,
           endY: endY,
           margin: margin,
+          rulerW: rulerW,
+          rulerH: rulerH,
           headerH: headerH,
+          footerH: footerH,
           pageNum: pageNum,
-          totalPages: totalGridPages,
+          totalPages: totalPages,
           pdfFont: pdfFont,
           pdfFontBold: pdfFontBold,
         );
       }
     }
-
-    // ── Legend page ────────────────────────────────────────────────────────
-
-    doc.addPage(pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(margin),
-      build: (_) => _buildLegendPage(
-        pattern: pattern,
-        stitchEquiv: stitchEquiv,
-      ),
-    ));
 
     // ── Save ───────────────────────────────────────────────────────────────
 
@@ -125,23 +190,25 @@ class PdfService {
     await File(finalPath).writeAsBytes(bytes);
   }
 
-  // ── Grid page ─────────────────────────────────────────────────────────────
+  // ── Chart page ────────────────────────────────────────────────────────────
 
-  static void _drawGridPage(
+  static void _drawChartPage(
     PdfGraphics canvas, {
     required PdfPageFormat format,
     required CrossStitchPattern pattern,
     required List<Stitch> nonBack,
     required List<BackStitch> backstitches,
     required Map<String, Thread> threadMap,
-    required Map<(int, int), Thread> symbolMap,
     required double cellSize,
     required int startX,
     required int startY,
     required int endX,
     required int endY,
     required double margin,
+    required double rulerW,
+    required double rulerH,
     required double headerH,
+    required double footerH,
     required int pageNum,
     required int totalPages,
     required PdfFont pdfFont,
@@ -152,108 +219,85 @@ class PdfService {
     final gridW = cols * cellSize;
     final gridH = rows * cellSize;
 
-    // Grid origin: bottom-left in PDF coords (y=0 at page bottom)
-    final gridOriginX = margin;
-    final gridOriginY = format.height - margin - headerH - 6 - gridH;
+    // Grid origin (bottom-left in PDF coords; y=0 is page bottom).
+    // Sits below the header+rulerH, to the right of the left row-ruler.
+    final gridOriginX = margin + rulerW;
+    final gridOriginY = format.height - margin - headerH - rulerH - gridH;
 
-    // ── Header ──────────────────────────────────────────────────────────
-    final headerY = format.height - margin - 11;
-    canvas.setFillColor(PdfColors.black);
-    canvas.drawString(pdfFontBold, 11, _ascii(pattern.name), margin, headerY);
+    // ── Header ───────────────────────────────────────────────────────────
+    _drawPageHeader(
+      canvas,
+      format: format,
+      pattern: pattern,
+      margin: margin,
+      headerH: headerH,
+      subtitle:
+          'Cols ${startX + 1}\u2013$endX, Rows ${startY + 1}\u2013$endY  |  Page $pageNum of $totalPages',
+      pdfFont: pdfFont,
+      pdfFontBold: pdfFontBold,
+    );
 
-    final pageLabel =
-        'Page $pageNum of $totalPages  |  '
-        'Cols ${startX + 1}-$endX  Rows ${startY + 1}-$endY  |  '
-        '${pattern.width} x ${pattern.height} stitches';
-    final labelW = pageLabel.length * 8 * 0.55;
-    canvas.drawString(pdfFont, 8, pageLabel,
-        format.width - margin - labelW, headerY - 1);
-
-    // ── Aida background ─────────────────────────────────────────────────
+    // ── Aida background ──────────────────────────────────────────────────
     canvas.setFillColor(_pdfColor(pattern.aidaColor));
     canvas.drawRect(gridOriginX, gridOriginY, gridW, gridH);
     canvas.fillPath();
 
-    // ── Stitch lines (mirrors canvas_painter.dart exactly) ──────────────
-    final lineWidth = math.max(0.5, cellSize * 0.12);
-    canvas.setLineWidth(lineWidth);
-
+    // ── Stitch fills (each stitch drawn individually, preserving partial shapes) ─
     for (final s in nonBack) {
       final cx = _stitchX(s);
       final cy = _stitchY(s);
       if (cx < startX || cx >= endX || cy < startY || cy >= endY) continue;
-
       final thread = threadMap[s.threadId];
       if (thread == null) continue;
-      canvas.setStrokeColor(_pdfColor(thread.color));
 
-      // Cell corners in PDF coords
       final gx = gridOriginX + (cx - startX) * cellSize;
       final gy = gridOriginY + (rows - (cy - startY) - 1) * cellSize;
-      // Shorthand: PDF top of cell = gy+cellSize, bottom = gy
-      // Flutter top-left  -> PDF (gx,        gy+cellSize)
-      // Flutter top-right -> PDF (gx+cellSize, gy+cellSize)
-      // Flutter bot-left  -> PDF (gx,        gy)
-      // Flutter bot-right -> PDF (gx+cellSize, gy)
-      final tl = (gx, gy + cellSize);
-      final tr = (gx + cellSize, gy + cellSize);
-      final bl = (gx, gy);
-      final br = (gx + cellSize, gy);
-      final cx2 = gx + cellSize / 2;
-      final cy2 = gy + cellSize / 2;
-      final midLT = (gx, gy + cellSize / 2);          // left edge mid
-      final midRT = (gx + cellSize, gy + cellSize / 2); // right edge mid
-      final midTT = (gx + cellSize / 2, gy + cellSize); // top edge mid
-      final midBT = (gx + cellSize / 2, gy);            // bottom edge mid
 
-      switch (s) {
-        case FullStitch():
-          _line(canvas, tl, br); // \
-          _line(canvas, tr, bl); // /
-        case HalfStitch(isForward: true):
-          _line(canvas, tr, bl); // /
-        case HalfStitch(isForward: false):
-          _line(canvas, tl, br); // \
-        case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-          _line(canvas, tl, (cx2, cy2));
-        case QuarterStitch(quadrant: QuadrantPosition.topRight):
-          _line(canvas, tr, (cx2, cy2));
-        case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
-          _line(canvas, bl, (cx2, cy2));
-        case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
-          _line(canvas, br, (cx2, cy2));
-        case HalfCrossStitch(half: HalfOrientation.left):
-          _line(canvas, tl, (cx2, gy));    // \ in left half
-          _line(canvas, (cx2, gy + cellSize), bl); // / in left half
-        case HalfCrossStitch(half: HalfOrientation.right):
-          _line(canvas, (cx2, gy + cellSize), br); // \ in right half
-          _line(canvas, tr, (cx2, gy));             // / in right half
-        case HalfCrossStitch(half: HalfOrientation.top):
-          _line(canvas, tl, midRT);  // \ in top half
-          _line(canvas, tr, midLT);  // / in top half
-        case HalfCrossStitch(half: HalfOrientation.bottom):
-          _line(canvas, midLT, br);  // \ in bottom half
-          _line(canvas, midRT, bl);  // / in bottom half
-        case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-          _line(canvas, tl, (cx2, cy2));       // \ in top-left quarter
-          _line(canvas, midTT, midLT);          // / in top-left quarter
-        case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-          _line(canvas, midTT, midRT);          // \ in top-right quarter
-          _line(canvas, tr, (cx2, cy2));        // / in top-right quarter
-        case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-          _line(canvas, midLT, midBT);          // \ in bottom-left quarter
-          _line(canvas, (cx2, cy2), bl);        // / in bottom-left quarter
-        case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-          _line(canvas, (cx2, cy2), br);        // \ in bottom-right quarter
-          _line(canvas, midRT, midBT);          // / in bottom-right quarter
-        case BackStitch():
-          break;
+      canvas.setFillColor(_pdfColor(thread.color));
+      _fillStitch(canvas, s, gx, gy, cellSize);
+
+      // Symbol centred in the stitch's sub-region (shown when sub-region >= 6 pt)
+      if (thread.symbol.isNotEmpty) {
+        final subSize = _stitchSubRegionSize(s, cellSize);
+        if (subSize >= 6) {
+          final sym = _ascii(thread.symbol);
+          if (sym.isNotEmpty) {
+            final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
+            final lum = thread.color.computeLuminance();
+            final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
+            final fs = math.max(3.5, subSize * 0.52);
+            canvas.setFillColor(textColor);
+            canvas.drawString(pdfFont, fs, sym, sx - fs * 0.55 / 2, sy - fs / 2 + 0.5);
+          }
+        }
       }
     }
 
+    // ── Backstitch lines (drawn above fills, before grid lines) ──────────
+    canvas.setLineWidth(math.max(0.6, cellSize * 0.15));
+    for (final bs in backstitches) {
+      final minBx = math.min(bs.x1, bs.x2);
+      final maxBx = math.max(bs.x1, bs.x2);
+      final minBy = math.min(bs.y1, bs.y2);
+      final maxBy = math.max(bs.y1, bs.y2);
+      if (maxBx < startX || minBx > endX || maxBy < startY || minBy > endY) {
+        continue;
+      }
+      final thread = threadMap[bs.threadId];
+      if (thread == null) continue;
+      canvas.setStrokeColor(_pdfColor(thread.color));
+      final px1 = gridOriginX + (bs.x1 - startX) * cellSize;
+      final py1 = gridOriginY + (rows - (bs.y1 - startY)) * cellSize;
+      final px2 = gridOriginX + (bs.x2 - startX) * cellSize;
+      final py2 = gridOriginY + (rows - (bs.y2 - startY)) * cellSize;
+      canvas.moveTo(px1, py1);
+      canvas.lineTo(px2, py2);
+      canvas.strokePath();
+    }
+
     // ── Minor grid lines ─────────────────────────────────────────────────
-    canvas.setStrokeColor(PdfColors.grey400);
-    canvas.setLineWidth(0.25);
+    canvas.setStrokeColor(PdfColors.grey500);
+    canvas.setLineWidth(0.2);
     for (int c = 0; c <= cols; c++) {
       final x = gridOriginX + c * cellSize;
       canvas.moveTo(x, gridOriginY);
@@ -268,8 +312,8 @@ class PdfService {
     }
 
     // ── Bold lines every 10 cells ────────────────────────────────────────
-    canvas.setStrokeColor(PdfColors.grey700);
-    canvas.setLineWidth(0.75);
+    canvas.setStrokeColor(PdfColors.grey800);
+    canvas.setLineWidth(0.6);
     for (int c = 0; c <= cols; c++) {
       if ((startX + c) % 10 == 0) {
         final x = gridOriginX + c * cellSize;
@@ -293,161 +337,774 @@ class PdfService {
     canvas.drawRect(gridOriginX, gridOriginY, gridW, gridH);
     canvas.strokePath();
 
-    // ── Symbol overlay (one per cell, cellSize >= 8pt) ───────────────────
-    if (cellSize >= 8) {
-      for (final entry in symbolMap.entries) {
-        final (cx, cy) = entry.key;
-        if (cx < startX || cx >= endX || cy < startY || cy >= endY) continue;
-        final thread = entry.value;
-        if (thread.symbol.isEmpty) continue;
-
-        final gx = gridOriginX + (cx - startX) * cellSize;
-        final gy = gridOriginY + (rows - (cy - startY) - 1) * cellSize;
-        final fs = math.max(4.0, cellSize * 0.46);
-        final lum = thread.color.computeLuminance();
-        final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
-
-        // Badge background
-        final bgW = fs * 0.9 + 4;
-        final bgH = fs + 3;
-        final bgX = gx + (cellSize - bgW) / 2;
-        final bgY = gy + (cellSize - bgH) / 2;
-        canvas.setFillColor(_pdfColor(thread.color));
-        canvas.drawRRect(bgX, bgY, bgW, bgH, 2, 2);
-        canvas.fillPath();
-
-        canvas.setFillColor(textColor);
-        final sym = _ascii(thread.symbol);
-        if (sym.isNotEmpty) {
-          final tx = gx + (cellSize - fs * 0.55) / 2;
-          final ty = gy + (cellSize - fs) / 2;
-          canvas.drawString(pdfFont, fs, sym, tx, ty);
-        }
+    // ── Column ruler (above grid) ────────────────────────────────────────
+    const rulerFs = 5.5;
+    canvas.setFillColor(PdfColors.grey700);
+    canvas.setStrokeColor(PdfColors.grey600);
+    canvas.setLineWidth(0.4);
+    for (int c = 0; c <= cols; c++) {
+      final col = startX + c;
+      if (col % 10 == 0 && col > 0) {
+        final x = gridOriginX + c * cellSize;
+        final label = '$col';
+        final lw = label.length * rulerFs * 0.55;
+        canvas.drawString(
+            pdfFont, rulerFs, label, x - lw / 2, gridOriginY + gridH + 3.5);
+        canvas.moveTo(x, gridOriginY + gridH);
+        canvas.lineTo(x, gridOriginY + gridH + 3);
+        canvas.strokePath();
       }
     }
 
-    // ── Ruler labels at every 10th line ──────────────────────────────────
-    if (cellSize >= 6) {
-      const labelFs = 5.0;
-      canvas.setFillColor(PdfColors.grey700);
-      for (int c = 1; c <= cols; c++) {
-        if ((startX + c) % 10 == 0) {
-          canvas.drawString(pdfFont, labelFs, '${startX + c}',
-              gridOriginX + c * cellSize + 1,
-              gridOriginY + gridH - labelFs - 1);
-        }
-      }
-      for (int r = 1; r <= rows; r++) {
-        if ((startY + r) % 10 == 0) {
-          canvas.drawString(pdfFont, labelFs, '${startY + r}',
-              gridOriginX + 1,
-              gridOriginY + gridH - r * cellSize - labelFs - 1);
-        }
+    // ── Row ruler (left of grid) ──────────────────────────────────────────
+    for (int r = 0; r <= rows; r++) {
+      final row = startY + r;
+      if (row % 10 == 0 && row > 0) {
+        final y = gridOriginY + gridH - r * cellSize;
+        final label = '$row';
+        final lw = label.length * rulerFs * 0.55;
+        canvas.setFillColor(PdfColors.grey700);
+        canvas.drawString(
+            pdfFont, rulerFs, label, gridOriginX - lw - 4, y - rulerFs / 2);
+        canvas.setStrokeColor(PdfColors.grey600);
+        canvas.setLineWidth(0.4);
+        canvas.moveTo(gridOriginX - 3, y);
+        canvas.lineTo(gridOriginX, y);
+        canvas.strokePath();
       }
     }
 
-    // ── Backstitch lines ─────────────────────────────────────────────────
-    canvas.setLineWidth(math.max(0.5, cellSize * 0.08));
-    for (final bs in backstitches) {
-      final minBx = math.min(bs.x1, bs.x2);
-      final maxBx = math.max(bs.x1, bs.x2);
-      final minBy = math.min(bs.y1, bs.y2);
-      final maxBy = math.max(bs.y1, bs.y2);
-      if (maxBx < startX || minBx > endX || maxBy < startY || minBy > endY) continue;
+    // ── Footer ───────────────────────────────────────────────────────────
+    _drawPageFooter(canvas,
+        format: format,
+        margin: margin,
+        footerH: footerH,
+        pageNum: pageNum,
+        totalPages: totalPages,
+        pdfFont: pdfFont);
+  }
 
-      final thread = threadMap[bs.threadId];
+  // ── Colour table page ─────────────────────────────────────────────────────
+
+  static void _drawColourTablePage(
+    PdfGraphics canvas, {
+    required PdfPageFormat format,
+    required CrossStitchPattern pattern,
+    required List<Thread> threads,
+    required Map<String, double> stitchEquiv,
+    required bool isBackstitch,
+    required double margin,
+    required double headerH,
+    required double footerH,
+    required int pageNum,
+    required int totalPages,
+    required PdfFont pdfFont,
+    required PdfFont pdfFontBold,
+  }) {
+    final subtitle = isBackstitch
+        ? 'Backstitch Colour Table  |  Page $pageNum of $totalPages'
+        : 'Cross Stitch Colour Table  |  Page $pageNum of $totalPages';
+
+    _drawPageHeader(
+      canvas,
+      format: format,
+      pattern: pattern,
+      margin: margin,
+      headerH: headerH,
+      subtitle: subtitle,
+      pdfFont: pdfFont,
+      pdfFontBold: pdfFontBold,
+    );
+
+    const tableFs = 7.5;
+    const rowH = 14.0;
+    const headRowH = 16.0;
+    const sectionHeadFs = 9.0;
+    const swatchW = 22.0;
+    const dmcW = 44.0;
+    const countW = 72.0;
+    final tableW = format.width - 2 * margin;
+    final nameW = tableW - swatchW - dmcW - countW;
+    final colWidths = [swatchW, dmcW, nameW, countW];
+
+    double y = format.height - margin - headerH;
+
+    final sectionLabel = isBackstitch ? 'Backstitches' : 'Cross Stitches';
+    canvas.setFillColor(PdfColors.black);
+    canvas.drawString(
+        pdfFontBold, sectionHeadFs, sectionLabel, margin, y - sectionHeadFs);
+    y -= sectionHeadFs + 6;
+
+    final symbolHeader = isBackstitch ? 'Colour' : 'Symbol';
+    final countHeader = isBackstitch ? 'Units (approx)' : 'Stitches (approx)';
+    _drawTableRow(canvas,
+        x: margin,
+        y: y,
+        colWidths: colWidths,
+        rowH: headRowH,
+        bgColor: PdfColors.grey200,
+        cells: [symbolHeader, 'DMC', 'Name', countHeader],
+        font: pdfFontBold,
+        fontSize: tableFs,
+        isHeader: true);
+    y -= headRowH;
+
+    for (final t in threads) {
+      final equiv = stitchEquiv[t.dmcCode] ?? 0;
+      final equivStr = isBackstitch
+          ? equiv.toStringAsFixed(1)
+          : (equiv == equiv.truncateToDouble()
+              ? equiv.toInt().toString()
+              : equiv.toStringAsFixed(1));
+      if (isBackstitch) {
+        _drawTableRow(canvas,
+            x: margin,
+            y: y,
+            colWidths: colWidths,
+            rowH: rowH,
+            bgColor: null,
+            cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
+            font: pdfFont,
+            fontSize: tableFs,
+            isHeader: false,
+            linePreviewColor: _pdfColor(t.color));
+      } else {
+        _drawTableRow(canvas,
+            x: margin,
+            y: y,
+            colWidths: colWidths,
+            rowH: rowH,
+            bgColor: null,
+            cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
+            font: pdfFont,
+            fontSize: tableFs,
+            isHeader: false,
+            swatchColor: _pdfColor(t.color),
+            swatchSymbol: _ascii(t.symbol));
+      }
+      y -= rowH;
+    }
+
+    _drawPageFooter(canvas,
+        format: format,
+        margin: margin,
+        footerH: footerH,
+        pageNum: pageNum,
+        totalPages: totalPages,
+        pdfFont: pdfFont);
+  }
+
+  // ── Title page ────────────────────────────────────────────────────────────
+
+  static void _drawTitlePage(
+    PdfGraphics canvas, {
+    required PdfPageFormat format,
+    required CrossStitchPattern pattern,
+    required List<Stitch> nonBack,
+    required List<BackStitch> backstitches,
+    required Map<String, Thread> threadMap,
+    required double margin,
+    required double footerH,
+    required int pageNum,
+    required int totalPages,
+    required PdfFont pdfFont,
+    required PdfFont pdfFontBold,
+  }) {
+    const titleFs = 18.0;
+    const subtitleFs = 9.0;
+    const ruleGap = 12.0;
+    const titleBlockH = titleFs + 5 + subtitleFs + 8 + 1 + ruleGap;
+
+    // Use all available height below the title block for the preview
+    final previewBudgetH =
+        (format.height - 2 * margin - footerH - titleBlockH).clamp(80.0, 600.0);
+
+    // ── Title + subtitle ─────────────────────────────────────────────────
+    final titleY = format.height - margin - titleFs;
+    canvas.setFillColor(PdfColors.black);
+    canvas.drawString(pdfFontBold, titleFs, _ascii(pattern.name), margin, titleY);
+
+    canvas.setFillColor(PdfColors.grey600);
+    final subtitle =
+        '${pattern.width} x ${pattern.height} stitches  |  Page $pageNum of $totalPages';
+    canvas.drawString(pdfFont, subtitleFs, _ascii(subtitle), margin,
+        titleY - titleFs - 5);
+
+    // Separator rule
+    final ruleY = titleY - titleFs - subtitleFs - 8 - 1;
+    canvas.setStrokeColor(PdfColors.grey400);
+    canvas.setLineWidth(0.75);
+    canvas.moveTo(margin, ruleY);
+    canvas.lineTo(format.width - margin, ruleY);
+    canvas.strokePath();
+
+    // ── Pattern preview ───────────────────────────────────────────────────
+    final previewTopY = ruleY - ruleGap;
+    final previewMaxW = format.width - 2 * margin;
+
+    final scaleByW = previewMaxW / pattern.width;
+    final scaleByH = previewBudgetH / pattern.height;
+    final previewCellSize = math.min(scaleByW, scaleByH);
+
+    final actualPreviewW = previewCellSize * pattern.width;
+    final actualPreviewH = previewCellSize * pattern.height;
+
+    final previewOriginX = margin + (previewMaxW - actualPreviewW) / 2;
+    final previewOriginY = previewTopY - actualPreviewH;
+
+    _drawStitchPreview(
+      canvas,
+      originX: previewOriginX,
+      originY: previewOriginY,
+      pattern: pattern,
+      nonBack: nonBack,
+      backstitches: backstitches,
+      threadMap: threadMap,
+      cellSize: previewCellSize,
+    );
+
+    // ── Footer ────────────────────────────────────────────────────────────
+    _drawPageFooter(canvas,
+        format: format,
+        margin: margin,
+        footerH: footerH,
+        pageNum: pageNum,
+        totalPages: totalPages,
+        pdfFont: pdfFont);
+  }
+
+  // ── Stitch preview (realistic line-art, no symbols) ───────────────────────
+
+  static void _drawStitchPreview(
+    PdfGraphics canvas, {
+    required double originX,
+    required double originY,
+    required CrossStitchPattern pattern,
+    required List<Stitch> nonBack,
+    required List<BackStitch> backstitches,
+    required Map<String, Thread> threadMap,
+    required double cellSize,
+  }) {
+    final pw2 = pattern.width * cellSize;
+    final ph2 = pattern.height * cellSize;
+    final rows = pattern.height;
+
+    // Aida background
+    canvas.setFillColor(_pdfColor(pattern.aidaColor));
+    canvas.drawRect(originX, originY, pw2, ph2);
+    canvas.fillPath();
+
+    // Cross-type stitches as line-art (rounded caps for a thread-like look)
+    canvas.setLineCap(PdfLineCap.round);
+    final lw = math.max(0.35, cellSize * 0.18);
+    canvas.setLineWidth(lw);
+
+    for (final s in nonBack) {
+      final cx = _stitchX(s);
+      final cy = _stitchY(s);
+      final thread = threadMap[s.threadId];
       if (thread == null) continue;
       canvas.setStrokeColor(_pdfColor(thread.color));
 
-      final px1 = gridOriginX + (bs.x1 - startX) * cellSize;
-      final py1 = gridOriginY + (rows - (bs.y1 - startY)) * cellSize;
-      final px2 = gridOriginX + (bs.x2 - startX) * cellSize;
-      final py2 = gridOriginY + (rows - (bs.y2 - startY)) * cellSize;
-      canvas.moveTo(px1, py1);
-      canvas.lineTo(px2, py2);
+      // gx/gy = bottom-left of this cell in PDF coords
+      final gx = originX + cx * cellSize;
+      final gy = originY + (rows - cy - 1) * cellSize;
+
+      _drawRealisticStitch(canvas, s, gx, gy, cellSize);
+    }
+
+    // Backstitches
+    canvas.setLineWidth(math.max(0.5, cellSize * 0.22));
+    for (final bs in backstitches) {
+      final thread = threadMap[bs.threadId];
+      if (thread == null) continue;
+      canvas.setStrokeColor(_pdfColor(thread.color));
+      canvas.moveTo(originX + bs.x1 * cellSize,
+          originY + (rows - bs.y1) * cellSize);
+      canvas.lineTo(originX + bs.x2 * cellSize,
+          originY + (rows - bs.y2) * cellSize);
       canvas.strokePath();
+    }
+
+    canvas.setLineCap(PdfLineCap.butt);
+
+    // Outer border
+    canvas.setStrokeColor(PdfColors.black);
+    canvas.setLineWidth(0.8);
+    canvas.drawRect(originX, originY, pw2, ph2);
+    canvas.strokePath();
+  }
+
+  /// Draws a single stitch as crossed diagonal lines (no fill, line-art only).
+  static void _drawRealisticStitch(
+      PdfGraphics canvas, Stitch s, double gx, double gy, double cs) {
+    // PDF: y increases up. gy = bottom, gy+cs = top of cell.
+    switch (s) {
+      case FullStitch():
+        // "\" line: top-left → bottom-right
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+        // "/" line: top-right → bottom-left
+        canvas.moveTo(gx + cs, gy + cs);
+        canvas.lineTo(gx, gy);
+        canvas.strokePath();
+
+      case HalfStitch(isForward: true): // "/"
+        canvas.moveTo(gx + cs, gy + cs);
+        canvas.lineTo(gx, gy);
+        canvas.strokePath();
+
+      case HalfStitch(isForward: false): // "\"
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+
+      case QuarterStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs / 2, gy + cs / 2);
+        canvas.strokePath();
+      case QuarterStitch(quadrant: QuadrantPosition.topRight):
+        canvas.moveTo(gx + cs, gy + cs);
+        canvas.lineTo(gx + cs / 2, gy + cs / 2);
+        canvas.strokePath();
+      case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.moveTo(gx, gy);
+        canvas.lineTo(gx + cs / 2, gy + cs / 2);
+        canvas.strokePath();
+      case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.moveTo(gx + cs, gy);
+        canvas.lineTo(gx + cs / 2, gy + cs / 2);
+        canvas.strokePath();
+
+      case HalfCrossStitch(half: HalfOrientation.left): // X in left half
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs / 2, gy);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs / 2, gy + cs);
+        canvas.lineTo(gx, gy);
+        canvas.strokePath();
+      case HalfCrossStitch(half: HalfOrientation.right): // X in right half
+        canvas.moveTo(gx + cs / 2, gy + cs);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs, gy + cs);
+        canvas.lineTo(gx + cs / 2, gy);
+        canvas.strokePath();
+      case HalfCrossStitch(half: HalfOrientation.top): // X in top half
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs, gy + cs);
+        canvas.lineTo(gx, gy + cs / 2);
+        canvas.strokePath();
+      case HalfCrossStitch(half: HalfOrientation.bottom): // X in bottom half
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs, gy + cs / 2);
+        canvas.lineTo(gx, gy);
+        canvas.strokePath();
+
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs / 2, gy + cs / 2);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs / 2, gy + cs);
+        canvas.lineTo(gx, gy + cs / 2);
+        canvas.strokePath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
+        canvas.moveTo(gx + cs / 2, gy + cs);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs, gy + cs);
+        canvas.lineTo(gx + cs / 2, gy + cs / 2);
+        canvas.strokePath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs / 2, gy);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs / 2, gy + cs / 2);
+        canvas.lineTo(gx, gy);
+        canvas.strokePath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.moveTo(gx + cs / 2, gy + cs / 2);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs, gy + cs / 2);
+        canvas.lineTo(gx + cs / 2, gy);
+        canvas.strokePath();
+
+      case BackStitch():
+        break;
     }
   }
 
-  // ── Legend page ───────────────────────────────────────────────────────────
+  // ── Thread legend (two-group table) ──────────────────────────────────────
 
-  static pw.Widget _buildLegendPage({
-    required CrossStitchPattern pattern,
-    required Map<String, double> stitchEquiv,
+  static void _drawThreadLegend(
+    PdfGraphics canvas, {
+    required PdfPageFormat format,
+    required double topY,    // PDF y of the top edge of the legend area
+    required double margin,
+    required List<Thread> crossThreads,
+    required List<Thread> backThreads,
+    required Map<String, double> crossStitchEquiv,
+    required Map<String, double> backStitchEquiv,
+    required double rowH,
+    required double headRowH,
+    required double sectionHeadFs,
+    required double sectionGap,
+    required PdfFont pdfFont,
+    required PdfFont pdfFontBold,
   }) {
-    final totalEquiv = stitchEquiv.values.fold(0.0, (a, b) => a + b);
+    const tableFs = 7.5;
+    final tableW = format.width - 2 * margin;
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(_ascii(pattern.name),
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-        pw.SizedBox(height: 4),
-        pw.Text(
-          '${pattern.width} x ${pattern.height} stitches  |  '
-          '${pattern.threads.length} colours  |  '
-          '${totalEquiv.round()} stitch equivalents',
-          style: const pw.TextStyle(fontSize: 9),
-        ),
-        pw.SizedBox(height: 16),
-        pw.Text('Thread Legend',
-            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-        pw.SizedBox(height: 6),
-        pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-          columnWidths: const {
-            0: pw.FixedColumnWidth(18),
-            1: pw.FixedColumnWidth(42),
-            2: pw.FlexColumnWidth(3),
-            3: pw.FixedColumnWidth(38),
-            4: pw.FixedColumnWidth(80),
-          },
-          children: [
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-              children: ['', 'DMC', 'Name', 'Symbol', 'Stitches (approx)']
-                  .map(_headerCell)
-                  .toList(),
-            ),
-            ...pattern.threads.map((t) {
-              final equiv = stitchEquiv[t.dmcCode] ?? 0;
-              final equivStr = equiv == equiv.truncateToDouble()
-                  ? equiv.toInt().toString()
-                  : equiv.toStringAsFixed(1);
-              return pw.TableRow(children: [
-                pw.Container(width: 18, height: 18, color: _pdfColor(t.color)),
-                _dataCell(_ascii(t.dmcCode)),
-                _dataCell(_ascii(t.name)),
-                _dataCell(_ascii(t.symbol)),
-                _dataCell(equivStr),
-              ]);
-            }),
-          ],
-        ),
-      ],
-    );
+    // Column widths: [swatch | DMC | Name | Count]
+    const swatchW = 22.0;
+    const dmcW = 44.0;
+    const countW = 72.0;
+    final nameW = tableW - swatchW - dmcW - countW;
+    final colWidths = [swatchW, dmcW, nameW, countW];
+
+    double y = topY;
+
+    // ── Cross stitches section ────────────────────────────────────────────
+    if (crossThreads.isNotEmpty) {
+      canvas.setFillColor(PdfColors.black);
+      canvas.drawString(pdfFontBold, sectionHeadFs, 'Cross Stitches',
+          margin, y - sectionHeadFs);
+      y -= sectionHeadFs + 5;
+
+      // Header row
+      _drawTableRow(canvas,
+          x: margin, y: y, colWidths: colWidths, rowH: headRowH,
+          bgColor: PdfColors.grey200,
+          cells: ['Symbol', 'DMC', 'Name', 'Stitches (approx)'],
+          font: pdfFontBold, fontSize: tableFs, isHeader: true);
+      y -= headRowH;
+
+      // Data rows
+      for (final t in crossThreads) {
+        final equiv = crossStitchEquiv[t.dmcCode] ?? 0;
+        final equivStr = equiv == equiv.truncateToDouble()
+            ? equiv.toInt().toString()
+            : equiv.toStringAsFixed(1);
+        _drawTableRow(canvas,
+            x: margin, y: y, colWidths: colWidths, rowH: rowH,
+            bgColor: null,
+            cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
+            font: pdfFont, fontSize: tableFs, isHeader: false,
+            swatchColor: _pdfColor(t.color),
+            swatchSymbol: _ascii(t.symbol));
+        y -= rowH;
+      }
+    }
+
+    // ── Backstitches section ──────────────────────────────────────────────
+    if (backThreads.isNotEmpty) {
+      y -= sectionGap;
+      canvas.setFillColor(PdfColors.black);
+      canvas.drawString(pdfFontBold, sectionHeadFs, 'Backstitches',
+          margin, y - sectionHeadFs);
+      y -= sectionHeadFs + 5;
+
+      // Header row
+      _drawTableRow(canvas,
+          x: margin, y: y, colWidths: colWidths, rowH: headRowH,
+          bgColor: PdfColors.grey200,
+          cells: ['Colour', 'DMC', 'Name', 'Units (approx)'],
+          font: pdfFontBold, fontSize: tableFs, isHeader: true);
+      y -= headRowH;
+
+      // Data rows
+      for (final t in backThreads) {
+        final equiv = backStitchEquiv[t.dmcCode] ?? 0;
+        final equivStr = equiv.toStringAsFixed(1);
+        _drawTableRow(canvas,
+            x: margin, y: y, colWidths: colWidths, rowH: rowH,
+            bgColor: null,
+            cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
+            font: pdfFont, fontSize: tableFs, isHeader: false,
+            linePreviewColor: _pdfColor(t.color));
+        y -= rowH;
+      }
+    }
   }
 
-  static pw.Widget _headerCell(String text) => pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-        child: pw.Text(text,
-            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-      );
+  // ── Shared page components ────────────────────────────────────────────────
 
-  static pw.Widget _dataCell(String text) => pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-        child: pw.Text(text, style: const pw.TextStyle(fontSize: 8)),
-      );
+  /// Draws the title + subtitle + separator rule at the top of any page.
+  static void _drawPageHeader(
+    PdfGraphics canvas, {
+    required PdfPageFormat format,
+    required CrossStitchPattern pattern,
+    required double margin,
+    required double headerH,
+    required String subtitle,
+    required PdfFont pdfFont,
+    required PdfFont pdfFontBold,
+  }) {
+    // Title
+    const titleFs = 14.0;
+    final titleY = format.height - margin - titleFs;
+    canvas.setFillColor(PdfColors.black);
+    canvas.drawString(
+        pdfFontBold, titleFs, _ascii(pattern.name), margin, titleY);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+    // Subtitle
+    const subtitleFs = 8.0;
+    canvas.setFillColor(PdfColors.grey600);
+    canvas.drawString(
+        pdfFont, subtitleFs, _ascii(subtitle), margin, titleY - titleFs - 4);
 
-  /// Draw a line between two (x, y) record points and stroke immediately.
-  static void _line(
-      PdfGraphics canvas, (double, double) from, (double, double) to) {
-    canvas.moveTo(from.$1, from.$2);
-    canvas.lineTo(to.$1, to.$2);
+    // Separator rule
+    final ruleY = format.height - margin - headerH + 8;
+    canvas.setStrokeColor(PdfColors.grey400);
+    canvas.setLineWidth(0.75);
+    canvas.moveTo(margin, ruleY);
+    canvas.lineTo(format.width - margin, ruleY);
     canvas.strokePath();
   }
+
+  /// Draws the separator rule + centred page number at the bottom of any page.
+  static void _drawPageFooter(
+    PdfGraphics canvas, {
+    required PdfPageFormat format,
+    required double margin,
+    required double footerH,
+    required int pageNum,
+    required int totalPages,
+    required PdfFont pdfFont,
+  }) {
+    const footerFs = 7.5;
+    final ruleY = margin + footerH - 4;
+    canvas.setStrokeColor(PdfColors.grey300);
+    canvas.setLineWidth(0.5);
+    canvas.moveTo(margin, ruleY);
+    canvas.lineTo(format.width - margin, ruleY);
+    canvas.strokePath();
+
+    final label = 'Page $pageNum of $totalPages';
+    final lw = label.length * footerFs * 0.55;
+    canvas.setFillColor(PdfColors.grey600);
+    canvas.drawString(
+        pdfFont, footerFs, label, format.width / 2 - lw / 2, margin);
+  }
+
+  /// Draws a single table row.
+  /// - [swatchColor] + [swatchSymbol]: col 0 filled with colour + symbol text centred on top.
+  /// - [linePreviewColor]: col 0 shows a thick coloured horizontal line (for backstitches).
+  static void _drawTableRow(
+    PdfGraphics canvas, {
+    required double x,
+    required double y,
+    required List<double> colWidths,
+    required double rowH,
+    required PdfColor? bgColor,
+    required List<String> cells,
+    required PdfFont font,
+    required double fontSize,
+    required bool isHeader,
+    PdfColor? swatchColor,
+    String? swatchSymbol,
+    PdfColor? linePreviewColor,
+  }) {
+    assert(cells.length == colWidths.length);
+    double cx = x;
+    final totalW = colWidths.fold(0.0, (a, b) => a + b);
+
+    // Row background
+    if (bgColor != null) {
+      canvas.setFillColor(bgColor);
+      canvas.drawRect(cx, y - rowH, totalW, rowH);
+      canvas.fillPath();
+    }
+
+    // Row border
+    canvas.setStrokeColor(PdfColors.grey400);
+    canvas.setLineWidth(0.4);
+    canvas.drawRect(cx, y - rowH, totalW, rowH);
+    canvas.strokePath();
+
+    // Cells
+    for (int i = 0; i < cells.length; i++) {
+      final cw = colWidths[i];
+
+      // Vertical divider (skip first)
+      if (i > 0) {
+        canvas.setStrokeColor(PdfColors.grey400);
+        canvas.setLineWidth(0.4);
+        canvas.moveTo(cx, y);
+        canvas.lineTo(cx, y - rowH);
+        canvas.strokePath();
+      }
+
+      if (i == 0 && linePreviewColor != null) {
+        // Backstitch line preview: thick coloured line across the cell centre
+        const pad = 4.0;
+        canvas.setStrokeColor(linePreviewColor);
+        canvas.setLineWidth(math.max(1.2, rowH * 0.22));
+        canvas.setLineCap(PdfLineCap.round);
+        canvas.moveTo(cx + pad, y - rowH / 2);
+        canvas.lineTo(cx + cw - pad, y - rowH / 2);
+        canvas.strokePath();
+        canvas.setLineCap(PdfLineCap.butt);
+        canvas.setLineWidth(0.4);
+      } else if (i == 0 && swatchColor != null) {
+        // Colour swatch with optional symbol overlay
+        const pad = 2.0;
+        canvas.setFillColor(swatchColor);
+        canvas.drawRect(cx + pad, y - rowH + pad, cw - 2 * pad, rowH - 2 * pad);
+        canvas.fillPath();
+        // Symbol text centred on swatch
+        if (swatchSymbol != null && swatchSymbol.isNotEmpty) {
+          final lum = swatchColor.red * 0.299 +
+              swatchColor.green * 0.587 +
+              swatchColor.blue * 0.114;
+          final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
+          final sf = math.max(3.5, (rowH - 2 * pad) * 0.58);
+          canvas.setFillColor(textColor);
+          final tw = sf * 0.55;
+          canvas.drawString(font, sf, swatchSymbol,
+              cx + pad + (cw - 2 * pad - tw) / 2,
+              y - rowH + pad + (rowH - 2 * pad - sf) / 2 + 1.0);
+        }
+      } else if (cells[i].isNotEmpty) {
+        canvas.setFillColor(PdfColors.black);
+        final ty = y - rowH + (rowH - fontSize) / 2 + 1.0;
+        canvas.drawString(font, fontSize, cells[i], cx + 3, ty);
+      }
+
+      cx += cw;
+    }
+  }
+
+  // ── Stitch fill helpers ─────────────────────────────────────────────────────
+
+  /// Fills the region of a stitch in PDF graphics coords.
+  /// gx/gy = bottom-left corner of the cell in PDF coords (y increases up).
+  static void _fillStitch(
+      PdfGraphics canvas, Stitch s, double gx, double gy, double cs) {
+    switch (s) {
+      case FullStitch():
+        canvas.drawRect(gx, gy, cs, cs);
+        canvas.fillPath();
+
+      // HalfStitch "/" (isForward=true): fill the left/upper triangle
+      // PDF coords: bl=(gx,gy), tl=(gx,gy+cs), tr=(gx+cs,gy+cs)
+      case HalfStitch(isForward: true):
+        canvas.moveTo(gx, gy);
+        canvas.lineTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy + cs);
+        canvas.closePath();
+        canvas.fillPath();
+
+      // HalfStitch "\" (isForward=false): fill the right/upper triangle
+      // PDF coords: tl=(gx,gy+cs), tr=(gx+cs,gy+cs), br=(gx+cs,gy)
+      case HalfStitch(isForward: false):
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy + cs);
+        canvas.lineTo(gx + cs, gy);
+        canvas.closePath();
+        canvas.fillPath();
+
+      // QuarterStitch: fill the relevant cell quadrant (rectangle)
+      // Screen topLeft  = PDF upper-left  → drawRect(gx, gy+cs/2, cs/2, cs/2)
+      // Screen topRight = PDF upper-right → drawRect(gx+cs/2, gy+cs/2, cs/2, cs/2)
+      // Screen botLeft  = PDF lower-left  → drawRect(gx, gy, cs/2, cs/2)
+      // Screen botRight = PDF lower-right → drawRect(gx+cs/2, gy, cs/2, cs/2)
+      case QuarterStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.drawRect(gx, gy + cs / 2, cs / 2, cs / 2);
+        canvas.fillPath();
+      case QuarterStitch(quadrant: QuadrantPosition.topRight):
+        canvas.drawRect(gx + cs / 2, gy + cs / 2, cs / 2, cs / 2);
+        canvas.fillPath();
+      case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.drawRect(gx, gy, cs / 2, cs / 2);
+        canvas.fillPath();
+      case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.drawRect(gx + cs / 2, gy, cs / 2, cs / 2);
+        canvas.fillPath();
+
+      // HalfCrossStitch: fill the appropriate half-cell rectangle
+      case HalfCrossStitch(half: HalfOrientation.left):
+        canvas.drawRect(gx, gy, cs / 2, cs);
+        canvas.fillPath();
+      case HalfCrossStitch(half: HalfOrientation.right):
+        canvas.drawRect(gx + cs / 2, gy, cs / 2, cs);
+        canvas.fillPath();
+      // Screen top = PDF upper half
+      case HalfCrossStitch(half: HalfOrientation.top):
+        canvas.drawRect(gx, gy + cs / 2, cs, cs / 2);
+        canvas.fillPath();
+      // Screen bottom = PDF lower half
+      case HalfCrossStitch(half: HalfOrientation.bottom):
+        canvas.drawRect(gx, gy, cs, cs / 2);
+        canvas.fillPath();
+
+      // QuarterCrossStitch: fill the appropriate quarter-cell rectangle
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.drawRect(gx, gy + cs / 2, cs / 2, cs / 2);
+        canvas.fillPath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
+        canvas.drawRect(gx + cs / 2, gy + cs / 2, cs / 2, cs / 2);
+        canvas.fillPath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.drawRect(gx, gy, cs / 2, cs / 2);
+        canvas.fillPath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.drawRect(gx + cs / 2, gy, cs / 2, cs / 2);
+        canvas.fillPath();
+
+      case BackStitch():
+        break;
+    }
+  }
+
+  /// Returns the centre of the stitch's filled sub-region in PDF coordinates.
+  static (double, double) _stitchSymbolCenter(
+      Stitch s, double gx, double gy, double cs) {
+    return switch (s) {
+      FullStitch() || HalfStitch() => (gx + cs / 2, gy + cs / 2),
+      // Screen topLeft  = PDF upper-left  → centre (gx+cs/4,   gy+3*cs/4)
+      QuarterStitch(quadrant: QuadrantPosition.topLeft) ||
+      QuarterCrossStitch(quadrant: QuadrantPosition.topLeft) =>
+        (gx + cs / 4, gy + 3 * cs / 4),
+      QuarterStitch(quadrant: QuadrantPosition.topRight) ||
+      QuarterCrossStitch(quadrant: QuadrantPosition.topRight) =>
+        (gx + 3 * cs / 4, gy + 3 * cs / 4),
+      QuarterStitch(quadrant: QuadrantPosition.bottomLeft) ||
+      QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft) =>
+        (gx + cs / 4, gy + cs / 4),
+      QuarterStitch(quadrant: QuadrantPosition.bottomRight) ||
+      QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight) =>
+        (gx + 3 * cs / 4, gy + cs / 4),
+      HalfCrossStitch(half: HalfOrientation.left) => (gx + cs / 4, gy + cs / 2),
+      HalfCrossStitch(half: HalfOrientation.right) =>
+        (gx + 3 * cs / 4, gy + cs / 2),
+      // Screen top = PDF upper
+      HalfCrossStitch(half: HalfOrientation.top) =>
+        (gx + cs / 2, gy + 3 * cs / 4),
+      HalfCrossStitch(half: HalfOrientation.bottom) =>
+        (gx + cs / 2, gy + cs / 4),
+      BackStitch() => (gx + cs / 2, gy + cs / 2),
+    };
+  }
+
+  /// Returns the effective size (pt) of the stitch's sub-region for font sizing.
+  static double _stitchSubRegionSize(Stitch s, double cs) => switch (s) {
+        FullStitch() || HalfStitch() => cs,
+        QuarterStitch() ||
+        QuarterCrossStitch() ||
+        HalfCrossStitch(half: HalfOrientation.left || HalfOrientation.right) =>
+          cs / 2,
+        HalfCrossStitch() => cs / 2,
+        BackStitch() => cs,
+      };
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   static int _stitchX(Stitch s) => switch (s) {
         FullStitch(x: final x) => x,
