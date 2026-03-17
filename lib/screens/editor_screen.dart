@@ -133,14 +133,27 @@ class EditorScreen extends ConsumerWidget {
 
       final key = event.logicalKey;
 
-      // In stitch mode only allow save and the stitch mode toggle (Escape)
+      // In stitch mode: allow save, pan/select mode toggle, and Escape.
       if (state.stitchMode) {
         if ((meta || ctrl) && key == LogicalKeyboardKey.keyS) {
           _save(context, ref);
           return KeyEventResult.handled;
         }
+        if (key == LogicalKeyboardKey.keyS) {
+          notifier.setDrawingMode(DrawingMode.select);
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.keyP || key == LogicalKeyboardKey.space) {
+          notifier.setDrawingMode(DrawingMode.pan);
+          return KeyEventResult.handled;
+        }
         if (key == LogicalKeyboardKey.escape) {
-          notifier.toggleStitchMode();
+          // Clear selection first; if nothing to clear, exit stitch mode.
+          if (state.selectionRect != null) {
+            notifier.cancelSelection();
+          } else {
+            notifier.toggleStitchMode();
+          }
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
