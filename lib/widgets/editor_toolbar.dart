@@ -901,7 +901,12 @@ class _StitchModeToolbar extends ConsumerWidget {
                         _ToolbarButton(
                           tooltip: 'Grey stitches',
                           selected: state.stitchViewMode == StitchViewMode.greyed,
-                          onTap: () => notifier.setStitchViewMode(StitchViewMode.greyed),
+                          onTap: () {
+                            notifier.setStitchViewMode(StitchViewMode.greyed);
+                            if (state.drawingMode == DrawingMode.select) {
+                              notifier.setDrawingMode(DrawingMode.pan);
+                            }
+                          },
                           builder: (c) =>
                               Icon(Icons.invert_colors_outlined, size: 16, color: c),
                         ),
@@ -1017,25 +1022,19 @@ class _StitchModeToolbar extends ConsumerWidget {
 }
 
 // ─── Toolbar button ───────────────────────────────────────────────────────────
-// Unified button for all toolbar actions.
-//
-// Without [label]: renders as a ~34×34 square (icon or custom-paint content).
-// With [label]:    auto-width pill with the content + text side by side.
-// [tooltip] overrides hover text; falls back to [label] if omitted.
+// Unified ~34×34 button for all toolbar actions.
 
 class _ToolbarButton extends StatelessWidget {
   final bool selected;
   final Widget Function(Color contentColor) builder;
-  final String? label;
-  final String? tooltip;
+  final String tooltip;
   final VoidCallback? onTap;
   final Color? activeColor; // defaults to theme primary
 
   const _ToolbarButton({
     required this.selected,
     required this.builder,
-    this.label,
-    this.tooltip,
+    required this.tooltip,
     this.onTap,
     this.activeColor,
   });
@@ -1056,42 +1055,20 @@ class _ToolbarButton extends StatelessWidget {
             ? Colors.white
             : Colors.grey.shade600;
 
-    final hasLabel = label != null && label!.isNotEmpty;
-    final tooltipText = tooltip ?? (hasLabel ? label! : '');
-
-    Widget content = builder(contentColor);
-    if (hasLabel) {
-      content = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          content,
-          const SizedBox(width: 5),
-          Text(
-            label!,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: contentColor,
-            ),
-          ),
-        ],
-      );
-    }
-
     return Tooltip(
-      message: tooltipText,
+      message: tooltip,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
+          width: 34,
           height: 34,
-          padding: EdgeInsets.symmetric(horizontal: hasLabel ? 10.0 : 8.5),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: borderColor, width: 1),
           ),
-          child: Center(child: content),
+          child: Center(child: builder(contentColor)),
         ),
       ),
     );
@@ -1252,7 +1229,7 @@ class _DemonstrateButton extends StatelessWidget {
           size: 18,
         ),
         label: Text(
-          hasSelection ? 'Demo selection' : 'Demonstrate',
+          'Demo',
           style: const TextStyle(fontSize: 12),
         ),
         style: FilledButton.styleFrom(
