@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:image/image.dart' as img;
 import 'package:stitchx/services/gif_renderer.dart'
     show kDemoSubFrames, renderDemoGif;
 import 'package:stitchx/services/stitch_planner.dart';
@@ -110,11 +111,25 @@ Future<void> main(List<String> arguments) async {
         defaultsTo: '8',
         help: 'Frames per second for the animation. (default: 8)')
     ..addOption('cell-size',
-        defaultsTo: '40',
-        help: 'Pixels per grid cell. (default: 40)')
+        defaultsTo: '60',
+        help: 'Pixels per grid cell. (default: 60)')
     ..addOption('padding',
         defaultsTo: '20',
         help: 'Padding around the pattern in pixels. (default: 20)')
+    ..addOption('sampling-factor',
+        defaultsTo: '1',
+        help: 'GIF colour-quantisation quality: 1 = best (slow), '
+            '10 = default fast. (default: 1)')
+    ..addOption('dither',
+        defaultsTo: 'none',
+        allowed: [
+          'none',
+          'falseFloydSteinberg',
+          'floydSteinberg',
+          'stucki',
+          'atkinson',
+        ],
+        help: 'Dithering kernel for GIF palette mapping. (default: none)')
     ..addFlag('help',
         abbr: 'h', negatable: false, help: 'Show this help message.');
 
@@ -150,6 +165,8 @@ Future<void> main(List<String> arguments) async {
   final fps = int.parse(args['fps'] as String);
   final cellSize = double.parse(args['cell-size'] as String);
   final padding = double.parse(args['padding'] as String);
+  final samplingFactor = int.parse(args['sampling-factor'] as String);
+  final dither = _parseDither(args['dither'] as String);
 
   // ── Read grid text ────────────────────────────────────────────────────────
 
@@ -226,6 +243,8 @@ Future<void> main(List<String> arguments) async {
     fps: fps,
     cellSize: cellSize,
     padding: padding,
+    samplingFactor: samplingFactor,
+    dither: dither,
   );
 
   print('Encoding GIF…');
@@ -237,6 +256,15 @@ Future<void> main(List<String> arguments) async {
 
 Future<String> _readStdin() =>
     stdin.transform(utf8.decoder).join();
+
+img.DitherKernel _parseDither(String name) => switch (name) {
+      'none'                => img.DitherKernel.none,
+      'falseFloydSteinberg' => img.DitherKernel.falseFloydSteinberg,
+      'floydSteinberg'      => img.DitherKernel.floydSteinberg,
+      'stucki'              => img.DitherKernel.stucki,
+      'atkinson'            => img.DitherKernel.atkinson,
+      _                     => img.DitherKernel.floydSteinberg,
+    };
 
 void _printUsage(ArgParser parser) {
   print('''

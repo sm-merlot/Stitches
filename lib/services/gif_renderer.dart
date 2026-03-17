@@ -34,13 +34,19 @@ Map<StitchType, int> singleThreadColorMap(int threadArgb) => {
 /// [fps] controls playback speed. At the default of 12 fps with 6 sub-frames,
 ///   each stitch takes ~0.5 s.
 /// [colorMap] overrides the default educational-palette colours.
+/// [samplingFactor] controls GIF colour-quantisation quality: 1 = best
+///   (samples every pixel), 10 = default fast, higher = faster but worse.
+/// [dither] controls the dithering kernel used when mapping to the 256-colour
+///   palette. Defaults to [img.DitherKernel.none].
 List<int> renderDemoGif({
   required PlannedAida aida,
   int fps = 12,
-  double cellSize = 40,
+  double cellSize = 60,
   double padding = 20,
   Map<StitchType, int>? colorMap,
   int backgroundArgb = 0xFFFAF6F0,
+  int samplingFactor = 1,
+  img.DitherKernel dither = img.DitherKernel.none,
 }) {
   final bounds = computeGridBounds(aida, cellSize);
   final originX = padding - bounds.left;
@@ -112,7 +118,12 @@ List<int> renderDemoGif({
   finalFrame.frameDuration = frameDelayMs * holdFrames;
   animation.addFrame(finalFrame);
 
-  return img.encodeGif(animation, repeat: 0);
+  return img.encodeGif(
+    animation,
+    repeat: 0,
+    samplingFactor: samplingFactor,
+    dither: dither,
+  );
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -161,7 +172,10 @@ img.Image _renderFrame({
   // Completed stitches.
   for (var i = 0; i < completeCount && i < segments.length; i++) {
     _drawSegment(image, segments[i],
-        colors: colors, thick: false, layerIndex: segmentLayerIndices[i]);
+        colors: colors,
+        thick: false,
+        cellSize: cellSize,
+        layerIndex: segmentLayerIndices[i]);
   }
 
   // In-progress stitch: draw from start toward end at [subProgress].
@@ -173,53 +187,54 @@ img.Image _renderFrame({
     final tipX = seg.x1 + (seg.x2 - seg.x1) * subProgress;
     final tipY = seg.y1 + (seg.y2 - seg.y1) * subProgress;
 
-    img.drawLine(
-      image,
-      x1: seg.x1.round(),
-      y1: seg.y1.round(),
-      x2: tipX.round(),
-      y2: tipY.round(),
-      color: color,
-      thickness: 3,
-      antialias: true,
-    );
+    final activeThickness = _activeLineThickness(cellSize);
+    _drawThreadLine(
+        image, seg.x1, seg.y1, tipX, tipY, color, activeThickness);
 
-    // Needle dot at the tip.
+    // Needle dot at the tip: gold fill + dark outline ring.
+    final needleR = (cellSize * 0.09).clamp(3.0, 7.0).round();
     img.fillCircle(
       image,
       x: tipX.round(),
       y: tipY.round(),
-      radius: (cellSize * 0.08).clamp(3, 6).round(),
-      color: img.ColorRgba8(232, 192, 32, 255), // golden needle
+      radius: needleR,
+      color: img.ColorRgba8(232, 192, 32, 255), // golden
+    );
+    img.drawCircle(
+      image,
+      x: tipX.round(),
+      y: tipY.round(),
+      radius: needleR,
+      color: img.ColorRgba8(60, 40, 0, 200), // dark outline
     );
   }
 
   return image;
 }
 
+// Returns line thickness for completed stitches, scaled to cellSize.
+int _lineThickness(double cellSize) =>
+    (cellSize * 0.07).clamp(2.0, 5.0).round();
+
+// Returns line thickness for the active (in-progress) stitch.
+int _activeLineThickness(double cellSize) =>
+    (cellSize * 0.11).clamp(3.0, 7.0).round();
+
 void _drawSegment(
   img.Image image,
   StitchSegment seg, {
   required Map<StitchType, int> colors,
   required bool thick,
+  required double cellSize,
   int layerIndex = 0,
 }) {
   final argb = colors[seg.type] ?? 0xFF888888;
   final color =
       img.ColorRgba8((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, 255);
-  final thickness = thick ? 3 : 2;
+  final thickness = thick ? _activeLineThickness(cellSize) : _lineThickness(cellSize);
 
   if (layerIndex == 0) {
-    img.drawLine(
-      image,
-      x1: seg.x1.round(),
-      y1: seg.y1.round(),
-      x2: seg.x2.round(),
-      y2: seg.y2.round(),
-      color: color,
-      thickness: thickness,
-      antialias: true,
-    );
+    _drawThreadLine(image, seg.x1, seg.y1, seg.x2, seg.y2, color, thickness);
   } else {
     // Overlapping backstitch: draw as dashes so the lower layer shows through.
     // Layer 1 = long dashes (8 on / 5 off).
@@ -228,6 +243,54 @@ void _drawSegment(
     const gapLen = 5.0;
     _drawDashedLine(image, seg.x1, seg.y1, seg.x2, seg.y2, color,
         thickness: thickness, dashLen: dashLen, gapLen: gapLen);
+  }
+}
+
+/// Draws a line with a perpendicular highlight stripe to simulate thread roundness.
+void _drawThreadLine(
+  img.Image image,
+  double x1,
+  double y1,
+  double x2,
+  double y2,
+  img.ColorRgba8 color,
+  int thickness,
+) {
+  img.drawLine(
+    image,
+    x1: x1.round(),
+    y1: y1.round(),
+    x2: x2.round(),
+    y2: y2.round(),
+    color: color,
+    thickness: thickness,
+    antialias: true,
+  );
+
+  // Highlight: lighter, thinner line offset perpendicularly (simulates a
+  // rounded thread catching light from above).
+  if (thickness >= 3) {
+    final dx = x2 - x1;
+    final dy = y2 - y1;
+    final dist = math.sqrt(dx * dx + dy * dy);
+    if (dist > 0.001) {
+      final px = -dy / dist;
+      final py = dx / dist;
+      final off = thickness * 0.22;
+      final hr = (math.min(255.0, color.r + (255 - color.r) * 0.45)).round();
+      final hg = (math.min(255.0, color.g + (255 - color.g) * 0.45)).round();
+      final hb = (math.min(255.0, color.b + (255 - color.b) * 0.45)).round();
+      img.drawLine(
+        image,
+        x1: (x1 + px * off).round(),
+        y1: (y1 + py * off).round(),
+        x2: (x2 + px * off).round(),
+        y2: (y2 + py * off).round(),
+        color: img.ColorRgba8(hr, hg, hb, 160),
+        thickness: math.max(1, (thickness * 0.38).round()),
+        antialias: true,
+      );
+    }
   }
 }
 
