@@ -1,12 +1,16 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/pattern.dart';
+import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
 import '../providers/recent_items_provider.dart';
+import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import 'editor_screen.dart';
 import 'new_pattern_dialog.dart';
 import 'settings_screen.dart';
+import 'workspace_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -41,24 +45,12 @@ class HomeScreen extends ConsumerWidget {
 
   Future<void> _openFolder(BuildContext context, WidgetRef ref) async {
     try {
-      final files = await FileService.openFolder();
-      if (files == null || !context.mounted) return;
-      if (files.isEmpty) {
-        _showError(context, 'No .stitchx files found in that folder.');
-        return;
-      }
-      // Record the folder path (parent of first file)
-      final folderPath = files.first
-          .split('/')
-          .sublist(0, files.first.split('/').length - 1)
-          .join('/');
-      ref
-          .read(recentItemsProvider.notifier)
-          .add(folderPath, isFolder: true);
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => FolderBrowserScreen(filePaths: files),
-        ),
+      final dir = await FilePicker.platform.getDirectoryPath();
+      if (dir == null || !context.mounted) return;
+      ref.read(workspaceProvider.notifier).openWorkspace(LocalFolder(dir));
+      ref.read(recentItemsProvider.notifier).add(dir, isFolder: true);
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -85,19 +77,12 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _openRecentFolder(
       BuildContext context, WidgetRef ref, RecentItem item) async {
     try {
-      final files = await FileService.openFolderFromPath(item.path);
-      if (!context.mounted) return;
-      if (files.isEmpty) {
-        _showError(context, 'No .stitchx files found in that folder.');
-        return;
-      }
       ref
-          .read(recentItemsProvider.notifier)
-          .add(item.path, isFolder: true);
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => FolderBrowserScreen(filePaths: files),
-        ),
+          .read(workspaceProvider.notifier)
+          .openWorkspace(LocalFolder(item.path));
+      if (!context.mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -339,73 +324,3 @@ class _RecentItemTile extends StatelessWidget {
   }
 }
 
-// ─── Folder Browser ───────────────────────────────────────────────────────────
-
-class FolderBrowserScreen extends ConsumerWidget {
-  final List<String> filePaths;
-  const FolderBrowserScreen({super.key, required this.filePaths});
-
-  String _fileName(String path) {
-    return path.split('/').last.split('\\').last;
-  }
-
-  Future<void> _openEntry(
-      BuildContext context, WidgetRef ref, String path) async {
-    try {
-      final (pattern, filePath) = await FileService.openFileFromPath(path);
-      if (!context.mounted) return;
-      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
-      ref.read(recentItemsProvider.notifier).add(filePath, isFolder: false);
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const EditorScreen()),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Could not open: $e'),
-            backgroundColor: Colors.red.shade700),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Folder (${filePaths.length} patterns)'),
-      ),
-      body: ListView.separated(
-        itemCount: filePaths.length,
-        separatorBuilder: (context, idx) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final path = filePaths[index];
-          return ListTile(
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.grid_4x4,
-                size: 22,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
-            ),
-            title: Text(_fileName(path)),
-            subtitle: Text(
-              path,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _openEntry(context, ref, path),
-          );
-        },
-      ),
-    );
-  }
-}

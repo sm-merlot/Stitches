@@ -65,9 +65,7 @@ class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
   static const _keyPinnedLocations = 'pinned_locations';
   static const _keyLastWorkspace = 'last_workspace';
 
-  WorkspaceNotifier() : super(const WorkspaceState()) {
-    _restoreLastWorkspace();
-  }
+  WorkspaceNotifier() : super(const WorkspaceState());
 
   // -------------------------------------------------------------------------
   // Workspace
@@ -169,17 +167,14 @@ class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
   // Persistence helpers
   // -------------------------------------------------------------------------
 
-  Future<void> _restoreLastWorkspace() async {
+  /// Returns the last-used workspace path (if any) without activating it.
+  /// Used by the home screen to show the last workspace in the recent list
+  /// without triggering a directory listing (which needs a fresh picker grant).
+  Future<StorageLocation?> readLastWorkspace() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_keyLastWorkspace);
-    if (raw == null) return;
-    final location = _deserializeLocation(raw);
-    if (location != null) {
-      state = state.copyWith(
-        workspace: location,
-        expandedFolderIds: {location.id},
-      );
-    }
+    if (raw == null) return null;
+    return _deserializeLocation(raw);
   }
 
   Future<void> _persistLastWorkspace(StorageLocation location) async {
