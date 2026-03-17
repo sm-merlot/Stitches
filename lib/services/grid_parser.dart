@@ -2,9 +2,9 @@ import 'dart:io';
 
 // All recognised stitch characters. Any of these in the grid = active cell.
 const stitchChars = {
-  '╳', // full cross stitch
-  '▞', // / half stitch
-  '▚', // \ half stitch
+  '╳', 'X', // full cross stitch
+  '▞', '/', // / half stitch
+  '▚', '\\', // \ half stitch
   '▌', // left half-fill
   '▐', // right half-fill
   '▀', // top half-fill

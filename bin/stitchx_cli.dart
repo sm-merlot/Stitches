@@ -219,9 +219,9 @@ Grid format:
 
   Symbol  Stitch
   ------  ------
-     ╳    Full cross stitch
-     ▞    / half stitch
-     ▚    \\ half stitch
+  ╳ / X   Full cross stitch
+  ▞ / /   / half stitch
+  ▚ / \\   \\ half stitch
      ▌    Left half-fill          ▐    Right half-fill
      ▀    Top half-fill           ▄    Bottom half-fill
      ▘    Top-left quarter        ▝    Top-right quarter
