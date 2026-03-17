@@ -865,6 +865,30 @@ class _StitchModeToolbar extends ConsumerWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Interaction mode: Pan / Select
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _StitchViewModeButton(
+                          icon: Icons.pan_tool_outlined,
+                          label: 'Pan  [P]',
+                          active: state.drawingMode == DrawingMode.pan,
+                          onTap: () => notifier.setDrawingMode(DrawingMode.pan),
+                        ),
+                        const SizedBox(width: 2),
+                        _StitchViewModeButton(
+                          icon: Icons.select_all_outlined,
+                          label: 'Select  [S]',
+                          active: state.drawingMode == DrawingMode.select,
+                          onTap: () => notifier.setDrawingMode(DrawingMode.select),
+                        ),
+                      ],
+                    ),
+                  ),
+                  vDivider,
+
                   // View mode: Normal / Hidden / Greyed
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
@@ -1400,14 +1424,26 @@ class _DemonstrateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasFullStitches =
-        state.pattern.stitches.any((s) => s is FullStitch);
+    // When a selection is active, only consider stitches within it.
+    final pool = state.selectionRect != null
+        ? state.selectedStitches
+        : state.pattern.stitches;
+    final hasFullStitches = pool.any((s) => s is FullStitch);
+    final hasSelection = state.selectionRect != null;
 
     return Tooltip(
-      message: 'Demonstrate stitching',
+      message: hasSelection
+          ? 'Demonstrate selected stitches'
+          : 'Demonstrate stitching',
       child: FilledButton.tonalIcon(
-        icon: const Icon(Icons.play_circle_outline, size: 18),
-        label: const Text('Demonstrate', style: TextStyle(fontSize: 12)),
+        icon: Icon(
+          hasSelection ? Icons.play_circle_filled : Icons.play_circle_outline,
+          size: 18,
+        ),
+        label: Text(
+          hasSelection ? 'Demo selection' : 'Demonstrate',
+          style: const TextStyle(fontSize: 12),
+        ),
         style: FilledButton.styleFrom(
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
@@ -1422,17 +1458,20 @@ class _DemonstrateButton extends StatelessWidget {
     final pattern = state.pattern;
     final focusId = state.stitchFocusThreadId;
 
+    // Use selected region when a selection is active, otherwise all stitches.
+    final pool = state.selectionRect != null
+        ? state.selectedStitches
+        : pattern.stitches;
+    final fullStitches = pool.whereType<FullStitch>().toList();
+
     // Determine the thread to demonstrate.
     Thread? thread;
     if (focusId != null) {
       // Focus thread is active — use it directly.
       thread = pattern.threadByCode(focusId);
     } else {
-      // Collect threads that have at least one FullStitch.
-      final threadIds = pattern.stitches
-          .whereType<FullStitch>()
-          .map((s) => s.threadId)
-          .toSet();
+      // Collect threads that have at least one FullStitch in the pool.
+      final threadIds = fullStitches.map((s) => s.threadId).toSet();
       final candidates =
           pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
 
@@ -1453,9 +1492,8 @@ class _DemonstrateButton extends StatelessWidget {
 
     if (thread == null || !context.mounted) return;
 
-    // Collect FullStitch cells for the chosen thread.
-    final cells = pattern.stitches
-        .whereType<FullStitch>()
+    // Collect cells for the chosen thread from the pool.
+    final cells = fullStitches
         .where((s) => s.threadId == thread!.dmcCode)
         .map<(int, int)>((s) => (s.x, s.y))
         .toList();
