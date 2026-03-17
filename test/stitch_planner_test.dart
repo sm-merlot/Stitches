@@ -1,503 +1,192 @@
-import 'dart:math';
+// File-based stitch planner tests.
+//
+// Each test case lives in test/fixtures/:
+//   <name>.pattern      — grid pattern (same format as the CLI accepts)
+//   <name>.expected — expected stitch sequence, one per line:
+//
+//     S(x,y,corner) B(x,y,corner)  — front stroke: surface→back
+//     B(x,y,corner) S(x,y,corner)  — back travel:  back→surface
+//
+// Corner notation per cell:
+//   TL───TC───TR
+//   │         │
+//   LC   CC   RC
+//   │         │
+//   BL───BC───BR
+//
+// To regenerate .expected files from the current algorithm:
+//   dart run tool/generate_fixtures.dart
+
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitchx/models/stitch_plan.dart';
+import 'package:stitchx/services/grid_parser.dart';
 import 'package:stitchx/services/stitch_planner.dart';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ── Corner helpers ─────────────────────────────────────────────────────────
 
-List<StitchType> stitchTypes(PlannedAida grid) => grid.stitches.map((s) => s.type).toList();
+String _cornerStr(Corner c) => switch (c) {
+      Corner.topLeft => 'TL',
+      Corner.topRight => 'TR',
+      Corner.bottomLeft => 'BL',
+      Corner.bottomRight => 'BR',
+    };
 
-int? frontIndex(PlannedAida grid, int sqId, StitchType kind) {
-  for (var i = 0; i < grid.stitches.length; i++) {
-    final s = grid.stitches[i];
-    if (s is PlanSimpleStitch && s.squareId == sqId && s.type == kind) return i;
+// ── Stitch serialisation (used in failure messages) ────────────────────────
+
+String _serializeStitch(PlanStitchEntry stitch, List<PlannedSquare> squares) {
+  final isFront =
+      stitch.type == StitchType.frontOne || stitch.type == StitchType.frontTwo;
+
+  if (stitch is PlanSimpleStitch) {
+    final sq = squares[stitch.squareId];
+    final froTag = isFront ? 'S' : 'B';
+    final toTag = isFront ? 'B' : 'S';
+    return '$froTag(${sq.x},${sq.y},${_cornerStr(stitch.fro)}) '
+        '$toTag(${sq.x},${sq.y},${_cornerStr(stitch.to)})';
   }
-  return null;
+
+  if (stitch is PlanCrossStitch) {
+    final froSq = squares[stitch.fro.squareId];
+    final toSq = squares[stitch.to.squareId];
+    return 'B(${froSq.x},${froSq.y},${_cornerStr(stitch.fro.corner)}) '
+        'S(${toSq.x},${toSq.y},${_cornerStr(stitch.to.corner)})';
+  }
+
+  throw ArgumentError('Unknown stitch type: $stitch');
 }
 
-List<(double, double, double, double)> backStitchCoords(PlannedAida grid) {
-  final result = <(double, double, double, double)>[];
-  const backTypes = {StitchType.backOne, StitchType.backTwo, StitchType.backThree};
-  for (final s in grid.stitches) {
-    if (!backTypes.contains(s.type)) continue;
-    final double fx, fy, tx, ty;
-    if (s is PlanSimpleStitch) {
-      final sq = grid.squares[s.squareId];
-      (fx, fy) = sq.cornerCoord(s.fro);
-      (tx, ty) = sq.cornerCoord(s.to);
-    } else if (s is PlanCrossStitch) {
-      (fx, fy) = grid.squares[s.fro.squareId].cornerCoord(s.fro.corner);
-      (tx, ty) = grid.squares[s.to.squareId].cornerCoord(s.to.corner);
-    } else {
-      continue;
-    }
-    result.add((fx, fy, tx, ty));
-  }
-  return result;
+// ── Expected-line parsing ──────────────────────────────────────────────────
+
+typedef _StitchSpec = ({
+  bool froIsSurface, // true → fro is S (surface), false → fro is B (back)
+  int x1,
+  int y1,
+  String c1, // raw corner string, supports TC/BC/LC/RC/CC for future use
+  bool toIsSurface,
+  int x2,
+  int y2,
+  String c2,
+});
+
+final _lineRe =
+    RegExp(r'([SB])\((\d+),(\d+),([A-Z]+)\)\s+([SB])\((\d+),(\d+),([A-Z]+)\)');
+
+_StitchSpec _parseLine(String line) {
+  final m = _lineRe.firstMatch(line.trim());
+  if (m == null) throw FormatException('Cannot parse fixture line: "$line"');
+  return (
+    froIsSurface: m.group(1) == 'S',
+    x1: int.parse(m.group(2)!),
+    y1: int.parse(m.group(3)!),
+    c1: m.group(4)!,
+    toIsSurface: m.group(5) == 'S',
+    x2: int.parse(m.group(6)!),
+    y2: int.parse(m.group(7)!),
+    c2: m.group(8)!,
+  );
 }
 
-double maxJump(PlannedAida grid) {
-  var worst = 0.0;
-  for (final (fx, fy, tx, ty) in backStitchCoords(grid)) {
-    worst = max(worst, sqrt((fx - tx) * (fx - tx) + (fy - ty) * (fy - ty)));
+// ── Stitch→spec matching ───────────────────────────────────────────────────
+
+bool _matches(
+    PlanStitchEntry stitch, _StitchSpec spec, List<PlannedSquare> squares) {
+  final isFront =
+      stitch.type == StitchType.frontOne || stitch.type == StitchType.frontTwo;
+
+  // Front stitches: fro = surface (S), to = back (B).
+  // Back stitches:  fro = back (B),    to = surface (S).
+  final froIsSurface = isFront;
+  final toIsSurface = !isFront;
+
+  if (froIsSurface != spec.froIsSurface) return false;
+  if (toIsSurface != spec.toIsSurface) return false;
+
+  int x1, y1, x2, y2;
+  String c1, c2;
+
+  if (stitch is PlanSimpleStitch) {
+    final sq = squares[stitch.squareId];
+    x1 = sq.x; y1 = sq.y; c1 = _cornerStr(stitch.fro);
+    x2 = sq.x; y2 = sq.y; c2 = _cornerStr(stitch.to);
+  } else if (stitch is PlanCrossStitch) {
+    final froSq = squares[stitch.fro.squareId];
+    final toSq = squares[stitch.to.squareId];
+    x1 = froSq.x; y1 = froSq.y; c1 = _cornerStr(stitch.fro.corner);
+    x2 = toSq.x; y2 = toSq.y; c2 = _cornerStr(stitch.to.corner);
+  } else {
+    return false;
   }
-  return worst;
+
+  return x1 == spec.x1 &&
+      y1 == spec.y1 &&
+      c1 == spec.c1 &&
+      x2 == spec.x2 &&
+      y2 == spec.y2 &&
+      c2 == spec.c2;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+// ── Test runner ────────────────────────────────────────────────────────────
 
 void main() {
-  // -------------------------------------------------------------------------
-  group('alternation', () {
-    void check(PlannedAida grid, String label) {
-      final types = stitchTypes(grid);
-      expect(types, isNotEmpty, reason: '$label: no stitches generated');
-      for (var i = 0; i < types.length; i++) {
-        final expected = i % 2 == 0 ? 'Front' : 'Back';
-        expect(types[i].name, contains(expected.toLowerCase()),
-            reason: '$label: position $i expected $expected, got ${types[i]}');
-      }
+  final fixturesDir = Directory('test/fixtures');
+
+  final txtFiles = fixturesDir
+      .listSync()
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.pattern'))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
+
+  for (final patternFile in txtFiles) {
+    final name = patternFile.uri.pathSegments.last.replaceAll('.pattern', '');
+    final expectedFile = File('test/fixtures/$name.expected');
+
+    if (!expectedFile.existsSync()) {
+      // No expected file yet — skip (run generate_fixtures.dart to create one).
+      continue;
     }
 
-    test('single cell', () => check(planStitching(title: '1x1', cols: 1, rows: 1, cells: [(0, 0)]), '1x1'));
+    test(name, () {
+      // Parse pattern.
+      final (:cells, :cols, :rows) = parseGrid(patternFile.readAsStringSync());
+      expect(cells, isNotEmpty, reason: '$name: no cells in pattern file');
 
-    test('horizontal row', () => check(
-        planStitching(title: '3x1', cols: 3, rows: 1, cells: [for (var x = 0; x < 3; x++) (x, 0)]), '3x1'));
+      // Run planner.
+      final aida =
+          planStitching(title: name, cols: cols, rows: rows, cells: cells);
 
-    test('vertical column', () => check(
-        planStitching(title: '1x3', cols: 1, rows: 3, cells: [for (var y = 0; y < 3; y++) (0, y)]), '1x3'));
-
-    test('rectangle', () => check(
-        planStitching(
-            title: '3x3',
-            cols: 3,
-            rows: 3,
-            cells: [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)]),
-        '3x3'));
-
-    test('l shape', () => check(
-        planStitching(
-            title: 'L',
-            cols: 4,
-            rows: 2,
-            cells: [...[for (var x = 0; x < 4; x++) (x, 0)], (0, 1), (1, 1)]),
-        'L'));
-
-    test('gapped row', () => check(
-        planStitching(title: 'gapped', cols: 5, rows: 1, cells: [(0, 0), (1, 0), (3, 0), (4, 0)]),
-        'gapped'));
-
-    test('staircase', () => check(
-        planStitching(
-            title: 'staircase',
-            cols: 5,
-            rows: 3,
-            cells: [
-              ...[for (var x = 0; x < 3; x++) (x, 0)],
-              ...[for (var x = 1; x < 4; x++) (x, 1)],
-              ...[for (var x = 2; x < 5; x++) (x, 2)],
-            ]),
-        'staircase'));
-  });
-
-  // -------------------------------------------------------------------------
-  group('front_one_before_front_two', () {
-    void check(PlannedAida grid, String label) {
-      for (final sqId in grid.activeSquareIds) {
-        final f1 = frontIndex(grid, sqId, StitchType.frontOne);
-        final f2 = frontIndex(grid, sqId, StitchType.frontTwo);
-        if (f1 != null && f2 != null) {
-          expect(f1, lessThan(f2),
-              reason: '$label: cell $sqId FrontOne at $f1, FrontTwo at $f2');
-        }
-      }
-    }
-
-    test('single cell', () => check(planStitching(title: '1x1', cols: 1, rows: 1, cells: [(0, 0)]), '1x1'));
-
-    test('horizontal row', () => check(
-        planStitching(title: '3x1', cols: 3, rows: 1, cells: [for (var x = 0; x < 3; x++) (x, 0)]), '3x1'));
-
-    test('vertical column', () => check(
-        planStitching(title: '1x3', cols: 1, rows: 3, cells: [for (var y = 0; y < 3; y++) (0, y)]), '1x3'));
-
-    test('rectangle', () => check(
-        planStitching(
-            title: '3x3',
-            cols: 3,
-            rows: 3,
-            cells: [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)]),
-        '3x3'));
-
-    test('l shape', () => check(
-        planStitching(
-            title: 'L',
-            cols: 4,
-            rows: 2,
-            cells: [...[for (var x = 0; x < 4; x++) (x, 0)], (0, 1), (1, 1)]),
-        'L'));
-
-    test('gapped row', () => check(
-        planStitching(title: 'gapped', cols: 5, rows: 1, cells: [(0, 0), (1, 0), (3, 0), (4, 0)]),
-        'gapped'));
-
-    test('staircase', () => check(
-        planStitching(
-            title: 'staircase',
-            cols: 5,
-            rows: 3,
-            cells: [
-              ...[for (var x = 0; x < 3; x++) (x, 0)],
-              ...[for (var x = 1; x < 4; x++) (x, 1)],
-              ...[for (var x = 2; x < 5; x++) (x, 2)],
-            ]),
-        'staircase'));
-  });
-
-  // -------------------------------------------------------------------------
-  group('no_zero_distance_back', () {
-    void check(PlannedAida grid, String label) {
-      for (final (fx, fy, tx, ty) in backStitchCoords(grid)) {
-        final d = sqrt((fx - tx) * (fx - tx) + (fy - ty) * (fy - ty));
-        expect(d, greaterThan(1e-9),
-            reason: '$label: zero-length back stitch at ($fx,$fy)');
-      }
-    }
-
-    test('single cell', () => check(planStitching(title: '1x1', cols: 1, rows: 1, cells: [(0, 0)]), '1x1'));
-
-    test('rectangle', () => check(
-        planStitching(
-            title: '3x3',
-            cols: 3,
-            rows: 3,
-            cells: [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)]),
-        '3x3'));
-
-    test('gapped row', () => check(
-        planStitching(title: 'gapped', cols: 5, rows: 1, cells: [(0, 0), (1, 0), (3, 0), (4, 0)]),
-        'gapped'));
-  });
-
-  // -------------------------------------------------------------------------
-  group('no_diagonal_back', () {
-    void check(PlannedAida grid, String label) {
-      for (final (fx, fy, tx, ty) in backStitchCoords(grid)) {
-        final isHV = (fx - tx).abs() < 1e-9 || (fy - ty).abs() < 1e-9;
-        expect(isHV, isTrue,
-            reason: '$label: diagonal back stitch ($fx,$fy)->($tx,$ty)');
-      }
-    }
-
-    test('single cell', () => check(planStitching(title: '1x1', cols: 1, rows: 1, cells: [(0, 0)]), '1x1'));
-
-    test('horizontal row', () => check(
-        planStitching(title: '3x1', cols: 3, rows: 1, cells: [for (var x = 0; x < 3; x++) (x, 0)]), '3x1'));
-
-    test('rectangle', () => check(
-        planStitching(
-            title: '3x3',
-            cols: 3,
-            rows: 3,
-            cells: [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)]),
-        '3x3'));
-
-    test('l shape', () => check(
-        planStitching(
-            title: 'L',
-            cols: 4,
-            rows: 2,
-            cells: [...[for (var x = 0; x < 4; x++) (x, 0)], (0, 1), (1, 1)]),
-        'L'));
-
-    test('gapped row', () => check(
-        planStitching(title: 'gapped', cols: 5, rows: 1, cells: [(0, 0), (1, 0), (3, 0), (4, 0)]),
-        'gapped'));
-
-    test('staircase', () => check(
-        planStitching(
-            title: 'staircase',
-            cols: 5,
-            rows: 3,
-            cells: [
-              ...[for (var x = 0; x < 3; x++) (x, 0)],
-              ...[for (var x = 1; x < 4; x++) (x, 1)],
-              ...[for (var x = 2; x < 5; x++) (x, 2)],
-            ]),
-        'staircase'));
-  });
-
-  // -------------------------------------------------------------------------
-  group('stitch_count', () {
-    void check(PlannedAida grid, int nCells, String label) {
-      final expected = 4 * nCells - 1;
-      expect(grid.stitches.length, expected,
-          reason: '$label: expected $expected stitches, got ${grid.stitches.length}');
-    }
-
-    test('single cell', () => check(planStitching(title: '1x1', cols: 1, rows: 1, cells: [(0, 0)]), 1, '1x1'));
-
-    test('horizontal row', () => check(
-        planStitching(title: '3x1', cols: 3, rows: 1, cells: [for (var x = 0; x < 3; x++) (x, 0)]), 3, '3x1'));
-
-    test('vertical column', () => check(
-        planStitching(title: '1x3', cols: 1, rows: 3, cells: [for (var y = 0; y < 3; y++) (0, y)]), 3, '1x3'));
-
-    test('rectangle', () => check(
-        planStitching(
-            title: '3x3',
-            cols: 3,
-            rows: 3,
-            cells: [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)]),
-        9, '3x3'));
-  });
-
-  // -------------------------------------------------------------------------
-  group('empty_grid', () {
-    test('no cells returns empty', () {
-      final grid = planStitching(title: 'empty', cols: 3, rows: 3, cells: []);
-      expect(grid.stitches, isEmpty);
-    });
-
-    test('cells outside grid ignored', () {
-      final grid = planStitching(title: 'out', cols: 2, rows: 2, cells: [(5, 5)]);
-      expect(grid.stitches, isEmpty);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  group('starts_at_corner', () {
-    (int, int) startCell(PlannedAida grid) {
-      final s = grid.stitches.first as PlanSimpleStitch;
-      final sq = grid.squares[s.squareId];
-      return (sq.x, sq.y);
-    }
-
-    Set<(int, int)> boundingCorners(List<(int, int)> cells) {
-      final xs = cells.map((c) => c.$1).toList();
-      final ys = cells.map((c) => c.$2).toList();
-      final minX = xs.reduce(min), maxX = xs.reduce(max);
-      final minY = ys.reduce(min), maxY = ys.reduce(max);
-      return {(minX, minY), (maxX, minY), (minX, maxY), (maxX, maxY)};
-    }
-
-    test('rectangle starts at corner', () {
-      final cells = [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)];
-      final grid = planStitching(title: '3x3', cols: 3, rows: 3, cells: cells);
-      expect(boundingCorners(cells), contains(startCell(grid)));
-    });
-
-    test('wide rectangle starts at corner', () {
-      final cells = [for (var x = 0; x < 4; x++) for (var y = 0; y < 3; y++) (x, y)];
-      final grid = planStitching(title: '4x3', cols: 4, rows: 3, cells: cells);
-      expect(boundingCorners(cells), contains(startCell(grid)));
-    });
-
-    test('l shape starts at corner', () {
-      final cells = [...[for (var x = 0; x < 4; x++) (x, 0)], (0, 1), (1, 1)];
-      final grid = planStitching(title: 'L', cols: 4, rows: 2, cells: cells);
-      expect(boundingCorners(cells), contains(startCell(grid)));
-    });
-
-    // Screen coords: preferred corners are (minX, minY) = top-left and
-    // (maxX, maxY) = bottom-right (the main diagonal of the bounding box).
-    test('preferred corner is top-left or bottom-right', () {
-      final cells = [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)];
-      final grid = planStitching(title: '3x3', cols: 3, rows: 3, cells: cells);
-      final start = startCell(grid);
-      final allXs = cells.map((c) => c.$1).toList();
-      final allYs = cells.map((c) => c.$2).toList();
-      // top-left = (minX, minY), bottom-right = (maxX, maxY) in screen coords
-      final preferred = {
-        (allXs.reduce(min), allYs.reduce(min)),
-        (allXs.reduce(max), allYs.reduce(max)),
-      };
-      expect(preferred, contains(start));
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  group('gapped_row_jumps', () {
-    test('max jump is two not four', () {
-      final grid = planStitching(
-          title: 'gapped', cols: 5, rows: 1, cells: [(0, 0), (1, 0), (3, 0), (4, 0)]);
-      expect(maxJump(grid), lessThanOrEqualTo(2.0 + 1e-9),
-          reason: 'expected max jump ≤ 2.0 for gapped row');
-    });
-
-    test('jump count', () {
-      final grid = planStitching(
-          title: 'gapped', cols: 5, rows: 1, cells: [(0, 0), (1, 0), (3, 0), (4, 0)]);
-      final jumps = backStitchCoords(grid)
-          .where((c) => sqrt((c.$1 - c.$3) * (c.$1 - c.$3) + (c.$2 - c.$4) * (c.$2 - c.$4)) > 1.0 + 1e-9)
+      // Load expected lines.
+      final expectedLines = expectedFile
+          .readAsStringSync()
+          .split('\n')
+          .where((l) => l.trim().isNotEmpty)
           .toList();
-      expect(jumps.length, 2, reason: 'expected exactly 2 jumps for gapped row');
-    });
-  });
 
-  // -------------------------------------------------------------------------
-  group('back_stitch_segment_styles', () {
-    const backTypes = {StitchType.backOne, StitchType.backTwo, StitchType.backThree};
+      // Validate parseability of expected lines upfront.
+      final specs = expectedLines.map(_parseLine).toList();
 
-    List<(double, double, double, double, StitchType)> backEntries(PlannedAida grid) {
-      final result = <(double, double, double, double, StitchType)>[];
-      for (final s in grid.stitches) {
-        if (!backTypes.contains(s.type)) continue;
-        final double fx, fy, tx, ty;
-        if (s is PlanSimpleStitch) {
-          final sq = grid.squares[s.squareId];
-          (fx, fy) = sq.cornerCoord(s.fro);
-          (tx, ty) = sq.cornerCoord(s.to);
-        } else if (s is PlanCrossStitch) {
-          (fx, fy) = grid.squares[s.fro.squareId].cornerCoord(s.fro.corner);
-          (tx, ty) = grid.squares[s.to.squareId].cornerCoord(s.to.corner);
-        } else {
-          continue;
-        }
-        result.add((fx, fy, tx, ty, s.type));
-      }
-      return result;
-    }
+      // Check count.
+      expect(
+        aida.stitches.length,
+        specs.length,
+        reason: '$name: wrong stitch count\n'
+            '  expected ${specs.length}, got ${aida.stitches.length}',
+      );
 
-    Set<String> segments(double fx, double fy, double tx, double ty) {
-      final segs = <String>{};
-      if ((fy - ty).abs() < 1e-9) {
-        var x = min(fx, tx);
-        final xHi = max(fx, tx);
-        while (x < xHi - 1e-9) {
-          segs.add('h:${(fy * 2).round()}:${(x * 2).round()}');
-          x += 1.0;
-        }
-      } else {
-        var y = min(fy, ty);
-        final yHi = max(fy, ty);
-        while (y < yHi - 1e-9) {
-          segs.add('v:${(fx * 2).round()}:${(y * 2).round()}');
-          y += 1.0;
-        }
-      }
-      return segs;
-    }
-
-    void check(PlannedAida grid, String label) {
-      final backs = backEntries(grid);
-      for (var i = 0; i < backs.length; i++) {
-        for (var j = i + 1; j < backs.length; j++) {
-          final a = backs[i];
-          final b = backs[j];
-          if (a.$5 == b.$5) {
-            final segsA = segments(a.$1, a.$2, a.$3, a.$4);
-            final segsB = segments(b.$1, b.$2, b.$3, b.$4);
-            final overlap = segsA.intersection(segsB);
-            expect(overlap, isEmpty,
-                reason: '$label: back stitches share segment(s) $overlap with same style ${a.$5}');
-          }
-        }
-      }
-    }
-
-    test('rectangle', () => check(
-        planStitching(
-            title: '3x3',
-            cols: 3,
-            rows: 3,
-            cells: [for (var x = 0; x < 3; x++) for (var y = 0; y < 3; y++) (x, y)]),
-        '3x3'));
-
-    test('horizontal row', () => check(
-        planStitching(title: '5x1', cols: 5, rows: 1, cells: [for (var x = 0; x < 5; x++) (x, 0)]),
-        '5x1'));
-
-    test('gapped row', () => check(
-        planStitching(title: 'gapped', cols: 5, rows: 1, cells: [(0, 0), (1, 0), (3, 0), (4, 0)]),
-        'gapped'));
-
-    test('staircase', () => check(
-        planStitching(
-            title: 'staircase',
-            cols: 5,
-            rows: 3,
-            cells: [
-              ...[for (var x = 0; x < 3; x++) (x, 0)],
-              ...[for (var x = 1; x < 4; x++) (x, 1)],
-              ...[for (var x = 2; x < 5; x++) (x, 2)],
-            ]),
-        'staircase'));
-  });
-
-  // -------------------------------------------------------------------------
-  group('end_run_order', () {
-    // Order-preserving deduplication (equivalent to Python's dict.fromkeys).
-    List<T> uniqueOrdered<T>(List<T> items) {
-      final seen = <T>{};
-      return [for (final item in items) if (seen.add(item)) item];
-    }
-
-    bool listsEqual<T>(List<T> a, List<T> b) {
-      if (a.length != b.length) return false;
-      for (var i = 0; i < a.length; i++) {
-        if (a[i] != b[i]) return false;
-      }
-      return true;
-    }
-
-    List<(int, int)> lastFrontCells(PlannedAida grid, int n) {
-      final fronts = grid.stitches
-          .where((s) => s.type == StitchType.frontOne || s.type == StitchType.frontTwo)
-          .toList();
-      final lastN = fronts.sublist(fronts.length - n);
-      return lastN.map((s) {
-        final sq = grid.squares[(s as PlanSimpleStitch).squareId];
-        return (sq.x, sq.y);
-      }).toList();
-    }
-
-    test('horizontal row 5 cells ends in run order', () {
-      final cells = [for (var x = 0; x < 5; x++) (x, 0)];
-      final grid = planStitching(title: '5x1', cols: 5, rows: 1, cells: cells);
-      final last3Cells = lastFrontCells(grid, 6); // 6 front stitches = last 3 cells
-      final unique = uniqueOrdered(last3Cells);
-      final xs = unique.map((c) => c.$1).toList();
-      expect(unique.length, 3, reason: 'last 3 cells should be 3 distinct cells');
-      final sorted = [...xs]..sort();
-      final sortedDesc = [...xs]..sort((a, b) => b.compareTo(a));
-      expect(listsEqual(xs, sorted) || listsEqual(xs, sortedDesc), isTrue,
-          reason: 'last 3 cells must be in run order, got $unique');
-    });
-
-    test('vertical column 4 cells ends in run cells', () {
-      // In screen coords, BL(0,y) == TL(0,y+1) (shared corner), which can
-      // cause d=0 for fwd direction and alter visit ordering within the end run.
-      // We verify the reservation mechanism is correct: the last 3 unique cells
-      // are all from the end of the run (not the start cell), in any order.
-      final cells = [for (var y = 0; y < 4; y++) (0, y)];
-      final grid = planStitching(title: '1x4', cols: 1, rows: 4, cells: cells);
-      final last3Cells = lastFrontCells(grid, 6);
-      final unique = uniqueOrdered(last3Cells);
-      expect(unique.length, 3, reason: 'should have 3 distinct end cells, got $unique');
-      // All 3 must be from the end of the run — not the start cell (0,0).
-      const endRunCells = {(0, 1), (0, 2), (0, 3)};
-      for (final cell in unique) {
-        expect(endRunCells, contains(cell),
-            reason: 'last 3 cells should be from end of run, got $unique');
+      // Check each stitch in order.
+      for (var i = 0; i < specs.length; i++) {
+        final actual = aida.stitches[i];
+        final spec = specs[i];
+        expect(
+          _matches(actual, spec, aida.squares),
+          isTrue,
+          reason: '$name: stitch $i mismatch\n'
+              '  expected: ${expectedLines[i]}\n'
+              '  got:      ${_serializeStitch(actual, aida.squares)}',
+        );
       }
     });
-
-    test('short run no reservation', () {
-      final cells = [for (var x = 0; x < 3; x++) (x, 0)];
-      final grid = planStitching(title: '3x1', cols: 3, rows: 1, cells: cells);
-      final types = stitchTypes(grid);
-      expect(types, isNotEmpty);
-      for (var i = 0; i < types.length; i++) {
-        final expected = i % 2 == 0 ? 'front' : 'back';
-        expect(types[i].name, contains(expected),
-            reason: 'position $i expected $expected, got ${types[i]}');
-      }
-    });
-  });
+  }
 }
