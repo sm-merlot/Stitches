@@ -40,8 +40,6 @@ class EditorToolbar extends ConsumerWidget {
 
     final notifier = ref.read(editorProvider.notifier);
     final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
-    final onPrimary = theme.colorScheme.onPrimary;
     final surface = theme.colorScheme.surface;
 
     final vDivider = Container(width: 1, height: 32, color: theme.dividerColor);
@@ -74,45 +72,41 @@ class EditorToolbar extends ConsumerWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _ModeButton(
-                          icon: Icons.draw_outlined,
+                        _ToolbarButton(
                           tooltip: 'Draw  [D]',
-                          active: state.drawingMode == DrawingMode.draw,
-                          activeColor: primary,
+                          selected: state.drawingMode == DrawingMode.draw,
                           onTap: () => notifier.setDrawingMode(DrawingMode.draw),
+                          builder: (c) => Icon(Icons.draw_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
-                        _ModeButton(
-                          icon: Icons.auto_fix_normal,
+                        _ToolbarButton(
                           tooltip: 'Erase  [E]',
-                          active: state.drawingMode == DrawingMode.erase,
+                          selected: state.drawingMode == DrawingMode.erase,
                           activeColor: theme.colorScheme.error,
                           onTap: () => notifier.setDrawingMode(DrawingMode.erase),
+                          builder: (c) => Icon(Icons.auto_fix_normal, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
-                        _ModeButton(
-                          icon: Icons.pan_tool_outlined,
+                        _ToolbarButton(
                           tooltip: 'Pan  [P or Space]',
-                          active: state.drawingMode == DrawingMode.pan,
-                          activeColor: primary,
+                          selected: state.drawingMode == DrawingMode.pan,
                           onTap: () => notifier.setDrawingMode(DrawingMode.pan),
+                          builder: (c) => Icon(Icons.pan_tool_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
-                        _ModeButton(
-                          icon: Icons.colorize_outlined,
+                        _ToolbarButton(
                           tooltip: 'Pick colour  [C]',
-                          active: state.drawingMode == DrawingMode.colorPicker,
-                          activeColor: primary,
+                          selected: state.drawingMode == DrawingMode.colorPicker,
                           onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
+                          builder: (c) => Icon(Icons.colorize_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
-                        _ModeButton(
-                          icon: Icons.select_all_outlined,
+                        _ToolbarButton(
                           tooltip: 'Select  [S]',
-                          active: state.drawingMode == DrawingMode.select ||
+                          selected: state.drawingMode == DrawingMode.select ||
                               state.drawingMode == DrawingMode.paste,
-                          activeColor: primary,
                           onTap: () => notifier.setDrawingMode(DrawingMode.select),
+                          builder: (c) => Icon(Icons.select_all_outlined, size: 17, color: c),
                         ),
                       ],
                     ),
@@ -126,67 +120,59 @@ class EditorToolbar extends ConsumerWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _StitchIconButton(
+                          _ToolbarButton(
                             tooltip: 'Full stitch  [1]',
                             selected: state.currentTool == DrawingTool.fullStitch,
                             onTap: () => notifier.setTool(DrawingTool.fullStitch),
-                            primary: primary,
-                            onPrimary: onPrimary,
-                            painterBuilder: (c) => _FullStitchIconPainter(color: c),
+                            builder: (c) => CustomPaint(
+                                painter: _StitchIconPainter(color: c, draw: _drawFullStitch)),
                           ),
                           const SizedBox(width: 4),
-                          _StitchIconButton(
+                          _ToolbarButton(
                             tooltip: 'Half diagonal /  [2]',
                             selected: state.currentTool == DrawingTool.halfForward,
                             onTap: () => notifier.setTool(DrawingTool.halfForward),
-                            primary: primary,
-                            onPrimary: onPrimary,
-                            painterBuilder: (c) => _HalfForwardIconPainter(color: c),
+                            builder: (c) => CustomPaint(
+                                painter: _StitchIconPainter(color: c, draw: _drawHalfForward)),
                           ),
                           const SizedBox(width: 4),
-                          _StitchIconButton(
+                          _ToolbarButton(
                             tooltip: 'Half diagonal \\  [3]',
                             selected: state.currentTool == DrawingTool.halfBackward,
                             onTap: () => notifier.setTool(DrawingTool.halfBackward),
-                            primary: primary,
-                            onPrimary: onPrimary,
-                            painterBuilder: (c) => _HalfBackwardIconPainter(color: c),
+                            builder: (c) => CustomPaint(
+                                painter: _StitchIconPainter(color: c, draw: _drawHalfBackward)),
                           ),
                           const SizedBox(width: 4),
-                          _StitchIconButton(
+                          _ToolbarButton(
                             tooltip: 'Half-cell cross (X in ½ cell)  [4]',
                             selected: state.currentTool == DrawingTool.halfCross,
                             onTap: () => notifier.setTool(DrawingTool.halfCross),
-                            primary: primary,
-                            onPrimary: onPrimary,
-                            painterBuilder: (c) => _HalfCrossIconPainter(color: c),
+                            builder: (c) => CustomPaint(
+                                painter: _StitchIconPainter(color: c, draw: _drawHalfCross)),
                           ),
                           const SizedBox(width: 4),
-                          _StitchIconButton(
+                          _ToolbarButton(
                             tooltip: 'Quarter diagonal (auto-corner)  [5]',
                             selected: state.currentTool == DrawingTool.quarterDiag,
                             onTap: () => notifier.setTool(DrawingTool.quarterDiag),
-                            primary: primary,
-                            onPrimary: onPrimary,
-                            painterBuilder: (c) => _QuarterDiagIconPainter(color: c),
+                            builder: (c) => CustomPaint(
+                                painter: _StitchIconPainter(color: c, draw: _drawQuarterDiag)),
                           ),
                           const SizedBox(width: 4),
-                          _StitchIconButton(
+                          _ToolbarButton(
                             tooltip: 'Quarter-cell cross / petit point  [6]',
                             selected: state.currentTool == DrawingTool.quarterCross,
                             onTap: () => notifier.setTool(DrawingTool.quarterCross),
-                            primary: primary,
-                            onPrimary: onPrimary,
-                            painterBuilder: (c) => _QuarterCrossIconPainter(color: c),
+                            builder: (c) => CustomPaint(
+                                painter: _StitchIconPainter(color: c, draw: _drawQuarterCross)),
                           ),
                           const SizedBox(width: 4),
-                          _ToolButton(
-                            icon: Icons.gesture,
+                          _ToolbarButton(
                             tooltip: 'Backstitch  [7]',
                             selected: state.currentTool == DrawingTool.backstitch,
                             onTap: () => notifier.setTool(DrawingTool.backstitch),
-                            primary: primary,
-                            onPrimary: onPrimary,
+                            builder: (c) => Icon(Icons.gesture, size: 17, color: c),
                           ),
                         ],
                       ),
@@ -871,18 +857,20 @@ class _StitchModeToolbar extends ConsumerWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _StitchViewModeButton(
-                          icon: Icons.pan_tool_outlined,
+                        _ToolbarButton(
                           tooltip: 'Pan  [P]',
-                          active: state.drawingMode == DrawingMode.pan,
+                          selected: state.drawingMode == DrawingMode.pan,
                           onTap: () => notifier.setDrawingMode(DrawingMode.pan),
+                          builder: (c) => Icon(Icons.pan_tool_outlined, size: 16, color: c),
                         ),
                         const SizedBox(width: 2),
-                        _StitchViewModeButton(
-                          icon: Icons.select_all_outlined,
+                        _ToolbarButton(
                           tooltip: 'Select  [S]',
-                          active: state.drawingMode == DrawingMode.select,
-                          onTap: () => notifier.setDrawingMode(DrawingMode.select),
+                          selected: state.drawingMode == DrawingMode.select,
+                          onTap: state.stitchViewMode != StitchViewMode.greyed
+                              ? () => notifier.setDrawingMode(DrawingMode.select)
+                              : null,
+                          builder: (c) => Icon(Icons.select_all_outlined, size: 16, color: c),
                         ),
                       ],
                     ),
@@ -895,25 +883,27 @@ class _StitchModeToolbar extends ConsumerWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _StitchViewModeButton(
-                          icon: Icons.visibility_outlined,
+                        _ToolbarButton(
                           label: 'Show all',
-                          active: state.stitchViewMode == StitchViewMode.normal,
+                          selected: state.stitchViewMode == StitchViewMode.normal,
                           onTap: () => notifier.setStitchViewMode(StitchViewMode.normal),
+                          builder: (c) => Icon(Icons.visibility_outlined, size: 16, color: c),
                         ),
                         const SizedBox(width: 2),
-                        _StitchViewModeButton(
-                          icon: Icons.visibility_off_outlined,
+                        _ToolbarButton(
                           label: 'Hide backstitches',
-                          active: state.stitchViewMode == StitchViewMode.hidden,
+                          selected: state.stitchViewMode == StitchViewMode.hidden,
                           onTap: () => notifier.setStitchViewMode(StitchViewMode.hidden),
+                          builder: (c) =>
+                              Icon(Icons.visibility_off_outlined, size: 16, color: c),
                         ),
                         const SizedBox(width: 2),
-                        _StitchViewModeButton(
-                          icon: Icons.invert_colors_outlined,
+                        _ToolbarButton(
                           label: 'Grey stitches',
-                          active: state.stitchViewMode == StitchViewMode.greyed,
+                          selected: state.stitchViewMode == StitchViewMode.greyed,
                           onTap: () => notifier.setStitchViewMode(StitchViewMode.greyed),
+                          builder: (c) =>
+                              Icon(Icons.invert_colors_outlined, size: 16, color: c),
                         ),
                       ],
                     ),
@@ -1026,393 +1016,210 @@ class _StitchModeToolbar extends ConsumerWidget {
   }
 }
 
-// ─── Stitch view mode button ──────────────────────────────────────────────────
+// ─── Toolbar button ───────────────────────────────────────────────────────────
+// Unified button for all toolbar actions.
+//
+// Without [label]: renders as a ~34×34 square (icon or custom-paint content).
+// With [label]:    auto-width pill with the content + text side by side.
+// [tooltip] overrides hover text; falls back to [label] if omitted.
 
-class _StitchViewModeButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _StitchViewModeButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Tooltip(
-      message: label,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: active ? primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: active ? primary : Colors.grey.shade300,
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: active ? Colors.white : Colors.grey.shade600),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: active ? Colors.white : Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Mode button (draw / erase / pan) ────────────────────────────────────────
-
-class _ModeButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final bool active;
-  final Color activeColor;
-  final VoidCallback onTap;
-
-  const _ModeButton({
-    required this.icon,
-    required this.tooltip,
-    required this.active,
-    required this.activeColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: active ? activeColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: active ? activeColor : Colors.grey.shade300,
-              width: 1,
-            ),
-          ),
-          child: Icon(
-            icon,
-            size: 17,
-            color: active ? Colors.white : Colors.grey.shade600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Stitch tool button ───────────────────────────────────────────────────────
-
-class _ToolButton extends StatelessWidget {
-  final String? label;
-  final IconData? icon;
-  final String tooltip;
+class _ToolbarButton extends StatelessWidget {
   final bool selected;
+  final Widget Function(Color contentColor) builder;
+  final String? label;
+  final String? tooltip;
   final VoidCallback? onTap;
-  final Color primary;
-  final Color onPrimary;
+  final Color? activeColor; // defaults to theme primary
 
-  const _ToolButton({
-    this.label,
-    this.icon,
-    required this.tooltip,
+  const _ToolbarButton({
     required this.selected,
-    required this.onTap,
-    required this.primary,
-    required this.onPrimary,
-  }) : assert(label != null || icon != null);
+    required this.builder,
+    this.label,
+    this.tooltip,
+    this.onTap,
+    this.activeColor,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final color = activeColor ?? Theme.of(context).colorScheme.primary;
     final disabled = onTap == null;
-    final bgColor = !disabled && selected ? primary : Colors.transparent;
+    final bgColor = !disabled && selected ? color : Colors.transparent;
     final borderColor = disabled
         ? Colors.grey.shade200
         : selected
-            ? primary
+            ? color
             : Colors.grey.shade300;
     final contentColor = disabled
         ? Colors.grey.shade400
         : selected
-            ? onPrimary
-            : Colors.grey.shade700;
+            ? Colors.white
+            : Colors.grey.shade600;
+
+    final hasLabel = label != null && label!.isNotEmpty;
+    final tooltipText = tooltip ?? (hasLabel ? label! : '');
+
+    Widget content = builder(contentColor);
+    if (hasLabel) {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          content,
+          const SizedBox(width: 5),
+          Text(
+            label!,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: contentColor,
+            ),
+          ),
+        ],
+      );
+    }
 
     return Tooltip(
-      message: tooltip,
+      message: tooltipText,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: 34,
           height: 34,
+          padding: EdgeInsets.symmetric(horizontal: hasLabel ? 10.0 : 8.5),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: borderColor, width: 1),
           ),
-          child: Center(
-            child: icon != null
-                ? Icon(icon, size: 17, color: contentColor)
-                : Text(
-                    label!,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: contentColor,
-                    ),
-                  ),
-          ),
+          child: Center(child: content),
         ),
       ),
     );
   }
 }
 
-// ─── Custom painted stitch tool button (shared) ──────────────────────────────
+// ─── Stitch icon painter ──────────────────────────────────────────────────────
+// Single painter + six top-level draw functions replace the old per-type classes.
 
-class _StitchIconButton extends StatelessWidget {
-  final String tooltip;
-  final bool selected;
-  final VoidCallback? onTap;
-  final Color primary;
-  final Color onPrimary;
-  final CustomPainter Function(Color color) painterBuilder;
+typedef _DrawFn = void Function(Canvas canvas, Size size, Color color);
 
-  const _StitchIconButton({
-    required this.tooltip,
-    required this.selected,
-    required this.onTap,
-    required this.primary,
-    required this.onPrimary,
-    required this.painterBuilder,
-  });
+class _StitchIconPainter extends CustomPainter {
+  final Color color;
+  final _DrawFn draw;
+  const _StitchIconPainter({required this.color, required this.draw});
 
   @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    final iconColor = disabled
-        ? Colors.grey.shade400
-        : selected
-            ? onPrimary
-            : Colors.grey.shade700;
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: !disabled && selected ? primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: disabled
-                  ? Colors.grey.shade200
-                  : selected
-                      ? primary
-                      : Colors.grey.shade300,
-              width: 1,
-            ),
-          ),
-          child: CustomPaint(painter: painterBuilder(iconColor)),
-        ),
-      ),
-    );
-  }
+  void paint(Canvas canvas, Size size) => draw(canvas, size, color);
+
+  @override
+  bool shouldRepaint(_StitchIconPainter old) =>
+      old.color != color || !identical(old.draw, draw);
 }
 
-// ─── Stitch icon painters ─────────────────────────────────────────────────────
-
-class _FullStitchIconPainter extends CustomPainter {
-  final Color color;
-  const _FullStitchIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const pad = 5.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    // Full X
-    canvas.drawLine(Offset(pad, pad), Offset(size.width - pad, size.height - pad), paint);
-    canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), paint);
-    // Cell outline
-    canvas.drawRect(
-      Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
-      Paint()
-        ..color = color.withValues(alpha: 0.25)
-        ..strokeWidth = 0.8
-        ..style = PaintingStyle.stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_FullStitchIconPainter old) => old.color != color;
-}
-
-class _HalfForwardIconPainter extends CustomPainter {
-  final Color color;
-  const _HalfForwardIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const pad = 5.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    // Forward diagonal /
-    canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), paint);
-    // Cell outline
-    canvas.drawRect(
-      Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
-      Paint()
-        ..color = color.withValues(alpha: 0.25)
-        ..strokeWidth = 0.8
-        ..style = PaintingStyle.stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_HalfForwardIconPainter old) => old.color != color;
-}
-
-class _HalfBackwardIconPainter extends CustomPainter {
-  final Color color;
-  const _HalfBackwardIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const pad = 5.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    // Backward diagonal \
-    canvas.drawLine(Offset(pad, pad), Offset(size.width - pad, size.height - pad), paint);
-    // Cell outline
-    canvas.drawRect(
-      Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
-      Paint()
-        ..color = color.withValues(alpha: 0.25)
-        ..strokeWidth = 0.8
-        ..style = PaintingStyle.stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_HalfBackwardIconPainter old) => old.color != color;
-}
-
-class _HalfCrossIconPainter extends CustomPainter {
-  final Color color;
-  const _HalfCrossIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const pad = 5.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final midX = size.width / 2;
-    canvas.drawLine(Offset(pad, pad), Offset(midX, size.height - pad), paint);
-    canvas.drawLine(Offset(midX, pad), Offset(pad, size.height - pad), paint);
-    canvas.drawLine(
-        Offset(midX, pad - 2),
-        Offset(midX, size.height - pad + 2),
-        Paint()
-          ..color = color.withValues(alpha: 0.35)
-          ..strokeWidth = 1.0);
-  }
-
-  @override
-  bool shouldRepaint(_HalfCrossIconPainter old) => old.color != color;
-}
-
-class _QuarterDiagIconPainter extends CustomPainter {
-  final Color color;
-  const _QuarterDiagIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const pad = 5.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    canvas.drawLine(Offset(pad, pad), Offset(cx, cy), paint);
-    final gridPaint = Paint()
+void _drawFullStitch(Canvas canvas, Size size, Color color) {
+  const pad = 5.0;
+  final p = Paint()
+    ..color = color
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  canvas.drawLine(Offset(pad, pad), Offset(size.width - pad, size.height - pad), p);
+  canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), p);
+  canvas.drawRect(
+    Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+    Paint()
       ..color = color.withValues(alpha: 0.25)
-      ..strokeWidth = 0.8;
-    canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gridPaint);
-    canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gridPaint);
-  }
-
-  @override
-  bool shouldRepaint(_QuarterDiagIconPainter old) => old.color != color;
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke,
+  );
 }
 
-class _QuarterCrossIconPainter extends CustomPainter {
-  final Color color;
-  const _QuarterCrossIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const pad = 5.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    canvas.drawLine(Offset(pad, pad), Offset(cx - 1, cy - 1), paint);
-    canvas.drawLine(Offset(cx - 1, pad), Offset(pad, cy - 1), paint);
-    final gridPaint = Paint()
+void _drawHalfForward(Canvas canvas, Size size, Color color) {
+  const pad = 5.0;
+  final p = Paint()
+    ..color = color
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), p);
+  canvas.drawRect(
+    Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+    Paint()
       ..color = color.withValues(alpha: 0.25)
-      ..strokeWidth = 0.8;
-    canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gridPaint);
-    canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gridPaint);
-  }
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke,
+  );
+}
 
-  @override
-  bool shouldRepaint(_QuarterCrossIconPainter old) => old.color != color;
+void _drawHalfBackward(Canvas canvas, Size size, Color color) {
+  const pad = 5.0;
+  final p = Paint()
+    ..color = color
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  canvas.drawLine(Offset(pad, pad), Offset(size.width - pad, size.height - pad), p);
+  canvas.drawRect(
+    Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+    Paint()
+      ..color = color.withValues(alpha: 0.25)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke,
+  );
+}
+
+void _drawHalfCross(Canvas canvas, Size size, Color color) {
+  const pad = 5.0;
+  final p = Paint()
+    ..color = color
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  final midX = size.width / 2;
+  canvas.drawLine(Offset(pad, pad), Offset(midX, size.height - pad), p);
+  canvas.drawLine(Offset(midX, pad), Offset(pad, size.height - pad), p);
+  canvas.drawLine(
+    Offset(midX, pad - 2),
+    Offset(midX, size.height - pad + 2),
+    Paint()
+      ..color = color.withValues(alpha: 0.35)
+      ..strokeWidth = 1.0,
+  );
+}
+
+void _drawQuarterDiag(Canvas canvas, Size size, Color color) {
+  const pad = 5.0;
+  final p = Paint()
+    ..color = color
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  final cx = size.width / 2;
+  final cy = size.height / 2;
+  canvas.drawLine(Offset(pad, pad), Offset(cx, cy), p);
+  final gp = Paint()
+    ..color = color.withValues(alpha: 0.25)
+    ..strokeWidth = 0.8;
+  canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
+  canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
+}
+
+void _drawQuarterCross(Canvas canvas, Size size, Color color) {
+  const pad = 5.0;
+  final p = Paint()
+    ..color = color
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  final cx = size.width / 2;
+  final cy = size.height / 2;
+  canvas.drawLine(Offset(pad, pad), Offset(cx - 1, cy - 1), p);
+  canvas.drawLine(Offset(cx - 1, pad), Offset(pad, cy - 1), p);
+  final gp = Paint()
+    ..color = color.withValues(alpha: 0.25)
+    ..strokeWidth = 0.8;
+  canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
+  canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
 }
 
 // ─── Demonstrate button ───────────────────────────────────────────────────────
@@ -1428,7 +1235,11 @@ class _DemonstrateButton extends StatelessWidget {
     final pool = state.selectionRect != null
         ? state.selectedStitches
         : state.pattern.stitches;
-    final hasFullStitches = pool.any((s) => s is FullStitch);
+    final focusId = state.stitchFocusThreadId;
+    final greyed = state.stitchViewMode == StitchViewMode.greyed;
+    final hasFullStitches = !greyed &&
+        pool.any((s) =>
+            s is FullStitch && (focusId == null || s.threadId == focusId));
     final hasSelection = state.selectionRect != null;
 
     return Tooltip(
