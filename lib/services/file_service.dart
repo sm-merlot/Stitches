@@ -111,6 +111,12 @@ class FileService {
       }
     }
 
+    if (pattern.referenceImagePath != null) {
+      buf.writeln('overlay:');
+      buf.writeln('  imagePath: ${_yamlStr(pattern.referenceImagePath!)}');
+      buf.writeln('  opacity: ${pattern.referenceOpacity.toStringAsFixed(2)}');
+    }
+
     buf.writeln('threads:');
     for (final t in pattern.threads) {
       final m = t.toYaml();

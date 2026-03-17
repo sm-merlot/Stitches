@@ -19,6 +19,12 @@ class CrossStitchPattern {
   /// Last-saved editor state — whether stitch mode was active.
   final bool editorStitchMode;
 
+  /// Path to a reference image overlay (persisted with the file).
+  final String? referenceImagePath;
+
+  /// Opacity of the reference image overlay (0.0–1.0).
+  final double referenceOpacity;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -29,6 +35,8 @@ class CrossStitchPattern {
     this.editorSelectedThreadId,
     this.editorTool,
     this.editorStitchMode = false,
+    this.referenceImagePath,
+    this.referenceOpacity = 0.5,
   });
 
   factory CrossStitchPattern.empty({
@@ -55,6 +63,8 @@ class CrossStitchPattern {
     Object? editorSelectedThreadId = _sentinel,
     Object? editorTool = _sentinel,
     bool? editorStitchMode,
+    Object? referenceImagePath = _sentinel,
+    double? referenceOpacity,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -70,6 +80,10 @@ class CrossStitchPattern {
           ? this.editorTool
           : editorTool as String?,
       editorStitchMode: editorStitchMode ?? this.editorStitchMode,
+      referenceImagePath: referenceImagePath == _sentinel
+          ? this.referenceImagePath
+          : referenceImagePath as String?,
+      referenceOpacity: referenceOpacity ?? this.referenceOpacity,
     );
   }
 
@@ -101,6 +115,8 @@ class CrossStitchPattern {
       editorSelectedThreadId: editor?['selectedThread'] as String?,
       editorTool: editor?['tool'] as String?,
       editorStitchMode: editor?['stitchMode'] as bool? ?? false,
+      referenceImagePath: yaml['overlay']?['imagePath'] as String?,
+      referenceOpacity: (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,
       threads: (yaml['threads'] as List?)
               ?.map((t) => Thread.fromYaml(t as Map))
               .toList() ??

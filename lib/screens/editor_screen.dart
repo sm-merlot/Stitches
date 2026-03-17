@@ -9,6 +9,7 @@ import '../services/file_service.dart';
 import '../services/pdf_service.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
+import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
@@ -274,6 +275,22 @@ class EditorScreen extends ConsumerWidget {
                 icon: const Icon(Icons.info_outline),
                 tooltip: 'Pattern Info',
                 onPressed: () => _showPatternInfo(context, state),
+              ),
+              IconButton(
+                icon: Icon(
+                  state.referenceImage != null
+                      ? Icons.photo_filter
+                      : Icons.photo_filter_outlined,
+                  color: state.referenceImage != null && state.referenceVisible
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                tooltip: 'Reference Image',
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const ReferenceImageSheet(),
+                ),
               ),
             ],
             // Keep screen on — only shown in stitch mode
