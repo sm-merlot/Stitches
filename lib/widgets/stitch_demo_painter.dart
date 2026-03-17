@@ -6,7 +6,15 @@ import '../services/stitch_renderer.dart';
 
 const _needleColor = Color(0xFFE8C020); // golden needle dot
 
+/// Maps [StitchType] to the same Flutter [Color]s used by the CLI GIF renderer.
+final _typeColors = stitchTypeArgb.map(
+  (type, argb) => MapEntry(type, Color(argb)),
+);
+
 /// [CustomPainter] that draws the step-by-step stitching demonstration.
+///
+/// Colors match the educational palette used by the CLI GIF renderer:
+/// purple = front1, green = front2, gold/red/blue = back layers.
 ///
 /// [currentSubStep] runs from 0 (empty canvas) to
 /// `segments.length * kDemoSubFrames` (all complete). Within each group of
@@ -15,13 +23,11 @@ const _needleColor = Color(0xFFE8C020); // golden needle dot
 class StitchDemoPainter extends CustomPainter {
   final PlannedAida aida;
   final int currentSubStep;
-  final Color threadColor;
   final Color aidaColor;
 
   const StitchDemoPainter({
     required this.aida,
     required this.currentSubStep,
-    required this.threadColor,
     this.aidaColor = const Color(0xFFFAF6F0),
   });
 
@@ -78,24 +84,16 @@ class StitchDemoPainter extends CustomPainter {
 
     // ── Completed stitches ───────────────────────────────────────────────────
     final strokeW = (cellSize * 0.06).clamp(1.0, 3.0);
-    final frontPaint = Paint()
-      ..color = threadColor
-      ..strokeWidth = strokeW
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final backPaint = Paint()
-      ..color = const Color(0xFF888888)
+    final basePaint = Paint()
       ..strokeWidth = strokeW
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     for (var i = 0; i < completeCount && i < segments.length; i++) {
       final seg = segments[i];
-      canvas.drawLine(
-        Offset(seg.x1, seg.y1),
-        Offset(seg.x2, seg.y2),
-        _isFront(seg.type) ? frontPaint : backPaint,
-      );
+      final color = _typeColors[seg.type] ?? const Color(0xFF888888);
+      _drawSegment(canvas, seg.x1, seg.y1, seg.x2, seg.y2, seg.type, color,
+          basePaint..color = color..strokeWidth = strokeW);
     }
 
     // ── In-progress stitch ───────────────────────────────────────────────────
@@ -104,15 +102,16 @@ class StitchDemoPainter extends CustomPainter {
       final tipX = seg.x1 + (seg.x2 - seg.x1) * subProgress;
       final tipY = seg.y1 + (seg.y2 - seg.y1) * subProgress;
 
-      final activeColor =
-          _isFront(seg.type) ? threadColor : const Color(0xFF555555);
+      final activeColor = _typeColors[seg.type] ?? const Color(0xFF888888);
+      final activeStrokeW = (strokeW * 1.6).clamp(1.5, 4.0);
       final activePaint = Paint()
         ..color = activeColor
-        ..strokeWidth = (strokeW * 1.6).clamp(1.5, 4.0)
+        ..strokeWidth = activeStrokeW
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
 
-      canvas.drawLine(Offset(seg.x1, seg.y1), Offset(tipX, tipY), activePaint);
+      _drawSegment(canvas, seg.x1, seg.y1, tipX, tipY, seg.type, activeColor,
+          activePaint..strokeWidth = activeStrokeW);
 
       // Needle dot at the tip.
       final needleRadius = (cellSize * 0.08).clamp(3.0, 7.0);
@@ -133,15 +132,66 @@ class StitchDemoPainter extends CustomPainter {
     }
   }
 
-  bool _isFront(StitchType type) =>
-      type == StitchType.frontOne ||
-      type == StitchType.frontTwo ||
-      type == StitchType.automatic;
+  /// Draws one segment, using dashes for back2/back3 to match the GIF renderer:
+  /// back2 = long dashes (8 on / 5 off), back3 = short dashes (3 on / 5 off).
+  void _drawSegment(
+    Canvas canvas,
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    StitchType type,
+    Color color,
+    Paint paint,
+  ) {
+    if (type == StitchType.backTwo) {
+      _drawDashedLine(canvas, x1, y1, x2, y2, paint,
+          dashLen: 8.0, gapLen: 5.0);
+    } else if (type == StitchType.backThree) {
+      _drawDashedLine(canvas, x1, y1, x2, y2, paint,
+          dashLen: 3.0, gapLen: 5.0);
+    } else {
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paint);
+    }
+  }
+
+  /// Draws a dashed line using Flutter [Canvas] path operations.
+  void _drawDashedLine(
+    Canvas canvas,
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    Paint paint, {
+    required double dashLen,
+    required double gapLen,
+  }) {
+    final dx = x2 - x1;
+    final dy = y2 - y1;
+    final dist = Offset(dx, dy).distance;
+    if (dist < 1e-9) return;
+    final ux = dx / dist;
+    final uy = dy / dist;
+    var d = 0.0;
+    var drawing = true;
+    while (d < dist) {
+      final segLen =
+          drawing ? dashLen.clamp(0.0, dist - d) : gapLen.clamp(0.0, dist - d);
+      if (drawing && segLen > 0) {
+        canvas.drawLine(
+          Offset(x1 + ux * d, y1 + uy * d),
+          Offset(x1 + ux * (d + segLen), y1 + uy * (d + segLen)),
+          paint,
+        );
+      }
+      d += segLen;
+      drawing = !drawing;
+    }
+  }
 
   @override
   bool shouldRepaint(StitchDemoPainter old) =>
       old.currentSubStep != currentSubStep ||
       old.aida != aida ||
-      old.threadColor != threadColor ||
       old.aidaColor != aidaColor;
 }

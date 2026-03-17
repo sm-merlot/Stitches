@@ -873,14 +873,14 @@ class _StitchModeToolbar extends ConsumerWidget {
                       children: [
                         _StitchViewModeButton(
                           icon: Icons.pan_tool_outlined,
-                          label: 'Pan  [P]',
+                          tooltip: 'Pan  [P]',
                           active: state.drawingMode == DrawingMode.pan,
                           onTap: () => notifier.setDrawingMode(DrawingMode.pan),
                         ),
                         const SizedBox(width: 2),
                         _StitchViewModeButton(
                           icon: Icons.select_all_outlined,
-                          label: 'Select  [S]',
+                          tooltip: 'Select  [S]',
                           active: state.drawingMode == DrawingMode.select,
                           onTap: () => notifier.setDrawingMode(DrawingMode.select),
                         ),
