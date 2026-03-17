@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
@@ -28,6 +29,11 @@ class CanvasPainter extends CustomPainter {
   /// If set, only this thread ID is shown at full colour; all others are greyed.
   final String? stitchFocusThreadId;
 
+  // ── Reference image overlay ───────────────────────────────────────────────
+  final ui.Image? referenceImage;
+  final double referenceOpacity;
+  final bool referenceVisible;
+
   const CanvasPainter({
     required this.pattern,
     required this.cellSize,
@@ -46,6 +52,9 @@ class CanvasPainter extends CustomPainter {
     this.stitchMode = false,
     this.stitchViewMode = StitchViewMode.normal,
     this.stitchFocusThreadId,
+    this.referenceImage,
+    this.referenceOpacity = 0.5,
+    this.referenceVisible = true,
   });
 
   @override
@@ -67,6 +76,19 @@ class CanvasPainter extends CustomPainter {
       Rect.fromLTWH(0, 0, w, h),
       Paint()..color = aidaColor,
     );
+
+    // ── Reference image overlay ───────────────────────────────────────────────
+    if (referenceImage != null && referenceVisible && referenceOpacity > 0) {
+      final src = Rect.fromLTWH(0, 0,
+          referenceImage!.width.toDouble(), referenceImage!.height.toDouble());
+      final dst = Rect.fromLTWH(0, 0, w, h);
+      canvas.drawImageRect(
+        referenceImage!,
+        src,
+        dst,
+        Paint()..color = Color.fromRGBO(255, 255, 255, referenceOpacity),
+      );
+    }
 
     // ── Stitches ─────────────────────────────────────────────────────────────
     // Render order: full → half → quarter → halfcross → quartercross → back
@@ -894,6 +916,9 @@ class CanvasPainter extends CustomPainter {
         oldDelegate.ghostThreads != ghostThreads ||
         oldDelegate.stitchMode != stitchMode ||
         oldDelegate.stitchViewMode != stitchViewMode ||
-        oldDelegate.stitchFocusThreadId != stitchFocusThreadId;
+        oldDelegate.stitchFocusThreadId != stitchFocusThreadId ||
+        oldDelegate.referenceImage != referenceImage ||
+        oldDelegate.referenceOpacity != referenceOpacity ||
+        oldDelegate.referenceVisible != referenceVisible;
   }
 }

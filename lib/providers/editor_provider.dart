@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/symbols.dart';
@@ -6,6 +7,7 @@ import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../services/file_service.dart';
+import '../services/reference_image_service.dart';
 
 enum DrawingTool {
   fullStitch,    // Full X stitch             [1]
@@ -55,6 +57,14 @@ class EditorState {
   /// If set, only this thread is shown at full colour; all others are greyed.
   final String? stitchFocusThreadId;
 
+  // ── Reference image overlay ───────────────────────────────────────────────
+  /// Decoded reference image for rendering (not part of undo stack).
+  final ui.Image? referenceImage;
+  /// Opacity of the overlay (0.0–1.0).
+  final double referenceOpacity;
+  /// Whether the overlay is currently visible.
+  final bool referenceVisible;
+
   const EditorState({
     required this.pattern,
     this.filePath,
@@ -72,6 +82,9 @@ class EditorState {
     this.stitchMode = false,
     this.stitchViewMode = StitchViewMode.normal,
     this.stitchFocusThreadId,
+    this.referenceImage,
+    this.referenceOpacity = 0.5,
+    this.referenceVisible = true,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -144,6 +157,9 @@ class EditorState {
     bool? stitchMode,
     StitchViewMode? stitchViewMode,
     Object? stitchFocusThreadId = _sentinel,
+    Object? referenceImage = _sentinel,
+    double? referenceOpacity,
+    bool? referenceVisible,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -168,6 +184,11 @@ class EditorState {
       stitchFocusThreadId: stitchFocusThreadId == _sentinel
           ? this.stitchFocusThreadId
           : stitchFocusThreadId as String?,
+      referenceImage: referenceImage == _sentinel
+          ? this.referenceImage
+          : referenceImage as ui.Image?,
+      referenceOpacity: referenceOpacity ?? this.referenceOpacity,
+      referenceVisible: referenceVisible ?? this.referenceVisible,
     );
   }
 
@@ -212,7 +233,18 @@ class EditorNotifier extends StateNotifier<EditorState> {
       recentThreadIds: threadId != null ? [threadId] : [],
       stitchMode: pattern.editorStitchMode,
       drawingMode: pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw,
+      referenceOpacity: withSymbols.referenceOpacity,
     );
+
+    // Decode reference image asynchronously after state is set.
+    if (withSymbols.referenceImagePath != null) {
+      ReferenceImageService.decodeFromPath(withSymbols.referenceImagePath!)
+          .then((img) {
+        if (img != null && mounted) {
+          state = state.copyWith(referenceImage: img);
+        }
+      });
+    }
   }
 
   void newPattern(CrossStitchPattern pattern) {
@@ -313,6 +345,43 @@ class EditorNotifier extends StateNotifier<EditorState> {
   /// Set or clear the focus thread. Pass [null] to show all threads normally.
   void setStitchFocusThread(String? threadId) {
     state = state.copyWith(stitchFocusThreadId: threadId);
+  }
+
+  // ─── Reference image overlay ──────────────────────────────────────────────
+
+  Future<void> pickReferenceImage() async {
+    final result = await ReferenceImageService.pickAndDecode();
+    if (result == null) return;
+    final (path, image) = result;
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(
+        referenceImagePath: path,
+        referenceOpacity: state.referenceOpacity,
+      ),
+      referenceImage: image,
+      referenceVisible: true,
+      isDirty: true,
+    );
+  }
+
+  void clearReferenceImage() {
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(referenceImagePath: null),
+      referenceImage: null,
+      isDirty: true,
+    );
+  }
+
+  void setReferenceOpacity(double opacity) {
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(referenceOpacity: opacity),
+      referenceOpacity: opacity,
+      isDirty: true,
+    );
+  }
+
+  void toggleReferenceVisible() {
+    state = state.copyWith(referenceVisible: !state.referenceVisible);
   }
 
   // ─── Selection ────────────────────────────────────────────────────────────
