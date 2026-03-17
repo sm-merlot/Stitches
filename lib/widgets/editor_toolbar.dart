@@ -884,14 +884,14 @@ class _StitchModeToolbar extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _ToolbarButton(
-                          label: 'Show all',
+                          tooltip: 'Show all',
                           selected: state.stitchViewMode == StitchViewMode.normal,
                           onTap: () => notifier.setStitchViewMode(StitchViewMode.normal),
                           builder: (c) => Icon(Icons.visibility_outlined, size: 16, color: c),
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
-                          label: 'Hide backstitches',
+                          tooltip: 'Hide backstitches',
                           selected: state.stitchViewMode == StitchViewMode.hidden,
                           onTap: () => notifier.setStitchViewMode(StitchViewMode.hidden),
                           builder: (c) =>
@@ -899,7 +899,7 @@ class _StitchModeToolbar extends ConsumerWidget {
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
-                          label: 'Grey stitches',
+                          tooltip: 'Grey stitches',
                           selected: state.stitchViewMode == StitchViewMode.greyed,
                           onTap: () => notifier.setStitchViewMode(StitchViewMode.greyed),
                           builder: (c) =>
