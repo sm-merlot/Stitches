@@ -1,0 +1,513 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/pattern.dart';
+import '../models/storage_location.dart';
+import '../providers/editor_provider.dart';
+import '../providers/folder_contents_provider.dart';
+import '../providers/recent_items_provider.dart';
+import '../providers/workspace_provider.dart';
+import '../services/file_service.dart';
+import '../screens/new_pattern_dialog.dart';
+import 'folder_tree_node.dart';
+
+class FileSidebar extends ConsumerStatefulWidget {
+  const FileSidebar({super.key});
+
+  @override
+  ConsumerState<FileSidebar> createState() => _FileSidebarState();
+}
+
+class _FileSidebarState extends ConsumerState<FileSidebar> {
+  String _filter = '';
+  final _filterController = TextEditingController();
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    super.dispose();
+  }
+
+  // ─── New file ─────────────────────────────────────────────────────────────
+
+  Future<void> _createNewFile(BuildContext context, StorageLocation folder) async {
+    final pattern = await showDialog<CrossStitchPattern>(
+      context: context,
+      builder: (_) => const NewPatternDialog(),
+    );
+    if (pattern == null || !context.mounted) return;
+
+    String folderPath;
+    if (folder is LocalFolder) {
+      folderPath = folder.path;
+    } else {
+      _showError(context, 'Cannot create files in Drive folders yet.');
+      return;
+    }
+
+    final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
+    final filePath = '$folderPath${Platform.pathSeparator}$safeName.stitchx';
+
+    try {
+      await FileService.saveFile(pattern, filePath);
+      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
+      refreshFolder(ref, folder);
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not create file: $e');
+    }
+  }
+
+  // ─── File context menu ────────────────────────────────────────────────────
+
+  Future<void> _showFileContextMenu(
+      BuildContext context, PatternFile file, Offset position) async {
+    final workspaceState = ref.read(workspaceProvider);
+    final workspace = workspaceState.workspace;
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+          position.dx, position.dy, position.dx + 1, position.dy + 1),
+      items: [
+        const PopupMenuItem(value: 'open', child: Text('Open')),
+        const PopupMenuItem(value: 'rename', child: Text('Rename')),
+        const PopupMenuItem(value: 'copy', child: Text('Copy')),
+        const PopupMenuItem(value: 'cut', child: Text('Cut')),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Text('Delete', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    );
+
+    if (!context.mounted) return;
+
+    switch (selected) {
+      case 'open':
+        await _openFile(context, file);
+      case 'rename':
+        await _renameFile(context, file, workspace);
+      case 'copy':
+        ref.read(workspaceProvider.notifier).copyFile(file);
+      case 'cut':
+        ref.read(workspaceProvider.notifier).cutFile(file);
+      case 'delete':
+        await _deleteFile(context, file, workspace);
+    }
+  }
+
+  Future<void> _openFile(BuildContext context, PatternFile file) async {
+    if (file is! LocalPatternFile) return;
+    try {
+      final (pattern, path) = await FileService.openFileFromPath(file.path);
+      if (!context.mounted) return;
+      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
+      ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not open file: $e');
+    }
+  }
+
+  Future<void> _renameFile(
+      BuildContext context, PatternFile file, StorageLocation? workspace) async {
+    if (file is! LocalPatternFile) return;
+
+    final controller = TextEditingController(text: file.displayName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Rename File'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'New name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    if (newName == null || newName.isEmpty || !context.mounted) return;
+
+    try {
+      final dir = file.path.substring(0, file.path.lastIndexOf(Platform.pathSeparator));
+      final newPath = '$dir${Platform.pathSeparator}$newName.stitchx';
+      await File(file.path).rename(newPath);
+
+      // If this file is currently open, update the editor file path
+      final editorState = ref.read(editorProvider);
+      if (editorState.filePath == file.path) {
+        ref.read(editorProvider.notifier).setFilePath(newPath);
+      }
+
+      if (workspace != null) refreshFolder(ref, workspace);
+      refreshFolder(ref, file.parent);
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not rename: $e');
+    }
+  }
+
+  Future<void> _deleteFile(
+      BuildContext context, PatternFile file, StorageLocation? workspace) async {
+    if (file is! LocalPatternFile) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete File'),
+        content: Text(
+            'Delete "${file.displayName}"? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await File(file.path).delete();
+      if (workspace != null) refreshFolder(ref, workspace);
+      refreshFolder(ref, file.parent);
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not delete: $e');
+    }
+  }
+
+  // ─── Folder context menu ──────────────────────────────────────────────────
+
+  Future<void> _showFolderContextMenu(
+      BuildContext context, StorageLocation folder, Offset position) async {
+    final workspaceState = ref.read(workspaceProvider);
+    final clipboard = workspaceState.clipboard;
+
+    final canPaste =
+        clipboard != null && clipboard.file is LocalPatternFile;
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+          position.dx, position.dy, position.dx + 1, position.dy + 1),
+      items: [
+        const PopupMenuItem(value: 'new_here', child: Text('New File Here')),
+        const PopupMenuItem(value: 'rename', child: Text('Rename')),
+        if (canPaste)
+          const PopupMenuItem(value: 'paste', child: Text('Paste')),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Text('Delete', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    );
+
+    if (!context.mounted) return;
+
+    switch (selected) {
+      case 'new_here':
+        await _createNewFile(context, folder);
+      case 'rename':
+        await _renameFolder(context, folder);
+      case 'paste':
+        await _pasteToFolder(context, folder);
+      case 'delete':
+        await _deleteFolder(context, folder);
+    }
+  }
+
+  Future<void> _renameFolder(BuildContext context, StorageLocation folder) async {
+    if (folder is! LocalFolder) return;
+
+    final controller = TextEditingController(text: folder.displayName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Rename Folder'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'New name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    if (newName == null || newName.isEmpty || !context.mounted) return;
+
+    try {
+      final parent = folder.path.substring(
+          0, folder.path.lastIndexOf(Platform.pathSeparator));
+      final newPath = '$parent${Platform.pathSeparator}$newName';
+      await Directory(folder.path).rename(newPath);
+
+      // If this folder is the workspace, update it
+      final wsState = ref.read(workspaceProvider);
+      if (wsState.workspace == folder) {
+        ref.read(workspaceProvider.notifier).openWorkspace(LocalFolder(newPath));
+      }
+
+      final parentLoc = LocalFolder(parent);
+      refreshFolder(ref, parentLoc);
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not rename: $e');
+    }
+  }
+
+  Future<void> _pasteToFolder(
+      BuildContext context, StorageLocation folder) async {
+    if (folder is! LocalFolder) return;
+
+    final workspaceState = ref.read(workspaceProvider);
+    final clipboard = workspaceState.clipboard;
+    if (clipboard == null || clipboard.file is! LocalPatternFile) return;
+
+    final sourceFile = clipboard.file as LocalPatternFile;
+    final destPath =
+        '${folder.path}${Platform.pathSeparator}${sourceFile.path.split(Platform.pathSeparator).last}';
+
+    try {
+      if (clipboard.op == ClipboardOp.cut) {
+        await File(sourceFile.path).rename(destPath);
+        ref.read(workspaceProvider.notifier).clearClipboard();
+        refreshFolder(ref, sourceFile.parent);
+      } else {
+        await File(sourceFile.path).copy(destPath);
+      }
+      refreshFolder(ref, folder);
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not paste: $e');
+    }
+  }
+
+  Future<void> _deleteFolder(
+      BuildContext context, StorageLocation folder) async {
+    if (folder is! LocalFolder) return;
+
+    final dir = Directory(folder.path);
+    bool isEmpty = true;
+    await for (final _ in dir.list()) {
+      isEmpty = false;
+      break;
+    }
+
+    if (!isEmpty) {
+      if (context.mounted) {
+        _showError(context, 'Cannot delete a non-empty folder.');
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Folder'),
+        content: Text('Delete "${folder.displayName}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await dir.delete();
+      final parent = folder.path.substring(
+          0, folder.path.lastIndexOf(Platform.pathSeparator));
+      refreshFolder(ref, LocalFolder(parent));
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not delete folder: $e');
+    }
+  }
+
+  void _showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(message), backgroundColor: Colors.red.shade700),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final workspaceState = ref.watch(workspaceProvider);
+    final editorState = ref.watch(editorProvider);
+    final workspace = workspaceState.workspace;
+    final theme = Theme.of(context);
+
+    if (workspace == null) {
+      return const SizedBox(width: 240);
+    }
+
+    final clipboard = workspaceState.clipboard;
+
+    return SizedBox(
+      width: 240,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Header ──────────────────────────────────────────────────────
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.folder,
+                  size: 15,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    workspace.displayName,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add, size: 16),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'New file',
+                  onPressed: () => _createNewFile(context, workspace),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Filter field ─────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: TextField(
+              controller: _filterController,
+              decoration: InputDecoration(
+                hintText: 'Filter...',
+                prefixIcon: const Icon(Icons.search, size: 16),
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                suffixIcon: _filter.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 14),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          _filterController.clear();
+                          setState(() => _filter = '');
+                        },
+                      )
+                    : null,
+              ),
+              style: theme.textTheme.bodySmall,
+              onChanged: (v) => setState(() => _filter = v),
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // ── Clipboard banner ─────────────────────────────────────────────
+          if (clipboard != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              color: theme.colorScheme.secondaryContainer,
+              child: Row(
+                children: [
+                  Icon(
+                    clipboard.op == ClipboardOp.cut
+                        ? Icons.content_cut
+                        : Icons.content_copy,
+                    size: 12,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '${clipboard.op == ClipboardOp.cut ? 'Cut' : 'Copied'}: ${clipboard.file.displayName}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSecondaryContainer,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () =>
+                        ref.read(workspaceProvider.notifier).clearClipboard(),
+                    child: const Icon(Icons.close, size: 12),
+                  ),
+                ],
+              ),
+            ),
+
+          // ── Tree ─────────────────────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: FolderTreeNode(
+                  folder: workspace,
+                  selectedFilePath: editorState.filePath,
+                  filter: _filter,
+                  onFileTap: (file) => _openFile(context, file),
+                  onFolderContextMenu: (folder, pos) =>
+                      _showFolderContextMenu(context, folder, pos),
+                  onFileContextMenu: (file, pos) =>
+                      _showFileContextMenu(context, file, pos),
+                  depth: 0,
+                  startExpanded: true,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
