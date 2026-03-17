@@ -17,6 +17,8 @@ dependencies:
   uuid: ^4.4.0
   cupertino_icons: ^1.0.8
   pdf: ^3.11.1
+  image: ^4.2.0
+  args: ^2.5.0
 
 dev_dependencies:
   flutter_test:

@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
+import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/color_picker_screen.dart';
+import '../screens/stitch_demo_screen.dart';
+import '../services/stitch_planner.dart';
+import 'color_select_dialog.dart';
 
 const _aidaPresets = [
   (label: 'White',         color: Color(0xFFFFFFFF)),
@@ -967,12 +971,16 @@ class _StitchModeToolbar extends ConsumerWidget {
             ),
           ),
 
-          // ── RIGHT: Palette button (opens side panel) ─────────────────────
+          // ── RIGHT: Demonstrate + Palette ─────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                vDivider,
+                const SizedBox(width: 4),
+                _DemonstrateButton(state: state),
+                const SizedBox(width: 4),
                 vDivider,
                 const SizedBox(width: 4),
                 Tooltip(
@@ -1381,4 +1389,97 @@ class _QuarterCrossIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_QuarterCrossIconPainter old) => old.color != color;
+}
+
+// ─── Demonstrate button ───────────────────────────────────────────────────────
+
+class _DemonstrateButton extends StatelessWidget {
+  final EditorState state;
+
+  const _DemonstrateButton({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFullStitches =
+        state.pattern.stitches.any((s) => s is FullStitch);
+
+    return Tooltip(
+      message: 'Demonstrate stitching',
+      child: FilledButton.tonalIcon(
+        icon: const Icon(Icons.play_circle_outline, size: 18),
+        label: const Text('Demonstrate', style: TextStyle(fontSize: 12)),
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          minimumSize: const Size(0, 36),
+        ),
+        onPressed: hasFullStitches ? () => _onDemonstrate(context) : null,
+      ),
+    );
+  }
+
+  Future<void> _onDemonstrate(BuildContext context) async {
+    final pattern = state.pattern;
+    final focusId = state.stitchFocusThreadId;
+
+    // Determine the thread to demonstrate.
+    Thread? thread;
+    if (focusId != null) {
+      // Focus thread is active — use it directly.
+      thread = pattern.threadByCode(focusId);
+    } else {
+      // Collect threads that have at least one FullStitch.
+      final threadIds = pattern.stitches
+          .whereType<FullStitch>()
+          .map((s) => s.threadId)
+          .toSet();
+      final candidates =
+          pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
+
+      if (candidates.isEmpty) return;
+
+      if (candidates.length == 1) {
+        thread = candidates.first;
+      } else {
+        // Multiple threads — ask the user to pick one.
+        if (!context.mounted) return;
+        thread = await showDialog<Thread>(
+          context: context,
+          builder: (_) => ColorSelectDialog(threads: candidates),
+        );
+        if (thread == null) return; // cancelled
+      }
+    }
+
+    if (thread == null || !context.mounted) return;
+
+    // Collect FullStitch cells for the chosen thread.
+    final cells = pattern.stitches
+        .whereType<FullStitch>()
+        .where((s) => s.threadId == thread!.dmcCode)
+        .map<(int, int)>((s) => (s.x, s.y))
+        .toList();
+
+    if (cells.isEmpty) return;
+
+    // Build the plan.
+    final aida = planStitching(
+      title: pattern.name,
+      cols: pattern.width,
+      rows: pattern.height,
+      cells: cells,
+    );
+
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StitchDemoScreen(
+          aida: aida,
+          threadColor: thread!.color,
+          threadName: '${thread.dmcCode} – ${thread.name}',
+          aidaColor: pattern.aidaColor,
+        ),
+      ),
+    );
+  }
 }
