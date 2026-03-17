@@ -2,6 +2,8 @@
 //
 // No Flutter imports; only the `image` package and internal Dart models.
 
+import 'dart:math' as math;
+
 import 'package:image/image.dart' as img;
 
 import '../models/stitch_plan.dart';
@@ -52,6 +54,18 @@ List<int> renderDemoGif({
     originY: originY,
   );
 
+  // Pre-compute the layer index for each segment: how many earlier segments
+  // share the same canonical edge. Layer 0 = solid, 1 = long dashes, 2 = dots.
+  final segmentLayerIndices = List<int>.filled(segments.length, 0);
+  {
+    final edgeSeen = <String, int>{};
+    for (var i = 0; i < segments.length; i++) {
+      final key = _segKey(segments[i]);
+      segmentLayerIndices[i] = edgeSeen[key] ?? 0;
+      edgeSeen[key] = (edgeSeen[key] ?? 0) + 1;
+    }
+  }
+
   final frameDelayMs = (1000 / fps).round();
   // Hold ~2 s on the finished frame before looping.
   final holdFrames = (fps * 2).round();
@@ -73,6 +87,7 @@ List<int> renderDemoGif({
     final frame = _renderFrame(
       aida: aida,
       segments: segments,
+      segmentLayerIndices: segmentLayerIndices,
       completeCount: completeCount,
       subProgress: subProgress,
       width: canvasWidth,
@@ -105,6 +120,7 @@ List<int> renderDemoGif({
 img.Image _renderFrame({
   required PlannedAida aida,
   required List<StitchSegment> segments,
+  required List<int> segmentLayerIndices,
   required int completeCount,
   required double subProgress,
   required int width,
@@ -144,7 +160,8 @@ img.Image _renderFrame({
 
   // Completed stitches.
   for (var i = 0; i < completeCount && i < segments.length; i++) {
-    _drawSegment(image, segments[i], colors: colors, thick: false);
+    _drawSegment(image, segments[i],
+        colors: colors, thick: false, layerIndex: segmentLayerIndices[i]);
   }
 
   // In-progress stitch: draw from start toward end at [subProgress].
@@ -185,18 +202,78 @@ void _drawSegment(
   StitchSegment seg, {
   required Map<StitchType, int> colors,
   required bool thick,
+  int layerIndex = 0,
 }) {
   final argb = colors[seg.type] ?? 0xFF888888;
   final color =
       img.ColorRgba8((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, 255);
-  img.drawLine(
-    image,
-    x1: seg.x1.round(),
-    y1: seg.y1.round(),
-    x2: seg.x2.round(),
-    y2: seg.y2.round(),
-    color: color,
-    thickness: thick ? 3 : 2,
-    antialias: true,
-  );
+  final thickness = thick ? 3 : 2;
+
+  if (layerIndex == 0) {
+    img.drawLine(
+      image,
+      x1: seg.x1.round(),
+      y1: seg.y1.round(),
+      x2: seg.x2.round(),
+      y2: seg.y2.round(),
+      color: color,
+      thickness: thickness,
+      antialias: true,
+    );
+  } else {
+    // Overlapping backstitch: draw as dashes so the lower layer shows through.
+    // Layer 1 = long dashes (8 on / 5 off).
+    // Layer 2 = short dashes / dots (3 on / 5 off).
+    final dashLen = layerIndex == 1 ? 8.0 : 3.0;
+    const gapLen = 5.0;
+    _drawDashedLine(image, seg.x1, seg.y1, seg.x2, seg.y2, color,
+        thickness: thickness, dashLen: dashLen, gapLen: gapLen);
+  }
+}
+
+/// Draws a dashed line between two pixel points.
+void _drawDashedLine(
+  img.Image image,
+  double x1,
+  double y1,
+  double x2,
+  double y2,
+  img.Color color, {
+  int thickness = 2,
+  double dashLen = 8,
+  double gapLen = 5,
+}) {
+  final dx = x2 - x1;
+  final dy = y2 - y1;
+  final dist = math.sqrt(dx * dx + dy * dy);
+  if (dist < 0.001) return;
+  final ux = dx / dist;
+  final uy = dy / dist;
+  var d = 0.0;
+  var drawing = true;
+  while (d < dist) {
+    final segLen =
+        drawing ? math.min(dashLen, dist - d) : math.min(gapLen, dist - d);
+    if (drawing) {
+      img.drawLine(
+        image,
+        x1: (x1 + ux * d).round(),
+        y1: (y1 + uy * d).round(),
+        x2: (x1 + ux * (d + segLen)).round(),
+        y2: (y1 + uy * (d + segLen)).round(),
+        color: color,
+        thickness: thickness,
+        antialias: true,
+      );
+    }
+    d += segLen;
+    drawing = !drawing;
+  }
+}
+
+/// Canonical edge key: order-independent so A→B == B→A.
+String _segKey(StitchSegment seg) {
+  final ax = seg.x1, ay = seg.y1, bx = seg.x2, by = seg.y2;
+  if (ax < bx || (ax == bx && ay <= by)) return '$ax,$ay,$bx,$by';
+  return '$bx,$by,$ax,$ay';
 }
