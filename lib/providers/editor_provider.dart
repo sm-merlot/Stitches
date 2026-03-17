@@ -5,6 +5,7 @@ import '../data/symbols.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
+import '../services/file_service.dart';
 
 enum DrawingTool {
   fullStitch,    // Full X stitch             [1]
@@ -209,6 +210,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
       currentTool: tool,
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
+      stitchMode: pattern.editorStitchMode,
+      drawingMode: pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw,
     );
   }
 
@@ -278,15 +281,29 @@ class EditorNotifier extends StateNotifier<EditorState> {
   // ─── Stitch mode ──────────────────────────────────────────────────────────
 
   /// Toggle stitch mode on/off. Entering stitch mode switches to pan.
+  /// Auto-saves the new value to the file immediately if a file path is set.
   void toggleStitchMode() {
     final entering = !state.stitchMode;
     state = state.copyWith(
       stitchMode: entering,
-      // Switch to pan so the canvas isn't accidentally edited
       drawingMode: entering ? DrawingMode.pan : DrawingMode.draw,
       selectionRect: null,
       backstitchStartPoint: null,
     );
+    _autoSaveStitchMode();
+  }
+
+  /// Writes only the editor metadata (including stitchMode) to the file
+  /// without touching isDirty — the pattern content hasn't changed.
+  Future<void> _autoSaveStitchMode() async {
+    final s = state;
+    if (s.filePath == null) return;
+    final patternToSave = s.pattern.copyWith(
+      editorSelectedThreadId: s.selectedThreadId,
+      editorTool: s.currentTool.name,
+      editorStitchMode: s.stitchMode,
+    );
+    await FileService.saveFile(patternToSave, s.filePath!);
   }
 
   void setStitchViewMode(StitchViewMode mode) {

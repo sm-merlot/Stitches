@@ -95,7 +95,9 @@ class FileService {
     buf.writeln('height: ${pattern.height}');
     buf.writeln('aidaColor: ${_yamlStr(pattern.aidaColorHex)}');
 
-    if (pattern.editorSelectedThreadId != null || pattern.editorTool != null) {
+    if (pattern.editorSelectedThreadId != null ||
+        pattern.editorTool != null ||
+        pattern.editorStitchMode) {
       buf.writeln('editor:');
       if (pattern.editorSelectedThreadId != null) {
         buf.writeln(
@@ -103,6 +105,9 @@ class FileService {
       }
       if (pattern.editorTool != null) {
         buf.writeln('  tool: ${pattern.editorTool!}');
+      }
+      if (pattern.editorStitchMode) {
+        buf.writeln('  stitchMode: true');
       }
     }
 

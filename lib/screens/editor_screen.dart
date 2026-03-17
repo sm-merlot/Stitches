@@ -276,6 +276,24 @@ class EditorScreen extends ConsumerWidget {
                 onPressed: () => _showPatternInfo(context, state),
               ),
             ],
+            // Keep screen on — only shown in stitch mode
+            if (state.stitchMode) ...[
+              const SizedBox(width: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: ref.watch(settingsProvider).keepScreenOn,
+                    onChanged: (v) => ref
+                        .read(settingsProvider.notifier)
+                        .setKeepScreenOn(v ?? false),
+                  ),
+                  const Text('Keep screen on',
+                      style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ],
             // Stitch mode toggle — always visible, pinned to right edge
             Tooltip(
               message: state.stitchMode ? 'Exit Stitch Mode' : 'Stitch Mode',

@@ -16,6 +16,9 @@ class CrossStitchPattern {
   /// Last-saved editor state — which tool was active (DrawingTool.name).
   final String? editorTool;
 
+  /// Last-saved editor state — whether stitch mode was active.
+  final bool editorStitchMode;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -25,6 +28,7 @@ class CrossStitchPattern {
     this.aidaColor = Colors.white,
     this.editorSelectedThreadId,
     this.editorTool,
+    this.editorStitchMode = false,
   });
 
   factory CrossStitchPattern.empty({
@@ -50,6 +54,7 @@ class CrossStitchPattern {
     Color? aidaColor,
     Object? editorSelectedThreadId = _sentinel,
     Object? editorTool = _sentinel,
+    bool? editorStitchMode,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -64,6 +69,7 @@ class CrossStitchPattern {
       editorTool: editorTool == _sentinel
           ? this.editorTool
           : editorTool as String?,
+      editorStitchMode: editorStitchMode ?? this.editorStitchMode,
     );
   }
 
@@ -94,6 +100,7 @@ class CrossStitchPattern {
       aidaColor: aidaHex != null ? _parseHex(aidaHex) : Colors.white,
       editorSelectedThreadId: editor?['selectedThread'] as String?,
       editorTool: editor?['tool'] as String?,
+      editorStitchMode: editor?['stitchMode'] as bool? ?? false,
       threads: (yaml['threads'] as List?)
               ?.map((t) => Thread.fromYaml(t as Map))
               .toList() ??
