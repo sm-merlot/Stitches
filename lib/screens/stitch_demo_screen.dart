@@ -149,137 +149,164 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.aida.title} — ${widget.threadName}'),
-        actions: [
-          _exporting
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : Tooltip(
-                  message: 'Download GIF',
-                  child: IconButton(
-                    icon: const Icon(Icons.download_outlined),
-                    onPressed: _exportGif,
-                  ),
-                ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ── Canvas ───────────────────────────────────────────────────────
-          Expanded(
-            child: CustomPaint(
-              painter: StitchDemoPainter(
-                aida: widget.aida,
-                currentSubStep: _subStep,
-                threadColor: widget.threadColor,
-                aidaColor: widget.aidaColor,
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        width: 680,
+        child: Column(
+          children: [
+            // ── Header ───────────────────────────────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                border: Border(bottom: BorderSide(color: theme.dividerColor)),
               ),
-              child: const SizedBox.expand(),
-            ),
-          ),
-
-          // ── Controls ─────────────────────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              border: Border(top: BorderSide(color: theme.dividerColor)),
-            ),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Stitch counter + speed label
-                Row(
-                  children: [
-                    Text(
-                      'Stitch $_displayStitch / $_stitchCount',
-                      style: theme.textTheme.bodySmall,
+              padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${widget.aida.title} — ${widget.threadName}',
+                      style: theme.textTheme.titleSmall,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const Spacer(),
-                    Text(
-                      '${(_fps / kDemoSubFrames).toStringAsFixed(1)} stitches/s',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                LinearProgressIndicator(
-                  value: _stitchCount == 0
-                      ? 0
-                      : _subStep / _totalSubSteps,
-                  minHeight: 2,
-                ),
-                const SizedBox(height: 4),
-                // Playback row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.skip_previous),
-                      tooltip: 'Reset',
-                      onPressed: _subStep > 0 ? _reset : null,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      tooltip: 'Previous stitch',
-                      onPressed: _subStep > 0 ? _stepBack : null,
-                    ),
-                    FilledButton.icon(
-                      icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
-                      label: Text(_playing ? 'Pause' : 'Play'),
-                      onPressed: _playing ? _pause : _play,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      tooltip: 'Next stitch',
-                      onPressed:
-                          _subStep < _totalSubSteps ? _stepForward : null,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.skip_next),
-                      tooltip: 'Jump to end',
-                      onPressed: _subStep < _totalSubSteps
-                          ? () {
-                              _pause();
-                              setState(() => _subStep = _totalSubSteps);
-                            }
-                          : null,
-                    ),
-                  ],
-                ),
-                // Speed slider
-                Row(
-                  children: [
-                    const Icon(Icons.slow_motion_video, size: 16),
-                    Expanded(
-                      child: Slider(
-                        min: kDemoSubFrames.toDouble(),      // 1 stitch/s
-                        max: kDemoSubFrames.toDouble() * 8,  // 8 stitches/s
-                        divisions: 7,
-                        value: _fps,
-                        label:
-                            '${(_fps / kDemoSubFrames).round()} stitches/s',
-                        onChanged: (v) {
-                          setState(() => _fps = v);
-                          if (_playing) _play();
-                        },
+                  ),
+                  if (_exporting)
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else
+                    Tooltip(
+                      message: 'Download GIF',
+                      child: IconButton(
+                        icon: const Icon(Icons.download_outlined, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _exportGif,
                       ),
                     ),
-                    const Icon(Icons.fast_forward, size: 16),
-                  ],
-                ),
-              ],
+                  Tooltip(
+                    message: 'Close',
+                    child: IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+
+            // ── Canvas ───────────────────────────────────────────────────────
+            Expanded(
+              child: CustomPaint(
+                painter: StitchDemoPainter(
+                  aida: widget.aida,
+                  currentSubStep: _subStep,
+                  threadColor: widget.threadColor,
+                  aidaColor: widget.aidaColor,
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+            // ── Controls ─────────────────────────────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                border: Border(top: BorderSide(color: theme.dividerColor)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Stitch counter + speed label
+                  Row(
+                    children: [
+                      Text(
+                        'Stitch $_displayStitch / $_stitchCount',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${(_fps / kDemoSubFrames).toStringAsFixed(1)} stitches/s',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                  LinearProgressIndicator(
+                    value: _stitchCount == 0 ? 0 : _subStep / _totalSubSteps,
+                    minHeight: 2,
+                  ),
+                  const SizedBox(height: 4),
+                  // Playback row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous),
+                        tooltip: 'Reset',
+                        onPressed: _subStep > 0 ? _reset : null,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left),
+                        tooltip: 'Previous stitch',
+                        onPressed: _subStep > 0 ? _stepBack : null,
+                      ),
+                      FilledButton.icon(
+                        icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+                        label: Text(_playing ? 'Pause' : 'Play'),
+                        onPressed: _playing ? _pause : _play,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right),
+                        tooltip: 'Next stitch',
+                        onPressed:
+                            _subStep < _totalSubSteps ? _stepForward : null,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.skip_next),
+                        tooltip: 'Jump to end',
+                        onPressed: _subStep < _totalSubSteps
+                            ? () {
+                                _pause();
+                                setState(() => _subStep = _totalSubSteps);
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
+                  // Speed slider
+                  Row(
+                    children: [
+                      const Icon(Icons.slow_motion_video, size: 16),
+                      Expanded(
+                        child: Slider(
+                          min: kDemoSubFrames.toDouble(),
+                          max: kDemoSubFrames.toDouble() * 8,
+                          divisions: 7,
+                          value: _fps,
+                          label:
+                              '${(_fps / kDemoSubFrames).round()} stitches/s',
+                          onChanged: (v) {
+                            setState(() => _fps = v);
+                            if (_playing) _play();
+                          },
+                        ),
+                      ),
+                      const Icon(Icons.fast_forward, size: 16),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

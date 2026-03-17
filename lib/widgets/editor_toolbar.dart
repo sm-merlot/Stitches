@@ -1509,14 +1509,13 @@ class _DemonstrateButton extends StatelessWidget {
     );
 
     if (!context.mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => StitchDemoScreen(
-          aida: aida,
-          threadColor: thread!.color,
-          threadName: '${thread.dmcCode} – ${thread.name}',
-          aidaColor: pattern.aidaColor,
-        ),
+    await showDialog<void>(
+      context: context,
+      builder: (_) => StitchDemoScreen(
+        aida: aida,
+        threadColor: thread!.color,
+        threadName: '${thread.dmcCode} – ${thread.name}',
+        aidaColor: pattern.aidaColor,
       ),
     );
   }
