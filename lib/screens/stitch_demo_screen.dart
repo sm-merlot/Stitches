@@ -208,7 +208,6 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
                 painter: StitchDemoPainter(
                   aida: widget.aida,
                   currentSubStep: _subStep,
-                  threadColor: widget.threadColor,
                   aidaColor: widget.aidaColor,
                 ),
                 child: const SizedBox.expand(),
