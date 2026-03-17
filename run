@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# run — project task runner for StitchX
+#
+# Usage:  ./run <command>
+#
+# Commands:
+#   macos         Run the Flutter app on macOS (debug)
+#   ios           Run on iOS device/simulator (debug)
+#   android       Run on Android device/emulator (debug)
+#   build         Build the macOS release app
+#   test          Run all Dart/Flutter tests
+#   test-planner  Run only the stitch planner tests
+#   analyze       Run flutter analyze
+#   build-cli     Compile the CLI to a standalone binary (./stitchx-cli)
+#   cli           Run the CLI via `dart run` (no compile step); pass args after --
+#                   e.g.  ./run cli -- -p "╳ ▞\n▚ ╳" -o out.gif
+#   clean         Delete build artefacts
+#   help          Show this message
+
+set -euo pipefail
+
+export PATH="/opt/homebrew/bin:$PATH"
+
+FLUTTER=flutter
+DART=dart
+CLI_ENTRY=bin/stitchx_cli.dart
+CLI_BIN=build/cli/macos_arm64/bundle/bin/stitchx_cli
+
+cmd=${1:-help}
+shift || true   # remaining args forwarded where needed
+
+case "$cmd" in
+
+  macos)
+    exec $FLUTTER run -d macos "$@"
+    ;;
+
+  ios)
+    exec $FLUTTER run -d ios "$@"
+    ;;
+
+  android)
+    exec $FLUTTER run -d android "$@"
+    ;;
+
+  build)
+    $FLUTTER build macos --release "$@"
+    echo "Built: build/macos/Build/Products/Release/stitchx.app"
+    ;;
+
+  test)
+    $FLUTTER test "$@"
+    ;;
+
+  test-planner)
+    $FLUTTER test test/stitch_planner_test.dart "$@"
+    ;;
+
+  analyze)
+    $FLUTTER analyze "$@"
+    ;;
+
+  build-cli)
+    $DART build cli "$@"
+    echo "Built: $CLI_BIN"
+    echo "Run with:  $CLI_BIN --help"
+    ;;
+
+  cli)
+    exec $DART run "$CLI_ENTRY" "$@"
+    ;;
+
+  clean)
+    $FLUTTER clean
+    rm -rf build/cli
+    echo "Cleaned."
+    ;;
+
+  help|--help|-h)
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+
+  *)
+    echo "Unknown command: $cmd"
+    echo "Run  ./run help  for usage."
+    exit 1
+    ;;
+
+esac
