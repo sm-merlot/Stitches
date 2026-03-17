@@ -1,28 +1,32 @@
 import 'package:flutter/material.dart';
 
 import '../models/stitch_plan.dart';
+import '../services/gif_renderer.dart' show kDemoSubFrames;
 import '../services/stitch_renderer.dart';
+
+const _needleColor = Color(0xFFE8C020); // golden needle dot
 
 /// [CustomPainter] that draws the step-by-step stitching demonstration.
 ///
-/// The painter computes layout (cellSize, origin) from the available [Size] so
-/// the pattern fills the canvas while maintaining aspect ratio.
+/// [currentSubStep] runs from 0 (empty canvas) to
+/// `segments.length * kDemoSubFrames` (all complete). Within each group of
+/// [kDemoSubFrames] steps the active segment is drawn incrementally so the
+/// line appears to be pulled across the fabric in real time.
 class StitchDemoPainter extends CustomPainter {
   final PlannedAida aida;
-  final int currentStep;
+  final int currentSubStep;
   final Color threadColor;
   final Color aidaColor;
 
   const StitchDemoPainter({
     required this.aida,
-    required this.currentStep,
+    required this.currentSubStep,
     required this.threadColor,
     this.aidaColor = const Color(0xFFFAF6F0),
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Compute layout in grid-unit space (cellSize=1) then scale to fit.
     final bounds = computeGridBounds(aida, 1.0);
     if (bounds.width == 0 || bounds.height == 0) return;
 
@@ -34,7 +38,6 @@ class StitchDemoPainter extends CustomPainter {
         ? availW / bounds.width
         : availH / bounds.height;
 
-    // Origin: position the pattern centred in the canvas.
     final originX =
         (size.width - bounds.width * cellSize) / 2 - bounds.left * cellSize;
     final originY =
@@ -46,6 +49,11 @@ class StitchDemoPainter extends CustomPainter {
       originX: originX,
       originY: originY,
     );
+
+    // Derive complete / in-progress state from the sub-step counter.
+    final completeCount = currentSubStep ~/ kDemoSubFrames;
+    final subProgress =
+        (currentSubStep % kDemoSubFrames) / kDemoSubFrames; // 0.0–<1.0
 
     // ── Background ───────────────────────────────────────────────────────────
     canvas.drawRect(
@@ -81,7 +89,7 @@ class StitchDemoPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    for (var i = 0; i < currentStep && i < segments.length; i++) {
+    for (var i = 0; i < completeCount && i < segments.length; i++) {
       final seg = segments[i];
       canvas.drawLine(
         Offset(seg.x1, seg.y1),
@@ -90,18 +98,37 @@ class StitchDemoPainter extends CustomPainter {
       );
     }
 
-    // ── Current stitch (highlighted) ─────────────────────────────────────────
-    if (currentStep > 0 && currentStep <= segments.length) {
-      final seg = segments[currentStep - 1];
-      final highlightPaint = Paint()
-        ..color = _isFront(seg.type) ? threadColor : const Color(0xFF555555)
-        ..strokeWidth = (strokeW * 1.8).clamp(2.0, 5.0)
+    // ── In-progress stitch ───────────────────────────────────────────────────
+    if (subProgress > 0 && completeCount < segments.length) {
+      final seg = segments[completeCount];
+      final tipX = seg.x1 + (seg.x2 - seg.x1) * subProgress;
+      final tipY = seg.y1 + (seg.y2 - seg.y1) * subProgress;
+
+      final activeColor =
+          _isFront(seg.type) ? threadColor : const Color(0xFF555555);
+      final activePaint = Paint()
+        ..color = activeColor
+        ..strokeWidth = (strokeW * 1.6).clamp(1.5, 4.0)
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
-      canvas.drawLine(
-        Offset(seg.x1, seg.y1),
-        Offset(seg.x2, seg.y2),
-        highlightPaint,
+
+      canvas.drawLine(Offset(seg.x1, seg.y1), Offset(tipX, tipY), activePaint);
+
+      // Needle dot at the tip.
+      final needleRadius = (cellSize * 0.08).clamp(3.0, 7.0);
+      canvas.drawCircle(
+        Offset(tipX, tipY),
+        needleRadius,
+        Paint()..color = _needleColor,
+      );
+      // Small dark outline so the dot is visible on any background.
+      canvas.drawCircle(
+        Offset(tipX, tipY),
+        needleRadius,
+        Paint()
+          ..color = Colors.black26
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8,
       );
     }
   }
@@ -113,7 +140,7 @@ class StitchDemoPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(StitchDemoPainter old) =>
-      old.currentStep != currentStep ||
+      old.currentSubStep != currentSubStep ||
       old.aida != aida ||
       old.threadColor != threadColor ||
       old.aidaColor != aidaColor;

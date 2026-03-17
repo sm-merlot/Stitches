@@ -19,7 +19,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:stitchx/services/gif_renderer.dart';
+import 'package:stitchx/services/gif_renderer.dart'
+    show kDemoSubFrames, renderDemoGif;
 import 'package:stitchx/services/stitch_planner.dart';
 import 'package:stitchx/services/stitch_renderer.dart';
 
@@ -216,7 +217,7 @@ Future<void> main(List<String> arguments) async {
   final bounds = computeGridBounds(aida, cellSize);
   final canvasWidth = (bounds.width + padding * 2).ceil();
   final canvasHeight = (bounds.height + padding * 2).ceil();
-  final totalFrames = aida.stitches.length + 1; // step 0 = empty grid
+  final totalFrames = aida.stitches.length * kDemoSubFrames + 1;
 
   print('Rendering $totalFrames frames at $fps fps ($canvasWidth×${canvasHeight}px)…');
 

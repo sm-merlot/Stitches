@@ -30,13 +30,20 @@ class StitchDemoScreen extends StatefulWidget {
 }
 
 class _StitchDemoScreenState extends State<StitchDemoScreen> {
-  int _step = 0;
+  // Sub-step counter: 0 = empty canvas,
+  // segments.length * kDemoSubFrames = all complete.
+  int _subStep = 0;
   bool _playing = false;
-  double _fps = 4.0;
+  // Default: 6 fps × 6 sub-frames = 1 stitch per second.
+  double _fps = kDemoSubFrames.toDouble();
   Timer? _timer;
   bool _exporting = false;
 
-  int get _totalSteps => widget.aida.stitches.length + 1; // 0 = empty canvas
+  int get _stitchCount => widget.aida.stitches.length;
+  int get _totalSubSteps => _stitchCount * kDemoSubFrames;
+
+  // Human-readable stitch index shown in the UI.
+  int get _displayStitch => _subStep ~/ kDemoSubFrames;
 
   @override
   void dispose() {
@@ -46,20 +53,20 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
 
   void _play() {
     _timer?.cancel();
-    if (_step >= _totalSteps - 1) _step = 0;
+    if (_subStep >= _totalSubSteps) _subStep = 0;
     setState(() => _playing = true);
     _timer = Timer.periodic(
       Duration(milliseconds: (1000 / _fps).round()),
       (_) {
         if (!mounted) return;
-        if (_step >= _totalSteps - 1) {
+        if (_subStep >= _totalSubSteps) {
           _timer?.cancel();
           setState(() {
             _playing = false;
-            _step = _totalSteps - 1;
+            _subStep = _totalSubSteps;
           });
         } else {
-          setState(() => _step++);
+          setState(() => _subStep++);
         }
       },
     );
@@ -70,19 +77,24 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
     setState(() => _playing = false);
   }
 
+  // Step back / forward by one full stitch (kDemoSubFrames sub-steps).
   void _stepBack() {
     _pause();
-    setState(() => _step = (_step - 1).clamp(0, _totalSteps - 1));
+    setState(() {
+      _subStep = (_subStep - kDemoSubFrames).clamp(0, _totalSubSteps);
+    });
   }
 
   void _stepForward() {
     _pause();
-    setState(() => _step = (_step + 1).clamp(0, _totalSteps - 1));
+    setState(() {
+      _subStep = (_subStep + kDemoSubFrames).clamp(0, _totalSubSteps);
+    });
   }
 
   void _reset() {
     _pause();
-    setState(() => _step = 0);
+    setState(() => _subStep = 0);
   }
 
   Future<void> _exportGif() async {
@@ -102,7 +114,8 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
       if (!mounted) return;
 
       final bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-      final suggestedName = widget.aida.title.replaceAll(RegExp(r'[^\w\s-]'), '_');
+      final suggestedName =
+          widget.aida.title.replaceAll(RegExp(r'[^\w\s-]'), '_');
       final path = await FilePicker.platform.saveFile(
         fileName: isMobile ? '$suggestedName.gif' : suggestedName,
         type: isMobile ? FileType.any : FileType.custom,
@@ -135,7 +148,6 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final stitchCount = widget.aida.stitches.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -166,7 +178,7 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
             child: CustomPaint(
               painter: StitchDemoPainter(
                 aida: widget.aida,
-                currentStep: _step,
+                currentSubStep: _subStep,
                 threadColor: widget.threadColor,
                 aidaColor: widget.aidaColor,
               ),
@@ -178,30 +190,31 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
           Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              border: Border(
-                top: BorderSide(color: theme.dividerColor),
-              ),
+              border: Border(top: BorderSide(color: theme.dividerColor)),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Step counter + progress
+                // Stitch counter + speed label
                 Row(
                   children: [
                     Text(
-                      'Step $_step / $stitchCount',
+                      'Stitch $_displayStitch / $_stitchCount',
                       style: theme.textTheme.bodySmall,
                     ),
                     const Spacer(),
                     Text(
-                      '${_fps.round()} fps',
+                      '${(_fps / kDemoSubFrames).toStringAsFixed(1)} stitches/s',
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
                 ),
                 LinearProgressIndicator(
-                  value: stitchCount == 0 ? 0 : _step / stitchCount,
+                  value: _stitchCount == 0
+                      ? 0
+                      : _subStep / _totalSubSteps,
                   minHeight: 2,
                 ),
                 const SizedBox(height: 4),
@@ -209,39 +222,34 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Reset
                     IconButton(
                       icon: const Icon(Icons.skip_previous),
                       tooltip: 'Reset',
-                      onPressed: _step > 0 ? _reset : null,
+                      onPressed: _subStep > 0 ? _reset : null,
                     ),
-                    // Step back
                     IconButton(
                       icon: const Icon(Icons.chevron_left),
-                      tooltip: 'Step back',
-                      onPressed: _step > 0 ? _stepBack : null,
+                      tooltip: 'Previous stitch',
+                      onPressed: _subStep > 0 ? _stepBack : null,
                     ),
-                    // Play / pause
                     FilledButton.icon(
                       icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
                       label: Text(_playing ? 'Pause' : 'Play'),
                       onPressed: _playing ? _pause : _play,
                     ),
-                    // Step forward
                     IconButton(
                       icon: const Icon(Icons.chevron_right),
-                      tooltip: 'Step forward',
+                      tooltip: 'Next stitch',
                       onPressed:
-                          _step < _totalSteps - 1 ? _stepForward : null,
+                          _subStep < _totalSubSteps ? _stepForward : null,
                     ),
-                    // Skip to end
                     IconButton(
                       icon: const Icon(Icons.skip_next),
                       tooltip: 'Jump to end',
-                      onPressed: _step < _totalSteps - 1
+                      onPressed: _subStep < _totalSubSteps
                           ? () {
                               _pause();
-                              setState(() => _step = _totalSteps - 1);
+                              setState(() => _subStep = _totalSubSteps);
                             }
                           : null,
                     ),
@@ -253,14 +261,15 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
                     const Icon(Icons.slow_motion_video, size: 16),
                     Expanded(
                       child: Slider(
-                        min: 1,
-                        max: 16,
-                        divisions: 15,
+                        min: kDemoSubFrames.toDouble(),      // 1 stitch/s
+                        max: kDemoSubFrames.toDouble() * 8,  // 8 stitches/s
+                        divisions: 7,
                         value: _fps,
-                        label: '${_fps.round()} fps',
+                        label:
+                            '${(_fps / kDemoSubFrames).round()} stitches/s',
                         onChanged: (v) {
                           setState(() => _fps = v);
-                          if (_playing) _play(); // restart with new speed
+                          if (_playing) _play();
                         },
                       ),
                     ),
