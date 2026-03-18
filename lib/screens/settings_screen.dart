@@ -53,6 +53,15 @@ class SettingsScreen extends ConsumerWidget {
                       ),
           ),
           const Divider(),
+          const _SectionHeader('Auto-Save'),
+          SwitchListTile(
+            title: const Text('Auto-save local files'),
+            subtitle: const Text('Automatically save after a short pause while editing'),
+            secondary: const Icon(Icons.save_outlined),
+            value: settings.autoSaveLocal,
+            onChanged: (v) => notifier.setAutoSaveLocal(v),
+          ),
+          const Divider(),
           const _SectionHeader('Thread Colours'),
           SwitchListTile(
             title: const Text('Colour system'),
