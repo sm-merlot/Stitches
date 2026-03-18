@@ -35,7 +35,7 @@ shift || true   # remaining args forwarded where needed
 case "$cmd" in
 
   macos)
-    exec $FLUTTER run -d macos "$@"
+    exec $FLUTTER run -d macos --dart-define-from-file=secrets.json "$@"
     ;;
 
   ios)
