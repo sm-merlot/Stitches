@@ -117,36 +117,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
   }
 
+  /// Flushes any pending auto-save immediately before navigating away.
   Future<bool> _onWillPop(BuildContext context) async {
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = null;
     final state = ref.read(editorProvider);
-    if (!state.isDirty) return true;
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Unsaved Changes'),
-        content:
-            const Text('You have unsaved changes. Leave without saving?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child:
-                const Text('Leave', style: TextStyle(color: Colors.red)),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(context).pop(false);
-              await _save(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
+    if (state.isDirty && state.isFileOpen) {
+      await _save(context, quiet: true);
+    }
+    return true;
   }
 
   String _title(EditorState editorState, WorkspaceState wsState) {
@@ -284,14 +263,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final editorState = ref.watch(editorProvider);
     final wsState = ref.watch(workspaceProvider);
     final driveState = ref.watch(googleDriveProvider);
-    final settings = ref.watch(settingsProvider);
 
     // ── Auto-save listener ────────────────────────────────────────────────
     ref.listen<EditorState>(editorProvider, (prev, next) {
       if (!next.isDirty || !next.isFileOpen) return;
-      final isDriveFile = next.driveFileId != null;
-      final shouldAutoSave = isDriveFile || settings.autoSaveLocal;
-      if (shouldAutoSave) _scheduleAutoSave();
+      _scheduleAutoSave();
     });
 
     // ── Keyboard handler (identical to EditorScreen) ─────────────────────
@@ -311,12 +287,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
       final key = event.logicalKey;
 
-      // In stitch mode: allow save, pan/select mode toggle, and Escape.
+      // In stitch mode: allow pan/select mode toggle and Escape.
       if (editorState.stitchMode) {
-        if ((meta || ctrl) && key == LogicalKeyboardKey.keyS) {
-          _save(context);
-          return KeyEventResult.handled;
-        }
         if (key == LogicalKeyboardKey.keyS) {
           notifier.setDrawingMode(DrawingMode.select);
           return KeyEventResult.handled;
@@ -349,10 +321,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         }
         if (key == LogicalKeyboardKey.keyY) {
           notifier.redo();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyS) {
-          _save(context);
           return KeyEventResult.handled;
         }
         if (key == LogicalKeyboardKey.keyA) {
@@ -445,11 +413,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         )
                       : const Icon(Icons.cloud_done_outlined),
                 ),
-              IconButton(
-                icon: const Icon(Icons.save_outlined),
-                tooltip: 'Save  (Cmd+S)',
-                onPressed: () => _save(context),
-              ),
               IconButton(
                 icon: const Icon(Icons.save_as_outlined),
                 tooltip: 'Save As…',
