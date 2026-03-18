@@ -92,10 +92,13 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
           contentsAsync.when(
             loading: () => Padding(
               padding: EdgeInsets.only(left: indent + 24, top: 4, bottom: 4),
-              child: const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
             ),
             error: (err, _) => Padding(

@@ -11,6 +11,7 @@ import '../services/file_service.dart';
 import 'editor_screen.dart';
 import 'new_pattern_dialog.dart';
 import 'settings_screen.dart';
+import 'drive_folder_picker_dialog.dart';
 import 'workspace_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -100,9 +101,10 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
-  void _browseDrive(BuildContext context, WidgetRef ref) {
-    final driveRoot = const DriveFolder(folderId: 'root', name: 'My Drive');
-    ref.read(workspaceProvider.notifier).openWorkspace(driveRoot);
+  Future<void> _browseDrive(BuildContext context, WidgetRef ref) async {
+    final folder = await DriveFolderPickerDialog.show(context);
+    if (folder == null || !context.mounted) return;
+    ref.read(workspaceProvider.notifier).openWorkspace(folder);
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
     );
