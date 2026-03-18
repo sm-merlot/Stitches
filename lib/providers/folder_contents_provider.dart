@@ -1,12 +1,13 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/storage_location.dart';
+import 'google_drive_provider.dart';
 
 final folderContentsProvider = FutureProvider.autoDispose
     .family<FolderContents, StorageLocation>((ref, location) async {
   return switch (location) {
     LocalFolder f => _loadLocalFolder(f),
-    DriveFolder _ => Future.value(FolderContents.empty),
+    DriveFolder f => _loadDriveFolder(ref, f),
   };
 });
 
@@ -38,6 +39,19 @@ Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
       a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
 
   return FolderContents(subfolders: subfolders, files: files);
+}
+
+Future<FolderContents> _loadDriveFolder(
+    Ref<AsyncValue<FolderContents>> ref, DriveFolder folder) async {
+  final notifier = ref.read(googleDriveProvider.notifier);
+  final service = await notifier.getService();
+  if (service == null) return FolderContents.empty;
+
+  try {
+    return await service.listFolderContents(folder);
+  } catch (_) {
+    return FolderContents.empty;
+  }
 }
 
 /// Invalidates the cached folder contents so the tree reloads.

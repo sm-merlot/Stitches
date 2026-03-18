@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -9,6 +10,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    final driveState = ref.watch(googleDriveProvider);
+    final driveNotifier = ref.read(googleDriveProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(
@@ -16,6 +19,40 @@ class SettingsScreen extends ConsumerWidget {
       ),
       body: ListView(
         children: [
+          // ── Google Drive ──────────────────────────────────────────────────
+          const _SectionHeader('Google Drive'),
+          ListTile(
+            leading: const Icon(Icons.account_circle_outlined),
+            title: Text(
+              driveState.status == DriveStatus.connected
+                  ? (driveState.email == 'connected'
+                      ? 'Connected'
+                      : driveState.email ?? 'Connected')
+                  : 'Not connected',
+            ),
+            subtitle: driveState.error != null
+                ? Text(
+                    driveState.error!,
+                    style: TextStyle(color: Colors.red.shade600, fontSize: 12),
+                  )
+                : null,
+            trailing: driveState.status == DriveStatus.connecting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : driveState.status == DriveStatus.connected
+                    ? TextButton(
+                        onPressed: () => driveNotifier.disconnect(),
+                        child: const Text('Sign Out'),
+                      )
+                    : FilledButton(
+                        onPressed: () => driveNotifier.connect(),
+                        child: const Text('Connect'),
+                      ),
+          ),
+          const Divider(),
           const _SectionHeader('Thread Colours'),
           SwitchListTile(
             title: const Text('Colour system'),
