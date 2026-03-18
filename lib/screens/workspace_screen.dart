@@ -330,12 +330,6 @@ class WorkspaceScreen extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.menu),
-            tooltip: 'Toggle sidebar',
-            onPressed: () =>
-                ref.read(workspaceProvider.notifier).toggleSidebar(),
-          ),
           title: Text(_title(editorState, wsState)),
           backgroundColor: editorState.stitchMode
               ? Theme.of(context).colorScheme.primaryContainer
@@ -434,27 +428,61 @@ class WorkspaceScreen extends ConsumerWidget {
             ),
           ],
         ),
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        body: Stack(
           children: [
-            // Sidebar
-            if (wsState.sidebarVisible) ...[
-              const FileSidebar(),
-              const VerticalDivider(width: 1, thickness: 1),
-            ],
-            // Editor
-            Expanded(
-              child: Focus(
-                autofocus: true,
-                onKeyEvent: handleKeys,
-                child: const Column(
-                  children: [
-                    Expanded(child: PatternCanvas()),
-                    EditorToolbar(),
-                  ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Sidebar
+                if (wsState.sidebarVisible) ...[
+                  const FileSidebar(),
+                  const VerticalDivider(width: 1, thickness: 1),
+                ],
+                // Editor
+                Expanded(
+                  child: Focus(
+                    autofocus: true,
+                    onKeyEvent: handleKeys,
+                    child: const Column(
+                      children: [
+                        Expanded(child: PatternCanvas()),
+                        EditorToolbar(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Open-sidebar tab (visible only when sidebar is hidden)
+            if (!wsState.sidebarVisible)
+              Positioned(
+                left: 0,
+                top: 12,
+                child: Material(
+                  elevation: 2,
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(6),
+                    bottomRight: Radius.circular(6),
+                  ),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: InkWell(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(6),
+                      bottomRight: Radius.circular(6),
+                    ),
+                    onTap: () =>
+                        ref.read(workspaceProvider.notifier).toggleSidebar(),
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                      child: Tooltip(
+                        message: 'Open sidebar',
+                        child: Icon(Icons.chevron_right, size: 18),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
         endDrawer: const _StitchPalettePanel(),

@@ -53,8 +53,9 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final fileName = '$safeName.stitchx';
       try {
-        // Write to temp dir first
+        // Write to temp dir first (ensure directory exists)
         final tempDir = await getTemporaryDirectory();
+        await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/$fileName';
         await FileService.saveFile(pattern, tempPath);
 
@@ -149,8 +150,9 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final bytes = await service.downloadFile(file.fileId);
         if (!context.mounted) return;
 
-        // Write to temp dir
+        // Write to temp dir (ensure directory exists)
         final tempDir = await getTemporaryDirectory();
+        await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/${file.displayName}.stitchx';
         await File(tempPath).writeAsBytes(bytes);
         if (!context.mounted) return;
@@ -506,6 +508,14 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                   visualDensity: VisualDensity.compact,
                   tooltip: 'New file',
                   onPressed: () => _createNewFile(context, workspace),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left, size: 16),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Close sidebar',
+                  onPressed: () =>
+                      ref.read(workspaceProvider.notifier).toggleSidebar(),
                 ),
               ],
             ),
