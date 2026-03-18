@@ -54,6 +54,29 @@ Future<FolderContents> _loadDriveFolder(
   }
 }
 
+/// Optimistic pending files, keyed by Drive folderId.
+/// Files added here appear in the tree immediately before the Drive upload
+/// completes. The placeholder [DrivePatternFile.fileId] is set to the local
+/// temp path so the tree can highlight the file via [selectedFilePath].
+final pendingDriveFilesProvider =
+    StateProvider<Map<String, List<PatternFile>>>((ref) => {});
+
+/// Adds a placeholder file for [folderId] so it shows in the tree immediately.
+void addPendingDriveFile(WidgetRef ref, String folderId, PatternFile file) {
+  final current = Map<String, List<PatternFile>>.from(
+      ref.read(pendingDriveFilesProvider));
+  current[folderId] = [...(current[folderId] ?? []), file];
+  ref.read(pendingDriveFilesProvider.notifier).state = current;
+}
+
+/// Removes all pending files for [folderId] (called after Drive upload + refresh).
+void clearPendingDriveFiles(WidgetRef ref, String folderId) {
+  final current = Map<String, List<PatternFile>>.from(
+      ref.read(pendingDriveFilesProvider));
+  current.remove(folderId);
+  ref.read(pendingDriveFilesProvider.notifier).state = current;
+}
+
 /// Invalidates the cached folder contents so the tree reloads.
 void refreshFolder(WidgetRef ref, StorageLocation loc) {
   ref.invalidate(folderContentsProvider(loc));

@@ -8,6 +8,7 @@ import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
+import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
@@ -165,37 +166,67 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     } else if (workspace is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final fileName = '$safeName.stitchx';
+      ref.read(fileLoadingProvider.notifier).state = true;
       try {
+        // Write to temp and open immediately — Drive upload happens in background.
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/$fileName';
         await FileService.saveFile(pattern, tempPath);
 
-        final driveNotifier = ref.read(googleDriveProvider.notifier);
-        final newFileId = await driveNotifier.uploadPattern(
-            pattern, tempPath, null, workspace.folderId);
+        ref.read(editorProvider.notifier).loadPattern(
+          pattern,
+          filePath: tempPath,
+          driveParentFolderId: workspace.folderId,
+          // driveFileId left null — set after background upload.
+        );
 
-        if (!context.mounted) return;
-        if (newFileId != null) {
-          ref.read(editorProvider.notifier).loadPattern(
-                pattern,
-                filePath: tempPath,
-                driveFileId: newFileId,
-                driveParentFolderId: workspace.folderId,
-              );
-          refreshFolder(ref, workspace);
-        }
+        // Show the file in the sidebar tree immediately via a placeholder.
+        addPendingDriveFile(
+          ref,
+          workspace.folderId,
+          DrivePatternFile(
+            fileId: tempPath, // placeholder — replaced once upload completes
+            name: fileName,
+            parentFolder: workspace,
+            modified: DateTime.now(),
+          ),
+        );
+
+        unawaited(_uploadNewFileToDrive(workspace, pattern, tempPath));
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not create Drive file: $e'),
+            SnackBar(content: Text('Could not create file: $e'),
                 backgroundColor: Colors.red.shade700),
           );
         }
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
       }
     } else {
       // No workspace — fall back to standalone new pattern
       ref.read(editorProvider.notifier).newPattern(pattern);
+    }
+  }
+
+  Future<void> _uploadNewFileToDrive(
+      DriveFolder folder, CrossStitchPattern pattern, String tempPath) async {
+    final newFileId = await ref.read(googleDriveProvider.notifier).uploadPattern(
+      pattern, tempPath, null, folder.folderId);
+    if (!mounted) return;
+    // Remove the optimistic placeholder before refreshing from Drive.
+    clearPendingDriveFiles(ref, folder.folderId);
+    if (newFileId != null) {
+      ref.read(editorProvider.notifier).setDriveFileId(newFileId);
+      refreshFolder(ref, folder);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not upload file to Drive.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -264,6 +295,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final editorState = ref.watch(editorProvider);
     final wsState = ref.watch(workspaceProvider);
     final driveState = ref.watch(googleDriveProvider);
+    final isFileLoading = ref.watch(fileLoadingProvider);
 
     // ── Auto-save listener ────────────────────────────────────────────────
     ref.listen<EditorState>(editorProvider, (prev, next) {
@@ -397,13 +429,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               : null,
           actions: [
             if (editorState.isFileOpen && !editorState.stitchMode) ...[
-              // Drive sync indicator
-              if (editorState.driveFileId != null)
+              // Drive sync indicator — shown as soon as the file has a Drive
+              // parent, including while the initial upload is still pending
+              // (driveFileId == null but driveParentFolderId != null).
+              if (editorState.driveParentFolderId != null)
                 Tooltip(
-                  message: driveState.isSyncing
+                  message: (driveState.isSyncing ||
+                          editorState.driveFileId == null)
                       ? 'Syncing to Google Drive…'
                       : 'Synced to Google Drive',
-                  child: driveState.isSyncing
+                  child: (driveState.isSyncing ||
+                          editorState.driveFileId == null)
                       ? const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 8),
                           child: SizedBox(
@@ -515,6 +551,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ),
               ],
             ),
+            // Blocking loading overlay (Drive download in progress)
+            if (isFileLoading)
+              const Positioned.fill(
+                child: AbsorbPointer(
+                  child: ColoredBox(
+                    color: Color(0x55000000),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+              ),
+
             // Open-sidebar tab (visible only when sidebar is hidden)
             if (!wsState.sidebarVisible)
               Positioned(

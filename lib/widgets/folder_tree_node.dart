@@ -45,6 +45,12 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
     final theme = Theme.of(context);
     final indent = widget.depth * 12.0;
     final contentsAsync = ref.watch(folderContentsProvider(widget.folder));
+    // Optimistic files added before the Drive upload completes.
+    final pendingFiles = widget.folder is DriveFolder
+        ? (ref.watch(pendingDriveFilesProvider)[
+                (widget.folder as DriveFolder).folderId] ??
+            const [])
+        : const <PatternFile>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -129,8 +135,8 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
                         startExpanded: false,
                       )),
 
-                  // Files (filtered)
-                  ...contents.files
+                  // Files (filtered) + optimistic pending files
+                  ...[...contents.files, ...pendingFiles]
                       .where((f) => filterLower.isEmpty ||
                           f.displayName.toLowerCase().contains(filterLower))
                       .map((file) => _FileTile(
@@ -175,7 +181,13 @@ class _FileTile extends StatelessWidget {
       return (file as LocalPatternFile).path == selectedFilePath;
     }
     if (file is DrivePatternFile) {
-      return (file as DrivePatternFile).fileId == selectedDriveFileId;
+      final driveFile = file as DrivePatternFile;
+      // Normal case: match by Drive file ID.
+      if (driveFile.fileId == selectedDriveFileId) return true;
+      // Pending case: the placeholder fileId is the local temp path, so match
+      // by filePath before the Drive upload has assigned a real ID.
+      if (selectedDriveFileId == null &&
+          driveFile.fileId == selectedFilePath) { return true; }
     }
     return false;
   }

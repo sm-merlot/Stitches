@@ -280,7 +280,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   void setDriveFileId(String? id) {
-    state = state.copyWith(driveFileId: id);
+    // Mark dirty so the auto-save listener uploads the current state to Drive.
+    state = state.copyWith(driveFileId: id, isDirty: state.isFileOpen);
   }
 
   void setDriveParentFolderId(String? id) {
