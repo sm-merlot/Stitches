@@ -11,6 +11,7 @@ import '../providers/editor_provider.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
+import '../providers/pdf_viewer_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
@@ -18,6 +19,7 @@ import '../services/pdf_service.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/file_sidebar.dart';
 import '../widgets/pattern_canvas.dart';
+import '../widgets/pdf_viewer_panel.dart';
 import 'new_pattern_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
@@ -127,10 +129,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       await _save(context, quiet: true);
     }
     ref.read(editorProvider.notifier).closeFile();
+    ref.read(pdfViewerProvider.notifier).state = null;
     return true;
   }
 
-  String _title(EditorState editorState, WorkspaceState wsState) {
+  String _title(EditorState editorState, WorkspaceState wsState, OpenPdf? openPdf) {
+    if (openPdf != null) {
+      final name = openPdf.localPath.split('/').last.replaceAll('.pdf', '');
+      return name;
+    }
     if (editorState.filePath != null || editorState.pattern.name != 'Untitled') {
       final name = editorState.pattern.name;
       final dirty = editorState.isDirty ? ' •' : '';
@@ -153,6 +160,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           '${workspace.path}${Platform.pathSeparator}$safeName.stitchx';
       try {
         await FileService.saveFile(pattern, filePath);
+        ref.read(pdfViewerProvider.notifier).state = null;
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
         refreshFolder(ref, workspace);
       } catch (e) {
@@ -296,6 +304,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final wsState = ref.watch(workspaceProvider);
     final driveState = ref.watch(googleDriveProvider);
     final isFileLoading = ref.watch(fileLoadingProvider);
+    final openPdf = ref.watch(pdfViewerProvider);
 
     // ── Auto-save listener ────────────────────────────────────────────────
     ref.listen<EditorState>(editorProvider, (prev, next) {
@@ -423,12 +432,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_title(editorState, wsState)),
+          title: Text(_title(editorState, wsState, openPdf)),
           backgroundColor: editorState.stitchMode
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
-            if (editorState.isFileOpen && !editorState.stitchMode) ...[
+            if (editorState.isFileOpen && !editorState.stitchMode && openPdf == null) ...[
               // Drive sync indicator — shown as soon as the file has a Drive
               // parent, including while the initial upload is still pending
               // (driveFileId == null but driveParentFolderId != null).
@@ -490,7 +499,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
             ],
             // Keep screen on — only shown in stitch mode with a file open
-            if (editorState.isFileOpen && editorState.stitchMode) ...[
+            if (editorState.isFileOpen && editorState.stitchMode && openPdf == null) ...[
               const SizedBox(width: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -508,7 +517,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
             ],
             // Stitch mode toggle — only visible with a file open
-            if (editorState.isFileOpen)
+            if (editorState.isFileOpen && openPdf == null)
               Tooltip(
                 message: editorState.stitchMode
                     ? 'Exit Stitch Mode'
@@ -531,23 +540,26 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   const FileSidebar(),
                   const VerticalDivider(width: 1, thickness: 1),
                 ],
-                // Editor or empty state
+                // Editor, PDF viewer, or empty state
                 Expanded(
-                  child: editorState.isFileOpen
-                      ? Focus(
-                          autofocus: true,
-                          onKeyEvent: handleKeys,
-                          child: const Column(
-                            children: [
-                              Expanded(child: PatternCanvas()),
-                              EditorToolbar(),
-                            ],
-                          ),
-                        )
-                      : _EmptyState(
-                          workspace: wsState.workspace,
-                          onNewFile: () => _newFileInWorkspace(context, wsState.workspace),
-                        ),
+                  child: openPdf != null
+                      ? PdfViewerPanel(path: openPdf.localPath)
+                      : editorState.isFileOpen
+                          ? Focus(
+                              autofocus: true,
+                              onKeyEvent: handleKeys,
+                              child: const Column(
+                                children: [
+                                  Expanded(child: PatternCanvas()),
+                                  EditorToolbar(),
+                                ],
+                              ),
+                            )
+                          : _EmptyState(
+                              workspace: wsState.workspace,
+                              onNewFile: () => _newFileInWorkspace(
+                                  context, wsState.workspace),
+                            ),
                 ),
               ],
             ),
@@ -594,7 +606,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
           ],
         ),
-        endDrawer: editorState.isFileOpen ? const _StitchPalettePanel() : null,
+        endDrawer: (editorState.isFileOpen && openPdf == null) ? const _StitchPalettePanel() : null,
         endDrawerEnableOpenDragGesture: false,
       ),
     );
