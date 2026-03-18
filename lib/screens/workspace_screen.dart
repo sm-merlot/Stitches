@@ -125,6 +125,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (state.isDirty && state.isFileOpen) {
       await _save(context, quiet: true);
     }
+    ref.read(editorProvider.notifier).closeFile();
     return true;
   }
 

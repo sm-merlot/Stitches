@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
@@ -8,14 +10,17 @@ import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import 'drive_file_picker_dialog.dart';
+import 'drive_folder_picker_dialog.dart';
 import 'editor_screen.dart';
 import 'new_pattern_dialog.dart';
 import 'settings_screen.dart';
-import 'drive_folder_picker_dialog.dart';
 import 'workspace_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
+  // ─── Actions ──────────────────────────────────────────────────────────────
 
   Future<void> _newPattern(BuildContext context, WidgetRef ref) async {
     final pattern = await showDialog<CrossStitchPattern>(
@@ -60,16 +65,111 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _openRecentFile(
-      BuildContext context, WidgetRef ref, RecentItem item) async {
+  Future<void> _openDriveFile(BuildContext context, WidgetRef ref) async {
+    final selection = await DriveFilePickerDialog.show(context);
+    if (selection == null || !context.mounted) return;
     try {
-      final (pattern, path) = await FileService.openFileFromPath(item.id);
+      final driveNotifier = ref.read(googleDriveProvider.notifier);
+      final service = await driveNotifier.getService();
       if (!context.mounted) return;
-      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
-      ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
+      if (service == null) {
+        _showError(context, 'Not connected to Google Drive.');
+        return;
+      }
+      final bytes = await service.downloadFile(selection.fileId);
+      if (!context.mounted) return;
+
+      final tempDir = await getTemporaryDirectory();
+      await Directory(tempDir.path).create(recursive: true);
+      final tempPath = '${tempDir.path}/${selection.fileName}.stitchx';
+      await File(tempPath).writeAsBytes(bytes);
+      if (!context.mounted) return;
+
+      final (pattern, path) = await FileService.openFileFromPath(tempPath);
+      if (!context.mounted) return;
+
+      ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: path,
+            driveFileId: selection.fileId,
+            driveParentFolderId: selection.parentFolderId,
+          );
+      final email = ref.read(googleDriveProvider).email;
+      ref.read(recentItemsProvider.notifier).add(
+            selection.fileId,
+            isFolder: false,
+            isDrive: true,
+            driveName: selection.fileName,
+            driveEmail: email,
+            drivePath: selection.drivePath,
+          );
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const EditorScreen()),
       );
+    } catch (e) {
+      if (!context.mounted) return;
+      _showError(context, 'Could not open Drive file: $e');
+    }
+  }
+
+  Future<void> _openDriveFolder(BuildContext context, WidgetRef ref) async {
+    final result = await DriveFolderPickerDialog.show(context);
+    if (result == null || !context.mounted) return;
+    final (folder, drivePath) = result;
+    ref.read(workspaceProvider.notifier).openWorkspace(folder);
+    final email = ref.read(googleDriveProvider).email;
+    ref.read(recentItemsProvider.notifier).add(
+          folder.folderId,
+          isFolder: true,
+          isDrive: true,
+          driveName: folder.name,
+          driveEmail: email,
+          drivePath: drivePath,
+        );
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
+    );
+  }
+
+  Future<void> _openRecentFile(
+      BuildContext context, WidgetRef ref, RecentItem item) async {
+    try {
+      if (item.isDrive) {
+        // Re-open a Drive file
+        final driveNotifier = ref.read(googleDriveProvider.notifier);
+        final service = await driveNotifier.getService();
+        if (!context.mounted) return;
+        if (service == null) {
+          _showError(context, 'Not connected to Google Drive.');
+          return;
+        }
+        final bytes = await service.downloadFile(item.id);
+        if (!context.mounted) return;
+        final tempDir = await getTemporaryDirectory();
+        await Directory(tempDir.path).create(recursive: true);
+        final fileName = item.driveName ?? 'pattern';
+        final tempPath = '${tempDir.path}/$fileName.stitchx';
+        await File(tempPath).writeAsBytes(bytes);
+        if (!context.mounted) return;
+        final (pattern, path) = await FileService.openFileFromPath(tempPath);
+        if (!context.mounted) return;
+        ref.read(editorProvider.notifier).loadPattern(
+              pattern,
+              filePath: path,
+              driveFileId: item.id,
+            );
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const EditorScreen()),
+        );
+      } else {
+        final (pattern, path) = await FileService.openFileFromPath(item.id);
+        if (!context.mounted) return;
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
+        ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const EditorScreen()),
+        );
+      }
     } catch (e) {
       if (!context.mounted) return;
       _showError(context, 'Could not open file: $e');
@@ -102,35 +202,21 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _browseDrive(BuildContext context, WidgetRef ref) async {
-    final result = await DriveFolderPickerDialog.show(context);
-    if (result == null || !context.mounted) return;
-    final (folder, drivePath) = result;
-    ref.read(workspaceProvider.notifier).openWorkspace(folder);
-    final email = ref.read(googleDriveProvider).email;
-    ref.read(recentItemsProvider.notifier).add(
-          folder.folderId,
-          isFolder: true,
-          isDrive: true,
-          driveName: folder.name,
-          driveEmail: email,
-          drivePath: drivePath,
-        );
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
-    );
-  }
-
   void _showError(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
     );
   }
 
+  // ─── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recents = ref.watch(recentItemsProvider);
     final driveState = ref.watch(googleDriveProvider);
+    final driveConnected = driveState.status == DriveStatus.connected;
+    final driveConfigured = driveState.isConfigured;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -147,7 +233,7 @@ class HomeScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 32),
         children: [
-          // ── Logo + action buttons ────────────────────────────────────────
+          // ── Logo ────────────────────────────────────────────────────────
           const SizedBox(height: 48),
           Center(
             child: Column(
@@ -156,39 +242,37 @@ class HomeScreen extends ConsumerWidget {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
+                    color: theme.colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Icon(
-                    Icons.grid_4x4,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
+                  child: Icon(Icons.grid_4x4,
+                      size: 48,
+                      color: theme.colorScheme.onPrimaryContainer),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'StitchX',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineMedium
+                  style: theme.textTheme.headlineMedium
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Cross-stitch pattern editor',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: Colors.grey.shade600),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 40),
+
+          // ── Action buttons ───────────────────────────────────────────────
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // New Pattern — full width primary
                 FilledButton.icon(
                   onPressed: () => _newPattern(context, ref),
                   icon: const Icon(Icons.add),
@@ -197,110 +281,109 @@ class HomeScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => _openFile(context, ref),
-                  icon: const Icon(Icons.file_open_outlined),
-                  label: const Text('Open File'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => _openFolder(context, ref),
-                  icon: const Icon(Icons.folder_open_outlined),
-                  label: const Text('Open Folder'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ],
-            ),
-          ),
+                const SizedBox(height: 16),
 
-          // ── Google Drive ─────────────────────────────────────────────────
-          const SizedBox(height: 32),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+                // Local open row
+                _SectionLabel(label: 'LOCAL'),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
-                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'GOOGLE DRIVE',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.primary,
-                          letterSpacing: 1.1,
-                        ),
+                      child: _OpenButton(
+                        icon: Icons.insert_drive_file_outlined,
+                        label: 'Open File',
+                        onTap: () => _openFile(context, ref),
                       ),
                     ),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant),
+                      child: _OpenButton(
+                        icon: Icons.folder_open_outlined,
+                        label: 'Open Folder',
+                        onTap: () => _openFolder(context, ref),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                if (driveState.status == DriveStatus.connected) ...[
+
+                // Drive section
+                if (driveConfigured) ...[
+                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      Icon(
-                        Icons.check_circle_outline,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          driveState.email == 'connected'
-                              ? 'Connected'
-                              : driveState.email ?? 'Connected',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      _SectionLabel(
+                        label: 'GOOGLE DRIVE',
+                        trailing: driveConnected
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle_outline,
+                                      size: 12,
+                                      color: theme.colorScheme.primary),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    driveState.email == 'connected'
+                                        ? 'Connected'
+                                        : driveState.email ?? 'Connected',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              )
+                            : null,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: () => _browseDrive(context, ref),
-                    icon: const Icon(Icons.cloud_outlined),
-                    label: const Text('Browse Drive'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: 8),
+                  if (driveState.status == DriveStatus.connecting)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (driveConnected)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _OpenButton(
+                            icon: Icons.insert_drive_file_outlined,
+                            label: 'Drive File',
+                            cloudBadge: true,
+                            onTap: () => _openDriveFile(context, ref),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _OpenButton(
+                            icon: Icons.folder_open_outlined,
+                            label: 'Drive Folder',
+                            cloudBadge: true,
+                            onTap: () => _openDriveFolder(context, ref),
+                          ),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    OutlinedButton.icon(
+                      onPressed: () => _connectDrive(context, ref),
+                      icon: const Icon(Icons.add_link_outlined),
+                      label: const Text('Connect Google Drive'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                     ),
-                  ),
-                ] else if (driveState.status == DriveStatus.connecting) ...[
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                ] else ...[
-                  OutlinedButton.icon(
-                    onPressed: () => _connectDrive(context, ref),
-                    icon: const Icon(Icons.add_link_outlined),
-                    label: const Text('Connect Google Drive'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                  if (driveState.error != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      driveState.error!,
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.red.shade600),
-                    ),
+                    if (driveState.error != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        driveState.error!,
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.red.shade600),
+                      ),
+                    ],
                   ],
                 ],
               ],
@@ -318,7 +401,7 @@ class HomeScreen extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: theme.colorScheme.primary,
                     letterSpacing: 1.1,
                   ),
                 ),
@@ -354,11 +437,9 @@ class HomeScreen extends ConsumerWidget {
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
                   ),
-                  child: Text(
-                    'Clear',
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                  ),
+                  child: Text('Clear',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade500)),
                 ),
               ],
             ),
@@ -382,6 +463,84 @@ class HomeScreen extends ConsumerWidget {
           ],
 
           const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Section label ────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final Widget? trailing;
+  const _SectionLabel({required this.label, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelText = Text(
+      label,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+        letterSpacing: 1.0,
+      ),
+    );
+    if (trailing == null) return labelText;
+    return Row(
+      children: [
+        labelText,
+        const SizedBox(width: 8),
+        trailing!,
+      ],
+    );
+  }
+}
+
+// ─── Open button ──────────────────────────────────────────────────────────────
+
+class _OpenButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool cloudBadge;
+  final VoidCallback onTap;
+
+  const _OpenButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.cloudBadge = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(icon, size: 18),
+              if (cloudBadge)
+                Positioned(
+                  right: -6,
+                  bottom: -4,
+                  child: Icon(Icons.cloud, size: 10,
+                      color: theme.colorScheme.primary),
+                ),
+            ],
+          ),
+          const SizedBox(width: 8),
+          Text(label),
         ],
       ),
     );
@@ -435,7 +594,8 @@ class _RecentSectionState extends State<_RecentSection> {
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
                 const SizedBox(width: 4),
-                Icon(widget.icon, size: 14,
+                Icon(widget.icon,
+                    size: 14,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                 const SizedBox(width: 6),
                 Text(
@@ -452,8 +612,7 @@ class _RecentSectionState extends State<_RecentSection> {
                   '${widget.items.length}',
                   style: TextStyle(
                       fontSize: 11,
-                      color:
-                          theme.colorScheme.onSurface.withValues(alpha: 0.35)),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.35)),
                 ),
               ],
             ),
@@ -500,7 +659,9 @@ class _RecentItemTile extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Icon(
-              item.isFolder ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
+              item.isFolder
+                  ? Icons.folder_outlined
+                  : Icons.insert_drive_file_outlined,
               size: 20,
               color: theme.colorScheme.onPrimaryContainer,
             ),
@@ -529,10 +690,8 @@ class _RecentItemTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            item.relativeTime,
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
-          ),
+          Text(item.relativeTime,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
           const SizedBox(width: 4),
           InkWell(
             onTap: onRemove,
@@ -548,4 +707,3 @@ class _RecentItemTile extends StatelessWidget {
     );
   }
 }
-
