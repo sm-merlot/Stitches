@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
+import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
@@ -90,6 +91,23 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _connectDrive(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(googleDriveProvider.notifier).connect();
+    } catch (e) {
+      if (!context.mounted) return;
+      _showError(context, 'Could not connect to Google Drive: $e');
+    }
+  }
+
+  void _browseDrive(BuildContext context, WidgetRef ref) {
+    final driveRoot = const DriveFolder(folderId: 'root', name: 'My Drive');
+    ref.read(workspaceProvider.notifier).openWorkspace(driveRoot);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
+    );
+  }
+
   void _showError(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
@@ -99,6 +117,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recents = ref.watch(recentItemsProvider);
+    final driveState = ref.watch(googleDriveProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -183,6 +202,94 @@ class HomeScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
+              ],
+            ),
+          ),
+
+          // ── Google Drive ─────────────────────────────────────────────────
+          const SizedBox(height: 32),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'GOOGLE DRIVE',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.primary,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (driveState.status == DriveStatus.connected) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          driveState.email == 'connected'
+                              ? 'Connected'
+                              : driveState.email ?? 'Connected',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () => _browseDrive(context, ref),
+                    icon: const Icon(Icons.cloud_outlined),
+                    label: const Text('Browse Drive'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ] else if (driveState.status == DriveStatus.connecting) ...[
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                ] else ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _connectDrive(context, ref),
+                    icon: const Icon(Icons.add_link_outlined),
+                    label: const Text('Connect Google Drive'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  if (driveState.error != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      driveState.error!,
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.red.shade600),
+                    ),
+                  ],
+                ],
               ],
             ),
           ),

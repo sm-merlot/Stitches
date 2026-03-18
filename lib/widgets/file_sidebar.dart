@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
 import '../providers/folder_contents_provider.dart';
+import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
@@ -37,23 +39,49 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     );
     if (pattern == null || !context.mounted) return;
 
-    String folderPath;
     if (folder is LocalFolder) {
-      folderPath = folder.path;
-    } else {
-      _showError(context, 'Cannot create files in Drive folders yet.');
-      return;
-    }
+      final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
+      final filePath = '${folder.path}${Platform.pathSeparator}$safeName.stitchx';
+      try {
+        await FileService.saveFile(pattern, filePath);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
+        refreshFolder(ref, folder);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not create file: $e');
+      }
+    } else if (folder is DriveFolder) {
+      final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
+      final fileName = '$safeName.stitchx';
+      try {
+        // Write to temp dir first
+        final tempDir = await getTemporaryDirectory();
+        final tempPath = '${tempDir.path}/$fileName';
+        await FileService.saveFile(pattern, tempPath);
 
-    final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
-    final filePath = '$folderPath${Platform.pathSeparator}$safeName.stitchx';
+        // Upload to Drive
+        final driveNotifier = ref.read(googleDriveProvider.notifier);
+        final newFileId = await driveNotifier.uploadPattern(
+          pattern,
+          tempPath,
+          null, // create new
+          folder.folderId,
+        );
 
-    try {
-      await FileService.saveFile(pattern, filePath);
-      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
-      refreshFolder(ref, folder);
-    } catch (e) {
-      if (context.mounted) _showError(context, 'Could not create file: $e');
+        if (!context.mounted) return;
+        if (newFileId != null) {
+          ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: tempPath,
+            driveFileId: newFileId,
+            driveParentFolderId: folder.folderId,
+          );
+          refreshFolder(ref, folder);
+        } else {
+          _showError(context, 'Could not upload file to Drive.');
+        }
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not create Drive file: $e');
+      }
     }
   }
 
@@ -98,21 +126,54 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
   }
 
   Future<void> _openFile(BuildContext context, PatternFile file) async {
-    if (file is! LocalPatternFile) return;
-    try {
-      final (pattern, path) = await FileService.openFileFromPath(file.path);
-      if (!context.mounted) return;
-      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
-      ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
-    } catch (e) {
-      if (context.mounted) _showError(context, 'Could not open file: $e');
+    if (file is LocalPatternFile) {
+      try {
+        final (pattern, path) = await FileService.openFileFromPath(file.path);
+        if (!context.mounted) return;
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
+        ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not open file: $e');
+      }
+    } else if (file is DrivePatternFile) {
+      try {
+        final driveNotifier = ref.read(googleDriveProvider.notifier);
+        final service = await driveNotifier.getService();
+        if (!context.mounted) return;
+        if (service == null) {
+          _showError(context, 'Not connected to Google Drive.');
+          return;
+        }
+
+        // Download bytes
+        final bytes = await service.downloadFile(file.fileId);
+        if (!context.mounted) return;
+
+        // Write to temp dir
+        final tempDir = await getTemporaryDirectory();
+        final tempPath = '${tempDir.path}/${file.displayName}.stitchx';
+        await File(tempPath).writeAsBytes(bytes);
+        if (!context.mounted) return;
+
+        // Parse pattern
+        final (pattern, path) = await FileService.openFileFromPath(tempPath);
+        if (!context.mounted) return;
+
+        ref.read(editorProvider.notifier).loadPattern(
+          pattern,
+          filePath: path,
+          driveFileId: file.fileId,
+          driveParentFolderId: file.parentFolder.folderId,
+        );
+        ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not open Drive file: $e');
+      }
     }
   }
 
   Future<void> _renameFile(
       BuildContext context, PatternFile file, StorageLocation? workspace) async {
-    if (file is! LocalPatternFile) return;
-
     final controller = TextEditingController(text: file.displayName);
     final newName = await showDialog<String>(
       context: context,
@@ -143,34 +204,47 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     controller.dispose();
     if (newName == null || newName.isEmpty || !context.mounted) return;
 
-    try {
-      final dir = file.path.substring(0, file.path.lastIndexOf(Platform.pathSeparator));
-      final newPath = '$dir${Platform.pathSeparator}$newName.stitchx';
-      await File(file.path).rename(newPath);
+    if (file is LocalPatternFile) {
+      try {
+        final dir = file.path.substring(0, file.path.lastIndexOf(Platform.pathSeparator));
+        final newPath = '$dir${Platform.pathSeparator}$newName.stitchx';
+        await File(file.path).rename(newPath);
 
-      // If this file is currently open, update the editor file path
-      final editorState = ref.read(editorProvider);
-      if (editorState.filePath == file.path) {
-        ref.read(editorProvider.notifier).setFilePath(newPath);
+        // If this file is currently open, update the editor file path
+        final editorState = ref.read(editorProvider);
+        if (editorState.filePath == file.path) {
+          ref.read(editorProvider.notifier).setFilePath(newPath);
+        }
+
+        if (workspace != null) refreshFolder(ref, workspace);
+        refreshFolder(ref, file.parent);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not rename: $e');
       }
-
-      if (workspace != null) refreshFolder(ref, workspace);
-      refreshFolder(ref, file.parent);
-    } catch (e) {
-      if (context.mounted) _showError(context, 'Could not rename: $e');
+    } else if (file is DrivePatternFile) {
+      try {
+        final driveNotifier = ref.read(googleDriveProvider.notifier);
+        final service = await driveNotifier.getService();
+        if (!context.mounted) return;
+        if (service == null) {
+          _showError(context, 'Not connected to Google Drive.');
+          return;
+        }
+        await service.renameItem(file.fileId, '$newName.stitchx');
+        refreshFolder(ref, file.parent);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not rename Drive file: $e');
+      }
     }
   }
 
   Future<void> _deleteFile(
       BuildContext context, PatternFile file, StorageLocation? workspace) async {
-    if (file is! LocalPatternFile) return;
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete File'),
-        content: Text(
-            'Delete "${file.displayName}"? This cannot be undone.'),
+        content: Text('Delete "${file.displayName}"? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -186,12 +260,29 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
     if (confirmed != true || !context.mounted) return;
 
-    try {
-      await File(file.path).delete();
-      if (workspace != null) refreshFolder(ref, workspace);
-      refreshFolder(ref, file.parent);
-    } catch (e) {
-      if (context.mounted) _showError(context, 'Could not delete: $e');
+    if (file is LocalPatternFile) {
+      try {
+        await File(file.path).delete();
+        if (workspace != null) refreshFolder(ref, workspace);
+        refreshFolder(ref, file.parent);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not delete: $e');
+      }
+    } else if (file is DrivePatternFile) {
+      try {
+        final driveNotifier = ref.read(googleDriveProvider.notifier);
+        final service = await driveNotifier.getService();
+        if (!context.mounted) return;
+        if (service == null) {
+          _showError(context, 'Not connected to Google Drive.');
+          return;
+        }
+        await service.deleteFile(file.fileId);
+        if (workspace != null) refreshFolder(ref, workspace);
+        refreshFolder(ref, file.parent);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not delete Drive file: $e');
+      }
     }
   }
 

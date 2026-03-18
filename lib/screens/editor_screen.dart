@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
 import '../providers/editor_provider.dart';
+import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/file_service.dart';
 import '../services/pdf_service.dart';
@@ -35,6 +36,24 @@ class EditorScreen extends ConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Saved')),
           );
+        }
+
+        // Auto-upload to Drive if this file is Drive-backed
+        final driveFileId = state.driveFileId;
+        final parentFolderId = state.driveParentFolderId;
+        if (driveFileId != null && parentFolderId != null) {
+          final notifier = ref.read(googleDriveProvider.notifier);
+          final newId = await notifier.uploadPattern(
+            _patternWithEditorState(state),
+            state.filePath!,
+            driveFileId,
+            parentFolderId,
+          );
+          if (newId != null && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Synced to Google Drive')),
+            );
+          }
         }
       } else {
         await _saveAs(context, ref);
@@ -116,6 +135,7 @@ class EditorScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
+    final driveState = ref.watch(googleDriveProvider);
 
     // All keyboard shortcuts handled here — single Focus, no competing nodes.
     KeyEventResult handleKeys(FocusNode node, KeyEvent event) {
@@ -251,6 +271,23 @@ class EditorScreen extends ConsumerWidget {
               : null,
           actions: [
             if (!state.stitchMode) ...[
+              // Drive sync indicator
+              if (state.driveFileId != null)
+                Tooltip(
+                  message: driveState.isSyncing
+                      ? 'Syncing to Google Drive…'
+                      : 'Synced to Google Drive',
+                  child: driveState.isSyncing
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : const Icon(Icons.cloud_done_outlined),
+                ),
               IconButton(
                 icon: const Icon(Icons.save_outlined),
                 tooltip: 'Save  (Cmd+S)',

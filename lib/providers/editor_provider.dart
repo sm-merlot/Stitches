@@ -65,6 +65,12 @@ class EditorState {
   /// Whether the overlay is currently visible.
   final bool referenceVisible;
 
+  // ── Google Drive ──────────────────────────────────────────────────────────
+  /// Drive file ID if the current pattern is backed by Google Drive.
+  final String? driveFileId;
+  /// Drive folder ID where the file lives (needed for upload).
+  final String? driveParentFolderId;
+
   const EditorState({
     required this.pattern,
     this.filePath,
@@ -85,6 +91,8 @@ class EditorState {
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
+    this.driveFileId,
+    this.driveParentFolderId,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -160,6 +168,8 @@ class EditorState {
     Object? referenceImage = _sentinel,
     double? referenceOpacity,
     bool? referenceVisible,
+    Object? driveFileId = _sentinel,
+    Object? driveParentFolderId = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -189,6 +199,12 @@ class EditorState {
           : referenceImage as ui.Image?,
       referenceOpacity: referenceOpacity ?? this.referenceOpacity,
       referenceVisible: referenceVisible ?? this.referenceVisible,
+      driveFileId: driveFileId == _sentinel
+          ? this.driveFileId
+          : driveFileId as String?,
+      driveParentFolderId: driveParentFolderId == _sentinel
+          ? this.driveParentFolderId
+          : driveParentFolderId as String?,
     );
   }
 
@@ -207,7 +223,12 @@ class EditorNotifier extends StateNotifier<EditorState> {
     name: 'Black',
   );
 
-  void loadPattern(CrossStitchPattern pattern, {String? filePath}) {
+  void loadPattern(
+    CrossStitchPattern pattern, {
+    String? filePath,
+    String? driveFileId,
+    String? driveParentFolderId,
+  }) {
     // Restore saved tool, falling back to fullStitch
     DrawingTool tool = DrawingTool.fullStitch;
     if (pattern.editorTool != null) {
@@ -234,6 +255,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
       stitchMode: pattern.editorStitchMode,
       drawingMode: pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw,
       referenceOpacity: withSymbols.referenceOpacity,
+      driveFileId: driveFileId,
+      driveParentFolderId: driveParentFolderId,
     );
 
     // Decode reference image asynchronously after state is set.
@@ -245,6 +268,14 @@ class EditorNotifier extends StateNotifier<EditorState> {
         }
       });
     }
+  }
+
+  void setDriveFileId(String? id) {
+    state = state.copyWith(driveFileId: id);
+  }
+
+  void setDriveParentFolderId(String? id) {
+    state = state.copyWith(driveParentFolderId: id);
   }
 
   void newPattern(CrossStitchPattern pattern) {
