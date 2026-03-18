@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
+import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
+import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -12,6 +16,7 @@ import '../services/pdf_service.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/file_sidebar.dart';
 import '../widgets/pattern_canvas.dart';
+import 'new_pattern_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
@@ -135,6 +140,67 @@ class WorkspaceScreen extends ConsumerWidget {
       return '$name$dirty';
     }
     return wsState.workspace?.displayName ?? 'Workspace';
+  }
+
+  Future<void> _newFileInWorkspace(
+      BuildContext context, WidgetRef ref, StorageLocation? workspace) async {
+    final pattern = await showDialog<CrossStitchPattern>(
+      context: context,
+      builder: (_) => const NewPatternDialog(),
+    );
+    if (pattern == null || !context.mounted) return;
+
+    if (workspace is LocalFolder) {
+      final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
+      final filePath =
+          '${workspace.path}${Platform.pathSeparator}$safeName.stitchx';
+      try {
+        await FileService.saveFile(pattern, filePath);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
+        refreshFolder(ref, workspace);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not create file: $e'),
+                backgroundColor: Colors.red.shade700),
+          );
+        }
+      }
+    } else if (workspace is DriveFolder) {
+      final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
+      final fileName = '$safeName.stitchx';
+      try {
+        final tempDir = await getTemporaryDirectory();
+        await Directory(tempDir.path).create(recursive: true);
+        final tempPath = '${tempDir.path}/$fileName';
+        await FileService.saveFile(pattern, tempPath);
+
+        final driveNotifier = ref.read(googleDriveProvider.notifier);
+        final newFileId = await driveNotifier.uploadPattern(
+            pattern, tempPath, null, workspace.folderId);
+
+        if (!context.mounted) return;
+        if (newFileId != null) {
+          ref.read(editorProvider.notifier).loadPattern(
+                pattern,
+                filePath: tempPath,
+                driveFileId: newFileId,
+                driveParentFolderId: workspace.folderId,
+              );
+          refreshFolder(ref, workspace);
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not create Drive file: $e'),
+                backgroundColor: Colors.red.shade700),
+          );
+        }
+      }
+    } else {
+      // No workspace — fall back to standalone new pattern
+      ref.read(editorProvider.notifier).newPattern(pattern);
+    }
   }
 
   Future<void> _exportPdf(BuildContext context, EditorState state) async {
@@ -335,7 +401,7 @@ class WorkspaceScreen extends ConsumerWidget {
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
-            if (!editorState.stitchMode) ...[
+            if (editorState.isFileOpen && !editorState.stitchMode) ...[
               // Drive sync indicator
               if (editorState.driveFileId != null)
                 Tooltip(
@@ -397,8 +463,8 @@ class WorkspaceScreen extends ConsumerWidget {
                 ),
               ),
             ],
-            // Keep screen on — only shown in stitch mode
-            if (editorState.stitchMode) ...[
+            // Keep screen on — only shown in stitch mode with a file open
+            if (editorState.isFileOpen && editorState.stitchMode) ...[
               const SizedBox(width: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -415,17 +481,18 @@ class WorkspaceScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Stitch mode toggle — always visible
-            Tooltip(
-              message: editorState.stitchMode
-                  ? 'Exit Stitch Mode'
-                  : 'Stitch Mode',
-              child: Switch(
-                value: editorState.stitchMode,
-                onChanged: (_) =>
-                    ref.read(editorProvider.notifier).toggleStitchMode(),
+            // Stitch mode toggle — only visible with a file open
+            if (editorState.isFileOpen)
+              Tooltip(
+                message: editorState.stitchMode
+                    ? 'Exit Stitch Mode'
+                    : 'Stitch Mode',
+                child: Switch(
+                  value: editorState.stitchMode,
+                  onChanged: (_) =>
+                      ref.read(editorProvider.notifier).toggleStitchMode(),
+                ),
               ),
-            ),
           ],
         ),
         body: Stack(
@@ -438,18 +505,23 @@ class WorkspaceScreen extends ConsumerWidget {
                   const FileSidebar(),
                   const VerticalDivider(width: 1, thickness: 1),
                 ],
-                // Editor
+                // Editor or empty state
                 Expanded(
-                  child: Focus(
-                    autofocus: true,
-                    onKeyEvent: handleKeys,
-                    child: const Column(
-                      children: [
-                        Expanded(child: PatternCanvas()),
-                        EditorToolbar(),
-                      ],
-                    ),
-                  ),
+                  child: editorState.isFileOpen
+                      ? Focus(
+                          autofocus: true,
+                          onKeyEvent: handleKeys,
+                          child: const Column(
+                            children: [
+                              Expanded(child: PatternCanvas()),
+                              EditorToolbar(),
+                            ],
+                          ),
+                        )
+                      : _EmptyState(
+                          workspace: wsState.workspace,
+                          onNewFile: () => _newFileInWorkspace(context, ref, wsState.workspace),
+                        ),
                 ),
               ],
             ),
@@ -485,7 +557,7 @@ class WorkspaceScreen extends ConsumerWidget {
               ),
           ],
         ),
-        endDrawer: const _StitchPalettePanel(),
+        endDrawer: editorState.isFileOpen ? const _StitchPalettePanel() : null,
         endDrawerEnableOpenDragGesture: false,
       ),
     );
@@ -574,6 +646,63 @@ class _StitchPalettePanel extends ConsumerWidget {
                   },
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final StorageLocation? workspace;
+  final VoidCallback onNewFile;
+
+  const _EmptyState({required this.workspace, required this.onNewFile});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.insert_drive_file_outlined,
+              size: 64,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'No file open',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              workspace != null
+                  ? 'Select a file from the sidebar or create a new one.'
+                  : 'Create a new pattern to get started.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+              ),
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: onNewFile,
+              icon: const Icon(Icons.add),
+              label: const Text('New Pattern'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 32, vertical: 16),
+                textStyle: theme.textTheme.titleSmall,
+              ),
+            ),
           ],
         ),
       ),

@@ -71,6 +71,11 @@ class EditorState {
   /// Drive folder ID where the file lives (needed for upload).
   final String? driveParentFolderId;
 
+  // ── File open state ───────────────────────────────────────────────────────
+  /// True once a file has been loaded or created. False on initial workspace
+  /// open and after the open file is deleted.
+  final bool isFileOpen;
+
   const EditorState({
     required this.pattern,
     this.filePath,
@@ -93,6 +98,7 @@ class EditorState {
     this.referenceVisible = true,
     this.driveFileId,
     this.driveParentFolderId,
+    this.isFileOpen = false,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -170,6 +176,7 @@ class EditorState {
     bool? referenceVisible,
     Object? driveFileId = _sentinel,
     Object? driveParentFolderId = _sentinel,
+    bool? isFileOpen,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -205,6 +212,7 @@ class EditorState {
       driveParentFolderId: driveParentFolderId == _sentinel
           ? this.driveParentFolderId
           : driveParentFolderId as String?,
+      isFileOpen: isFileOpen ?? this.isFileOpen,
     );
   }
 
@@ -257,6 +265,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
       referenceOpacity: withSymbols.referenceOpacity,
       driveFileId: driveFileId,
       driveParentFolderId: driveParentFolderId,
+      isFileOpen: true,
     );
 
     // Decode reference image asynchronously after state is set.
@@ -288,7 +297,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
       pattern: seeded,
       selectedThreadId: threads.first.dmcCode,
       recentThreadIds: [threads.first.dmcCode],
+      isFileOpen: true,
     );
+  }
+
+  /// Resets to no-file-open state (e.g. after the open file is deleted).
+  void closeFile() {
+    state = EditorState(pattern: CrossStitchPattern.empty());
   }
 
   void setFilePath(String? path) {
