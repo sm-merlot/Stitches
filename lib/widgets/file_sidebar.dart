@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
+import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -51,36 +53,40 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     } else if (folder is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final fileName = '$safeName.stitchx';
+      ref.read(fileLoadingProvider.notifier).state = true;
       try {
-        // Write to temp dir first (ensure directory exists)
+        // Write to temp dir and open immediately — no waiting for Drive.
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/$fileName';
         await FileService.saveFile(pattern, tempPath);
 
-        // Upload to Drive
-        final driveNotifier = ref.read(googleDriveProvider.notifier);
-        final newFileId = await driveNotifier.uploadPattern(
+        ref.read(editorProvider.notifier).loadPattern(
           pattern,
-          tempPath,
-          null, // create new
-          folder.folderId,
+          filePath: tempPath,
+          driveParentFolderId: folder.folderId,
+          // driveFileId left null — set after background upload completes.
         );
 
-        if (!context.mounted) return;
-        if (newFileId != null) {
-          ref.read(editorProvider.notifier).loadPattern(
-            pattern,
-            filePath: tempPath,
-            driveFileId: newFileId,
-            driveParentFolderId: folder.folderId,
-          );
-          refreshFolder(ref, folder);
-        } else {
-          _showError(context, 'Could not upload file to Drive.');
-        }
+        // Show the file in the tree immediately using a placeholder whose
+        // fileId equals the local temp path (for selection matching).
+        addPendingDriveFile(
+          ref,
+          folder.folderId,
+          DrivePatternFile(
+            fileId: tempPath, // placeholder — replaced once upload completes
+            name: fileName,
+            parentFolder: folder,
+            modified: DateTime.now(),
+          ),
+        );
+
+        // Upload to Drive in the background.
+        unawaited(_uploadNewFileToDrive(folder, pattern, tempPath));
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not create Drive file: $e');
+        if (context.mounted) _showError(context, 'Could not create file: $e');
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
       }
     }
   }
@@ -136,38 +142,102 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       }
     } else if (file is DrivePatternFile) {
       try {
-        final driveNotifier = ref.read(googleDriveProvider.notifier);
-        final service = await driveNotifier.getService();
-        if (!context.mounted) return;
-        if (service == null) {
-          _showError(context, 'Not connected to Google Drive.');
-          return;
-        }
-
-        // Download bytes
-        final bytes = await service.downloadFile(file.fileId);
-        if (!context.mounted) return;
-
-        // Write to temp dir (ensure directory exists)
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
-        final tempPath = '${tempDir.path}/${file.displayName}.stitchx';
-        await File(tempPath).writeAsBytes(bytes);
-        if (!context.mounted) return;
+        // Use fileId as cache key so the same Drive file always maps to the
+        // same local path regardless of renames.
+        final tempPath = '${tempDir.path}/${file.fileId}.stitchx';
+        final cached = File(tempPath);
 
-        // Parse pattern
-        final (pattern, path) = await FileService.openFileFromPath(tempPath);
-        if (!context.mounted) return;
+        if (await cached.exists()) {
+          // Load from cache immediately, then refresh from Drive in background.
+          final (pattern, path) = await FileService.openFileFromPath(tempPath);
+          if (!context.mounted) return;
+          ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: path,
+            driveFileId: file.fileId,
+            driveParentFolderId: file.parentFolder.folderId,
+          );
+          unawaited(_refreshFromDrive(file, tempPath));
+        } else {
+          // No cache — download first, showing a blocking overlay.
+          ref.read(fileLoadingProvider.notifier).state = true;
+          try {
+            final driveNotifier = ref.read(googleDriveProvider.notifier);
+            final service = await driveNotifier.getService();
+            if (!context.mounted) return;
+            if (service == null) {
+              _showError(context, 'Not connected to Google Drive.');
+              return;
+            }
+            final bytes = await service.downloadFile(file.fileId);
+            if (!context.mounted) return;
+            await cached.writeAsBytes(bytes);
+            if (!context.mounted) return;
+            final (pattern, path) = await FileService.openFileFromPath(tempPath);
+            if (!context.mounted) return;
+            ref.read(editorProvider.notifier).loadPattern(
+              pattern,
+              filePath: path,
+              driveFileId: file.fileId,
+              driveParentFolderId: file.parentFolder.folderId,
+            );
+          } finally {
+            if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+          }
+        }
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not open Drive file: $e');
+      }
+    }
+  }
 
+  /// Uploads a newly created pattern to Drive and stores the resulting file ID.
+  Future<void> _uploadNewFileToDrive(
+      DriveFolder folder, CrossStitchPattern pattern, String tempPath) async {
+    final newFileId = await ref.read(googleDriveProvider.notifier).uploadPattern(
+      pattern, tempPath, null, folder.folderId);
+    if (!mounted) return;
+    // Remove the optimistic placeholder before refreshing from Drive.
+    clearPendingDriveFiles(ref, folder.folderId);
+    if (newFileId != null) {
+      // setDriveFileId marks dirty → auto-save will upload any edits made
+      // during the background upload.
+      ref.read(editorProvider.notifier).setDriveFileId(newFileId);
+      refreshFolder(ref, folder);
+    } else {
+      _showError(context, 'Could not upload file to Drive.');
+    }
+  }
+
+  /// Downloads the Drive version and silently refreshes the cached file,
+  /// but only if the user has not edited the pattern since it was opened.
+  Future<void> _refreshFromDrive(DrivePatternFile file, String tempPath) async {
+    try {
+      final service = await ref.read(googleDriveProvider.notifier).getService();
+      if (!mounted || service == null) return;
+      final bytes = await service.downloadFile(file.fileId);
+      if (!mounted) return;
+      // Don't clobber any edits the user has made since opening.
+      final state = ref.read(editorProvider);
+      if (state.driveFileId != file.fileId || state.isDirty) return;
+      await File(tempPath).writeAsBytes(bytes);
+      if (!mounted) return;
+      final (pattern, path) = await FileService.openFileFromPath(tempPath);
+      if (!mounted) return;
+      // Re-check: still the same file and still unedited?
+      final current = ref.read(editorProvider);
+      if (current.driveFileId == file.fileId && !current.isDirty) {
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
           filePath: path,
           driveFileId: file.fileId,
           driveParentFolderId: file.parentFolder.folderId,
         );
-      } catch (e) {
-        if (context.mounted) _showError(context, 'Could not open Drive file: $e');
       }
+    } catch (_) {
+      // Silently ignore — user already has a usable cached version.
     }
   }
 
@@ -272,6 +342,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (context.mounted) _showError(context, 'Could not delete: $e');
       }
     } else if (file is DrivePatternFile) {
+      ref.read(fileLoadingProvider.notifier).state = true;
       try {
         final driveNotifier = ref.read(googleDriveProvider.notifier);
         final service = await driveNotifier.getService();
@@ -289,6 +360,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         refreshFolder(ref, file.parent);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not delete Drive file: $e');
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
       }
     }
   }
