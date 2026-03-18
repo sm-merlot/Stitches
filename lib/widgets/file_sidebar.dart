@@ -603,6 +603,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                 child: FolderTreeNode(
                   folder: workspace,
                   selectedFilePath: editorState.filePath,
+                  selectedDriveFileId: editorState.driveFileId,
                   filter: _filter,
                   onFileTap: (file) => _openFile(context, file),
                   onFolderContextMenu: (folder, pos) =>

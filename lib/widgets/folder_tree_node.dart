@@ -6,6 +6,7 @@ import '../providers/folder_contents_provider.dart';
 class FolderTreeNode extends ConsumerStatefulWidget {
   final StorageLocation folder;
   final String? selectedFilePath;
+  final String? selectedDriveFileId;
   final String filter;
   final void Function(PatternFile) onFileTap;
   final void Function(StorageLocation, Offset) onFolderContextMenu;
@@ -17,6 +18,7 @@ class FolderTreeNode extends ConsumerStatefulWidget {
     super.key,
     required this.folder,
     required this.selectedFilePath,
+    required this.selectedDriveFileId,
     required this.filter,
     required this.onFileTap,
     required this.onFolderContextMenu,
@@ -118,6 +120,7 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
                   ...contents.subfolders.map((subfolder) => FolderTreeNode(
                         folder: subfolder,
                         selectedFilePath: widget.selectedFilePath,
+                        selectedDriveFileId: widget.selectedDriveFileId,
                         filter: widget.filter,
                         onFileTap: widget.onFileTap,
                         onFolderContextMenu: widget.onFolderContextMenu,
@@ -133,6 +136,7 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
                       .map((file) => _FileTile(
                             file: file,
                             selectedFilePath: widget.selectedFilePath,
+                            selectedDriveFileId: widget.selectedDriveFileId,
                             depth: widget.depth + 1,
                             onTap: () => widget.onFileTap(file),
                             onContextMenu: (pos) =>
@@ -152,6 +156,7 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
 class _FileTile extends StatelessWidget {
   final PatternFile file;
   final String? selectedFilePath;
+  final String? selectedDriveFileId;
   final int depth;
   final VoidCallback onTap;
   final void Function(Offset) onContextMenu;
@@ -159,6 +164,7 @@ class _FileTile extends StatelessWidget {
   const _FileTile({
     required this.file,
     required this.selectedFilePath,
+    required this.selectedDriveFileId,
     required this.depth,
     required this.onTap,
     required this.onContextMenu,
@@ -167,6 +173,9 @@ class _FileTile extends StatelessWidget {
   bool get _isSelected {
     if (file is LocalPatternFile) {
       return (file as LocalPatternFile).path == selectedFilePath;
+    }
+    if (file is DrivePatternFile) {
+      return (file as DrivePatternFile).fileId == selectedDriveFileId;
     }
     return false;
   }
