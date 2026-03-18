@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,8 +21,28 @@ import 'new_pattern_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
-class WorkspaceScreen extends ConsumerWidget {
+class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
+
+  @override
+  ConsumerState<WorkspaceScreen> createState() => _WorkspaceScreenState();
+}
+
+class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
+  Timer? _autoSaveTimer;
+
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleAutoSave() {
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) _save(context, quiet: true);
+    });
+  }
 
   // ─── Helpers (mirrored from EditorScreen) ─────────────────────────────────
 
@@ -32,14 +53,14 @@ class WorkspaceScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _save(BuildContext context, WidgetRef ref) async {
+  Future<void> _save(BuildContext context, {bool quiet = false}) async {
     final state = ref.read(editorProvider);
     try {
       if (state.filePath != null) {
         await FileService.saveFile(
             _patternWithEditorState(state), state.filePath!);
         ref.read(editorProvider.notifier).markSaved();
-        if (context.mounted) {
+        if (!quiet && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Saved')),
           );
@@ -50,20 +71,15 @@ class WorkspaceScreen extends ConsumerWidget {
         final parentFolderId = state.driveParentFolderId;
         if (driveFileId != null && parentFolderId != null) {
           final notifier = ref.read(googleDriveProvider.notifier);
-          final newId = await notifier.uploadPattern(
+          await notifier.uploadPattern(
             _patternWithEditorState(state),
             state.filePath!,
             driveFileId,
             parentFolderId,
           );
-          if (newId != null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Synced to Google Drive')),
-            );
-          }
         }
       } else {
-        await _saveAs(context, ref);
+        await _saveAs(context);
       }
     } catch (e) {
       if (context.mounted) {
@@ -76,7 +92,7 @@ class WorkspaceScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _saveAs(BuildContext context, WidgetRef ref) async {
+  Future<void> _saveAs(BuildContext context) async {
     final state = ref.read(editorProvider);
     try {
       final path =
@@ -101,7 +117,7 @@ class WorkspaceScreen extends ConsumerWidget {
     }
   }
 
-  Future<bool> _onWillPop(BuildContext context, WidgetRef ref) async {
+  Future<bool> _onWillPop(BuildContext context) async {
     final state = ref.read(editorProvider);
     if (!state.isDirty) return true;
     final result = await showDialog<bool>(
@@ -123,7 +139,7 @@ class WorkspaceScreen extends ConsumerWidget {
           FilledButton(
             onPressed: () async {
               Navigator.of(context).pop(false);
-              await _save(context, ref);
+              await _save(context);
             },
             child: const Text('Save'),
           ),
@@ -143,7 +159,7 @@ class WorkspaceScreen extends ConsumerWidget {
   }
 
   Future<void> _newFileInWorkspace(
-      BuildContext context, WidgetRef ref, StorageLocation? workspace) async {
+      BuildContext context, StorageLocation? workspace) async {
     final pattern = await showDialog<CrossStitchPattern>(
       context: context,
       builder: (_) => const NewPatternDialog(),
@@ -218,7 +234,7 @@ class WorkspaceScreen extends ConsumerWidget {
   }
 
   Future<void> _showResizeDialog(
-      BuildContext context, WidgetRef ref, EditorState state) async {
+      BuildContext context, EditorState state) async {
     final result = await showDialog<ResizeResult>(
       context: context,
       builder: (_) => ResizeCanvasDialog(
@@ -263,10 +279,20 @@ class WorkspaceScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  @override
+  Widget build(BuildContext context) {
     final editorState = ref.watch(editorProvider);
     final wsState = ref.watch(workspaceProvider);
     final driveState = ref.watch(googleDriveProvider);
+    final settings = ref.watch(settingsProvider);
+
+    // ── Auto-save listener ────────────────────────────────────────────────
+    ref.listen<EditorState>(editorProvider, (prev, next) {
+      if (!next.isDirty || !next.isFileOpen) return;
+      final isDriveFile = next.driveFileId != null;
+      final shouldAutoSave = isDriveFile || settings.autoSaveLocal;
+      if (shouldAutoSave) _scheduleAutoSave();
+    });
 
     // ── Keyboard handler (identical to EditorScreen) ─────────────────────
     KeyEventResult handleKeys(FocusNode node, KeyEvent event) {
@@ -288,7 +314,7 @@ class WorkspaceScreen extends ConsumerWidget {
       // In stitch mode: allow save, pan/select mode toggle, and Escape.
       if (editorState.stitchMode) {
         if ((meta || ctrl) && key == LogicalKeyboardKey.keyS) {
-          _save(context, ref);
+          _save(context);
           return KeyEventResult.handled;
         }
         if (key == LogicalKeyboardKey.keyS) {
@@ -326,7 +352,7 @@ class WorkspaceScreen extends ConsumerWidget {
           return KeyEventResult.handled;
         }
         if (key == LogicalKeyboardKey.keyS) {
-          _save(context, ref);
+          _save(context);
           return KeyEventResult.handled;
         }
         if (key == LogicalKeyboardKey.keyA) {
@@ -391,7 +417,7 @@ class WorkspaceScreen extends ConsumerWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final shouldPop = await _onWillPop(context, ref);
+        final shouldPop = await _onWillPop(context);
         if (shouldPop && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
@@ -422,12 +448,12 @@ class WorkspaceScreen extends ConsumerWidget {
               IconButton(
                 icon: const Icon(Icons.save_outlined),
                 tooltip: 'Save  (Cmd+S)',
-                onPressed: () => _save(context, ref),
+                onPressed: () => _save(context),
               ),
               IconButton(
                 icon: const Icon(Icons.save_as_outlined),
                 tooltip: 'Save As…',
-                onPressed: () => _saveAs(context, ref),
+                onPressed: () => _saveAs(context),
               ),
               IconButton(
                 icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -438,7 +464,7 @@ class WorkspaceScreen extends ConsumerWidget {
                 icon: const Icon(Icons.crop_outlined),
                 tooltip: 'Resize Aida',
                 onPressed: () =>
-                    _showResizeDialog(context, ref, editorState),
+                    _showResizeDialog(context, editorState),
               ),
               IconButton(
                 icon: const Icon(Icons.info_outline),
@@ -520,7 +546,7 @@ class WorkspaceScreen extends ConsumerWidget {
                         )
                       : _EmptyState(
                           workspace: wsState.workspace,
-                          onNewFile: () => _newFileInWorkspace(context, ref, wsState.workspace),
+                          onNewFile: () => _newFileInWorkspace(context, wsState.workspace),
                         ),
                 ),
               ],
