@@ -9,9 +9,10 @@ import '../services/google_drive_service.dart';
 class DriveFolderPickerDialog extends ConsumerStatefulWidget {
   const DriveFolderPickerDialog({super.key});
 
-  /// Shows the dialog and returns the selected [DriveFolder], or null if cancelled.
-  static Future<DriveFolder?> show(BuildContext context) {
-    return showDialog<DriveFolder>(
+  /// Shows the dialog and returns the selected folder + its breadcrumb path,
+  /// or null if cancelled.
+  static Future<(DriveFolder, String)?> show(BuildContext context) {
+    return showDialog<(DriveFolder, String)>(
       context: context,
       builder: (_) => const DriveFolderPickerDialog(),
     );
@@ -184,7 +185,12 @@ class _DriveFolderPickerDialogState
                       FilledButton(
                         onPressed: _loading
                             ? null
-                            : () => Navigator.of(context).pop(_current),
+                            : () => Navigator.of(context).pop((
+                                  _current,
+                                  _breadcrumbs
+                                      .map((b) => b.displayName)
+                                      .join(' › '),
+                                )),
                         child: const Text('Select This Folder'),
                       ),
                     ],

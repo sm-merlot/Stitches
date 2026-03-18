@@ -63,7 +63,7 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _openRecentFile(
       BuildContext context, WidgetRef ref, RecentItem item) async {
     try {
-      final (pattern, path) = await FileService.openFileFromPath(item.path);
+      final (pattern, path) = await FileService.openFileFromPath(item.id);
       if (!context.mounted) return;
       ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
       ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
@@ -79,9 +79,10 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _openRecentFolder(
       BuildContext context, WidgetRef ref, RecentItem item) async {
     try {
-      ref
-          .read(workspaceProvider.notifier)
-          .openWorkspace(LocalFolder(item.path));
+      final location = item.isDrive
+          ? DriveFolder(folderId: item.id, name: item.driveName ?? 'Drive')
+          : LocalFolder(item.id);
+      ref.read(workspaceProvider.notifier).openWorkspace(location);
       if (!context.mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
@@ -102,9 +103,19 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Future<void> _browseDrive(BuildContext context, WidgetRef ref) async {
-    final folder = await DriveFolderPickerDialog.show(context);
-    if (folder == null || !context.mounted) return;
+    final result = await DriveFolderPickerDialog.show(context);
+    if (result == null || !context.mounted) return;
+    final (folder, drivePath) = result;
     ref.read(workspaceProvider.notifier).openWorkspace(folder);
+    final email = ref.read(googleDriveProvider).email;
+    ref.read(recentItemsProvider.notifier).add(
+          folder.folderId,
+          isFolder: true,
+          isDrive: true,
+          driveName: folder.name,
+          driveEmail: email,
+          drivePath: drivePath,
+        );
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
     );
@@ -317,21 +328,25 @@ class HomeScreen extends ConsumerWidget {
                       context: context,
                       builder: (_) => AlertDialog(
                         title: const Text('Clear Recent'),
-                        content:
-                            const Text('Remove all items from the recent list?'),
+                        content: const Text(
+                            'Remove all items from the recent list?'),
                         actions: [
                           TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
+                              onPressed: () =>
+                                  Navigator.of(context).pop(false),
                               child: const Text('Cancel')),
                           TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
+                              onPressed: () =>
+                                  Navigator.of(context).pop(true),
                               child: const Text('Clear')),
                         ],
                       ),
                     );
                     if (confirmed == true) {
                       for (final item in [...recents]) {
-                        ref.read(recentItemsProvider.notifier).remove(item.path);
+                        ref
+                            .read(recentItemsProvider.notifier)
+                            .remove(item.id);
                       }
                     }
                   },
@@ -341,26 +356,117 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   child: Text(
                     'Clear',
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.grey.shade500),
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey.shade500),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            ...recents.map((item) => _RecentItemTile(
-                  item: item,
-                  onTap: () => item.isFolder
-                      ? _openRecentFolder(context, ref, item)
-                      : _openRecentFile(context, ref, item),
-                  onRemove: () =>
-                      ref.read(recentItemsProvider.notifier).remove(item.path),
-                )),
+            const SizedBox(height: 8),
+            _RecentSection(
+              label: 'Folders',
+              icon: Icons.folder_outlined,
+              items: recents.where((r) => r.isFolder).toList(),
+              onTap: (item) => _openRecentFolder(context, ref, item),
+              onRemove: (item) =>
+                  ref.read(recentItemsProvider.notifier).remove(item.id),
+            ),
+            _RecentSection(
+              label: 'Files',
+              icon: Icons.insert_drive_file_outlined,
+              items: recents.where((r) => !r.isFolder).toList(),
+              onTap: (item) => _openRecentFile(context, ref, item),
+              onRemove: (item) =>
+                  ref.read(recentItemsProvider.notifier).remove(item.id),
+            ),
           ],
 
           const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+}
+
+// ─── Recent section (expandable) ──────────────────────────────────────────────
+
+class _RecentSection extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final List<RecentItem> items;
+  final void Function(RecentItem) onTap;
+  final void Function(RecentItem) onRemove;
+
+  const _RecentSection({
+    required this.label,
+    required this.icon,
+    required this.items,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  @override
+  State<_RecentSection> createState() => _RecentSectionState();
+}
+
+class _RecentSectionState extends State<_RecentSection> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_right,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+                const SizedBox(width: 4),
+                Icon(widget.icon, size: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                const SizedBox(width: 6),
+                Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${widget.items.length}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color:
+                          theme.colorScheme.onSurface.withValues(alpha: 0.35)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded)
+          ...widget.items.map((item) => _RecentItemTile(
+                item: item,
+                onTap: () => widget.onTap(item),
+                onRemove: () => widget.onRemove(item),
+              )),
+        const SizedBox(height: 8),
+      ],
     );
   }
 }
@@ -390,12 +496,22 @@ class _RecentItemTile extends StatelessWidget {
           color: theme.colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(
-          item.isFolder
-              ? Icons.folder_outlined
-              : Icons.insert_drive_file_outlined,
-          size: 20,
-          color: theme.colorScheme.onPrimaryContainer,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(
+              item.isFolder ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
+              size: 20,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+            if (item.isDrive)
+              Positioned(
+                right: 4,
+                bottom: 4,
+                child: Icon(Icons.cloud, size: 10,
+                    color: theme.colorScheme.primary),
+              ),
+          ],
         ),
       ),
       title: Text(

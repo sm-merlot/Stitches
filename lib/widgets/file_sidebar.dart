@@ -7,7 +7,6 @@ import '../models/storage_location.dart';
 import '../providers/editor_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
-import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import '../screens/new_pattern_dialog.dart';
@@ -132,7 +131,6 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final (pattern, path) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
-        ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not open file: $e');
       }
@@ -167,7 +165,6 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           driveFileId: file.fileId,
           driveParentFolderId: file.parentFolder.folderId,
         );
-        ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not open Drive file: $e');
       }
