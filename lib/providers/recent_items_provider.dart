@@ -3,33 +3,49 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class RecentItem {
-  final String path;
+  /// For local items: the file/folder path.
+  /// For Drive items: the folderId.
+  final String id;
   final bool isFolder;
+  final bool isDrive;
+  /// Email of the Google account (Drive items only).
+  final String? driveEmail;
+  /// Display name of the Drive file/folder.
+  final String? driveName;
+  /// Breadcrumb path within Drive, e.g. "My Drive › Projects › Patterns".
+  final String? drivePath;
   final DateTime lastOpened;
 
   const RecentItem({
-    required this.path,
+    required this.id,
     required this.isFolder,
     required this.lastOpened,
+    this.isDrive = false,
+    this.driveEmail,
+    this.driveName,
+    this.drivePath,
   });
 
-  /// Filename without extension (for files), or folder name (for folders).
   String get displayName {
-    final seg = path.split('/').last.split('\\').last;
+    if (isDrive) return driveName ?? 'Drive Folder';
+    final seg = id.split('/').last.split('\\').last;
     if (isFolder) return seg;
     return seg.endsWith('.stitchx') ? seg.substring(0, seg.length - 8) : seg;
   }
 
-  /// Parent directory path shown as subtitle.
   String get displayPath {
-    final parts = path.split('/');
+    if (isDrive) {
+      final account = driveEmail ?? 'Google Drive';
+      if (drivePath != null) return '$drivePath  ·  $account';
+      return 'Google Drive · $account';
+    }
+    final parts = id.split('/');
     if (parts.length >= 2) {
       return parts.sublist(0, parts.length - 1).join('/');
     }
-    return path;
+    return id;
   }
 
-  /// Human-readable relative time string.
   String get relativeTime {
     final diff = DateTime.now().difference(lastOpened);
     if (diff.inMinutes < 1) return 'Just now';
@@ -42,16 +58,25 @@ class RecentItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'path': path,
+        'id': id,
         'isFolder': isFolder,
+        'isDrive': isDrive,
+        if (driveEmail != null) 'driveEmail': driveEmail,
+        if (driveName != null) 'driveName': driveName,
+        if (drivePath != null) 'drivePath': drivePath,
         'lastOpened': lastOpened.millisecondsSinceEpoch,
       };
 
   factory RecentItem.fromJson(Map<String, dynamic> json) => RecentItem(
-        path: json['path'] as String,
+        // 'path' key is the old format — fall back for backward compatibility
+        id: (json['id'] ?? json['path']) as String,
         isFolder: json['isFolder'] as bool,
         lastOpened:
             DateTime.fromMillisecondsSinceEpoch(json['lastOpened'] as int),
+        isDrive: json['isDrive'] as bool? ?? false,
+        driveEmail: json['driveEmail'] as String?,
+        driveName: json['driveName'] as String?,
+        drivePath: json['drivePath'] as String?,
       );
 }
 
@@ -75,17 +100,31 @@ class RecentItemsNotifier extends StateNotifier<List<RecentItem>> {
     } catch (_) {}
   }
 
-  Future<void> add(String path, {required bool isFolder}) async {
+  Future<void> add(
+    String id, {
+    required bool isFolder,
+    bool isDrive = false,
+    String? driveEmail,
+    String? driveName,
+    String? drivePath,
+  }) async {
     final item = RecentItem(
-        path: path, isFolder: isFolder, lastOpened: DateTime.now());
-    var updated = [item, ...state.where((e) => e.path != path)];
+      id: id,
+      isFolder: isFolder,
+      lastOpened: DateTime.now(),
+      isDrive: isDrive,
+      driveEmail: driveEmail,
+      driveName: driveName,
+      drivePath: drivePath,
+    );
+    var updated = [item, ...state.where((e) => e.id != id)];
     if (updated.length > _maxItems) updated = updated.sublist(0, _maxItems);
     state = updated;
     await _save();
   }
 
-  Future<void> remove(String path) async {
-    state = state.where((e) => e.path != path).toList();
+  Future<void> remove(String id) async {
+    state = state.where((e) => e.id != id).toList();
     await _save();
   }
 
