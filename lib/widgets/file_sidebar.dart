@@ -265,6 +265,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     if (file is LocalPatternFile) {
       try {
         await File(file.path).delete();
+        // If this was the open file, close it
+        if (ref.read(editorProvider).filePath == file.path) {
+          ref.read(editorProvider.notifier).closeFile();
+        }
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
@@ -280,6 +284,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           return;
         }
         await service.deleteFile(file.fileId);
+        // If this was the open Drive file, close it
+        if (ref.read(editorProvider).driveFileId == file.fileId) {
+          ref.read(editorProvider.notifier).closeFile();
+        }
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
