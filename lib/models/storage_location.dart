@@ -63,7 +63,7 @@ class DriveFolder extends StorageLocation {
 // Files
 // ---------------------------------------------------------------------------
 
-/// Represents a .stitchx file in either local storage or Google Drive.
+/// Represents a file (pattern or PDF) in either local storage or Google Drive.
 sealed class PatternFile {
   const PatternFile();
 
@@ -129,6 +129,62 @@ class DrivePatternFile extends PatternFile {
 
   @override
   String toString() => 'DrivePatternFile($name, $fileId)';
+}
+
+class LocalPdfFile extends PatternFile {
+  final String path;
+  @override
+  final DateTime? modified;
+
+  const LocalPdfFile({required this.path, this.modified});
+
+  @override
+  String get displayName =>
+      path.split(Platform.pathSeparator).last.replaceAll('.pdf', '');
+
+  @override
+  StorageLocation get parent =>
+      LocalFolder(path.substring(0, path.lastIndexOf(Platform.pathSeparator)));
+
+  @override
+  bool operator ==(Object other) => other is LocalPdfFile && other.path == path;
+
+  @override
+  int get hashCode => path.hashCode;
+
+  @override
+  String toString() => 'LocalPdfFile($path)';
+}
+
+class DrivePdfFile extends PatternFile {
+  final String fileId;
+  final String name;
+  final DriveFolder parentFolder;
+  @override
+  final DateTime? modified;
+
+  const DrivePdfFile({
+    required this.fileId,
+    required this.name,
+    required this.parentFolder,
+    this.modified,
+  });
+
+  @override
+  String get displayName => name.replaceAll('.pdf', '');
+
+  @override
+  StorageLocation get parent => parentFolder;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DrivePdfFile && other.fileId == fileId;
+
+  @override
+  int get hashCode => fileId.hashCode;
+
+  @override
+  String toString() => 'DrivePdfFile($name, $fileId)';
 }
 
 // ---------------------------------------------------------------------------

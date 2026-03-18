@@ -30,6 +30,12 @@ Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
         path: entity.path,
         modified: stat.modified,
       ));
+    } else if (entity is File && entity.path.endsWith('.pdf')) {
+      final stat = await entity.stat();
+      files.add(LocalPdfFile(
+        path: entity.path,
+        modified: stat.modified,
+      ));
     }
   }
 

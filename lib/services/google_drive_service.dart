@@ -40,6 +40,13 @@ class GoogleDriveService {
           parentFolder: parent,
           modified: file.modifiedTime,
         ));
+      } else if (name.endsWith('.pdf')) {
+        files.add(DrivePdfFile(
+          fileId: id,
+          name: name,
+          parentFolder: parent,
+          modified: file.modifiedTime,
+        ));
       }
     }
 

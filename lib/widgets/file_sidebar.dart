@@ -9,6 +9,7 @@ import '../providers/editor_provider.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
+import '../providers/pdf_viewer_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import '../screens/new_pattern_dialog.dart';
@@ -98,15 +99,19 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     final workspaceState = ref.read(workspaceProvider);
     final workspace = workspaceState.workspace;
 
+    final isPdf = file is LocalPdfFile || file is DrivePdfFile;
+
     final selected = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
           position.dx, position.dy, position.dx + 1, position.dy + 1),
       items: [
         const PopupMenuItem(value: 'open', child: Text('Open')),
-        const PopupMenuItem(value: 'rename', child: Text('Rename')),
-        const PopupMenuItem(value: 'copy', child: Text('Copy')),
-        const PopupMenuItem(value: 'cut', child: Text('Cut')),
+        if (!isPdf) ...[
+          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+          const PopupMenuItem(value: 'copy', child: Text('Copy')),
+          const PopupMenuItem(value: 'cut', child: Text('Cut')),
+        ],
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'delete',
@@ -132,10 +137,58 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
   }
 
   Future<void> _openFile(BuildContext context, PatternFile file) async {
+    if (file is LocalPdfFile) {
+      // Clear any open pattern and open the PDF directly from disk.
+      ref.read(editorProvider.notifier).closeFile();
+      ref.read(pdfViewerProvider.notifier).state =
+          OpenPdf(localPath: file.path);
+      return;
+    }
+
+    if (file is DrivePdfFile) {
+      try {
+        final tempDir = await getTemporaryDirectory();
+        await Directory(tempDir.path).create(recursive: true);
+        final tempPath = '${tempDir.path}/${file.fileId}.pdf';
+        final cached = File(tempPath);
+
+        ref.read(editorProvider.notifier).closeFile();
+
+        if (await cached.exists()) {
+          ref.read(pdfViewerProvider.notifier).state =
+              OpenPdf(localPath: tempPath, driveFileId: file.fileId);
+        } else {
+          ref.read(fileLoadingProvider.notifier).state = true;
+          try {
+            final service =
+                await ref.read(googleDriveProvider.notifier).getService();
+            if (!context.mounted) return;
+            if (service == null) {
+              _showError(context, 'Not connected to Google Drive.');
+              return;
+            }
+            final bytes = await service.downloadFile(file.fileId);
+            if (!context.mounted) return;
+            await cached.writeAsBytes(bytes);
+            if (!context.mounted) return;
+            ref.read(pdfViewerProvider.notifier).state =
+                OpenPdf(localPath: tempPath, driveFileId: file.fileId);
+          } finally {
+            if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+          }
+        }
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not open PDF: $e');
+      }
+      return;
+    }
+
     if (file is LocalPatternFile) {
       try {
         final (pattern, path) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
+        // Clear any open PDF when switching to a pattern.
+        ref.read(pdfViewerProvider.notifier).state = null;
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not open file: $e');
@@ -153,6 +206,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           // Load from cache immediately, then refresh from Drive in background.
           final (pattern, path) = await FileService.openFileFromPath(tempPath);
           if (!context.mounted) return;
+          // Clear any open PDF when switching to a pattern.
+          ref.read(pdfViewerProvider.notifier).state = null;
           ref.read(editorProvider.notifier).loadPattern(
             pattern,
             filePath: path,
@@ -177,6 +232,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             if (!context.mounted) return;
             final (pattern, path) = await FileService.openFileFromPath(tempPath);
             if (!context.mounted) return;
+            // Clear any open PDF when switching to a pattern.
+            ref.read(pdfViewerProvider.notifier).state = null;
             ref.read(editorProvider.notifier).loadPattern(
               pattern,
               filePath: path,
@@ -328,6 +385,43 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     );
 
     if (confirmed != true || !context.mounted) return;
+
+    if (file is LocalPdfFile) {
+      try {
+        await File(file.path).delete();
+        if (ref.read(pdfViewerProvider)?.localPath == file.path) {
+          ref.read(pdfViewerProvider.notifier).state = null;
+        }
+        if (workspace != null) refreshFolder(ref, workspace);
+        refreshFolder(ref, file.parent);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not delete: $e');
+      }
+      return;
+    }
+
+    if (file is DrivePdfFile) {
+      ref.read(fileLoadingProvider.notifier).state = true;
+      try {
+        final service = await ref.read(googleDriveProvider.notifier).getService();
+        if (!context.mounted) return;
+        if (service == null) {
+          _showError(context, 'Not connected to Google Drive.');
+          return;
+        }
+        await service.deleteFile(file.fileId);
+        if (ref.read(pdfViewerProvider)?.driveFileId == file.fileId) {
+          ref.read(pdfViewerProvider.notifier).state = null;
+        }
+        if (workspace != null) refreshFolder(ref, workspace);
+        refreshFolder(ref, file.parent);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not delete PDF: $e');
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+      }
+      return;
+    }
 
     if (file is LocalPatternFile) {
       try {
@@ -674,6 +768,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                   folder: workspace,
                   selectedFilePath: editorState.filePath,
                   selectedDriveFileId: editorState.driveFileId,
+                  selectedPdfPath: ref.watch(pdfViewerProvider)?.localPath,
+                  selectedDrivePdfId: ref.watch(pdfViewerProvider)?.driveFileId,
                   filter: _filter,
                   onFileTap: (file) => _openFile(context, file),
                   onFolderContextMenu: (folder, pos) =>
