@@ -21,28 +21,6 @@ const _frontCorners = {
       return a.$2 > b.$2 ? a : b;
     });
 
-// Chooses 'fwd' or 'rev' based on which produces a better back stitch from
-// [fromNode]. Prefers non-diagonal, then shorter.
-String _bestBackDir(
-  int fromNode,
-  int fwdStart,
-  int revStart,
-  Map<int, (double, double)> nodeCoords,
-) {
-  (bool isDiag, double dist) cost(int toNode) {
-    final (fx, fy) = nodeCoords[fromNode]!;
-    final (tx, ty) = nodeCoords[toNode]!;
-    final dx = (tx - fx).abs();
-    final dy = (ty - fy).abs();
-    return (dx > 1e-9 && dy > 1e-9, sqrt(dx * dx + dy * dy));
-  }
-
-  final (fwdDiag, fwdDist) = cost(fwdStart);
-  final (revDiag, revDist) = cost(revStart);
-
-  if (fwdDiag != revDiag) return fwdDiag ? 'rev' : 'fwd';
-  return fwdDist <= revDist ? 'fwd' : 'rev';
-}
 
 /// State-machine cross-stitch planner (v3).
 ///
@@ -268,10 +246,97 @@ PlannedAida planStitchingV3({
   // ---- Pass 2: routing ----
   // For each scheduled op, choose fwd/rev to minimise back-stitch cost,
   // then emit the back stitch (if needed) and the front stitch.
+  //
+  // Direction priority:
+  //   1. Needle already at the candidate start → use that direction (no back needed).
+  //   2. One approach is diagonal and the other isn't → prefer non-diagonal.
+  //   3. Approaches differ in length → prefer shorter.
+  //   4. Tie → prefer the end position whose departure to the next cell is
+  //      perpendicular to the movement direction (H movement → V departure,
+  //      V movement → H departure).
+  //   5. Still tied → default to 'fwd'.
+
+  // Local helper: choose direction for a single op.
+  String chooseDir(
+    int? fromNode,
+    int fwdStart,
+    int fwdEnd,
+    int revStart,
+    int revEnd,
+    int currentCellId,
+    int opIdx,
+  ) {
+    if (fromNode == null) {
+      // Starting cell: choose direction based on where the next cell is.
+      if (opIdx + 1 < schedule.length) {
+        final nextOp = schedule[opIdx + 1];
+        final currentSq = squares[currentCellId];
+        final nextSq = squares[nextOp.cellId];
+        final moveDx = nextSq.x - currentSq.x;
+        final moveDy = nextSq.y - currentSq.y;
+        // Next is left or above → S1b (rev); next is right or below → S1a (fwd).
+        if (moveDx < 0 || moveDy < 0) return 'rev';
+      }
+      return 'fwd';
+    }
+    if (fromNode == fwdStart) return 'fwd';
+    if (fromNode == revStart) return 'rev';
+
+    (bool isDiag, double dist) approachCost(int toNode) {
+      final (fx, fy) = nodeCoords[fromNode]!;
+      final (tx, ty) = nodeCoords[toNode]!;
+      final dx = (tx - fx).abs();
+      final dy = (ty - fy).abs();
+      return (dx > 1e-9 && dy > 1e-9, sqrt(dx * dx + dy * dy));
+    }
+
+    final (fwdDiag, fwdDist) = approachCost(fwdStart);
+    final (revDiag, revDist) = approachCost(revStart);
+
+    if (fwdDiag != revDiag) return fwdDiag ? 'rev' : 'fwd';
+    if ((fwdDist - revDist).abs() > 1e-9) return fwdDist < revDist ? 'fwd' : 'rev';
+
+    // Tie: prefer end that allows a perpendicular departure toward the next cell.
+    if (opIdx + 1 < schedule.length) {
+      final nextOp = schedule[opIdx + 1];
+      final currentSq = squares[currentCellId];
+      final nextSq = squares[nextOp.cellId];
+      final moveDx = nextSq.x - currentSq.x;
+      final moveDy = nextSq.y - currentSq.y;
+
+      if (moveDx != 0 || moveDy != 0) {
+        final nextCn = cellNodes[nextOp.cellId]!;
+        final nextStarts = nextOp.kind == 'S1'
+            ? [nextCn[Corner.topLeft]!, nextCn[Corner.bottomRight]!]
+            : [nextCn[Corner.topRight]!, nextCn[Corner.bottomLeft]!];
+
+        bool hasPerpDeparture(int endNode) {
+          for (final ns in nextStarts) {
+            final (ex, ey) = nodeCoords[endNode]!;
+            final (nx, ny) = nodeCoords[ns]!;
+            final ddx = (nx - ex).abs();
+            final ddy = (ny - ey).abs();
+            // H movement → want V departure (ddx≈0).
+            // V movement → want H departure (ddy≈0).
+            if (moveDy == 0 && ddx < 1e-9) return true;
+            if (moveDx == 0 && ddy < 1e-9) return true;
+          }
+          return false;
+        }
+
+        final fwdPerp = hasPerpDeparture(fwdEnd);
+        final revPerp = hasPerpDeparture(revEnd);
+        if (fwdPerp != revPerp) return fwdPerp ? 'fwd' : 'rev';
+      }
+    }
+
+    return 'fwd';
+  }
 
   int? needleNode;
 
-  for (final op in schedule) {
+  for (var opIdx = 0; opIdx < schedule.length; opIdx++) {
+    final op = schedule[opIdx];
     final cn = cellNodes[op.cellId]!;
 
     final int fwdStart, fwdEnd, revStart, revEnd;
@@ -287,14 +352,9 @@ PlannedAida planStitchingV3({
       revEnd = cn[Corner.topRight]!;
     }
 
-    final String dir;
-    if (needleNode == null || needleNode == fwdStart) {
-      dir = 'fwd';
-    } else if (needleNode == revStart) {
-      dir = 'rev';
-    } else {
-      dir = _bestBackDir(needleNode!, fwdStart, revStart, nodeCoords);
-    }
+    final dir = chooseDir(
+      needleNode, fwdStart, fwdEnd, revStart, revEnd, op.cellId, opIdx,
+    );
 
     final startN = dir == 'fwd' ? fwdStart : revStart;
     final endN = dir == 'fwd' ? fwdEnd : revEnd;

@@ -325,10 +325,10 @@ void main() {
         3,
         3,
         [
-          'S(2,2,TL) B(2,2,BR)', // S1 fwd (2,2): needle at BR(2,2)
-          'B(2,2,BR) S(2,2,BL)', // back H via (2,2): BR→BL = BR(1,2)
+          'S(2,2,BR) B(2,2,TL)', // S1 rev (2,2): next is left → S1b; needle at TL(2,2)=TR(1,2)
+          'B(1,2,TR) S(1,2,BR)', // back V via (1,2): TR(1,2)→BR(1,2) — tiebreak rev
           'S(1,2,BR) B(1,2,TL)', // S1 rev (1,2): needle at TL(1,2)
-          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2)
+          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2) — last op, default fwd
           'S(0,2,TL) B(0,2,BR)', // S1 fwd (0,2)
         ],
         startCell: (2, 2),
@@ -341,6 +341,11 @@ void main() {
       // XXX
       //
       // Pass 1 schedule: (2,1) → below → (2,2) → left → (1,2) → left → (0,2).
+      //
+      // Tiebreaker fires at (2,2): approach H=V=1. Next is (1,2) (H move left).
+      //   revEnd=TL(2,2) can reach BR(1,2) vertically (dx=0) → rev wins.
+      // Tiebreaker fires at (1,2): same pattern → rev wins.
+      // (0,2) is last op → default fwd.
       _expectV3Sequence(
         '3x3 mid-right start',
         [
@@ -352,11 +357,11 @@ void main() {
         3,
         [
           'S(2,1,TL) B(2,1,BR)', // S1 fwd (2,1): needle at BR(2,1)
-          'B(2,1,BR) S(2,1,BL)', // back H via (2,1): BR→BL = TL(2,2)
-          'S(2,2,TL) B(2,2,BR)', // S1 fwd (2,2): needle at BR(2,2)
-          'B(2,2,BR) S(2,2,BL)', // back H via (2,2): BR→BL = BR(1,2)
+          'B(2,2,TR) S(2,2,BR)', // back V via (2,2): BR(2,1)=TR(2,2)→BR(2,2) — tiebreak rev
+          'S(2,2,BR) B(2,2,TL)', // S1 rev (2,2): needle at TL(2,2)
+          'B(1,2,TR) S(1,2,BR)', // back V via (1,2): TL(2,2)=TR(1,2)→BR(1,2) — tiebreak rev
           'S(1,2,BR) B(1,2,TL)', // S1 rev (1,2): needle at TL(1,2)
-          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2)
+          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2) — last op, default fwd
           'S(0,2,TL) B(0,2,BR)', // S1 fwd (0,2)
         ],
         startCell: (2, 1),
@@ -368,7 +373,12 @@ void main() {
       // XXX
       // XXX
       //
-      // Pass 1 schedule: (2,0) → below → (2,1) → below → (2,2) → left → (1,2) → left → (0,2).
+      // Pass 1 schedule: (2,0)→(2,1)→(2,2)→(1,2)→(0,2).
+      //
+      // (2,1): tie, next=(2,2) is V move down → H departure preferred → fwd wins.
+      // (2,2): tie, next=(1,2) is H move left → V departure preferred → rev wins.
+      // (1,2): tie, next=(0,2) is H move left → V departure preferred → rev wins.
+      // (0,2): last op → default fwd.
       _expectV3Sequence(
         '3x3 top-right start',
         [
@@ -380,16 +390,47 @@ void main() {
         3,
         [
           'S(2,0,TL) B(2,0,BR)', // S1 fwd (2,0): needle at BR(2,0)
-          'B(2,0,BR) S(2,0,BL)', // back H via (2,0): BR→BL = TL(2,1)
+          'B(2,0,BR) S(2,0,BL)', // back H via (2,0): BR→BL=TL(2,1) — next is V, fwd wins tiebreak
           'S(2,1,TL) B(2,1,BR)', // S1 fwd (2,1): needle at BR(2,1)
-          'B(2,1,BR) S(2,1,BL)', // back H via (2,1): BR→BL = TL(2,2)
-          'S(2,2,TL) B(2,2,BR)', // S1 fwd (2,2): needle at BR(2,2)
-          'B(2,2,BR) S(2,2,BL)', // back H via (2,2): BR→BL = BR(1,2)
+          'B(2,2,TR) S(2,2,BR)', // back V via (2,2): BR(2,1)=TR(2,2)→BR(2,2) — next is H, rev wins
+          'S(2,2,BR) B(2,2,TL)', // S1 rev (2,2): needle at TL(2,2)
+          'B(1,2,TR) S(1,2,BR)', // back V via (1,2): TL(2,2)=TR(1,2)→BR(1,2) — next is H, rev wins
           'S(1,2,BR) B(1,2,TL)', // S1 rev (1,2): needle at TL(1,2)
-          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2)
+          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2) — last op, default fwd
           'S(0,2,TL) B(0,2,BR)', // S1 fwd (0,2)
         ],
         startCell: (2, 0),
+      );
+    });
+    test('4x1 row, auto start right (3,0) — tiebreaker fires', () {
+      // XXXX    Auto-start: (3,0) — rightmost cell.
+      //
+      // Pass 1 schedule: (3,0) → left → (2,0) → left → (1,0) → left → (0,0).
+      //
+      // Pass 2:
+      //  (3,0) S1 fwd:  needle at BR(3,0).
+      //  (2,0) S1: fwd=TL(2,0) diagonal from BR(3,0); rev=BR(2,0)=BL(3,0) horizontal → rev.
+      //            Back H via (3,0): BR→BL. S1 rev: BR→TL. Needle at TL(2,0).
+      //  (1,0) S1: fwd=TL(1,0) H dist=1; rev=BR(1,0) V dist=1 — TIE.
+      //            Next cell (0,0) is horizontal (left). V departure preferred.
+      //            revEnd=TL(1,0) → to BR(0,0) has dx=0 (vertical) → rev wins tiebreak.
+      //            Back V via (1,0): TL(2,0)→BR(1,0) = TR(1,0)→BR(1,0). S1 rev. Needle at TL(1,0).
+      //  (0,0) S1: fwd=TL(0,0) H dist=1; rev=BR(0,0) V dist=1 — TIE, no next op → fwd.
+      //            Back H via (0,0): TL(1,0)=TR(0,0) → TL(0,0). S1 fwd. Needle at BR(0,0).
+      _expectV3Sequence(
+        '4x1 row tiebreaker',
+        [(0, 0), (1, 0), (2, 0), (3, 0)],
+        4,
+        1,
+        [
+          'S(3,0,BR) B(3,0,TL)', // S1 rev (3,0): next is left → S1b; needle at TL(3,0)=TR(2,0)
+          'B(2,0,TR) S(2,0,BR)', // back V via (2,0): TR(2,0)→BR(2,0) — tiebreak rev
+          'S(2,0,BR) B(2,0,TL)', // S1 rev (2,0): needle at TL(2,0)=TR(1,0)
+          'B(1,0,TR) S(1,0,BR)', // back V via (1,0): TR(1,0)→BR(1,0) — tiebreaker chose rev
+          'S(1,0,BR) B(1,0,TL)', // S1 rev (1,0): needle at TL(1,0)=TR(0,0)
+          'B(0,0,TR) S(0,0,TL)', // back H via (0,0): TR(0,0)→TL(0,0)
+          'S(0,0,TL) B(0,0,BR)', // S1 fwd (0,0): no next op → default fwd
+        ],
       );
     });
   });
