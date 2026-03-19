@@ -208,6 +208,7 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
         _ => null,
       };
     } catch (_) {
+      // Corrupt or unrecognised prefs data — treat as no saved workspace.
       return null;
     }
   }

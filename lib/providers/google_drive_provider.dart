@@ -118,7 +118,9 @@ class DriveNotifier extends Notifier<DriveState> {
   Future<void> disconnect() async {
     try {
       await _auth.signOut();
-    } catch (_) {}
+    } catch (_) {
+      // Sign-out failed (e.g. network error) — clear local state regardless.
+    }
     state = const DriveState();
   }
 

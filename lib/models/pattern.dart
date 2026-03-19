@@ -104,7 +104,7 @@ class CrossStitchPattern {
     return Color(int.parse('FF$h', radix: 16));
   }
 
-  factory CrossStitchPattern.fromYaml(Map yaml) {
+  factory CrossStitchPattern.fromYaml(Map<String, dynamic> yaml) {
     final editor = yaml['editor'] as Map?;
     final aidaHex = yaml['aidaColor'] as String?;
     return CrossStitchPattern(
@@ -118,11 +118,11 @@ class CrossStitchPattern {
       referenceImagePath: yaml['overlay']?['imagePath'] as String?,
       referenceOpacity: (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,
       threads: (yaml['threads'] as List?)
-              ?.map((t) => Thread.fromYaml(t as Map))
+              ?.map((t) => Thread.fromYaml(Map<String, dynamic>.from(t as Map)))
               .toList() ??
           [],
       stitches: (yaml['stitches'] as List?)
-              ?.map((s) => Stitch.fromYaml(s as Map))
+              ?.map((s) => Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
               .toList() ??
           [],
     );

@@ -85,7 +85,7 @@ class FileService {
   static CrossStitchPattern parseYamlString(String yamlString) {
     final doc = loadYaml(yamlString);
     if (doc is! Map) throw const FormatException('Invalid .stitchx file');
-    return CrossStitchPattern.fromYaml(doc);
+    return CrossStitchPattern.fromYaml(Map<String, dynamic>.from(doc));
   }
 
   static String toYamlString(CrossStitchPattern pattern) {
@@ -130,25 +130,20 @@ class FileService {
     for (final s in pattern.stitches) {
       final m = s.toYaml();
       final type = m['type'] as String;
+      final thread = _yamlStr(m['thread'] as String);
       switch (type) {
         case 'full':
-          buf.writeln(
-              '  - {type: full, x: ${m['x']}, y: ${m['y']}, thread: ${_yamlStr(m['thread'] as String)}}');
+          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, thread: $thread}');
         case 'half':
-          buf.writeln(
-              '  - {type: half, x: ${m['x']}, y: ${m['y']}, dir: ${m['dir']}, thread: ${_yamlStr(m['thread'] as String)}}');
+          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, dir: ${m['dir']}, thread: $thread}');
         case 'quarter':
-          buf.writeln(
-              '  - {type: quarter, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: ${_yamlStr(m['thread'] as String)}}');
+          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
         case 'halfcross':
-          buf.writeln(
-              '  - {type: halfcross, x: ${m['x']}, y: ${m['y']}, half: ${m['half']}, thread: ${_yamlStr(m['thread'] as String)}}');
+          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, half: ${m['half']}, thread: $thread}');
         case 'quartercross':
-          buf.writeln(
-              '  - {type: quartercross, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: ${_yamlStr(m['thread'] as String)}}');
+          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
         case 'back':
-          buf.writeln(
-              '  - {type: back, x1: ${m['x1']}, y1: ${m['y1']}, x2: ${m['x2']}, y2: ${m['y2']}, thread: ${_yamlStr(m['thread'] as String)}}');
+          buf.writeln('  - {type: $type, x1: ${m['x1']}, y1: ${m['y1']}, x2: ${m['x2']}, y2: ${m['y2']}, thread: $thread}');
       }
     }
 

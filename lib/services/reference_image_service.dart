@@ -26,6 +26,7 @@ class ReferenceImageService {
       final frame = await codec.getNextFrame();
       return frame.image;
     } catch (_) {
+      // File missing, unreadable, or unsupported format — overlay won't load.
       return null;
     }
   }
