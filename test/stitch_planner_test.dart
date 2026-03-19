@@ -505,6 +505,69 @@ void main() {
         startCell: (2, 0),
       );
     });
+    test('3x3 full grid, start top-left (0,0)', () {
+      // XXX     Start: (0,0) — top-left corner.
+      // XXX     Pass 1: down left col → right along bottom → S2 right → up →
+      // XXX             drain empties right → S2 right → up → drain right → S2.
+      //
+      // Key: S2(0,2)→S1(1,1) movement is diagonal; fix ensures rev is chosen
+      //      for S2(0,2) so the back to (1,1) is straight (vertical), not diagonal.
+      _expectV3Sequence(
+        '3x3 top-left start',
+        [
+          (0, 0), (1, 0), (2, 0),
+          (0, 1), (1, 1), (2, 1),
+          (0, 2), (1, 2), (2, 2),
+        ],
+        3,
+        3,
+        [
+          // S1 pass: down left col then sweep bottom row right
+          'S(0,0,TL) B(0,0,BR)', // S1a (0,0): next below
+          'B(0,0,BR) S(0,0,BL)', // back H → TL(0,1); next V → fwd
+          'S(0,1,TL) B(0,1,BR)', // S1a (0,1)
+          'B(0,1,BR) S(0,1,BL)', // back H → TL(0,2); next V → fwd
+          'S(0,2,TL) B(0,2,BR)', // S1a (0,2)
+          'B(0,2,BR) S(0,2,TR)', // back V → TL(1,2); next H right → fwd
+          'S(1,2,TL) B(1,2,BR)', // S1a (1,2)
+          'B(1,2,BR) S(1,2,TR)', // back V → TL(2,2); next H right → fwd
+          'S(2,2,TL) B(2,2,BR)', // S1a (2,2)
+          // S2 bottom row: sweep left (2,2)→(1,2)→(0,2)
+          'B(2,2,BR) S(2,2,TR)', // back V; next H left → fwd
+          'S(2,2,TR) B(2,2,BL)', // S2a (2,2)
+          'B(1,2,BR) S(1,2,TR)', // back V; next H left → fwd
+          'S(1,2,TR) B(1,2,BL)', // S2a (1,2)
+          'B(0,2,BR) S(0,2,BL)', // back H; diagonal move next → rev wins (straight dep)
+          'S(0,2,BL) B(0,2,TR)', // S2b (0,2): rev → needle at TR(0,2)=(1,2)
+          // TR(0,2)=(1,2) → TL(1,1)=(1,1): vertical (dx=0) — the fixed stitch
+          'B(0,1,BR) S(0,1,TR)', // back V (via (0,1)): (1,2)→(1,1); non-diagonal
+          'S(1,1,TL) B(1,1,BR)', // S1a (1,1)
+          'B(1,1,BR) S(1,1,TR)', // back V; next H right → fwd
+          'S(2,1,TL) B(2,1,BR)', // S1a (2,1)
+          // S2 mid row: sweep left (2,1)→(1,1)
+          'B(2,1,BR) S(2,1,TR)', // back V; next H left → fwd
+          'S(2,1,TR) B(2,1,BL)', // S2a (2,1)
+          'B(1,1,BR) S(1,1,TR)', // back V; diagonal move next → rev wins
+          'S(1,1,TR) B(1,1,BL)', // S2b (1,1): rev → needle at TR(1,1)
+          'B(0,1,BR) S(0,1,BL)', // back H → TL(0,1)
+          'S(0,1,BL) B(0,1,TR)', // S2b (0,1)
+          // Move up to (0,0) s=1; right=(1,0) s=0 → move right first
+          'B(0,0,BR) S(0,0,TR)', // back V (via (0,0)): TR(0,1)→TR(0,0)
+          'S(1,0,TL) B(1,0,BR)', // S1a (1,0)
+          'B(1,0,BR) S(1,0,TR)', // back V; next H right → fwd
+          'S(2,0,TL) B(2,0,BR)', // S1a (2,0)
+          // S2 top row: sweep left (2,0)→(1,0)→(0,0)
+          'B(2,0,BR) S(2,0,TR)', // back V; next H left → fwd
+          'S(2,0,TR) B(2,0,BL)', // S2a (2,0)
+          'B(1,0,BR) S(1,0,TR)', // back V; diagonal move next → rev wins
+          'S(1,0,TR) B(1,0,BL)', // S2b (1,0): rev → needle at TR(1,0)
+          'B(0,0,BR) S(0,0,TR)', // back H → TR(0,0); last op default fwd
+          'S(0,0,TR) B(0,0,BL)', // S2a (0,0)
+        ],
+        startCell: (0, 0),
+      );
+    });
+
     test('4x1 row, auto start right (3,0) — tiebreaker fires', () {
       // XXXX    Auto-start: (3,0) — rightmost cell.
       //

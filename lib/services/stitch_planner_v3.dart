@@ -368,8 +368,10 @@ PlannedAida planStitchingV3({
             final ddy = (ny - ey).abs();
             // H movement → want V departure (ddx≈0).
             // V movement → want H departure (ddy≈0).
+            // Diagonal movement → want any straight departure (ddx≈0 or ddy≈0).
             if (moveDy == 0 && ddx < 1e-9) return true;
             if (moveDx == 0 && ddy < 1e-9) return true;
+            if (moveDx != 0 && moveDy != 0 && (ddx < 1e-9 || ddy < 1e-9)) return true;
           }
           return false;
         }
