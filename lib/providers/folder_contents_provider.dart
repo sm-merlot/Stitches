@@ -11,6 +11,10 @@ final folderContentsProvider = FutureProvider.autoDispose
   };
 });
 
+bool _isHidden(String name) => name.startsWith('.');
+bool _isPatternFile(String path) => path.endsWith('.stitchx');
+bool _isPdfFile(String path) => path.endsWith('.pdf');
+
 Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
   final dir = Directory(folder.path);
   if (!await dir.exists()) return FolderContents.empty;
@@ -20,17 +24,17 @@ Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
 
   await for (final entity in dir.list(recursive: false)) {
     final name = entity.path.split(Platform.pathSeparator).last;
-    if (name.startsWith('.')) continue;
+    if (_isHidden(name)) continue;
 
     if (entity is Directory) {
       subfolders.add(LocalFolder(entity.path));
-    } else if (entity is File && entity.path.endsWith('.stitchx')) {
+    } else if (entity is File && _isPatternFile(entity.path)) {
       final stat = await entity.stat();
       files.add(LocalPatternFile(
         path: entity.path,
         modified: stat.modified,
       ));
-    } else if (entity is File && entity.path.endsWith('.pdf')) {
+    } else if (entity is File && _isPdfFile(entity.path)) {
       final stat = await entity.stat();
       files.add(LocalPdfFile(
         path: entity.path,
