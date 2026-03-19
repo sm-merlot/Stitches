@@ -101,18 +101,18 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   // -------------------------------------------------------------------------
 
   void toggleFolder(String folderId) {
-    final expanded = Set<String>.from(state.expandedFolderIds);
-    if (expanded.contains(folderId)) {
-      expanded.remove(folderId);
-    } else {
-      expanded.add(folderId);
-    }
-    state = state.copyWith(expandedFolderIds: expanded);
+    final ids = state.expandedFolderIds;
+    state = state.copyWith(
+      expandedFolderIds: ids.contains(folderId)
+          ? ids.difference({folderId})
+          : {...ids, folderId},
+    );
   }
 
   void expandFolder(String folderId) {
-    final expanded = Set<String>.from(state.expandedFolderIds)..add(folderId);
-    state = state.copyWith(expandedFolderIds: expanded);
+    state = state.copyWith(
+      expandedFolderIds: {...state.expandedFolderIds, folderId},
+    );
   }
 
   // -------------------------------------------------------------------------

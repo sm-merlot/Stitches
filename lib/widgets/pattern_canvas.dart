@@ -43,7 +43,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Selection / move state
   Offset? _selectionAnchor;      // grid cell where rubber-band drag started
   bool _isMovingSelection = false;
-  bool _selectionHasDragged = false; // true once pointer moves during a rubber-band
+  bool _hasDraggedSelection = false; // true once pointer moves during a rubber-band
   Offset? _moveDragStartCell;
   Offset _moveDelta = Offset.zero;
 
@@ -326,7 +326,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           setState(() {
             _selectionAnchor = cell;
             _isMovingSelection = false;
-            _selectionHasDragged = false;
+            _hasDraggedSelection = false;
           });
         }
         return;
@@ -378,7 +378,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         if (_isMovingSelection && _moveDragStartCell != null) {
           setState(() => _moveDelta = cell - _moveDragStartCell!);
         } else if (_selectionAnchor != null) {
-          setState(() => _selectionHasDragged = true);
+          setState(() => _hasDraggedSelection = true);
           ref.read(editorProvider.notifier).setSelectionRect(
               _buildSelRect(_selectionAnchor!, cell));
         }
@@ -463,10 +463,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final rect = _buildSelRect(_selectionAnchor!, cell);
       // Only keep selection if the user actually dragged; a bare click deselects
       ref.read(editorProvider.notifier).setSelectionRect(
-          _selectionHasDragged && rect.width >= 1 && rect.height >= 1 ? rect : null);
+          _hasDraggedSelection && rect.width >= 1 && rect.height >= 1 ? rect : null);
       setState(() {
         _selectionAnchor = null;
-        _selectionHasDragged = false;
+        _hasDraggedSelection = false;
       });
       _activePointers.remove(event.pointer);
       return;
