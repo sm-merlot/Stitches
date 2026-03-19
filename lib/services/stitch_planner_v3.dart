@@ -269,31 +269,42 @@ PlannedAida planStitchingV3({
         } else if (rightId != null && scheduled[rightId] == 0) {
           cur = rightId; moved = true;
         } else {
-          ops.add((cellId: cur, kind: 'S2'));
-          scheduled[cur] = 2;
-
-          // MNC: opposite-primary neighbour is empty → it may be unreachable by
-          // this sweep direction.  Record it so its sub-sweep can be spliced in
-          // immediately after this S2 in the final schedule.
-          if (secondaryId != null &&
-              scheduled[secondaryId] == 0 &&
-              !mncSet.contains(secondaryId)) {
-            mncSet.add(secondaryId);
-            mncs.add((afterIdx: ops.length - 1, cellId: secondaryId, goUp: !goUp));
-          }
-
-          bool isDone(int? id) => id == null || scheduled[id] == 2;
-          if (primaryId != null && scheduled[primaryId] == 1) {
-            cur = primaryId; moved = true;
-          } else if (leftId != null && scheduled[leftId] == 1) {
-            cur = leftId; moved = true;
-          } else if (rightId != null && scheduled[rightId] == 1) {
-            cur = rightId; moved = true;
-          } else if (isDone(primaryId) &&
-              isDone(leftId) &&
-              isDone(rightId) &&
-              secondaryId != null) {
+          // If all primary/lateral neighbours are done and secondary is empty,
+          // defer this cell's S2 and visit secondary first — it can only be
+          // reached from here, and doing S2 now would force a long back stitch
+          // to get back after visiting secondary's region.
+          final allDone = (primaryId == null || scheduled[primaryId] == 2) &&
+              (leftId == null || scheduled[leftId] == 2) &&
+              (rightId == null || scheduled[rightId] == 2);
+          if (allDone && secondaryId != null && scheduled[secondaryId] == 0) {
             cur = secondaryId; moved = true;
+          } else {
+            ops.add((cellId: cur, kind: 'S2'));
+            scheduled[cur] = 2;
+
+            // MNC: opposite-primary neighbour is empty → it may be unreachable by
+            // this sweep direction.  Record it so its sub-sweep can be spliced in
+            // immediately after this S2 in the final schedule.
+            if (secondaryId != null &&
+                scheduled[secondaryId] == 0 &&
+                !mncSet.contains(secondaryId)) {
+              mncSet.add(secondaryId);
+              mncs.add((afterIdx: ops.length - 1, cellId: secondaryId, goUp: !goUp));
+            }
+
+            bool isDone(int? id) => id == null || scheduled[id] == 2;
+            if (primaryId != null && scheduled[primaryId] == 1) {
+              cur = primaryId; moved = true;
+            } else if (leftId != null && scheduled[leftId] == 1) {
+              cur = leftId; moved = true;
+            } else if (rightId != null && scheduled[rightId] == 1) {
+              cur = rightId; moved = true;
+            } else if (isDone(primaryId) &&
+                isDone(leftId) &&
+                isDone(rightId) &&
+                secondaryId != null) {
+              cur = secondaryId; moved = true;
+            }
           }
         }
       }
