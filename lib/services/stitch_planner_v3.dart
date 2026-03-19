@@ -247,35 +247,48 @@ PlannedAida planStitchingV3({
       }
     }
 
-    // R2: S1-only cell (and didn't just move via R1) → schedule S2; move to an
-    //     S1 neighbour (below/left/right), or up if all neighbours are absent
-    //     or already S2.
+    // R2: S1-only cell (and didn't just move via R1).
+    //   First check if any adjacent cell (below/left/right) is still empty —
+    //   if so, move there immediately (S2 waits until we return).
+    //   Otherwise schedule S2, then move to an S1 neighbour or up.
     if (!moved && scheduled[currentSqId] == 1) {
-      schedule.add((cellId: currentSqId, kind: 'S2'));
-      scheduled[currentSqId] = 2;
-
       final belowId = activeSqAt(sq.x, sq.y + 1);
       final leftId = activeSqAt(sq.x - 1, sq.y);
       final rightId = activeSqAt(sq.x + 1, sq.y);
-      final aboveId = activeSqAt(sq.x, sq.y - 1);
 
-      bool isDoneOrAbsent(int? id) => id == null || scheduled[id] == 2;
-
-      if (belowId != null && scheduled[belowId] == 1) {
+      if (belowId != null && scheduled[belowId] == 0) {
         currentSqId = belowId;
         moved = true;
-      } else if (leftId != null && scheduled[leftId] == 1) {
+      } else if (leftId != null && scheduled[leftId] == 0) {
         currentSqId = leftId;
         moved = true;
-      } else if (rightId != null && scheduled[rightId] == 1) {
+      } else if (rightId != null && scheduled[rightId] == 0) {
         currentSqId = rightId;
         moved = true;
-      } else if (isDoneOrAbsent(belowId) &&
-          isDoneOrAbsent(leftId) &&
-          isDoneOrAbsent(rightId) &&
-          aboveId != null) {
-        currentSqId = aboveId;
-        moved = true;
+      } else {
+        // No empty neighbours — schedule S2 and move to an S1 neighbour or up.
+        schedule.add((cellId: currentSqId, kind: 'S2'));
+        scheduled[currentSqId] = 2;
+
+        final aboveId = activeSqAt(sq.x, sq.y - 1);
+        bool isDoneOrAbsent(int? id) => id == null || scheduled[id] == 2;
+
+        if (belowId != null && scheduled[belowId] == 1) {
+          currentSqId = belowId;
+          moved = true;
+        } else if (leftId != null && scheduled[leftId] == 1) {
+          currentSqId = leftId;
+          moved = true;
+        } else if (rightId != null && scheduled[rightId] == 1) {
+          currentSqId = rightId;
+          moved = true;
+        } else if (isDoneOrAbsent(belowId) &&
+            isDoneOrAbsent(leftId) &&
+            isDoneOrAbsent(rightId) &&
+            aboveId != null) {
+          currentSqId = aboveId;
+          moved = true;
+        }
       }
     }
   }
