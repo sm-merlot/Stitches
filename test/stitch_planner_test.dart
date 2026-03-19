@@ -362,8 +362,8 @@ void main() {
           'S(0,0,BL) B(0,0,TR)', // S2b (0,0); needle at TR(0,0)
           'B(0,0,TR) S(0,0,BR)', // back V; tiebreak rev (via cell (0,0))
           'S(1,0,BL) B(1,0,TR)', // S2b (1,0); needle at TR(1,0)
-          'B(2,0,TL) S(2,0,TR)', // back H → TR(2,0); last op default fwd (via cell (2,0))
-          'S(2,0,TR) B(2,0,BL)', // S2a (2,0)
+          'B(1,0,TR) S(1,0,BR)', // back V → BL(2,0); last-op perp approach → rev
+          'S(2,0,BL) B(2,0,TR)', // S2b (2,0) rev
         ],
         startCell: (2, 2),
       );
@@ -430,8 +430,8 @@ void main() {
           'S(0,0,BL) B(0,0,TR)', // S2b (0,0)
           'B(0,0,TR) S(0,0,BR)', // back V (via cell (0,0)); tiebreak rev
           'S(1,0,BL) B(1,0,TR)', // S2b (1,0)
-          'B(2,0,TL) S(2,0,TR)', // back H → TR(2,0); last op default fwd
-          'S(2,0,TR) B(2,0,BL)', // S2a (2,0)
+          'B(1,0,TR) S(1,0,BR)', // back V → BL(2,0); last-op perp approach → rev
+          'S(2,0,BL) B(2,0,TR)', // S2b (2,0) rev
         ],
         startCell: (2, 1),
       );
@@ -499,8 +499,8 @@ void main() {
           'S(0,0,BL) B(0,0,TR)', // S2b (0,0)
           'B(0,0,TR) S(0,0,BR)', // back V (via cell (0,0)); tiebreak rev
           'S(1,0,BL) B(1,0,TR)', // S2b (1,0)
-          'B(2,0,TL) S(2,0,TR)', // back H → TR(2,0); last op default fwd
-          'S(2,0,TR) B(2,0,BL)', // S2a (2,0)
+          'B(1,0,TR) S(1,0,BR)', // back V → BL(2,0); last-op perp approach → rev
+          'S(2,0,BL) B(2,0,TR)', // S2b (2,0) rev
         ],
         startCell: (2, 0),
       );
@@ -568,6 +568,77 @@ void main() {
       );
     });
 
+    test('3x3 full grid, start top-mid (1,0)', () {
+      // XXX     Start: (1,0) — top-middle.
+      // XXX     Pass 1: down mid col → left col → right to (2,2) → up mid col.
+      // XXX     Key: S2(0,2) ends at TR(0,2); step-3.5 lookahead picks rev so that
+      //              the back stitch to S1(2,2) is 1 unit instead of 3.
+      _expectV3Sequence(
+        '3x3 top-mid start',
+        [
+          (0, 0), (1, 0), (2, 0),
+          (0, 1), (1, 1), (2, 1),
+          (0, 2), (1, 2), (2, 2),
+        ],
+        3,
+        3,
+        [
+          // S1 pass: down mid col
+          'S(1,0,TL) B(1,0,BR)', // S1a (1,0): next below → fwd
+          'B(1,0,BR) S(1,0,BL)', // back H to TL(1,1)
+          'S(1,1,TL) B(1,1,BR)', // S1a (1,1): needle already at TL
+          'B(1,2,TR) S(1,2,BR)', // back V; perp dep tiebreak → rev
+          'S(1,2,BR) B(1,2,TL)', // S1b (1,2) rev
+          // left col
+          'B(0,1,BR) S(0,1,BL)', // back H to TL(0,2)
+          'S(0,2,TL) B(0,2,BR)', // S1a (0,2) fwd
+          // S2(0,2): step-3.5 lookahead: rev end is 1 unit from TL(2,2), fwd end is 2.24 → rev
+          'B(0,2,BR) S(0,2,BL)', // back H to BL(0,2); lookahead picks rev
+          'S(0,2,BL) B(0,2,TR)', // S2b (0,2) rev; needle at TR(0,2)=TL(1,2)
+          // jump to S1(2,2): non-diag approach (H=1) wins over diag (sqrt5)
+          'B(1,1,BL) S(1,1,BR)', // back H to TL(2,2)=BR(1,1)
+          'S(2,2,TL) B(2,2,BR)', // S1a (2,2) fwd
+          // S2(2,2): next op is S2(1,2) to left; perp dep → fwd
+          'B(2,2,BR) S(2,2,TR)', // back V up; perp dep → fwd
+          'S(2,2,TR) B(2,2,BL)', // S2a (2,2) fwd
+          // S2(1,2): next op is S1(0,1) diag; perp dep → fwd
+          'B(1,2,BR) S(1,2,TR)', // back V up; perp dep → fwd
+          'S(1,2,TR) B(1,2,BL)', // S2a (1,2) fwd
+          // S1(0,1): non-diag rev approach (V=1) wins over diag fwd (sqrt5)
+          'B(0,2,BR) S(0,2,TR)', // back V up to BR(0,1)=revStart
+          'S(0,1,BR) B(0,1,TL)', // S1b (0,1) rev; needle==revStart
+          // S2(0,1): step-3.5 lookahead: rev end closer to TL(2,1) → rev
+          'B(0,1,TL) S(0,1,BL)', // back V; lookahead picks rev
+          'S(0,1,BL) B(0,1,TR)', // S2b (0,1) rev; needle at TR(0,1)=TL(1,1)
+          // S1(2,1): non-diag fwd approach (H=1) wins over diag rev (sqrt5)
+          'B(1,0,BL) S(1,0,BR)', // back H to TL(2,1)=BR(1,0)
+          'S(2,1,TL) B(2,1,BR)', // S1a (2,1) fwd
+          // S2(2,1): next op S2(1,1) to left; perp dep → fwd
+          'B(2,1,BR) S(2,1,TR)', // back V up; perp dep → fwd
+          'S(2,1,TR) B(2,1,BL)', // S2a (2,1) fwd
+          // S2(1,1): next op S1(0,0) diag; both perp → default fwd
+          'B(1,1,BR) S(1,1,TR)', // back V up; default fwd
+          'S(1,1,TR) B(1,1,BL)', // S2a (1,1) fwd
+          // S1(0,0): non-diag rev approach (V=1) wins over diag fwd (sqrt5)
+          'B(0,1,BR) S(0,1,TR)', // back V up to BR(0,0)=revStart
+          'S(0,0,BR) B(0,0,TL)', // S1b (0,0) rev
+          // S2(0,0): step-3.5 lookahead: rev end closer to TL(2,0) → rev
+          'B(0,0,TL) S(0,0,BL)', // back V; lookahead picks rev
+          'S(0,0,BL) B(0,0,TR)', // S2b (0,0) rev; needle at TR(0,0)=TL(1,0)
+          // S1(2,0): non-diag fwd approach (H=1) wins over diag rev (sqrt5)
+          'B(1,0,TL) S(1,0,TR)', // back H to TL(2,0)=TR(1,0)
+          'S(2,0,TL) B(2,0,BR)', // S1a (2,0) fwd
+          // S2(2,0): next op S2(1,0) to left; perp dep → fwd
+          'B(2,0,BR) S(2,0,TR)', // back V up; perp dep → fwd
+          'S(2,0,TR) B(2,0,BL)', // S2a (2,0) fwd
+          // S2(1,0): last op; incoming direction right (2,0→1,0 is left); perp approach → fwd
+          'B(1,0,BR) S(1,0,TR)', // back V up; last-op perp approach → fwd
+          'S(1,0,TR) B(1,0,BL)', // S2a (1,0) fwd
+        ],
+        startCell: (1, 0),
+      );
+    });
+
     test('4x1 row, auto start right (3,0) — tiebreaker fires', () {
       // XXXX    Auto-start: (3,0) — rightmost cell.
       //
@@ -604,8 +675,8 @@ void main() {
           'S(1,0,BL) B(1,0,TR)', // S2b (1,0); needle at TR(1,0)
           'B(1,0,TR) S(1,0,BR)', // back V (via cell (1,0)); tiebreak rev
           'S(2,0,BL) B(2,0,TR)', // S2b (2,0); needle at TR(2,0)
-          'B(3,0,TL) S(3,0,TR)', // back H → TR(3,0); last op default fwd
-          'S(3,0,TR) B(3,0,BL)', // S2a (3,0)
+          'B(2,0,TR) S(2,0,BR)', // back V → BL(3,0); last-op perp approach → rev
+          'S(3,0,BL) B(3,0,TR)', // S2b (3,0) rev
         ],
       );
     });
