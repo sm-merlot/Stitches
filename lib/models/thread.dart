@@ -23,7 +23,7 @@ class Thread {
         'symbol': symbol,
       };
 
-  factory Thread.fromYaml(Map yaml) {
+  factory Thread.fromYaml(Map<String, dynamic> yaml) {
     final hex =
         (yaml['color'] as String).replaceAll('#', '');
     final r = int.parse(hex.substring(0, 2), radix: 16);

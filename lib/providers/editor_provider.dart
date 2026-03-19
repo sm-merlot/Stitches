@@ -256,7 +256,9 @@ class EditorNotifier extends Notifier<EditorState> {
     if (pattern.editorTool != null) {
       try {
         tool = DrawingTool.values.byName(pattern.editorTool!);
-      } catch (_) {}
+      } catch (_) {
+        // Unknown tool name from an older file format — fall back to fullStitch.
+      }
     }
 
     // Ensure all threads have symbols (handles files saved before this feature)
@@ -836,6 +838,7 @@ class EditorNotifier extends Notifier<EditorState> {
   String _serializeClipboard(List<Thread> threads, List<Stitch> stitches) {
     return jsonEncode({
       'stitchx': {
+        'version': 1,
         'threads': threads.map((t) => t.toYaml()).toList(),
         'stitches': stitches.map((s) => s.toYaml()).toList(),
       }
@@ -846,14 +849,16 @@ class EditorNotifier extends Notifier<EditorState> {
     try {
       final root = (jsonDecode(text) as Map<String, dynamic>)['stitchx'];
       if (root == null) return null;
+      // 'version' field reserved for future format migrations; currently unused.
       final threads = (root['threads'] as List)
-          .map((t) => Thread.fromYaml(t as Map))
+          .map((t) => Thread.fromYaml(t as Map<String, dynamic>))
           .toList();
       final stitches = (root['stitches'] as List)
-          .map((s) => Stitch.fromYaml(s as Map))
+          .map((s) => Stitch.fromYaml(s as Map<String, dynamic>))
           .toList();
       return (threads, stitches);
     } catch (_) {
+      // Invalid or non-stitchx clipboard content — fall back to in-memory clipboard.
       return null;
     }
   }

@@ -56,6 +56,7 @@ Future<FolderContents> _loadDriveFolder(
   try {
     return await service.listFolderContents(folder);
   } catch (_) {
+    // Network/auth failure — return empty so the tree degrades gracefully.
     return FolderContents.empty;
   }
 }

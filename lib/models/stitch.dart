@@ -11,7 +11,7 @@ sealed class Stitch {
 
   Map<String, dynamic> toYaml();
 
-  static Stitch fromYaml(Map yaml) {
+  static Stitch fromYaml(Map<String, dynamic> yaml) {
     final type = yaml['type'] as String;
     return switch (type) {
       'full' => FullStitch.fromYaml(yaml),
@@ -40,7 +40,7 @@ final class FullStitch extends Stitch {
         'thread': threadId,
       };
 
-  factory FullStitch.fromYaml(Map yaml) => FullStitch(
+  factory FullStitch.fromYaml(Map<String, dynamic> yaml) => FullStitch(
         x: yaml['x'] as int,
         y: yaml['y'] as int,
         threadId: yaml['thread'] as String,
@@ -78,7 +78,7 @@ final class HalfStitch extends Stitch {
         'thread': threadId,
       };
 
-  factory HalfStitch.fromYaml(Map yaml) => HalfStitch(
+  factory HalfStitch.fromYaml(Map<String, dynamic> yaml) => HalfStitch(
         x: yaml['x'] as int,
         y: yaml['y'] as int,
         isForward: (yaml['dir'] as String) == 'forward',
@@ -118,7 +118,7 @@ final class QuarterStitch extends Stitch {
         'thread': threadId,
       };
 
-  factory QuarterStitch.fromYaml(Map yaml) => QuarterStitch(
+  factory QuarterStitch.fromYaml(Map<String, dynamic> yaml) => QuarterStitch(
         x: yaml['x'] as int,
         y: yaml['y'] as int,
         quadrant: QuadrantPosition.values.byName(yaml['quadrant'] as String),
@@ -160,7 +160,7 @@ final class HalfCrossStitch extends Stitch {
         'thread': threadId,
       };
 
-  factory HalfCrossStitch.fromYaml(Map yaml) => HalfCrossStitch(
+  factory HalfCrossStitch.fromYaml(Map<String, dynamic> yaml) => HalfCrossStitch(
         x: yaml['x'] as int,
         y: yaml['y'] as int,
         half: HalfOrientation.values.byName(yaml['half'] as String),
@@ -202,7 +202,7 @@ final class QuarterCrossStitch extends Stitch {
         'thread': threadId,
       };
 
-  factory QuarterCrossStitch.fromYaml(Map yaml) => QuarterCrossStitch(
+  factory QuarterCrossStitch.fromYaml(Map<String, dynamic> yaml) => QuarterCrossStitch(
         x: yaml['x'] as int,
         y: yaml['y'] as int,
         quadrant: QuadrantPosition.values.byName(yaml['quadrant'] as String),
@@ -251,7 +251,7 @@ final class BackStitch extends Stitch {
         'thread': threadId,
       };
 
-  factory BackStitch.fromYaml(Map yaml) => BackStitch(
+  factory BackStitch.fromYaml(Map<String, dynamic> yaml) => BackStitch(
         x1: (yaml['x1'] as num).toDouble(),
         y1: (yaml['y1'] as num).toDouble(),
         x2: (yaml['x2'] as num).toDouble(),

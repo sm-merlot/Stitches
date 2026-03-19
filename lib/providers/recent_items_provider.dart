@@ -102,7 +102,9 @@ class RecentItemsNotifier extends Notifier<List<RecentItem>> {
           .map((e) => RecentItem.fromJson(e as Map<String, dynamic>))
           .toList();
       state = list;
-    } catch (_) {}
+    } catch (_) {
+      // Corrupt or unreadable prefs data — silently reset to empty list.
+    }
   }
 
   Future<void> add(
