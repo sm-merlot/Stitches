@@ -166,6 +166,44 @@ void _expectV2Sequence(
   );
 }
 
+// ── V3-specific inline tests ───────────────────────────────────────────────
+
+void _expectV3Sequence(
+  String label,
+  List<(int, int)> cells,
+  int cols,
+  int rows,
+  List<String> expected, {
+  (int, int)? startCell,
+}) {
+  final aida = planStitchingV3(
+    title: label,
+    cols: cols,
+    rows: rows,
+    cells: cells,
+    startCell: startCell,
+  );
+
+  final actual =
+      aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList();
+
+  final maxLen = actual.length > expected.length ? actual.length : expected.length;
+  final diffLines = <String>[];
+  for (var i = 0; i < maxLen; i++) {
+    final a = i < actual.length ? actual[i] : '<missing>';
+    final e = i < expected.length ? expected[i] : '<missing>';
+    final mark = a == e ? '   ' : '***';
+    diffLines.add('$mark [$i] expected: $e');
+    if (a != e) diffLines.add('         got:      $a');
+  }
+
+  expect(
+    actual,
+    expected,
+    reason: '$label:\n${diffLines.join('\n')}',
+  );
+}
+
 void main() {
   group('planStitchingV2', () {
     test('2x2 full grid', () {
@@ -260,6 +298,86 @@ void main() {
           'B(0,0,BR) S(0,0,TR)', // 34 — back V (2nd pass): S2 (0,0)
           'S(0,0,TR) B(0,0,BL)', // 35 — S2 (0,0) forward
         ],
+      );
+    });
+  });
+
+  group('planStitchingV3', () {
+    test('3x3 full grid, start bottom-right (2,2)', () {
+      // XXX     Start: (2,2) — bottom-right corner.
+      // XXX
+      // XXX
+      //
+      // R1 with cell below empty: S1 + B(BR→BL), move below.
+      // R1 with no empty cell below: S1 only.
+      //
+      // At (2,2): no cell below → S1 only.
+      _expectV3Sequence(
+        '3x3 bottom-right start',
+        [
+          (0, 0), (1, 0), (2, 0),
+          (0, 1), (1, 1), (2, 1),
+          (0, 2), (1, 2), (2, 2),
+        ],
+        3,
+        3,
+        [
+          'S(2,2,TL) B(2,2,BR)', // S1 (2,2) — no cell below, S1 only
+        ],
+        startCell: (2, 2),
+      );
+    });
+
+    test('3x3 full grid, start mid-right (2,1)', () {
+      // XXX     Start: (2,1) — middle of right column.
+      // XXX
+      // XXX
+      //
+      // At (2,1): cell below (2,2) is empty → S1 + B(BR→BL), move to (2,2).
+      // At (2,2): no cell below → S1 only.
+      _expectV3Sequence(
+        '3x3 mid-right start',
+        [
+          (0, 0), (1, 0), (2, 0),
+          (0, 1), (1, 1), (2, 1),
+          (0, 2), (1, 2), (2, 2),
+        ],
+        3,
+        3,
+        [
+          'S(2,1,TL) B(2,1,BR)', // S1 (2,1)
+          'B(2,1,BR) S(2,1,BL)', // B(BR→BL) — cell below is empty
+          'S(2,2,TL) B(2,2,BR)', // S1 (2,2) — no cell below, S1 only
+        ],
+        startCell: (2, 1),
+      );
+    });
+
+    test('3x3 full grid, start top-right (2,0)', () {
+      // XXX     Start: (2,0) — top of right column.
+      // XXX
+      // XXX
+      //
+      // At (2,0): cell below (2,1) is empty → S1 + B(BR→BL), move to (2,1).
+      // At (2,1): cell below (2,2) is empty → S1 + B(BR→BL), move to (2,2).
+      // At (2,2): no cell below → S1 only.
+      _expectV3Sequence(
+        '3x3 top-right start',
+        [
+          (0, 0), (1, 0), (2, 0),
+          (0, 1), (1, 1), (2, 1),
+          (0, 2), (1, 2), (2, 2),
+        ],
+        3,
+        3,
+        [
+          'S(2,0,TL) B(2,0,BR)', // S1 (2,0)
+          'B(2,0,BR) S(2,0,BL)', // B(BR→BL) — cell below is empty
+          'S(2,1,TL) B(2,1,BR)', // S1 (2,1) — needle already at TL, no back needed
+          'B(2,1,BR) S(2,1,BL)', // B(BR→BL) — cell below is empty
+          'S(2,2,TL) B(2,2,BR)', // S1 (2,2) — no cell below, S1 only
+        ],
+        startCell: (2, 0),
       );
     });
   });

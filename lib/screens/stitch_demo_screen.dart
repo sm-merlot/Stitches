@@ -69,7 +69,7 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
   }
 
   void _replan() {
-    _aida = planStitchingV2(
+    _aida = planStitchingV3(
       title: widget.title,
       cols: widget.cols,
       rows: widget.rows,
