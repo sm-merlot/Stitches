@@ -513,6 +513,9 @@ PlannedAida planStitchingV3({
     rows: rows,
     squares: squares,
     activeSquareIds: activeSqIdsSet,
+    schedule: schedule
+        .map((op) => '${op.kind}(${squares[op.cellId].x},${squares[op.cellId].y})')
+        .toList(),
     stitches: stitchList,
   );
 }

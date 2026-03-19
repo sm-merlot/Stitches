@@ -83,6 +83,9 @@ class PlannedAida {
   /// The squareIds that are being stitched (the active cells).
   final Set<int> activeSquareIds;
 
+  /// Pass 1 schedule: ordered list of ops as "S1(x,y)" / "S2(x,y)" strings.
+  final List<String> schedule;
+
   /// The planned stitch sequence: [PlanSimpleStitch | PlanCrossStitch].
   final List<PlanStitchEntry> stitches;
 
@@ -92,6 +95,7 @@ class PlannedAida {
     required this.rows,
     required this.squares,
     required this.activeSquareIds,
+    this.schedule = const [],
     required this.stitches,
   });
 }
