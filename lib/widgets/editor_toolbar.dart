@@ -8,7 +8,6 @@ import '../providers/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/color_picker_screen.dart';
 import '../screens/stitch_demo_screen.dart';
-import '../services/stitch_planner.dart';
 import 'color_select_dialog.dart';
 
 const _aidaPresets = [
@@ -1288,19 +1287,14 @@ class _DemonstrateButton extends StatelessWidget {
 
     if (cells.isEmpty) return;
 
-    // Build the plan.
-    final aida = planStitching(
-      title: pattern.name,
-      cols: pattern.width,
-      rows: pattern.height,
-      cells: cells,
-    );
-
     if (!context.mounted) return;
     await showDialog<void>(
       context: context,
       builder: (_) => StitchDemoScreen(
-        aida: aida,
+        title: pattern.name,
+        cols: pattern.width,
+        rows: pattern.height,
+        cells: cells,
         threadColor: thread!.color,
         threadName: '${thread.dmcCode} – ${thread.name}',
         aidaColor: pattern.aidaColor,
