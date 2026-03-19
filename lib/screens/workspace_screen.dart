@@ -33,6 +33,7 @@ class WorkspaceScreen extends ConsumerStatefulWidget {
 
 class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Timer? _autoSaveTimer;
+  final _pdfPanelKey = GlobalKey<PdfViewerPanelState>();
 
   @override
   void dispose() {
@@ -135,8 +136,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   String _title(EditorState editorState, WorkspaceState wsState, OpenPdf? openPdf) {
     if (openPdf != null) {
-      final name = openPdf.localPath.split('/').last.replaceAll('.pdf', '');
-      return name;
+      return openPdf.title;
     }
     if (editorState.filePath != null || editorState.pattern.name != 'Untitled') {
       final name = editorState.pattern.name;
@@ -351,6 +351,18 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         return KeyEventResult.ignored;
       }
 
+      // PDF zoom shortcuts (Cmd+= / Cmd+-)
+      if (openPdf != null && (meta || ctrl)) {
+        if (key == LogicalKeyboardKey.equal) {
+          _pdfPanelKey.currentState?.zoomIn();
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.minus) {
+          _pdfPanelKey.currentState?.zoomOut();
+          return KeyEventResult.handled;
+        }
+      }
+
       // Modifier shortcuts
       if (meta || ctrl) {
         if (key == LogicalKeyboardKey.keyZ && !shift) {
@@ -437,6 +449,32 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
+            // PDF viewer actions
+            if (openPdf != null) ...[
+              IconButton(
+                icon: const Icon(Icons.zoom_out),
+                tooltip: 'Zoom out',
+                onPressed: () => _pdfPanelKey.currentState?.zoomOut(),
+              ),
+              IconButton(
+                icon: const Icon(Icons.zoom_in),
+                tooltip: 'Zoom in',
+                onPressed: () => _pdfPanelKey.currentState?.zoomIn(),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: ref.watch(settingsProvider).keepScreenOn,
+                    onChanged: (v) => ref
+                        .read(settingsProvider.notifier)
+                        .setKeepScreenOn(v ?? false),
+                  ),
+                  const Text('Keep screen on', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ],
             if (editorState.isFileOpen && !editorState.stitchMode && openPdf == null) ...[
               // Drive sync indicator — shown as soon as the file has a Drive
               // parent, including while the initial upload is still pending
@@ -543,7 +581,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 // Editor, PDF viewer, or empty state
                 Expanded(
                   child: openPdf != null
-                      ? PdfViewerPanel(path: openPdf.localPath)
+                      ? Focus(
+                          autofocus: true,
+                          onKeyEvent: handleKeys,
+                          child: PdfViewerPanel(key: _pdfPanelKey, path: openPdf.localPath),
+                        )
                       : editorState.isFileOpen
                           ? Focus(
                               autofocus: true,

@@ -156,7 +156,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
         if (await cached.exists()) {
           ref.read(pdfViewerProvider.notifier).state =
-              OpenPdf(localPath: tempPath, driveFileId: file.fileId);
+              OpenPdf(localPath: tempPath, driveFileId: file.fileId, displayName: file.displayName);
         } else {
           ref.read(fileLoadingProvider.notifier).state = true;
           try {
@@ -172,7 +172,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             await cached.writeAsBytes(bytes);
             if (!context.mounted) return;
             ref.read(pdfViewerProvider.notifier).state =
-                OpenPdf(localPath: tempPath, driveFileId: file.fileId);
+                OpenPdf(localPath: tempPath, driveFileId: file.fileId, displayName: file.displayName);
           } finally {
             if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
           }

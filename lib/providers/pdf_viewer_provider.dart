@@ -9,7 +9,14 @@ class OpenPdf {
   /// Used to highlight the correct entry in the sidebar tree.
   final String? driveFileId;
 
-  const OpenPdf({required this.localPath, this.driveFileId});
+  /// Human-readable display name (without extension). Falls back to the
+  /// basename of [localPath] when not set explicitly.
+  final String? displayName;
+
+  const OpenPdf({required this.localPath, this.driveFileId, this.displayName});
+
+  String get title =>
+      displayName ?? localPath.split('/').last.replaceAll('.pdf', '');
 }
 
 /// The currently open PDF, or null when no PDF is being viewed.
