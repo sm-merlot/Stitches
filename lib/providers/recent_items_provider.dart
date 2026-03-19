@@ -26,9 +26,11 @@ class RecentItem {
     this.drivePath,
   });
 
+  List<String> get _localPathParts => id.split(RegExp(r'[/\\]'));
+
   String get displayName {
     if (isDrive) return driveName ?? 'Drive Folder';
-    final seg = id.split('/').last.split('\\').last;
+    final seg = _localPathParts.last;
     if (isFolder) return seg;
     return seg.endsWith('.stitchx') ? seg.substring(0, seg.length - 8) : seg;
   }
@@ -39,7 +41,7 @@ class RecentItem {
       if (drivePath != null) return '$drivePath  ·  $account';
       return 'Google Drive · $account';
     }
-    final parts = id.split('/');
+    final parts = _localPathParts;
     if (parts.length >= 2) {
       return parts.sublist(0, parts.length - 1).join('/');
     }
