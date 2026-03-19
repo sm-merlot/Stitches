@@ -54,7 +54,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     } else if (folder is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final fileName = '$safeName.stitchx';
-      ref.read(fileLoadingProvider.notifier).state = true;
+      ref.read(fileLoadingProvider.notifier).set(true);
       try {
         // Write to temp dir and open immediately — no waiting for Drive.
         final tempDir = await getTemporaryDirectory();
@@ -87,7 +87,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not create file: $e');
       } finally {
-        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
     }
   }
@@ -140,8 +140,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     if (file is LocalPdfFile) {
       // Clear any open pattern and open the PDF directly from disk.
       ref.read(editorProvider.notifier).closeFile();
-      ref.read(pdfViewerProvider.notifier).state =
-          OpenPdf(localPath: file.path);
+      ref.read(pdfViewerProvider.notifier).set(OpenPdf(localPath: file.path));
       return;
     }
 
@@ -155,10 +154,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         ref.read(editorProvider.notifier).closeFile();
 
         if (await cached.exists()) {
-          ref.read(pdfViewerProvider.notifier).state =
-              OpenPdf(localPath: tempPath, driveFileId: file.fileId, displayName: file.displayName);
+          ref.read(pdfViewerProvider.notifier).set(
+              OpenPdf(localPath: tempPath, driveFileId: file.fileId, displayName: file.displayName));
         } else {
-          ref.read(fileLoadingProvider.notifier).state = true;
+          ref.read(fileLoadingProvider.notifier).set(true);
           try {
             final service =
                 await ref.read(googleDriveProvider.notifier).getService();
@@ -171,10 +170,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             if (!context.mounted) return;
             await cached.writeAsBytes(bytes);
             if (!context.mounted) return;
-            ref.read(pdfViewerProvider.notifier).state =
-                OpenPdf(localPath: tempPath, driveFileId: file.fileId, displayName: file.displayName);
+            ref.read(pdfViewerProvider.notifier).set(
+                OpenPdf(localPath: tempPath, driveFileId: file.fileId, displayName: file.displayName));
           } finally {
-            if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+            if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
           }
         }
       } catch (e) {
@@ -188,7 +187,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final (pattern, path) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
         // Clear any open PDF when switching to a pattern.
-        ref.read(pdfViewerProvider.notifier).state = null;
+        ref.read(pdfViewerProvider.notifier).set(null);
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not open file: $e');
@@ -207,7 +206,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           final (pattern, path) = await FileService.openFileFromPath(tempPath);
           if (!context.mounted) return;
           // Clear any open PDF when switching to a pattern.
-          ref.read(pdfViewerProvider.notifier).state = null;
+          ref.read(pdfViewerProvider.notifier).set(null);
           ref.read(editorProvider.notifier).loadPattern(
             pattern,
             filePath: path,
@@ -217,7 +216,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           unawaited(_refreshFromDrive(file, tempPath));
         } else {
           // No cache — download first, showing a blocking overlay.
-          ref.read(fileLoadingProvider.notifier).state = true;
+          ref.read(fileLoadingProvider.notifier).set(true);
           try {
             final driveNotifier = ref.read(googleDriveProvider.notifier);
             final service = await driveNotifier.getService();
@@ -233,7 +232,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             final (pattern, path) = await FileService.openFileFromPath(tempPath);
             if (!context.mounted) return;
             // Clear any open PDF when switching to a pattern.
-            ref.read(pdfViewerProvider.notifier).state = null;
+            ref.read(pdfViewerProvider.notifier).set(null);
             ref.read(editorProvider.notifier).loadPattern(
               pattern,
               filePath: path,
@@ -241,7 +240,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
               driveParentFolderId: file.parentFolder.folderId,
             );
           } finally {
-            if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+            if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
           }
         }
       } catch (e) {
@@ -390,7 +389,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       try {
         await File(file.path).delete();
         if (ref.read(pdfViewerProvider)?.localPath == file.path) {
-          ref.read(pdfViewerProvider.notifier).state = null;
+          ref.read(pdfViewerProvider.notifier).set(null);
         }
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
@@ -401,7 +400,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     }
 
     if (file is DrivePdfFile) {
-      ref.read(fileLoadingProvider.notifier).state = true;
+      ref.read(fileLoadingProvider.notifier).set(true);
       try {
         final service = await ref.read(googleDriveProvider.notifier).getService();
         if (!context.mounted) return;
@@ -411,14 +410,14 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         }
         await service.deleteFile(file.fileId);
         if (ref.read(pdfViewerProvider)?.driveFileId == file.fileId) {
-          ref.read(pdfViewerProvider.notifier).state = null;
+          ref.read(pdfViewerProvider.notifier).set(null);
         }
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not delete PDF: $e');
       } finally {
-        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
       return;
     }
@@ -436,7 +435,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (context.mounted) _showError(context, 'Could not delete: $e');
       }
     } else if (file is DrivePatternFile) {
-      ref.read(fileLoadingProvider.notifier).state = true;
+      ref.read(fileLoadingProvider.notifier).set(true);
       try {
         final driveNotifier = ref.read(googleDriveProvider.notifier);
         final service = await driveNotifier.getService();
@@ -455,7 +454,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not delete Drive file: $e');
       } finally {
-        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
     }
   }

@@ -18,16 +18,19 @@ class AppSettings {
   }
 }
 
-class SettingsNotifier extends StateNotifier<AppSettings> {
+class SettingsNotifier extends Notifier<AppSettings> {
   static const _keyUseDmc = 'use_dmc';
   static const _keyKeepScreenOn = 'keep_screen_on';
 
-  SettingsNotifier() : super(const AppSettings()) {
+  @override
+  AppSettings build() {
     _load();
+    return const AppSettings();
   }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!ref.mounted) return;
     state = AppSettings(
       useDmc: prefs.getBool(_keyUseDmc) ?? true,
       keepScreenOn: prefs.getBool(_keyKeepScreenOn) ?? false,
@@ -48,6 +51,4 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 }
 
 final settingsProvider =
-    StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
-  return SettingsNotifier();
-});
+    NotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);

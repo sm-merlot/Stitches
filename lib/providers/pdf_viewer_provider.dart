@@ -22,4 +22,11 @@ class OpenPdf {
 /// The currently open PDF, or null when no PDF is being viewed.
 /// Setting this to a non-null value switches the workspace to PDF view.
 /// Setting it to null (or opening a pattern) returns to the editor.
-final pdfViewerProvider = StateProvider<OpenPdf?>((ref) => null);
+class PdfViewerNotifier extends Notifier<OpenPdf?> {
+  @override
+  OpenPdf? build() => null;
+  void set(OpenPdf? value) => state = value;
+}
+
+final pdfViewerProvider =
+    NotifierProvider<PdfViewerNotifier, OpenPdf?>(PdfViewerNotifier.new);

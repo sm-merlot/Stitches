@@ -61,11 +61,12 @@ class WorkspaceState {
 // Notifier
 // ---------------------------------------------------------------------------
 
-class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
+class WorkspaceNotifier extends Notifier<WorkspaceState> {
   static const _keyPinnedLocations = 'pinned_locations';
   static const _keyLastWorkspace = 'last_workspace';
 
-  WorkspaceNotifier() : super(const WorkspaceState());
+  @override
+  WorkspaceState build() => const WorkspaceState();
 
   // -------------------------------------------------------------------------
   // Workspace
@@ -217,6 +218,4 @@ class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
 // ---------------------------------------------------------------------------
 
 final workspaceProvider =
-    StateNotifierProvider<WorkspaceNotifier, WorkspaceState>((ref) {
-  return WorkspaceNotifier();
-});
+    NotifierProvider<WorkspaceNotifier, WorkspaceState>(WorkspaceNotifier.new);
