@@ -218,80 +218,118 @@ PlannedAida planStitchingV3({
     return (id != null && activeSqIdsSet.contains(id)) ? id : null;
   }
 
-  var currentSqId = cellToId[startCoord]!;
+  // mncSet: shared dedup guard — prevents the same cell being added to MNC twice.
+  final mncSet = <int>{};
 
-  bool moved = true;
-  while (moved) {
-    moved = false;
-    final sq = squares[currentSqId];
-    final s = scheduled[currentSqId]!;
-
-    // R1: Empty cell → schedule S1; move below if empty, else left if empty,
-    //     else right if empty.
-    if (scheduled[currentSqId] == 0) {
-      schedule.add((cellId: currentSqId, kind: 'S1'));
-      scheduled[currentSqId] = 1;
-
+  // Runs one complete sweep from [startId].
+  // goUp=false → down/left/right (Phase 1).
+  // goUp=true  → up/left/right (MNC sub-sweep).
+  // Results go into caller-supplied [ops] and [mncs] lists.
+  // [ops]  — the (cellId, kind) ops produced by this sweep.
+  // [mncs] — MNC detections: (afterIdx, cellId, goUp).
+  //           afterIdx is the position in [ops] after which the sub-sweep
+  //           for cellId should be spliced into the final schedule.
+  void runOneSweep(
+    int startId,
+    bool goUp,
+    List<({int cellId, String kind})> ops,
+    List<({int afterIdx, int cellId, bool goUp})> mncs,
+  ) {
+    var cur = startId;
+    bool moved = true;
+    while (moved) {
+      moved = false;
+      final sq = squares[cur];
+      final aboveId = activeSqAt(sq.x, sq.y - 1);
       final belowId = activeSqAt(sq.x, sq.y + 1);
       final leftId = activeSqAt(sq.x - 1, sq.y);
       final rightId = activeSqAt(sq.x + 1, sq.y);
-      if (belowId != null && scheduled[belowId] == 0) {
-        currentSqId = belowId;
-        moved = true;
-      } else if (leftId != null && scheduled[leftId] == 0) {
-        currentSqId = leftId;
-        moved = true;
-      } else if (rightId != null && scheduled[rightId] == 0) {
-        currentSqId = rightId;
-        moved = true;
+      final primaryId = goUp ? aboveId : belowId;
+      final secondaryId = goUp ? belowId : aboveId;
+
+      // R1: Empty cell → schedule S1; move primary/left/right.
+      if (scheduled[cur] == 0) {
+        ops.add((cellId: cur, kind: 'S1'));
+        scheduled[cur] = 1;
+        if (primaryId != null && scheduled[primaryId] == 0) {
+          cur = primaryId; moved = true;
+        } else if (leftId != null && scheduled[leftId] == 0) {
+          cur = leftId; moved = true;
+        } else if (rightId != null && scheduled[rightId] == 0) {
+          cur = rightId; moved = true;
+        }
       }
-    }
 
-    // R2: S1-only cell (and didn't just move via R1).
-    //   First check if any adjacent cell (below/left/right) is still empty —
-    //   if so, move there immediately (S2 waits until we return).
-    //   Otherwise schedule S2, then move to an S1 neighbour or up.
-    if (!moved && scheduled[currentSqId] == 1) {
-      final belowId = activeSqAt(sq.x, sq.y + 1);
-      final leftId = activeSqAt(sq.x - 1, sq.y);
-      final rightId = activeSqAt(sq.x + 1, sq.y);
+      // R2: S1-only cell — check empties, then schedule S2 and record MNC.
+      if (!moved && scheduled[cur] == 1) {
+        if (primaryId != null && scheduled[primaryId] == 0) {
+          cur = primaryId; moved = true;
+        } else if (leftId != null && scheduled[leftId] == 0) {
+          cur = leftId; moved = true;
+        } else if (rightId != null && scheduled[rightId] == 0) {
+          cur = rightId; moved = true;
+        } else {
+          ops.add((cellId: cur, kind: 'S2'));
+          scheduled[cur] = 2;
 
-      if (belowId != null && scheduled[belowId] == 0) {
-        currentSqId = belowId;
-        moved = true;
-      } else if (leftId != null && scheduled[leftId] == 0) {
-        currentSqId = leftId;
-        moved = true;
-      } else if (rightId != null && scheduled[rightId] == 0) {
-        currentSqId = rightId;
-        moved = true;
-      } else {
-        // No empty neighbours — schedule S2 and move to an S1 neighbour or up.
-        schedule.add((cellId: currentSqId, kind: 'S2'));
-        scheduled[currentSqId] = 2;
+          // MNC: opposite-primary neighbour is empty → it may be unreachable by
+          // this sweep direction.  Record it so its sub-sweep can be spliced in
+          // immediately after this S2 in the final schedule.
+          if (secondaryId != null &&
+              scheduled[secondaryId] == 0 &&
+              !mncSet.contains(secondaryId)) {
+            mncSet.add(secondaryId);
+            mncs.add((afterIdx: ops.length - 1, cellId: secondaryId, goUp: !goUp));
+          }
 
-        final aboveId = activeSqAt(sq.x, sq.y - 1);
-        bool isDoneOrAbsent(int? id) => id == null || scheduled[id] == 2;
-
-        if (belowId != null && scheduled[belowId] == 1) {
-          currentSqId = belowId;
-          moved = true;
-        } else if (leftId != null && scheduled[leftId] == 1) {
-          currentSqId = leftId;
-          moved = true;
-        } else if (rightId != null && scheduled[rightId] == 1) {
-          currentSqId = rightId;
-          moved = true;
-        } else if (isDoneOrAbsent(belowId) &&
-            isDoneOrAbsent(leftId) &&
-            isDoneOrAbsent(rightId) &&
-            aboveId != null) {
-          currentSqId = aboveId;
-          moved = true;
+          bool isDone(int? id) => id == null || scheduled[id] == 2;
+          if (primaryId != null && scheduled[primaryId] == 1) {
+            cur = primaryId; moved = true;
+          } else if (leftId != null && scheduled[leftId] == 1) {
+            cur = leftId; moved = true;
+          } else if (rightId != null && scheduled[rightId] == 1) {
+            cur = rightId; moved = true;
+          } else if (isDone(primaryId) &&
+              isDone(leftId) &&
+              isDone(rightId) &&
+              secondaryId != null) {
+            cur = secondaryId; moved = true;
+          }
         }
       }
     }
   }
+
+  // Expand a sweep result by splicing each MNC's sub-sweep into [ops] at its
+  // recorded insertion point.  Sub-sweeps are themselves expanded recursively,
+  // so MNCs discovered inside sub-sweeps are also inserted at the right place.
+  // The shared [scheduled] map means cells already covered by an earlier sweep
+  // are skipped (scheduled != 0).
+  List<({int cellId, String kind})> expandSweep(
+    List<({int cellId, String kind})> ops,
+    List<({int afterIdx, int cellId, bool goUp})> mncs,
+  ) {
+    if (mncs.isEmpty) return ops;
+    final result = <({int cellId, String kind})>[];
+    int prev = 0;
+    for (final mnc in mncs) {
+      if (scheduled[mnc.cellId] != 0) continue; // already covered
+      result.addAll(ops.getRange(prev, mnc.afterIdx));
+      prev = mnc.afterIdx;
+      final subOps = <({int cellId, String kind})>[];
+      final subMncs = <({int afterIdx, int cellId, bool goUp})>[];
+      runOneSweep(mnc.cellId, mnc.goUp, subOps, subMncs);
+      result.addAll(expandSweep(subOps, subMncs));
+    }
+    result.addAll(ops.getRange(prev, ops.length));
+    return result;
+  }
+
+  // ---- Phase 1: downward sweep, with MNC sub-sweeps spliced inline ----
+  final p1Ops = <({int cellId, String kind})>[];
+  final p1Mncs = <({int afterIdx, int cellId, bool goUp})>[];
+  runOneSweep(cellToId[startCoord]!, false, p1Ops, p1Mncs);
+  schedule.addAll(expandSweep(p1Ops, p1Mncs));
 
   // ---- Pass 2: routing ----
   // For each scheduled op, choose fwd/rev to minimise back-stitch cost,
