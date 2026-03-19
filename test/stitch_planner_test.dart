@@ -168,12 +168,26 @@ void _expectV2Sequence(
 
 // ── V3-specific inline tests ───────────────────────────────────────────────
 
-void _expectV3Sequence(
+String _diffReason(String label, List<String> actual, List<String> expected) {
+  final maxLen =
+      actual.length > expected.length ? actual.length : expected.length;
+  final lines = <String>[];
+  for (var i = 0; i < maxLen; i++) {
+    final a = i < actual.length ? actual[i] : '<missing>';
+    final e = i < expected.length ? expected[i] : '<missing>';
+    lines.add('${a == e ? '   ' : '***'} [$i] expected: $e');
+    if (a != e) lines.add('         got:      $a');
+  }
+  return '$label:\n${lines.join('\n')}';
+}
+
+void _expectV3(
   String label,
   List<(int, int)> cells,
   int cols,
   int rows,
-  List<String> expected, {
+  List<String> expectedSchedule,
+  List<String> expectedStitches, {
   (int, int)? startCell,
 }) {
   final aida = planStitchingV3(
@@ -184,23 +198,18 @@ void _expectV3Sequence(
     startCell: startCell,
   );
 
-  final actual =
-      aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList();
-
-  final maxLen = actual.length > expected.length ? actual.length : expected.length;
-  final diffLines = <String>[];
-  for (var i = 0; i < maxLen; i++) {
-    final a = i < actual.length ? actual[i] : '<missing>';
-    final e = i < expected.length ? expected[i] : '<missing>';
-    final mark = a == e ? '   ' : '***';
-    diffLines.add('$mark [$i] expected: $e');
-    if (a != e) diffLines.add('         got:      $a');
-  }
-
   expect(
-    actual,
-    expected,
-    reason: '$label:\n${diffLines.join('\n')}',
+    aida.schedule,
+    expectedSchedule,
+    reason: _diffReason('$label — Pass 1', aida.schedule, expectedSchedule),
+  );
+
+  final actualStitches =
+      aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList();
+  expect(
+    actualStitches,
+    expectedStitches,
+    reason: _diffReason('$label — Pass 2', actualStitches, expectedStitches),
   );
 }
 
@@ -307,63 +316,54 @@ void main() {
       // XXX     Start: (2,2) — bottom-right corner.
       // XXX
       // XXX
-      //
-      // Pass 1 schedule: (2,2) → left → (1,2) → left → (0,2). Stop (no left).
-      // Pass 2 routing:
-      //   (2,2) S1 fwd:  needle at BR(2,2).
-      //   (1,2) S1: fwd=TL(1,2) is diagonal from BR(2,2); rev=BR(1,2) is horizontal → rev.
-      //             Back H via cell (2,2): BR→BL. Then S1 rev: BR→TL.
-      //   (0,2) S1: fwd=TL(0,2) horizontal from TL(1,2); rev=BR(0,2) vertical → tie → fwd.
-      //             Back H via cell (0,1): BR→BL. Then S1 fwd: TL→BR.
-      _expectV3Sequence(
+      _expectV3(
         '3x3 bottom-right start',
+        [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
+        3, 3,
+        // Pass 1: sweep left along bottom, S2 right, move up, repeat
         [
-          (0, 0), (1, 0), (2, 0),
-          (0, 1), (1, 1), (2, 1),
-          (0, 2), (1, 2), (2, 2),
+          'S1(2,2)', 'S1(1,2)', 'S1(0,2)',
+          'S2(0,2)', 'S2(1,2)', 'S2(2,2)',
+          'S1(2,1)', 'S1(1,1)', 'S1(0,1)',
+          'S2(0,1)', 'S2(1,1)', 'S2(2,1)',
+          'S1(2,0)', 'S1(1,0)', 'S1(0,0)',
+          'S2(0,0)', 'S2(1,0)', 'S2(2,0)',
         ],
-        3,
-        3,
+        // Pass 2: directed stitch sequence
         [
-          // S1 pass (right col → bottom row sweep left)
-          'S(2,2,BR) B(2,2,TL)', // S1b (2,2): next is left; needle at TL(2,2)=TR(1,2)
-          'B(1,2,TR) S(1,2,BR)', // back V → BR(1,2); tiebreak rev
-          'S(1,2,BR) B(1,2,TL)', // S1b (1,2); needle at TL(1,2)
-          'B(0,1,BR) S(0,1,BL)', // back H → TL(0,2)
-          'S(0,2,TL) B(0,2,BR)', // S1a (0,2); needle at BR(0,2)
-          // S2 pass (sweep right)
-          'B(0,2,BR) S(0,2,BL)', // back H → BL(0,2); tiebreak rev
-          'S(0,2,BL) B(0,2,TR)', // S2b (0,2); needle at TR(0,2)
-          'B(0,2,TR) S(0,2,BR)', // back V → BR(0,2)=BL(1,2); tiebreak rev (via cell (0,2))
-          'S(1,2,BL) B(1,2,TR)', // S2b (1,2); needle at TR(1,2)
-          'B(1,2,TR) S(1,2,BR)', // back V → BR(1,2)=BL(2,2); tiebreak rev (via cell (1,2))
-          'S(2,2,BL) B(2,2,TR)', // S2b (2,2): next is (2,1) up → H dep preferred; needle at TR(2,2)
-          // S1 pass mid-row (move up then sweep left)
-          'S(2,1,BR) B(2,1,TL)', // S1b (2,1): needle==revStart, no back
-          'B(1,1,TR) S(1,1,BR)', // back V; tiebreak rev
-          'S(1,1,BR) B(1,1,TL)', // S1b (1,1); needle at TL(1,1)
-          'B(0,0,BR) S(0,0,BL)', // back H → TL(0,1) (via cell (0,0))
-          'S(0,1,TL) B(0,1,BR)', // S1a (0,1); needle at BR(0,1)
-          // S2 pass mid-row (sweep right)
-          'B(0,1,BR) S(0,1,BL)', // back H; tiebreak rev
-          'S(0,1,BL) B(0,1,TR)', // S2b (0,1); needle at TR(0,1)
-          'B(0,1,TR) S(0,1,BR)', // back V; tiebreak rev (via cell (0,1))
-          'S(1,1,BL) B(1,1,TR)', // S2b (1,1); needle at TR(1,1)
-          'B(1,1,TR) S(1,1,BR)', // back V; tiebreak rev (via cell (1,1))
-          'S(2,1,BL) B(2,1,TR)', // S2b (2,1): next is (2,0) up → H dep preferred
-          // S1 pass top row (move up then sweep left)
-          'S(2,0,BR) B(2,0,TL)', // S1b (2,0): needle==revStart, no back
-          'B(1,0,TR) S(1,0,BR)', // back V; tiebreak rev
-          'S(1,0,BR) B(1,0,TL)', // S1b (1,0); needle at TL(1,0)
-          'B(0,0,TR) S(0,0,TL)', // back H → TL(0,0)
-          'S(0,0,TL) B(0,0,BR)', // S1a (0,0): no next S1; default fwd
-          // S2 pass top row (sweep right)
-          'B(0,0,BR) S(0,0,BL)', // back H; tiebreak rev
-          'S(0,0,BL) B(0,0,TR)', // S2b (0,0); needle at TR(0,0)
-          'B(0,0,TR) S(0,0,BR)', // back V; tiebreak rev (via cell (0,0))
-          'S(1,0,BL) B(1,0,TR)', // S2b (1,0); needle at TR(1,0)
-          'B(1,0,TR) S(1,0,BR)', // back V → BL(2,0); last-op perp approach → rev
-          'S(2,0,BL) B(2,0,TR)', // S2b (2,0) rev
+          'S(2,2,BR) B(2,2,TL)',
+          'B(1,2,TR) S(1,2,BR)',
+          'S(1,2,BR) B(1,2,TL)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,2,TL) B(0,2,BR)',
+          'B(0,2,BR) S(0,2,BL)',
+          'S(0,2,BL) B(0,2,TR)',
+          'B(0,2,TR) S(0,2,BR)',
+          'S(1,2,BL) B(1,2,TR)',
+          'B(1,2,TR) S(1,2,BR)',
+          'S(2,2,BL) B(2,2,TR)',
+          'S(2,1,BR) B(2,1,TL)',
+          'B(1,1,TR) S(1,1,BR)',
+          'S(1,1,BR) B(1,1,TL)',
+          'B(0,0,BR) S(0,0,BL)',
+          'S(0,1,TL) B(0,1,BR)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,1,BL) B(0,1,TR)',
+          'B(0,1,TR) S(0,1,BR)',
+          'S(1,1,BL) B(1,1,TR)',
+          'B(1,1,TR) S(1,1,BR)',
+          'S(2,1,BL) B(2,1,TR)',
+          'S(2,0,BR) B(2,0,TL)',
+          'B(1,0,TR) S(1,0,BR)',
+          'S(1,0,BR) B(1,0,TL)',
+          'B(0,0,TR) S(0,0,TL)',
+          'S(0,0,TL) B(0,0,BR)',
+          'B(0,0,BR) S(0,0,BL)',
+          'S(0,0,BL) B(0,0,TR)',
+          'B(0,0,TR) S(0,0,BR)',
+          'S(1,0,BL) B(1,0,TR)',
+          'B(1,0,TR) S(1,0,BR)',
+          'S(2,0,BL) B(2,0,TR)',
         ],
         startCell: (2, 2),
       );
@@ -373,65 +373,55 @@ void main() {
       // XXX     Start: (2,1) — middle of right column.
       // XXX
       // XXX
-      //
-      // Pass 1 schedule: (2,1) → below → (2,2) → left → (1,2) → left → (0,2).
-      //
-      // Tiebreaker fires at (2,2): approach H=V=1. Next is (1,2) (H move left).
-      //   revEnd=TL(2,2) can reach BR(1,2) vertically (dx=0) → rev wins.
-      // Tiebreaker fires at (1,2): same pattern → rev wins.
-      // (0,2) is last op → default fwd.
-      _expectV3Sequence(
+      _expectV3(
         '3x3 mid-right start',
+        [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
+        3, 3,
+        // Pass 1: down right col, sweep bottom row left, S2 right, move up, repeat
         [
-          (0, 0), (1, 0), (2, 0),
-          (0, 1), (1, 1), (2, 1),
-          (0, 2), (1, 2), (2, 2),
+          'S1(2,1)', 'S1(2,2)', 'S1(1,2)', 'S1(0,2)',
+          'S2(0,2)', 'S2(1,2)', 'S2(2,2)',
+          'S1(1,1)', 'S1(0,1)',
+          'S2(0,1)', 'S2(1,1)', 'S2(2,1)',
+          'S1(2,0)', 'S1(1,0)', 'S1(0,0)',
+          'S2(0,0)', 'S2(1,0)', 'S2(2,0)',
         ],
-        3,
-        3,
+        // Pass 2
         [
-          // S1 pass: down right col then sweep bottom row left
-          'S(2,1,TL) B(2,1,BR)', // S1a (2,1): next below
-          'B(2,2,TR) S(2,2,BR)', // back V; tiebreak rev
-          'S(2,2,BR) B(2,2,TL)', // S1b (2,2)
-          'B(1,2,TR) S(1,2,BR)', // back V; tiebreak rev
-          'S(1,2,BR) B(1,2,TL)', // S1b (1,2)
-          'B(0,1,BR) S(0,1,BL)', // back H → TL(0,2)
-          'S(0,2,TL) B(0,2,BR)', // S1a (0,2)
-          // S2 bottom row: sweep right (0,2)→(1,2)
-          'B(0,2,BR) S(0,2,BL)', // back H; tiebreak rev
-          'S(0,2,BL) B(0,2,TR)', // S2b (0,2)
-          'B(0,2,TR) S(0,2,BR)', // back V (via cell (0,2)); tiebreak rev
-          'S(1,2,BL) B(1,2,TR)', // S2b (1,2); needle at TR(1,2)
-          // (2,1) has s=1 and (2,2) s=0 adj? No — check: (2,1) s=1, left=(1,1) s=0 → move left
-          // but first: S2(2,2) needs to happen; (1,2) moves right to (2,2) s=1, (2,2) left=(1,2) s=2 right=null, down=null → S2(2,2)
-          'B(2,1,BL) S(2,1,BR)', // back to revStart=BR(2,2) (via cell (2,1) BL); tiebreak rev (next up → H dep)
-          'S(2,2,TR) B(2,2,BL)', // S2b (2,2): next (2,1) has left (1,1) empty → move left first
-          // Move up to (2,1) s=1; left=(1,1) s=0 → move left, then S1 mid row
-          'B(1,2,BR) S(1,2,TR)', // back to TL(1,1) via (1,2)
-          'S(1,1,BR) B(1,1,TL)', // S1b (1,1): needle==revStart
-          'B(0,0,BR) S(0,0,BL)', // back H → TL(0,1)
-          'S(0,1,TL) B(0,1,BR)', // S1a (0,1)
-          // S2 mid row: sweep right
-          'B(0,1,BR) S(0,1,BL)', // back H; tiebreak rev
-          'S(0,1,BL) B(0,1,TR)', // S2b (0,1)
-          'B(0,1,TR) S(0,1,BR)', // back V (via cell (0,1)); tiebreak rev
-          'S(1,1,BL) B(1,1,TR)', // S2b (1,1)
-          'B(1,1,TR) S(1,1,BR)', // back V (via cell (1,1)); tiebreak rev
-          'S(2,1,BL) B(2,1,TR)', // S2b (2,1): next (2,0) up → H dep
-          // Move up to (2,0) s=0 → R1 fires; sweep top row left
-          'S(2,0,BR) B(2,0,TL)', // S1b (2,0): needle==revStart; next left
-          'B(1,0,TR) S(1,0,BR)', // back V; tiebreak rev
-          'S(1,0,BR) B(1,0,TL)', // S1b (1,0)
-          'B(0,0,TR) S(0,0,TL)', // back H → TL(0,0)
-          'S(0,0,TL) B(0,0,BR)', // S1a (0,0): no next S1
-          // S2 top row: sweep right
-          'B(0,0,BR) S(0,0,BL)', // back H; tiebreak rev
-          'S(0,0,BL) B(0,0,TR)', // S2b (0,0)
-          'B(0,0,TR) S(0,0,BR)', // back V (via cell (0,0)); tiebreak rev
-          'S(1,0,BL) B(1,0,TR)', // S2b (1,0)
-          'B(1,0,TR) S(1,0,BR)', // back V → BL(2,0); last-op perp approach → rev
-          'S(2,0,BL) B(2,0,TR)', // S2b (2,0) rev
+          'S(2,1,TL) B(2,1,BR)',
+          'B(2,2,TR) S(2,2,BR)',
+          'S(2,2,BR) B(2,2,TL)',
+          'B(1,2,TR) S(1,2,BR)',
+          'S(1,2,BR) B(1,2,TL)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,2,TL) B(0,2,BR)',
+          'B(0,2,BR) S(0,2,BL)',
+          'S(0,2,BL) B(0,2,TR)',
+          'B(0,2,TR) S(0,2,BR)',
+          'S(1,2,BL) B(1,2,TR)',
+          'B(2,1,BL) S(2,1,BR)',
+          'S(2,2,TR) B(2,2,BL)',
+          'B(1,2,BR) S(1,2,TR)',
+          'S(1,1,BR) B(1,1,TL)',
+          'B(0,0,BR) S(0,0,BL)',
+          'S(0,1,TL) B(0,1,BR)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,1,BL) B(0,1,TR)',
+          'B(0,1,TR) S(0,1,BR)',
+          'S(1,1,BL) B(1,1,TR)',
+          'B(1,1,TR) S(1,1,BR)',
+          'S(2,1,BL) B(2,1,TR)',
+          'S(2,0,BR) B(2,0,TL)',
+          'B(1,0,TR) S(1,0,BR)',
+          'S(1,0,BR) B(1,0,TL)',
+          'B(0,0,TR) S(0,0,TL)',
+          'S(0,0,TL) B(0,0,BR)',
+          'B(0,0,BR) S(0,0,BL)',
+          'S(0,0,BL) B(0,0,TR)',
+          'B(0,0,TR) S(0,0,BR)',
+          'S(1,0,BL) B(1,0,TR)',
+          'B(1,0,TR) S(1,0,BR)',
+          'S(2,0,BL) B(2,0,TR)',
         ],
         startCell: (2, 1),
       );
@@ -441,128 +431,114 @@ void main() {
       // XXX     Start: (2,0) — top of right column.
       // XXX
       // XXX
-      //
-      // Pass 1 schedule: (2,0)→(2,1)→(2,2)→(1,2)→(0,2).
-      //
-      // (2,1): tie, next=(2,2) is V move down → H departure preferred → fwd wins.
-      // (2,2): tie, next=(1,2) is H move left → V departure preferred → rev wins.
-      // (1,2): tie, next=(0,2) is H move left → V departure preferred → rev wins.
-      // (0,2): last op → default fwd.
-      _expectV3Sequence(
+      _expectV3(
         '3x3 top-right start',
+        [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
+        3, 3,
+        // Pass 1: down right col, sweep bottom row left, S2 right, move up, repeat
         [
-          (0, 0), (1, 0), (2, 0),
-          (0, 1), (1, 1), (2, 1),
-          (0, 2), (1, 2), (2, 2),
+          'S1(2,0)', 'S1(2,1)', 'S1(2,2)', 'S1(1,2)', 'S1(0,2)',
+          'S2(0,2)', 'S2(1,2)', 'S2(2,2)',
+          'S1(1,1)', 'S1(0,1)',
+          'S2(0,1)', 'S2(1,1)', 'S2(2,1)',
+          'S1(1,0)', 'S1(0,0)',
+          'S2(0,0)', 'S2(1,0)', 'S2(2,0)',
         ],
-        3,
-        3,
+        // Pass 2
         [
-          // S1 pass: down right col then sweep bottom row left
-          'S(2,0,TL) B(2,0,BR)', // S1a (2,0): next below
-          'B(2,0,BR) S(2,0,BL)', // back H → TL(2,1); next V → fwd
-          'S(2,1,TL) B(2,1,BR)', // S1a (2,1)
-          'B(2,2,TR) S(2,2,BR)', // back V; tiebreak rev
-          'S(2,2,BR) B(2,2,TL)', // S1b (2,2)
-          'B(1,2,TR) S(1,2,BR)', // back V; tiebreak rev
-          'S(1,2,BR) B(1,2,TL)', // S1b (1,2)
-          'B(0,1,BR) S(0,1,BL)', // back H → TL(0,2)
-          'S(0,2,TL) B(0,2,BR)', // S1a (0,2)
-          // S2 bottom row: sweep right (0,2)→(1,2)
-          'B(0,2,BR) S(0,2,BL)', // back H; tiebreak rev
-          'S(0,2,BL) B(0,2,TR)', // S2b (0,2)
-          'B(0,2,TR) S(0,2,BR)', // back V (via cell (0,2)); tiebreak rev
-          'S(1,2,BL) B(1,2,TR)', // S2b (1,2); needle at TR(1,2)
-          // Move right to (2,2) s=1; (2,1) has s=1, left=(1,1) s=0 → checks adj before S2
-          'B(2,1,BL) S(2,1,BR)', // back to revStart=BR(2,2) via (2,1); tiebreak rev
-          'S(2,2,TR) B(2,2,BL)', // S2b (2,2)
-          // Move up to (2,1) s=1; left=(1,1) s=0 → move left first
-          'B(1,2,BR) S(1,2,TR)', // back to TL(1,1) via (1,2)
-          'S(1,1,BR) B(1,1,TL)', // S1b (1,1): needle==revStart
-          'B(0,0,BR) S(0,0,BL)', // back H → TL(0,1)
-          'S(0,1,TL) B(0,1,BR)', // S1a (0,1)
-          // S2 mid row: sweep right
-          'B(0,1,BR) S(0,1,BL)', // back H; tiebreak rev
-          'S(0,1,BL) B(0,1,TR)', // S2b (0,1)
-          'B(0,1,TR) S(0,1,BR)', // back V (via cell (0,1)); tiebreak rev
-          'S(1,1,BL) B(1,1,TR)', // S2b (1,1)
-          // Move right to (2,1) s=1; (2,0) has s=1 and left=(1,0) s=0 → move left first
-          'B(2,0,BL) S(2,0,BR)', // back to revStart=BR(2,1) via (2,0); tiebreak rev
-          'S(2,1,TR) B(2,1,BL)', // S2b (2,1)
-          // Move up to (2,0) s=1; left=(1,0) s=0 → move left first
-          'B(1,1,BR) S(1,1,TR)', // back to TL(1,0) via (1,1)
-          'S(1,0,BR) B(1,0,TL)', // S1b (1,0): needle==revStart
-          'B(0,0,TR) S(0,0,TL)', // back H → TL(0,0)
-          'S(0,0,TL) B(0,0,BR)', // S1a (0,0): no next S1
-          // S2 top row: sweep right
-          'B(0,0,BR) S(0,0,BL)', // back H; tiebreak rev
-          'S(0,0,BL) B(0,0,TR)', // S2b (0,0)
-          'B(0,0,TR) S(0,0,BR)', // back V (via cell (0,0)); tiebreak rev
-          'S(1,0,BL) B(1,0,TR)', // S2b (1,0)
-          'B(1,0,TR) S(1,0,BR)', // back V → BL(2,0); last-op perp approach → rev
-          'S(2,0,BL) B(2,0,TR)', // S2b (2,0) rev
+          'S(2,0,TL) B(2,0,BR)',
+          'B(2,0,BR) S(2,0,BL)',
+          'S(2,1,TL) B(2,1,BR)',
+          'B(2,2,TR) S(2,2,BR)',
+          'S(2,2,BR) B(2,2,TL)',
+          'B(1,2,TR) S(1,2,BR)',
+          'S(1,2,BR) B(1,2,TL)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,2,TL) B(0,2,BR)',
+          'B(0,2,BR) S(0,2,BL)',
+          'S(0,2,BL) B(0,2,TR)',
+          'B(0,2,TR) S(0,2,BR)',
+          'S(1,2,BL) B(1,2,TR)',
+          'B(2,1,BL) S(2,1,BR)',
+          'S(2,2,TR) B(2,2,BL)',
+          'B(1,2,BR) S(1,2,TR)',
+          'S(1,1,BR) B(1,1,TL)',
+          'B(0,0,BR) S(0,0,BL)',
+          'S(0,1,TL) B(0,1,BR)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,1,BL) B(0,1,TR)',
+          'B(0,1,TR) S(0,1,BR)',
+          'S(1,1,BL) B(1,1,TR)',
+          'B(2,0,BL) S(2,0,BR)',
+          'S(2,1,TR) B(2,1,BL)',
+          'B(1,1,BR) S(1,1,TR)',
+          'S(1,0,BR) B(1,0,TL)',
+          'B(0,0,TR) S(0,0,TL)',
+          'S(0,0,TL) B(0,0,BR)',
+          'B(0,0,BR) S(0,0,BL)',
+          'S(0,0,BL) B(0,0,TR)',
+          'B(0,0,TR) S(0,0,BR)',
+          'S(1,0,BL) B(1,0,TR)',
+          'B(1,0,TR) S(1,0,BR)',
+          'S(2,0,BL) B(2,0,TR)',
         ],
         startCell: (2, 0),
       );
     });
     test('3x3 full grid, start top-left (0,0)', () {
       // XXX     Start: (0,0) — top-left corner.
-      // XXX     Pass 1: down left col → right along bottom → S2 right → up →
-      // XXX             drain empties right → S2 right → up → drain right → S2.
-      //
-      // Key: S2(0,2)→S1(1,1) movement is diagonal; fix ensures rev is chosen
-      //      for S2(0,2) so the back to (1,1) is straight (vertical), not diagonal.
-      _expectV3Sequence(
+      // XXX
+      // XXX
+      _expectV3(
         '3x3 top-left start',
+        [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
+        3, 3,
+        // Pass 1: down left col, sweep bottom row right, S2 left, move up, repeat
         [
-          (0, 0), (1, 0), (2, 0),
-          (0, 1), (1, 1), (2, 1),
-          (0, 2), (1, 2), (2, 2),
+          'S1(0,0)', 'S1(0,1)', 'S1(0,2)', 'S1(1,2)', 'S1(2,2)',
+          'S2(2,2)', 'S2(1,2)', 'S2(0,2)',
+          'S1(1,1)', 'S1(2,1)',
+          'S2(2,1)', 'S2(1,1)', 'S2(0,1)',
+          'S1(1,0)', 'S1(2,0)',
+          'S2(2,0)', 'S2(1,0)', 'S2(0,0)',
         ],
-        3,
-        3,
+        // Pass 2
         [
-          // S1 pass: down left col then sweep bottom row right
-          'S(0,0,TL) B(0,0,BR)', // S1a (0,0): next below
-          'B(0,0,BR) S(0,0,BL)', // back H → TL(0,1); next V → fwd
-          'S(0,1,TL) B(0,1,BR)', // S1a (0,1)
-          'B(0,1,BR) S(0,1,BL)', // back H → TL(0,2); next V → fwd
-          'S(0,2,TL) B(0,2,BR)', // S1a (0,2)
-          'B(0,2,BR) S(0,2,TR)', // back V → TL(1,2); next H right → fwd
-          'S(1,2,TL) B(1,2,BR)', // S1a (1,2)
-          'B(1,2,BR) S(1,2,TR)', // back V → TL(2,2); next H right → fwd
-          'S(2,2,TL) B(2,2,BR)', // S1a (2,2)
-          // S2 bottom row: sweep left (2,2)→(1,2)→(0,2)
-          'B(2,2,BR) S(2,2,TR)', // back V; next H left → fwd
-          'S(2,2,TR) B(2,2,BL)', // S2a (2,2)
-          'B(1,2,BR) S(1,2,TR)', // back V; next H left → fwd
-          'S(1,2,TR) B(1,2,BL)', // S2a (1,2)
-          'B(0,2,BR) S(0,2,BL)', // back H; diagonal move next → rev wins (straight dep)
-          'S(0,2,BL) B(0,2,TR)', // S2b (0,2): rev → needle at TR(0,2)=(1,2)
-          // TR(0,2)=(1,2) → TL(1,1)=(1,1): vertical (dx=0) — the fixed stitch
-          'B(0,1,BR) S(0,1,TR)', // back V (via (0,1)): (1,2)→(1,1); non-diagonal
-          'S(1,1,TL) B(1,1,BR)', // S1a (1,1)
-          'B(1,1,BR) S(1,1,TR)', // back V; next H right → fwd
-          'S(2,1,TL) B(2,1,BR)', // S1a (2,1)
-          // S2 mid row: sweep left (2,1)→(1,1)
-          'B(2,1,BR) S(2,1,TR)', // back V; next H left → fwd
-          'S(2,1,TR) B(2,1,BL)', // S2a (2,1)
-          'B(1,1,BR) S(1,1,TR)', // back V; diagonal move next → rev wins
-          'S(1,1,TR) B(1,1,BL)', // S2b (1,1): rev → needle at TR(1,1)
-          'B(0,1,BR) S(0,1,BL)', // back H → TL(0,1)
-          'S(0,1,BL) B(0,1,TR)', // S2b (0,1)
-          // Move up to (0,0) s=1; right=(1,0) s=0 → move right first
-          'B(0,0,BR) S(0,0,TR)', // back V (via (0,0)): TR(0,1)→TR(0,0)
-          'S(1,0,TL) B(1,0,BR)', // S1a (1,0)
-          'B(1,0,BR) S(1,0,TR)', // back V; next H right → fwd
-          'S(2,0,TL) B(2,0,BR)', // S1a (2,0)
-          // S2 top row: sweep left (2,0)→(1,0)→(0,0)
-          'B(2,0,BR) S(2,0,TR)', // back V; next H left → fwd
-          'S(2,0,TR) B(2,0,BL)', // S2a (2,0)
-          'B(1,0,BR) S(1,0,TR)', // back V; diagonal move next → rev wins
-          'S(1,0,TR) B(1,0,BL)', // S2b (1,0): rev → needle at TR(1,0)
-          'B(0,0,BR) S(0,0,TR)', // back H → TR(0,0); last op default fwd
-          'S(0,0,TR) B(0,0,BL)', // S2a (0,0)
+          'S(0,0,TL) B(0,0,BR)',
+          'B(0,0,BR) S(0,0,BL)',
+          'S(0,1,TL) B(0,1,BR)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,2,TL) B(0,2,BR)',
+          'B(0,2,BR) S(0,2,TR)',
+          'S(1,2,TL) B(1,2,BR)',
+          'B(1,2,BR) S(1,2,TR)',
+          'S(2,2,TL) B(2,2,BR)',
+          'B(2,2,BR) S(2,2,TR)',
+          'S(2,2,TR) B(2,2,BL)',
+          'B(1,2,BR) S(1,2,TR)',
+          'S(1,2,TR) B(1,2,BL)',
+          'B(0,2,BR) S(0,2,BL)',
+          'S(0,2,BL) B(0,2,TR)',
+          'B(0,1,BR) S(0,1,TR)',
+          'S(1,1,TL) B(1,1,BR)',
+          'B(1,1,BR) S(1,1,TR)',
+          'S(2,1,TL) B(2,1,BR)',
+          'B(2,1,BR) S(2,1,TR)',
+          'S(2,1,TR) B(2,1,BL)',
+          'B(1,1,BR) S(1,1,TR)',
+          'S(1,1,TR) B(1,1,BL)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,1,BL) B(0,1,TR)',
+          'B(0,0,BR) S(0,0,TR)',
+          'S(1,0,TL) B(1,0,BR)',
+          'B(1,0,BR) S(1,0,TR)',
+          'S(2,0,TL) B(2,0,BR)',
+          'B(2,0,BR) S(2,0,TR)',
+          'S(2,0,TR) B(2,0,BL)',
+          'B(1,0,BR) S(1,0,TR)',
+          'S(1,0,TR) B(1,0,BL)',
+          'B(0,0,BR) S(0,0,TR)',
+          'S(0,0,TR) B(0,0,BL)',
         ],
         startCell: (0, 0),
       );
@@ -570,70 +546,59 @@ void main() {
 
     test('3x3 full grid, start top-mid (1,0)', () {
       // XXX     Start: (1,0) — top-middle.
-      // XXX     Pass 1: down mid col → left col → right to (2,2) → up mid col.
-      // XXX     Key: S2(0,2) ends at TR(0,2); step-3.5 lookahead picks rev so that
-      //              the back stitch to S1(2,2) is 1 unit instead of 3.
-      _expectV3Sequence(
+      // XXX
+      // XXX
+      _expectV3(
         '3x3 top-mid start',
+        [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
+        3, 3,
+        // Pass 1: mid col down, left col, S2 left col, right to (2,2), S2 sweep
         [
-          (0, 0), (1, 0), (2, 0),
-          (0, 1), (1, 1), (2, 1),
-          (0, 2), (1, 2), (2, 2),
+          'S1(1,0)', 'S1(1,1)', 'S1(1,2)', 'S1(0,2)',
+          'S2(0,2)',
+          'S1(2,2)', 'S2(2,2)', 'S2(1,2)',
+          'S1(0,1)', 'S2(0,1)',
+          'S1(2,1)', 'S2(2,1)', 'S2(1,1)',
+          'S1(0,0)', 'S2(0,0)',
+          'S1(2,0)', 'S2(2,0)', 'S2(1,0)',
         ],
-        3,
-        3,
+        // Pass 2
         [
-          // S1 pass: down mid col
-          'S(1,0,TL) B(1,0,BR)', // S1a (1,0): next below → fwd
-          'B(1,0,BR) S(1,0,BL)', // back H to TL(1,1)
-          'S(1,1,TL) B(1,1,BR)', // S1a (1,1): needle already at TL
-          'B(1,2,TR) S(1,2,BR)', // back V; perp dep tiebreak → rev
-          'S(1,2,BR) B(1,2,TL)', // S1b (1,2) rev
-          // left col
-          'B(0,1,BR) S(0,1,BL)', // back H to TL(0,2)
-          'S(0,2,TL) B(0,2,BR)', // S1a (0,2) fwd
-          // S2(0,2): step-3.5 lookahead: rev end is 1 unit from TL(2,2), fwd end is 2.24 → rev
-          'B(0,2,BR) S(0,2,BL)', // back H to BL(0,2); lookahead picks rev
-          'S(0,2,BL) B(0,2,TR)', // S2b (0,2) rev; needle at TR(0,2)=TL(1,2)
-          // jump to S1(2,2): non-diag approach (H=1) wins over diag (sqrt5)
-          'B(1,1,BL) S(1,1,BR)', // back H to TL(2,2)=BR(1,1)
-          'S(2,2,TL) B(2,2,BR)', // S1a (2,2) fwd
-          // S2(2,2): next op is S2(1,2) to left; perp dep → fwd
-          'B(2,2,BR) S(2,2,TR)', // back V up; perp dep → fwd
-          'S(2,2,TR) B(2,2,BL)', // S2a (2,2) fwd
-          // S2(1,2): next op is S1(0,1) diag; perp dep → fwd
-          'B(1,2,BR) S(1,2,TR)', // back V up; perp dep → fwd
-          'S(1,2,TR) B(1,2,BL)', // S2a (1,2) fwd
-          // S1(0,1): non-diag rev approach (V=1) wins over diag fwd (sqrt5)
-          'B(0,2,BR) S(0,2,TR)', // back V up to BR(0,1)=revStart
-          'S(0,1,BR) B(0,1,TL)', // S1b (0,1) rev; needle==revStart
-          // S2(0,1): step-3.5 lookahead: rev end closer to TL(2,1) → rev
-          'B(0,1,TL) S(0,1,BL)', // back V; lookahead picks rev
-          'S(0,1,BL) B(0,1,TR)', // S2b (0,1) rev; needle at TR(0,1)=TL(1,1)
-          // S1(2,1): non-diag fwd approach (H=1) wins over diag rev (sqrt5)
-          'B(1,0,BL) S(1,0,BR)', // back H to TL(2,1)=BR(1,0)
-          'S(2,1,TL) B(2,1,BR)', // S1a (2,1) fwd
-          // S2(2,1): next op S2(1,1) to left; perp dep → fwd
-          'B(2,1,BR) S(2,1,TR)', // back V up; perp dep → fwd
-          'S(2,1,TR) B(2,1,BL)', // S2a (2,1) fwd
-          // S2(1,1): next op S1(0,0) diag; both perp → default fwd
-          'B(1,1,BR) S(1,1,TR)', // back V up; default fwd
-          'S(1,1,TR) B(1,1,BL)', // S2a (1,1) fwd
-          // S1(0,0): non-diag rev approach (V=1) wins over diag fwd (sqrt5)
-          'B(0,1,BR) S(0,1,TR)', // back V up to BR(0,0)=revStart
-          'S(0,0,BR) B(0,0,TL)', // S1b (0,0) rev
-          // S2(0,0): step-3.5 lookahead: rev end closer to TL(2,0) → rev
-          'B(0,0,TL) S(0,0,BL)', // back V; lookahead picks rev
-          'S(0,0,BL) B(0,0,TR)', // S2b (0,0) rev; needle at TR(0,0)=TL(1,0)
-          // S1(2,0): non-diag fwd approach (H=1) wins over diag rev (sqrt5)
-          'B(1,0,TL) S(1,0,TR)', // back H to TL(2,0)=TR(1,0)
-          'S(2,0,TL) B(2,0,BR)', // S1a (2,0) fwd
-          // S2(2,0): next op S2(1,0) to left; perp dep → fwd
-          'B(2,0,BR) S(2,0,TR)', // back V up; perp dep → fwd
-          'S(2,0,TR) B(2,0,BL)', // S2a (2,0) fwd
-          // S2(1,0): last op; incoming direction right (2,0→1,0 is left); perp approach → fwd
-          'B(1,0,BR) S(1,0,TR)', // back V up; last-op perp approach → fwd
-          'S(1,0,TR) B(1,0,BL)', // S2a (1,0) fwd
+          'S(1,0,TL) B(1,0,BR)',
+          'B(1,0,BR) S(1,0,BL)',
+          'S(1,1,TL) B(1,1,BR)',
+          'B(1,2,TR) S(1,2,BR)',
+          'S(1,2,BR) B(1,2,TL)',
+          'B(0,1,BR) S(0,1,BL)',
+          'S(0,2,TL) B(0,2,BR)',
+          'B(0,2,BR) S(0,2,BL)',
+          'S(0,2,BL) B(0,2,TR)',
+          'B(1,1,BL) S(1,1,BR)',
+          'S(2,2,TL) B(2,2,BR)',
+          'B(2,2,BR) S(2,2,TR)',
+          'S(2,2,TR) B(2,2,BL)',
+          'B(1,2,BR) S(1,2,TR)',
+          'S(1,2,TR) B(1,2,BL)',
+          'B(0,2,BR) S(0,2,TR)',
+          'S(0,1,BR) B(0,1,TL)',
+          'B(0,1,TL) S(0,1,BL)',
+          'S(0,1,BL) B(0,1,TR)',
+          'B(1,0,BL) S(1,0,BR)',
+          'S(2,1,TL) B(2,1,BR)',
+          'B(2,1,BR) S(2,1,TR)',
+          'S(2,1,TR) B(2,1,BL)',
+          'B(1,1,BR) S(1,1,TR)',
+          'S(1,1,TR) B(1,1,BL)',
+          'B(0,1,BR) S(0,1,TR)',
+          'S(0,0,BR) B(0,0,TL)',
+          'B(0,0,TL) S(0,0,BL)',
+          'S(0,0,BL) B(0,0,TR)',
+          'B(1,0,TL) S(1,0,TR)',
+          'S(2,0,TL) B(2,0,BR)',
+          'B(2,0,BR) S(2,0,TR)',
+          'S(2,0,TR) B(2,0,BL)',
+          'B(1,0,BR) S(1,0,TR)',
+          'S(1,0,TR) B(1,0,BL)',
         ],
         startCell: (1, 0),
       );
@@ -654,11 +619,15 @@ void main() {
       //            Back V via (1,0): TL(2,0)→BR(1,0) = TR(1,0)→BR(1,0). S1 rev. Needle at TL(1,0).
       //  (0,0) S1: fwd=TL(0,0) H dist=1; rev=BR(0,0) V dist=1 — TIE, no next op → fwd.
       //            Back H via (0,0): TL(1,0)=TR(0,0) → TL(0,0). S1 fwd. Needle at BR(0,0).
-      _expectV3Sequence(
+      _expectV3(
         '4x1 row tiebreaker',
         [(0, 0), (1, 0), (2, 0), (3, 0)],
         4,
         1,
+        [
+          'S1(3,0)', 'S1(2,0)', 'S1(1,0)', 'S1(0,0)',
+          'S2(0,0)', 'S2(1,0)', 'S2(2,0)', 'S2(3,0)',
+        ],
         [
           // S1 pass (sweep left)
           'S(3,0,BR) B(3,0,TL)', // S1b (3,0): next left → S1b; needle at TL(3,0)=TR(2,0)
