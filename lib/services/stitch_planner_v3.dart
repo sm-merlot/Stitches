@@ -226,18 +226,23 @@ PlannedAida planStitchingV3({
     final sq = squares[currentSqId];
     final s = scheduled[currentSqId]!;
 
-    // R1: Empty cell → schedule S1; move below if empty, else left if empty.
+    // R1: Empty cell → schedule S1; move below if empty, else left if empty,
+    //     else right if empty.
     if (s == 0) {
       schedule.add((cellId: currentSqId, kind: 'S1'));
       scheduled[currentSqId] = 1;
 
       final belowId = activeSqAt(sq.x, sq.y + 1);
       final leftId = activeSqAt(sq.x - 1, sq.y);
+      final rightId = activeSqAt(sq.x + 1, sq.y);
       if (belowId != null && scheduled[belowId] == 0) {
         currentSqId = belowId;
         moved = true;
       } else if (leftId != null && scheduled[leftId] == 0) {
         currentSqId = leftId;
+        moved = true;
+      } else if (rightId != null && scheduled[rightId] == 0) {
+        currentSqId = rightId;
         moved = true;
       }
     }
