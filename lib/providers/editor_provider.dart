@@ -105,6 +105,13 @@ class EditorState {
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
 
+  /// Pattern with current editor state embedded, ready to be written to disk.
+  CrossStitchPattern get patternForSave => pattern.copyWith(
+        editorSelectedThreadId: selectedThreadId,
+        editorTool: currentTool.name,
+        editorStitchMode: stitchMode,
+      );
+
   Thread? get selectedThread => selectedThreadId != null
       ? pattern.threadByCode(selectedThreadId!)
       : null;
@@ -116,23 +123,29 @@ class EditorState {
     return pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
   }
 
+  /// Returns the (x, y) cell for cell-based stitches; null for BackStitch.
+  static (int, int)? cellCoords(Stitch s) => switch (s) {
+    FullStitch(x: final x, y: final y) => (x, y),
+    HalfStitch(x: final x, y: final y) => (x, y),
+    QuarterStitch(x: final x, y: final y) => (x, y),
+    HalfCrossStitch(x: final x, y: final y) => (x, y),
+    QuarterCrossStitch(x: final x, y: final y) => (x, y),
+    BackStitch() => null,
+  };
+
   /// Whether a stitch falls within [rect] (for cell stitches: whole-cell containment;
   /// for backstitches: both endpoints must be within the rect).
   static bool isStitchInRect(Stitch s, Rect rect) {
-    bool cellIn(int x, int y) =>
-        x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
-    return switch (s) {
-      FullStitch(x: final x, y: final y) => cellIn(x, y),
-      HalfStitch(x: final x, y: final y) => cellIn(x, y),
-      QuarterStitch(x: final x, y: final y) => cellIn(x, y),
-      HalfCrossStitch(x: final x, y: final y) => cellIn(x, y),
-      QuarterCrossStitch(x: final x, y: final y) => cellIn(x, y),
-      BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2) =>
-        x1 >= rect.left && x1 <= rect.right &&
-        y1 >= rect.top && y1 <= rect.bottom &&
-        x2 >= rect.left && x2 <= rect.right &&
-        y2 >= rect.top && y2 <= rect.bottom,
-    };
+    final coords = cellCoords(s);
+    if (coords != null) {
+      return coords.$1 >= rect.left && coords.$1 < rect.right &&
+          coords.$2 >= rect.top && coords.$2 < rect.bottom;
+    }
+    final bs = s as BackStitch;
+    return bs.x1 >= rect.left && bs.x1 <= rect.right &&
+        bs.y1 >= rect.top && bs.y1 <= rect.bottom &&
+        bs.x2 >= rect.left && bs.x2 <= rect.right &&
+        bs.y2 >= rect.top && bs.y2 <= rect.bottom;
   }
 
   /// Creates a new stitch with coordinates shifted by [dx],[dy].
@@ -376,14 +389,8 @@ class EditorNotifier extends Notifier<EditorState> {
   /// Writes only the editor metadata (including stitchMode) to the file
   /// without touching isDirty — the pattern content hasn't changed.
   Future<void> _autoSaveStitchMode() async {
-    final s = state;
-    if (s.filePath == null) return;
-    final patternToSave = s.pattern.copyWith(
-      editorSelectedThreadId: s.selectedThreadId,
-      editorTool: s.currentTool.name,
-      editorStitchMode: s.stitchMode,
-    );
-    await FileService.saveFile(patternToSave, s.filePath!);
+    if (state.filePath == null) return;
+    await FileService.saveFile(state.patternForSave, state.filePath!);
   }
 
   void setStitchViewMode(StitchViewMode mode) {
@@ -525,11 +532,7 @@ class EditorNotifier extends Notifier<EditorState> {
     var threads = [...state.pattern.threads];
     for (final ct in state.clipboardThreads ?? <Thread>[]) {
       if (!threads.any((t) => t.dmcCode == ct.dmcCode)) {
-        final usedSymbols = threads.map((t) => t.symbol).toSet();
-        final resolved = usedSymbols.contains(ct.symbol)
-            ? ct.copyWith(symbol: _nextSymbol(usedSymbols))
-            : ct;
-        threads.add(resolved);
+        threads.add(_resolveThreadSymbol(ct, threads));
       }
     }
 
@@ -612,11 +615,7 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   void addThread(Thread thread) {
-    // Auto-assign a symbol if the thread doesn't have one
-    final usedSymbols = state.pattern.threads.map((t) => t.symbol).toSet();
-    final t = thread.symbol.isEmpty
-        ? thread.copyWith(symbol: _nextSymbol(usedSymbols))
-        : thread;
+    final t = _resolveThreadSymbol(thread, state.pattern.threads);
     final newThreads = [...state.pattern.threads, t];
     final newPattern = state.pattern.copyWith(threads: newThreads);
     final recents = [
@@ -646,21 +645,16 @@ class EditorNotifier extends Notifier<EditorState> {
     final dx = (anchorX / 2.0 * (newWidth - old.width)).round();
     final dy = (anchorY / 2.0 * (newHeight - old.height)).round();
 
-    bool inBounds(Stitch s) => switch (s) {
-      FullStitch(x: final x, y: final y) =>
-        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
-      HalfStitch(x: final x, y: final y) =>
-        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
-      QuarterStitch(x: final x, y: final y) =>
-        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
-      HalfCrossStitch(x: final x, y: final y) =>
-        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
-      QuarterCrossStitch(x: final x, y: final y) =>
-        x >= 0 && x < newWidth && y >= 0 && y < newHeight,
-      BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2) =>
-        x1 >= 0 && x1 <= newWidth && y1 >= 0 && y1 <= newHeight &&
-        x2 >= 0 && x2 <= newWidth && y2 >= 0 && y2 <= newHeight,
-    };
+    bool inBounds(Stitch s) {
+      final coords = EditorState.cellCoords(s);
+      if (coords != null) {
+        return coords.$1 >= 0 && coords.$1 < newWidth &&
+            coords.$2 >= 0 && coords.$2 < newHeight;
+      }
+      final bs = s as BackStitch;
+      return bs.x1 >= 0 && bs.x1 <= newWidth && bs.y1 >= 0 && bs.y1 <= newHeight &&
+          bs.x2 >= 0 && bs.x2 <= newWidth && bs.y2 >= 0 && bs.y2 <= newHeight;
+    }
 
     final newStitches = old.stitches
         .map((s) => EditorState.offsetStitch(s, dx, dy))
@@ -789,15 +783,8 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   bool _stitchAtCell(Stitch s, int cellX, int cellY) {
-    return switch (s) {
-      FullStitch(x: final sx, y: final sy) => sx == cellX && sy == cellY,
-      HalfStitch(x: final sx, y: final sy) => sx == cellX && sy == cellY,
-      QuarterStitch(x: final sx, y: final sy) => sx == cellX && sy == cellY,
-      HalfCrossStitch(x: final sx, y: final sy) => sx == cellX && sy == cellY,
-      QuarterCrossStitch(x: final sx, y: final sy) =>
-        sx == cellX && sy == cellY,
-      BackStitch() => false,
-    };
+    final coords = EditorState.cellCoords(s);
+    return coords != null && coords.$1 == cellX && coords.$2 == cellY;
   }
 
   /// A backstitch is "in" a cell if either endpoint lies within its bounds
@@ -817,6 +804,16 @@ class EditorNotifier extends Notifier<EditorState> {
       if (!used.contains(s)) return s;
     }
     return '';
+  }
+
+  /// Returns [thread] with a symbol assigned if its current symbol is empty or
+  /// already used by a thread in [existingThreads].
+  Thread _resolveThreadSymbol(Thread thread, List<Thread> existingThreads) {
+    final usedSymbols = existingThreads.map((t) => t.symbol).toSet();
+    if (thread.symbol.isEmpty || usedSymbols.contains(thread.symbol)) {
+      return thread.copyWith(symbol: _nextSymbol(usedSymbols));
+    }
+    return thread;
   }
 
   /// Ensures every thread in [threads] has a symbol, assigning from [kPatternSymbols]
@@ -862,17 +859,13 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   bool _isInBounds(Stitch s, int maxX, int maxY) {
-    bool cellOk(int x, int y) => x >= 0 && x < maxX && y >= 0 && y < maxY;
-    return switch (s) {
-      FullStitch(x: final x, y: final y) => cellOk(x, y),
-      HalfStitch(x: final x, y: final y) => cellOk(x, y),
-      QuarterStitch(x: final x, y: final y) => cellOk(x, y),
-      HalfCrossStitch(x: final x, y: final y) => cellOk(x, y),
-      QuarterCrossStitch(x: final x, y: final y) => cellOk(x, y),
-      BackStitch(x1: final x1, y1: final y1, x2: final x2, y2: final y2) =>
-        x1 >= 0 && x1 <= maxX && y1 >= 0 && y1 <= maxY &&
-        x2 >= 0 && x2 <= maxX && y2 >= 0 && y2 <= maxY,
-    };
+    final coords = EditorState.cellCoords(s);
+    if (coords != null) {
+      return coords.$1 >= 0 && coords.$1 < maxX && coords.$2 >= 0 && coords.$2 < maxY;
+    }
+    final bs = s as BackStitch;
+    return bs.x1 >= 0 && bs.x1 <= maxX && bs.y1 >= 0 && bs.y1 <= maxY &&
+        bs.x2 >= 0 && bs.x2 <= maxX && bs.y2 >= 0 && bs.y2 <= maxY;
   }
 }
 

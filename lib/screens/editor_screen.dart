@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
-import '../models/pattern.dart';
 import '../providers/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
@@ -17,20 +16,11 @@ import 'resize_canvas_dialog.dart';
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
 
-  /// Returns the pattern with current editor state embedded for saving.
-  CrossStitchPattern _patternWithEditorState(EditorState state) {
-    return state.pattern.copyWith(
-      editorSelectedThreadId: state.selectedThreadId,
-      editorTool: state.currentTool.name,
-    );
-  }
-
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     try {
       if (state.filePath != null) {
-        await FileService.saveFile(
-            _patternWithEditorState(state), state.filePath!);
+        await FileService.saveFile(state.patternForSave, state.filePath!);
         ref.read(editorProvider.notifier).markSaved();
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -44,7 +34,7 @@ class EditorScreen extends ConsumerWidget {
         if (driveFileId != null && parentFolderId != null) {
           final notifier = ref.read(googleDriveProvider.notifier);
           final newId = await notifier.uploadPattern(
-            _patternWithEditorState(state),
+            state.patternForSave,
             state.filePath!,
             driveFileId,
             parentFolderId,
@@ -72,8 +62,7 @@ class EditorScreen extends ConsumerWidget {
   Future<void> _saveAs(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     try {
-      final path =
-          await FileService.saveFileAs(_patternWithEditorState(state));
+      final path = await FileService.saveFileAs(state.patternForSave);
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);
         ref.read(editorProvider.notifier).markSaved();

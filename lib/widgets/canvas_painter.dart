@@ -34,7 +34,11 @@ class CanvasPainter extends CustomPainter {
   final double referenceOpacity;
   final bool referenceVisible;
 
-  const CanvasPainter({
+  late final Map<String, Thread> _threadMap = {
+    for (final t in pattern.threads) t.dmcCode: t,
+  };
+
+  CanvasPainter({
     required this.pattern,
     required this.cellSize,
     required this.panOffset,
@@ -66,11 +70,6 @@ class CanvasPainter extends CustomPainter {
     final w = pattern.width * cellSize;
     final h = pattern.height * cellSize;
 
-    // Build thread lookup map once
-    final threadMap = <String, Thread>{
-      for (final t in pattern.threads) t.dmcCode: t,
-    };
-
     // ── Background ───────────────────────────────────────────────────────────
     canvas.drawRect(
       Rect.fromLTWH(0, 0, w, h),
@@ -93,7 +92,7 @@ class CanvasPainter extends CustomPainter {
     // ── Stitches ─────────────────────────────────────────────────────────────
     // Render order: full → half → quarter → halfcross → quartercross → back
     for (final stitch in pattern.stitches) {
-      final thread = threadMap[stitch.threadId];
+      final thread = _threadMap[stitch.threadId];
       if (thread == null) continue;
 
       switch (stitch) {
@@ -123,7 +122,7 @@ class CanvasPainter extends CustomPainter {
     // ── Backstitches (drawn on top of grid) ──────────────────────────────────
     for (final stitch in pattern.stitches) {
       if (stitch is! BackStitch) continue;
-      final thread = threadMap[stitch.threadId];
+      final thread = _threadMap[stitch.threadId];
       if (thread == null) continue;
       final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: false);
       if (c != null) {
@@ -135,7 +134,7 @@ class CanvasPainter extends CustomPainter {
     if (cellSize * scale >= 8) {
       for (final stitch in pattern.stitches) {
         if (stitch is BackStitch) continue;
-        final thread = threadMap[stitch.threadId];
+        final thread = _threadMap[stitch.threadId];
         if (thread == null || thread.symbol.isEmpty) continue;
         final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
         if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
@@ -155,7 +154,7 @@ class CanvasPainter extends CustomPainter {
 
     // ── Ghost stitches (paste preview / move preview) ─────────────────────
     if (ghostStitches != null && ghostStitches!.isNotEmpty) {
-      _drawGhostStitches(canvas, ghostStitches!, threadMap);
+      _drawGhostStitches(canvas, ghostStitches!);
     }
 
     // ── Selection rect ───────────────────────────────────────────────────────
@@ -586,12 +585,11 @@ class CanvasPainter extends CustomPainter {
 
   // ─── Ghost stitches (paste/move preview) ─────────────────────────────────
 
-  void _drawGhostStitches(
-      Canvas canvas, List<Stitch> stitches, Map<String, Thread> threadMap) {
+  void _drawGhostStitches(Canvas canvas, List<Stitch> stitches) {
     // Merge in any extra threads from the clipboard (cross-pattern paste)
     final Map<String, Thread> map = (ghostThreads != null && ghostThreads!.isNotEmpty)
-        ? {...threadMap, for (final t in ghostThreads!) t.dmcCode: t}
-        : threadMap;
+        ? {..._threadMap, for (final t in ghostThreads!) t.dmcCode: t}
+        : _threadMap;
     canvas.saveLayer(
       Rect.fromLTWH(0, 0, pattern.width * cellSize, pattern.height * cellSize),
       Paint()..color = Colors.white.withValues(alpha: 0.55),
