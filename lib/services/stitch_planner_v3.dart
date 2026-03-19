@@ -346,6 +346,31 @@ PlannedAida planStitchingV3({
     if (fwdDiag != revDiag) return fwdDiag ? 'rev' : 'fwd';
     if ((fwdDist - revDist).abs() > 1e-9) return fwdDist < revDist ? 'fwd' : 'rev';
 
+    // 3.5 Lookahead: if approach distances tie, prefer the end closer to the
+    // nearest start of the next op (minimises the following back stitch).
+    if (opIdx + 1 < schedule.length) {
+      final nextOp = schedule[opIdx + 1];
+      final nextCn = cellNodes[nextOp.cellId]!;
+      final nextStarts = nextOp.kind == 'S1'
+          ? [nextCn[Corner.topLeft]!, nextCn[Corner.bottomRight]!]
+          : [nextCn[Corner.topRight]!, nextCn[Corner.bottomLeft]!];
+
+      double minDepDist(int endNode) {
+        final (ex, ey) = nodeCoords[endNode]!;
+        double best = double.infinity;
+        for (final ns in nextStarts) {
+          final (nx, ny) = nodeCoords[ns]!;
+          final d = sqrt((nx - ex) * (nx - ex) + (ny - ey) * (ny - ey));
+          if (d < best) best = d;
+        }
+        return best;
+      }
+
+      final fwdDep = minDepDist(fwdEnd);
+      final revDep = minDepDist(revEnd);
+      if ((fwdDep - revDep).abs() > 1e-9) return fwdDep < revDep ? 'fwd' : 'rev';
+    }
+
     // Tie: prefer end that allows a perpendicular departure toward the next cell.
     // For the last op, mirror the logic using the incoming direction instead.
     if (opIdx + 1 < schedule.length) {
