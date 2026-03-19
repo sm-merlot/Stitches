@@ -347,6 +347,7 @@ PlannedAida planStitchingV3({
     if ((fwdDist - revDist).abs() > 1e-9) return fwdDist < revDist ? 'fwd' : 'rev';
 
     // Tie: prefer end that allows a perpendicular departure toward the next cell.
+    // For the last op, mirror the logic using the incoming direction instead.
     if (opIdx + 1 < schedule.length) {
       final nextOp = schedule[opIdx + 1];
       final currentSq = squares[currentCellId];
@@ -378,6 +379,33 @@ PlannedAida planStitchingV3({
 
         final fwdPerp = hasPerpDeparture(fwdEnd);
         final revPerp = hasPerpDeparture(revEnd);
+        if (fwdPerp != revPerp) return fwdPerp ? 'fwd' : 'rev';
+      }
+    } else if (opIdx > 0) {
+      // Last op: use incoming direction (previous cell → current cell) to prefer
+      // the start node reachable with a perpendicular approach from the needle.
+      final prevOp = schedule[opIdx - 1];
+      final currentSq = squares[currentCellId];
+      final prevSq = squares[prevOp.cellId];
+      final moveDx = currentSq.x - prevSq.x;
+      final moveDy = currentSq.y - prevSq.y;
+
+      if (moveDx != 0 || moveDy != 0) {
+        bool hasPerpApproach(int startNode) {
+          final (fx, fy) = nodeCoords[fromNode]!;
+          final (sx, sy) = nodeCoords[startNode]!;
+          final ddx = (sx - fx).abs();
+          final ddy = (sy - fy).abs();
+          // H move → want V approach (ddx≈0). V move → want H approach (ddy≈0).
+          // Diagonal → want any straight approach.
+          if (moveDy == 0 && ddx < 1e-9) return true;
+          if (moveDx == 0 && ddy < 1e-9) return true;
+          if (moveDx != 0 && moveDy != 0 && (ddx < 1e-9 || ddy < 1e-9)) return true;
+          return false;
+        }
+
+        final fwdPerp = hasPerpApproach(fwdStart);
+        final revPerp = hasPerpApproach(revStart);
         if (fwdPerp != revPerp) return fwdPerp ? 'fwd' : 'rev';
       }
     }
