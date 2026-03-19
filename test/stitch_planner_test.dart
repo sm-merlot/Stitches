@@ -308,10 +308,13 @@ void main() {
       // XXX
       // XXX
       //
-      // R1 with cell below empty: S1 + B(BR→BL), move below.
-      // R1 with no empty cell below: S1 only.
-      //
-      // At (2,2): no cell below → S1 only.
+      // Pass 1 schedule: (2,2) → left → (1,2) → left → (0,2). Stop (no left).
+      // Pass 2 routing:
+      //   (2,2) S1 fwd:  needle at BR(2,2).
+      //   (1,2) S1: fwd=TL(1,2) is diagonal from BR(2,2); rev=BR(1,2) is horizontal → rev.
+      //             Back H via cell (2,2): BR→BL. Then S1 rev: BR→TL.
+      //   (0,2) S1: fwd=TL(0,2) horizontal from TL(1,2); rev=BR(0,2) vertical → tie → fwd.
+      //             Back H via cell (0,1): BR→BL. Then S1 fwd: TL→BR.
       _expectV3Sequence(
         '3x3 bottom-right start',
         [
@@ -322,7 +325,11 @@ void main() {
         3,
         3,
         [
-          'S(2,2,TL) B(2,2,BR)', // S1 (2,2) — no cell below, S1 only
+          'S(2,2,TL) B(2,2,BR)', // S1 fwd (2,2): needle at BR(2,2)
+          'B(2,2,BR) S(2,2,BL)', // back H via (2,2): BR→BL = BR(1,2)
+          'S(1,2,BR) B(1,2,TL)', // S1 rev (1,2): needle at TL(1,2)
+          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2)
+          'S(0,2,TL) B(0,2,BR)', // S1 fwd (0,2)
         ],
         startCell: (2, 2),
       );
@@ -333,8 +340,7 @@ void main() {
       // XXX
       // XXX
       //
-      // At (2,1): cell below (2,2) is empty → S1 + B(BR→BL), move to (2,2).
-      // At (2,2): no cell below → S1 only.
+      // Pass 1 schedule: (2,1) → below → (2,2) → left → (1,2) → left → (0,2).
       _expectV3Sequence(
         '3x3 mid-right start',
         [
@@ -345,9 +351,13 @@ void main() {
         3,
         3,
         [
-          'S(2,1,TL) B(2,1,BR)', // S1 (2,1)
-          'B(2,1,BR) S(2,1,BL)', // B(BR→BL) — cell below is empty
-          'S(2,2,TL) B(2,2,BR)', // S1 (2,2) — no cell below, S1 only
+          'S(2,1,TL) B(2,1,BR)', // S1 fwd (2,1): needle at BR(2,1)
+          'B(2,1,BR) S(2,1,BL)', // back H via (2,1): BR→BL = TL(2,2)
+          'S(2,2,TL) B(2,2,BR)', // S1 fwd (2,2): needle at BR(2,2)
+          'B(2,2,BR) S(2,2,BL)', // back H via (2,2): BR→BL = BR(1,2)
+          'S(1,2,BR) B(1,2,TL)', // S1 rev (1,2): needle at TL(1,2)
+          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2)
+          'S(0,2,TL) B(0,2,BR)', // S1 fwd (0,2)
         ],
         startCell: (2, 1),
       );
@@ -358,9 +368,7 @@ void main() {
       // XXX
       // XXX
       //
-      // At (2,0): cell below (2,1) is empty → S1 + B(BR→BL), move to (2,1).
-      // At (2,1): cell below (2,2) is empty → S1 + B(BR→BL), move to (2,2).
-      // At (2,2): no cell below → S1 only.
+      // Pass 1 schedule: (2,0) → below → (2,1) → below → (2,2) → left → (1,2) → left → (0,2).
       _expectV3Sequence(
         '3x3 top-right start',
         [
@@ -371,11 +379,15 @@ void main() {
         3,
         3,
         [
-          'S(2,0,TL) B(2,0,BR)', // S1 (2,0)
-          'B(2,0,BR) S(2,0,BL)', // B(BR→BL) — cell below is empty
-          'S(2,1,TL) B(2,1,BR)', // S1 (2,1) — needle already at TL, no back needed
-          'B(2,1,BR) S(2,1,BL)', // B(BR→BL) — cell below is empty
-          'S(2,2,TL) B(2,2,BR)', // S1 (2,2) — no cell below, S1 only
+          'S(2,0,TL) B(2,0,BR)', // S1 fwd (2,0): needle at BR(2,0)
+          'B(2,0,BR) S(2,0,BL)', // back H via (2,0): BR→BL = TL(2,1)
+          'S(2,1,TL) B(2,1,BR)', // S1 fwd (2,1): needle at BR(2,1)
+          'B(2,1,BR) S(2,1,BL)', // back H via (2,1): BR→BL = TL(2,2)
+          'S(2,2,TL) B(2,2,BR)', // S1 fwd (2,2): needle at BR(2,2)
+          'B(2,2,BR) S(2,2,BL)', // back H via (2,2): BR→BL = BR(1,2)
+          'S(1,2,BR) B(1,2,TL)', // S1 rev (1,2): needle at TL(1,2)
+          'B(0,1,BR) S(0,1,BL)', // back H via (0,1): TL(1,2)→TL(0,2)
+          'S(0,2,TL) B(0,2,BR)', // S1 fwd (0,2)
         ],
         startCell: (2, 0),
       );
