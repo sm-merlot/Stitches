@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 
+/// Which quarter of a cell a stitch occupies (quarter-stitch and petit-point).
 enum QuadrantPosition { topLeft, topRight, bottomLeft, bottomRight }
 
-/// Orientation for a half-cell cross stitch
+/// Which half of a cell a half-cross stitch occupies (left/right = vertical split, top/bottom = horizontal split).
 enum HalfOrientation { left, right, top, bottom }
 
 sealed class Stitch {

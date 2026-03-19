@@ -233,6 +233,7 @@ class EditorState {
 }
 
 class EditorNotifier extends Notifier<EditorState> {
+  // When the stack exceeds this depth, the oldest entries are dropped.
   static const int _maxUndoDepth = 200;
 
   @override
