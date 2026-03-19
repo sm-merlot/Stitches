@@ -228,7 +228,7 @@ PlannedAida planStitchingV3({
 
     // R1: Empty cell → schedule S1; move below if empty, else left if empty,
     //     else right if empty.
-    if (s == 0) {
+    if (scheduled[currentSqId] == 0) {
       schedule.add((cellId: currentSqId, kind: 'S1'));
       scheduled[currentSqId] = 1;
 
@@ -243,6 +243,38 @@ PlannedAida planStitchingV3({
         moved = true;
       } else if (rightId != null && scheduled[rightId] == 0) {
         currentSqId = rightId;
+        moved = true;
+      }
+    }
+
+    // R2: S1-only cell (and didn't just move via R1) → schedule S2; move to an
+    //     S1 neighbour (below/left/right), or up if all neighbours are absent
+    //     or already S2.
+    if (!moved && scheduled[currentSqId] == 1) {
+      schedule.add((cellId: currentSqId, kind: 'S2'));
+      scheduled[currentSqId] = 2;
+
+      final belowId = activeSqAt(sq.x, sq.y + 1);
+      final leftId = activeSqAt(sq.x - 1, sq.y);
+      final rightId = activeSqAt(sq.x + 1, sq.y);
+      final aboveId = activeSqAt(sq.x, sq.y - 1);
+
+      bool isDoneOrAbsent(int? id) => id == null || scheduled[id] == 2;
+
+      if (belowId != null && scheduled[belowId] == 1) {
+        currentSqId = belowId;
+        moved = true;
+      } else if (leftId != null && scheduled[leftId] == 1) {
+        currentSqId = leftId;
+        moved = true;
+      } else if (rightId != null && scheduled[rightId] == 1) {
+        currentSqId = rightId;
+        moved = true;
+      } else if (isDoneOrAbsent(belowId) &&
+          isDoneOrAbsent(leftId) &&
+          isDoneOrAbsent(rightId) &&
+          aboveId != null) {
+        currentSqId = aboveId;
         moved = true;
       }
     }
