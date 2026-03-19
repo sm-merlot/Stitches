@@ -80,16 +80,19 @@ class RecentItem {
       );
 }
 
-class RecentItemsNotifier extends StateNotifier<List<RecentItem>> {
+class RecentItemsNotifier extends Notifier<List<RecentItem>> {
   static const _key = 'recent_items';
   static const _maxItems = 20;
 
-  RecentItemsNotifier() : super([]) {
+  @override
+  List<RecentItem> build() {
     _load();
+    return [];
   }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!ref.mounted) return;
     final raw = prefs.getString(_key);
     if (raw == null) return;
     try {
@@ -136,5 +139,5 @@ class RecentItemsNotifier extends StateNotifier<List<RecentItem>> {
 }
 
 final recentItemsProvider =
-    StateNotifierProvider<RecentItemsNotifier, List<RecentItem>>(
-        (_) => RecentItemsNotifier());
+    NotifierProvider<RecentItemsNotifier, List<RecentItem>>(
+        RecentItemsNotifier.new);

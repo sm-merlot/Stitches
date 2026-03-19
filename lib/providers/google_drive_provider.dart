@@ -52,20 +52,24 @@ class DriveState {
 // Notifier
 // ---------------------------------------------------------------------------
 
-class DriveNotifier extends StateNotifier<DriveState> {
-  DriveNotifier() : super(const DriveState()) {
-    checkConnection();
-  }
-
+class DriveNotifier extends Notifier<DriveState> {
   final _auth = GoogleAuthService.instance;
+
+  @override
+  DriveState build() {
+    checkConnection();
+    return const DriveState();
+  }
 
   /// Checks stored credentials and updates status accordingly.
   Future<void> checkConnection() async {
     final configured = _auth.isConfigured;
     try {
       final signedIn = configured && await _auth.isSignedIn();
+      if (!ref.mounted) return;
       if (signedIn) {
         final email = await _auth.accountEmail();
+        if (!ref.mounted) return;
         state = state.copyWith(
           status: DriveStatus.connected,
           email: email,
@@ -80,6 +84,7 @@ class DriveNotifier extends StateNotifier<DriveState> {
         );
       }
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         status: DriveStatus.error,
         error: e.toString(),
@@ -92,13 +97,16 @@ class DriveNotifier extends StateNotifier<DriveState> {
     state = state.copyWith(status: DriveStatus.connecting, error: null);
     try {
       await _auth.signIn();
+      if (!ref.mounted) return;
       final email = await _auth.accountEmail();
+      if (!ref.mounted) return;
       state = state.copyWith(
         status: DriveStatus.connected,
         email: email,
         error: null,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         status: DriveStatus.error,
         error: 'Sign-in failed: $e',
@@ -138,6 +146,7 @@ class DriveNotifier extends StateNotifier<DriveState> {
     state = state.copyWith(isSyncing: true);
     try {
       final service = await getService();
+      if (!ref.mounted) return null;
       if (service == null) {
         state = state.copyWith(
           isSyncing: false,
@@ -157,9 +166,11 @@ class DriveNotifier extends StateNotifier<DriveState> {
         parentFolderId: parentFolderId,
       );
 
+      if (!ref.mounted) return null;
       state = state.copyWith(isSyncing: false, error: null);
       return newId;
     } catch (e) {
+      if (!ref.mounted) return null;
       state = state.copyWith(
         isSyncing: false,
         error: 'Upload failed: $e',
@@ -174,6 +185,4 @@ class DriveNotifier extends StateNotifier<DriveState> {
 // ---------------------------------------------------------------------------
 
 final googleDriveProvider =
-    StateNotifierProvider<DriveNotifier, DriveState>((ref) {
-  return DriveNotifier();
-});
+    NotifierProvider<DriveNotifier, DriveState>(DriveNotifier.new);

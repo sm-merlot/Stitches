@@ -219,10 +219,11 @@ class EditorState {
   static const _sentinel = Object();
 }
 
-class EditorNotifier extends StateNotifier<EditorState> {
+class EditorNotifier extends Notifier<EditorState> {
   static const int _maxUndoDepth = 200;
 
-  EditorNotifier() : super(EditorState(pattern: CrossStitchPattern.empty()));
+  @override
+  EditorState build() => EditorState(pattern: CrossStitchPattern.empty());
 
   /// DMC 310 Black — added automatically to every new pattern.
   static const _defaultBlackThread = Thread(
@@ -272,7 +273,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
     if (withSymbols.referenceImagePath != null) {
       ReferenceImageService.decodeFromPath(withSymbols.referenceImagePath!)
           .then((img) {
-        if (img != null && mounted) {
+        if (img != null && ref.mounted) {
           state = state.copyWith(referenceImage: img);
         }
       });
@@ -876,6 +877,4 @@ class EditorNotifier extends StateNotifier<EditorState> {
 }
 
 final editorProvider =
-    StateNotifierProvider<EditorNotifier, EditorState>((ref) {
-  return EditorNotifier();
-});
+    NotifierProvider<EditorNotifier, EditorState>(EditorNotifier.new);

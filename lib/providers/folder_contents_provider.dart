@@ -48,7 +48,7 @@ Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
 }
 
 Future<FolderContents> _loadDriveFolder(
-    Ref<AsyncValue<FolderContents>> ref, DriveFolder folder) async {
+    Ref ref, DriveFolder folder) async {
   final notifier = ref.read(googleDriveProvider.notifier);
   final service = await notifier.getService();
   if (service == null) return FolderContents.empty;
@@ -64,15 +64,23 @@ Future<FolderContents> _loadDriveFolder(
 /// Files added here appear in the tree immediately before the Drive upload
 /// completes. The placeholder [DrivePatternFile.fileId] is set to the local
 /// temp path so the tree can highlight the file via [selectedFilePath].
+class PendingDriveFilesNotifier
+    extends Notifier<Map<String, List<PatternFile>>> {
+  @override
+  Map<String, List<PatternFile>> build() => {};
+  void set(Map<String, List<PatternFile>> value) => state = value;
+}
+
 final pendingDriveFilesProvider =
-    StateProvider<Map<String, List<PatternFile>>>((ref) => {});
+    NotifierProvider<PendingDriveFilesNotifier, Map<String, List<PatternFile>>>(
+        PendingDriveFilesNotifier.new);
 
 /// Adds a placeholder file for [folderId] so it shows in the tree immediately.
 void addPendingDriveFile(WidgetRef ref, String folderId, PatternFile file) {
   final current = Map<String, List<PatternFile>>.from(
       ref.read(pendingDriveFilesProvider));
   current[folderId] = [...(current[folderId] ?? []), file];
-  ref.read(pendingDriveFilesProvider.notifier).state = current;
+  ref.read(pendingDriveFilesProvider.notifier).set(current);
 }
 
 /// Removes all pending files for [folderId] (called after Drive upload + refresh).
@@ -80,7 +88,7 @@ void clearPendingDriveFiles(WidgetRef ref, String folderId) {
   final current = Map<String, List<PatternFile>>.from(
       ref.read(pendingDriveFilesProvider));
   current.remove(folderId);
-  ref.read(pendingDriveFilesProvider.notifier).state = current;
+  ref.read(pendingDriveFilesProvider.notifier).set(current);
 }
 
 /// Invalidates the cached folder contents so the tree reloads.

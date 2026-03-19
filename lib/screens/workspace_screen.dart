@@ -130,7 +130,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       await _save(context, quiet: true);
     }
     ref.read(editorProvider.notifier).closeFile();
-    ref.read(pdfViewerProvider.notifier).state = null;
+    ref.read(pdfViewerProvider.notifier).set(null);
     return true;
   }
 
@@ -160,7 +160,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           '${workspace.path}${Platform.pathSeparator}$safeName.stitchx';
       try {
         await FileService.saveFile(pattern, filePath);
-        ref.read(pdfViewerProvider.notifier).state = null;
+        ref.read(pdfViewerProvider.notifier).set(null);
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
         refreshFolder(ref, workspace);
       } catch (e) {
@@ -174,7 +174,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     } else if (workspace is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final fileName = '$safeName.stitchx';
-      ref.read(fileLoadingProvider.notifier).state = true;
+      ref.read(fileLoadingProvider.notifier).set(true);
       try {
         // Write to temp and open immediately — Drive upload happens in background.
         final tempDir = await getTemporaryDirectory();
@@ -210,7 +210,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           );
         }
       } finally {
-        if (mounted) ref.read(fileLoadingProvider.notifier).state = false;
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
     } else {
       // No workspace — fall back to standalone new pattern
