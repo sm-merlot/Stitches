@@ -221,9 +221,8 @@ PlannedAida planStitchingV3({
   // mncSet: shared dedup guard — prevents the same cell being added to MNC twice.
   final mncSet = <int>{};
 
-  // Runs one complete sweep from [startId].
-  // goUp=false → down/left/right (Phase 1).
-  // goUp=true  → up/left/right (MNC sub-sweep).
+  // Runs one complete sweep from [startId] using the same down/left/right
+  // logic regardless of whether this is Phase 1 or an MNC sub-sweep.
   // Results go into caller-supplied [ops] and [mncs] lists.
   // [ops]  — the (cellId, kind) ops produced by this sweep.
   // [mncs] — MNC detections: (afterIdx, cellId, goUp).
@@ -289,7 +288,7 @@ PlannedAida planStitchingV3({
                 scheduled[secondaryId] == 0 &&
                 !mncSet.contains(secondaryId)) {
               mncSet.add(secondaryId);
-              mncs.add((afterIdx: ops.length - 1, cellId: secondaryId, goUp: !goUp));
+              mncs.add((afterIdx: ops.length - 1, cellId: secondaryId, goUp: goUp));
             }
 
             bool isDone(int? id) => id == null || scheduled[id] == 2;
@@ -316,21 +315,36 @@ PlannedAida planStitchingV3({
   // so MNCs discovered inside sub-sweeps are also inserted at the right place.
   // The shared [scheduled] map means cells already covered by an earlier sweep
   // are skipped (scheduled != 0).
+  //
+  // MNCs are processed in LIFO order (stack) so that the most-recently
+  // detected MNC runs first and schedules its cells before earlier MNCs are
+  // evaluated.  Results are then assembled in ascending afterIdx order so
+  // each sub-sweep is inserted at the correct position in the final schedule.
   List<({int cellId, String kind})> expandSweep(
     List<({int cellId, String kind})> ops,
     List<({int afterIdx, int cellId, bool goUp})> mncs,
   ) {
     if (mncs.isEmpty) return ops;
-    final result = <({int cellId, String kind})>[];
-    int prev = 0;
-    for (final mnc in mncs) {
-      if (scheduled[mnc.cellId] != 0) continue; // already covered
-      result.addAll(ops.getRange(prev, mnc.afterIdx));
-      prev = mnc.afterIdx;
+    // Run sub-sweeps in LIFO order so the most-recently detected MNC is
+    // processed first.  afterIdx is unique per MNC (each fires on a distinct
+    // S2 op), so it serves as a stable key for later assembly.
+    final subResults = <int, List<({int cellId, String kind})>>{};
+    for (final mnc in mncs.reversed) {
+      if (scheduled[mnc.cellId] != 0) continue;
       final subOps = <({int cellId, String kind})>[];
       final subMncs = <({int afterIdx, int cellId, bool goUp})>[];
       runOneSweep(mnc.cellId, mnc.goUp, subOps, subMncs);
-      result.addAll(expandSweep(subOps, subMncs));
+      subResults[mnc.afterIdx] = expandSweep(subOps, subMncs);
+    }
+    // Splice sub-sweeps into ops in ascending afterIdx order.
+    final result = <({int cellId, String kind})>[];
+    int prev = 0;
+    for (final mnc in mncs) {
+      final sub = subResults[mnc.afterIdx];
+      if (sub == null) continue;
+      result.addAll(ops.getRange(prev, mnc.afterIdx));
+      prev = mnc.afterIdx;
+      result.addAll(sub);
     }
     result.addAll(ops.getRange(prev, ops.length));
     return result;
