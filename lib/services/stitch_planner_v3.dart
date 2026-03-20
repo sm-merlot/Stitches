@@ -225,14 +225,13 @@ PlannedAida planStitchingV3({
   // logic regardless of whether this is Phase 1 or an MNC sub-sweep.
   // Results go into caller-supplied [ops] and [mncs] lists.
   // [ops]  — the (cellId, kind) ops produced by this sweep.
-  // [mncs] — MNC detections: (afterIdx, cellId, goUp).
+  // [mncs] — MNC detections: (afterIdx, cellId).
   //           afterIdx is the position in [ops] after which the sub-sweep
   //           for cellId should be spliced into the final schedule.
   void runOneSweep(
     int startId,
-    bool goUp,
     List<({int cellId, String kind})> ops,
-    List<({int afterIdx, int cellId, bool goUp})> mncs,
+    List<({int afterIdx, int cellId})> mncs,
   ) {
     var cur = startId;
     bool moved = true;
@@ -243,8 +242,8 @@ PlannedAida planStitchingV3({
       final belowId = activeSqAt(sq.x, sq.y + 1);
       final leftId = activeSqAt(sq.x - 1, sq.y);
       final rightId = activeSqAt(sq.x + 1, sq.y);
-      final primaryId = goUp ? aboveId : belowId;
-      final secondaryId = goUp ? belowId : aboveId;
+      final primaryId = belowId;
+      final secondaryId = aboveId;
 
       // R1: Empty cell → schedule S1; move primary/left/right.
       if (scheduled[cur] == 0) {
@@ -288,7 +287,7 @@ PlannedAida planStitchingV3({
                 scheduled[secondaryId] == 0 &&
                 !mncSet.contains(secondaryId)) {
               mncSet.add(secondaryId);
-              mncs.add((afterIdx: ops.length - 1, cellId: secondaryId, goUp: goUp));
+              mncs.add((afterIdx: ops.length - 1, cellId: secondaryId));
             }
 
             bool isDone(int? id) => id == null || scheduled[id] == 2;
@@ -322,7 +321,7 @@ PlannedAida planStitchingV3({
   // each sub-sweep is inserted at the correct position in the final schedule.
   List<({int cellId, String kind})> expandSweep(
     List<({int cellId, String kind})> ops,
-    List<({int afterIdx, int cellId, bool goUp})> mncs,
+    List<({int afterIdx, int cellId})> mncs,
   ) {
     if (mncs.isEmpty) return ops;
     // Run sub-sweeps in LIFO order so the most-recently detected MNC is
@@ -332,8 +331,8 @@ PlannedAida planStitchingV3({
     for (final mnc in mncs.reversed) {
       if (scheduled[mnc.cellId] != 0) continue;
       final subOps = <({int cellId, String kind})>[];
-      final subMncs = <({int afterIdx, int cellId, bool goUp})>[];
-      runOneSweep(mnc.cellId, mnc.goUp, subOps, subMncs);
+      final subMncs = <({int afterIdx, int cellId})>[];
+      runOneSweep(mnc.cellId, subOps, subMncs);
       subResults[mnc.afterIdx] = expandSweep(subOps, subMncs);
     }
     // Splice sub-sweeps into ops in ascending afterIdx order.
@@ -352,8 +351,8 @@ PlannedAida planStitchingV3({
 
   // ---- Phase 1: downward sweep, with MNC sub-sweeps spliced inline ----
   final p1Ops = <({int cellId, String kind})>[];
-  final p1Mncs = <({int afterIdx, int cellId, bool goUp})>[];
-  runOneSweep(cellToId[startCoord]!, false, p1Ops, p1Mncs);
+  final p1Mncs = <({int afterIdx, int cellId})>[];
+  runOneSweep(cellToId[startCoord]!, p1Ops, p1Mncs);
   schedule.addAll(expandSweep(p1Ops, p1Mncs));
 
   // ---- Pass 2: routing ----
