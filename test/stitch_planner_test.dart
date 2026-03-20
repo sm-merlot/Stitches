@@ -337,9 +337,9 @@ void main() {
           'S(2,2,BR) B(2,2,TL)',
           'B(1,2,TR) S(1,2,BR)',
           'S(1,2,BR) B(1,2,TL)',
-          'B(0,1,BR) S(0,1,BL)',
-          'S(0,2,TL) B(0,2,BR)',
-          'B(0,2,BR) S(0,2,BL)',
+          'B(0,2,TR) S(0,2,BR)',  // turn-around S1(0,2): H move → V back → S1 rev
+          'S(0,2,BR) B(0,2,TL)',
+          'B(0,2,TL) S(0,2,BL)',  // turn-around S2(0,2): V back stitch
           'S(0,2,BL) B(0,2,TR)',
           'B(0,2,TR) S(0,2,BR)',
           'S(1,2,BL) B(1,2,TR)',
@@ -347,9 +347,9 @@ void main() {
           'S(2,1,BR) B(2,1,TL)',
           'B(1,1,TR) S(1,1,BR)',
           'S(1,1,BR) B(1,1,TL)',
-          'B(0,0,BR) S(0,0,BL)',
-          'S(0,1,TL) B(0,1,BR)',
-          'B(0,1,BR) S(0,1,BL)',
+          'B(0,1,TR) S(0,1,BR)',  // turn-around S1(0,1): H move → V back → S1 rev
+          'S(0,1,BR) B(0,1,TL)',
+          'B(0,1,TL) S(0,1,BL)',  // turn-around S2(0,1): V back stitch
           'S(0,1,BL) B(0,1,TR)',
           'B(0,1,TR) S(0,1,BR)',
           'S(1,1,BL) B(1,1,TR)',
@@ -357,9 +357,9 @@ void main() {
           'S(2,0,BR) B(2,0,TL)',
           'B(1,0,TR) S(1,0,BR)',
           'S(1,0,BR) B(1,0,TL)',
-          'B(0,0,TR) S(0,0,TL)',
-          'S(0,0,TL) B(0,0,BR)',
-          'B(0,0,BR) S(0,0,BL)',
+          'B(0,0,TR) S(0,0,BR)',  // turn-around S1(0,0): H move → V back → S1 rev
+          'S(0,0,BR) B(0,0,TL)',
+          'B(0,0,TL) S(0,0,BL)',  // turn-around S2(0,0): V back stitch
           'S(0,0,BL) B(0,0,TR)',
           'B(0,0,TR) S(0,0,BR)',
           'S(1,0,BL) B(1,0,TR)',
@@ -400,9 +400,9 @@ void main() {
           'S(2,2,BR) B(2,2,TL)',
           'B(1,2,TR) S(1,2,BR)',
           'S(1,2,BR) B(1,2,TL)',
-          'B(0,1,BR) S(0,1,BL)',
-          'S(0,2,TL) B(0,2,BR)',
-          'B(0,2,BR) S(0,2,BL)',
+          'B(0,2,TR) S(0,2,BR)',  // turn-around S1(0,2): H move → V back → S1 rev
+          'S(0,2,BR) B(0,2,TL)',
+          'B(0,2,TL) S(0,2,BL)',  // turn-around S2(0,2): V back stitch
           'S(0,2,BL) B(0,2,TR)',
           'B(0,2,TR) S(0,2,BR)',
           'S(1,2,BL) B(1,2,TR)',
@@ -410,9 +410,9 @@ void main() {
           'S(2,2,TR) B(2,2,BL)',
           'B(1,2,BR) S(1,2,TR)',
           'S(1,1,BR) B(1,1,TL)',
-          'B(0,0,BR) S(0,0,BL)',
-          'S(0,1,TL) B(0,1,BR)',
-          'B(0,1,BR) S(0,1,BL)',
+          'B(0,1,TR) S(0,1,BR)',  // turn-around S1(0,1): H move → V back → S1 rev
+          'S(0,1,BR) B(0,1,TL)',
+          'B(0,1,TL) S(0,1,BL)',  // turn-around S2(0,1): V back stitch
           'S(0,1,BL) B(0,1,TR)',
           'B(0,1,TR) S(0,1,BR)',
           'S(1,1,BL) B(1,1,TR)',
@@ -420,9 +420,9 @@ void main() {
           'S(2,0,BR) B(2,0,TL)',
           'B(1,0,TR) S(1,0,BR)',
           'S(1,0,BR) B(1,0,TL)',
-          'B(0,0,TR) S(0,0,TL)',
-          'S(0,0,TL) B(0,0,BR)',
-          'B(0,0,BR) S(0,0,BL)',
+          'B(0,0,TR) S(0,0,BR)',  // turn-around S1(0,0): H move → V back → S1 rev
+          'S(0,0,BR) B(0,0,TL)',
+          'B(0,0,TL) S(0,0,BL)',  // turn-around S2(0,0): V back stitch
           'S(0,0,BL) B(0,0,TR)',
           'B(0,0,TR) S(0,0,BR)',
           'S(1,0,BL) B(1,0,TR)',
@@ -461,9 +461,9 @@ void main() {
           'S(2,2,BR) B(2,2,TL)',
           'B(1,2,TR) S(1,2,BR)',
           'S(1,2,BR) B(1,2,TL)',
-          'B(0,1,BR) S(0,1,BL)',
-          'S(0,2,TL) B(0,2,BR)',
-          'B(0,2,BR) S(0,2,BL)',
+          'B(0,2,TR) S(0,2,BR)',  // turn-around S1(0,2): H move → V back → S1 rev
+          'S(0,2,BR) B(0,2,TL)',
+          'B(0,2,TL) S(0,2,BL)',  // turn-around S2(0,2): V back stitch
           'S(0,2,BL) B(0,2,TR)',
           'B(0,2,TR) S(0,2,BR)',
           'S(1,2,BL) B(1,2,TR)',
@@ -471,9 +471,9 @@ void main() {
           'S(2,2,TR) B(2,2,BL)',
           'B(1,2,BR) S(1,2,TR)',
           'S(1,1,BR) B(1,1,TL)',
-          'B(0,0,BR) S(0,0,BL)',
-          'S(0,1,TL) B(0,1,BR)',
-          'B(0,1,BR) S(0,1,BL)',
+          'B(0,1,TR) S(0,1,BR)',  // turn-around S1(0,1): H move → V back → S1 rev
+          'S(0,1,BR) B(0,1,TL)',
+          'B(0,1,TL) S(0,1,BL)',  // turn-around S2(0,1): V back stitch
           'S(0,1,BL) B(0,1,TR)',
           'B(0,1,TR) S(0,1,BR)',
           'S(1,1,BL) B(1,1,TR)',
@@ -481,9 +481,9 @@ void main() {
           'S(2,1,TR) B(2,1,BL)',
           'B(1,1,BR) S(1,1,TR)',
           'S(1,0,BR) B(1,0,TL)',
-          'B(0,0,TR) S(0,0,TL)',
-          'S(0,0,TL) B(0,0,BR)',
-          'B(0,0,BR) S(0,0,BL)',
+          'B(0,0,TR) S(0,0,BR)',  // turn-around S1(0,0): H move → V back → S1 rev
+          'S(0,0,BR) B(0,0,TL)',
+          'B(0,0,TL) S(0,0,BL)',  // turn-around S2(0,0): V back stitch
           'S(0,0,BL) B(0,0,TR)',
           'B(0,0,TR) S(0,0,BR)',
           'S(1,0,BL) B(1,0,TR)',
@@ -577,9 +577,9 @@ void main() {
           'S(1,1,TL) B(1,1,BR)',
           'B(1,2,TR) S(1,2,BR)',
           'S(1,2,BR) B(1,2,TL)',
-          'B(0,1,BR) S(0,1,BL)',
-          'S(0,2,TL) B(0,2,BR)',
-          'B(0,2,BR) S(0,2,BL)',
+          'B(0,2,TR) S(0,2,BR)',  // turn-around S1(0,2): H move → V back → S1 rev
+          'S(0,2,BR) B(0,2,TL)',
+          'B(0,2,TL) S(0,2,BL)',  // turn-around S2(0,2): V back stitch
           'S(0,2,BL) B(0,2,TR)',
           'B(1,1,BL) S(1,1,BR)',
           'S(2,2,TL) B(2,2,BR)',
@@ -643,10 +643,10 @@ void main() {
           'S(2,0,BR) B(2,0,TL)', // S1b (2,0); needle at TL(2,0)=TR(1,0)
           'B(1,0,TR) S(1,0,BR)', // back V; tiebreak rev
           'S(1,0,BR) B(1,0,TL)', // S1b (1,0); needle at TL(1,0)=TR(0,0)
-          'B(0,0,TR) S(0,0,TL)', // back H → TL(0,0)
-          'S(0,0,TL) B(0,0,BR)', // S1a (0,0): no next S1, default fwd; needle at BR(0,0)
+          'B(0,0,TR) S(0,0,BR)',  // turn-around S1(0,0): H move → V back → S1 rev
+          'S(0,0,BR) B(0,0,TL)', // S1 rev (0,0); needle at TL(0,0)
           // S2 pass (sweep right)
-          'B(0,0,BR) S(0,0,BL)', // back H; tiebreak rev
+          'B(0,0,TL) S(0,0,BL)', // turn-around S2(0,0): V back stitch
           'S(0,0,BL) B(0,0,TR)', // S2b (0,0); needle at TR(0,0)
           'B(0,0,TR) S(0,0,BR)', // back V (via cell (0,0)); tiebreak rev
           'S(1,0,BL) B(1,0,TR)', // S2b (1,0); needle at TR(1,0)

@@ -409,6 +409,60 @@ PlannedAida planStitchingV3({
     if (fwdDiag != revDiag) return fwdDiag ? 'rev' : 'fwd';
     if ((fwdDist - revDist).abs() > 1e-9) return fwdDist < revDist ? 'fwd' : 'rev';
 
+    // Turn-around rule: when S1 is immediately followed by S2 on the same cell,
+    // choose directions so ALL back stitches are perpendicular to cell movement.
+    // H cell movement → V back stitches; V cell movement → H back stitches.
+    final currentOp = schedule[opIdx];
+    if (currentOp.kind == 'S1' && opIdx + 1 < schedule.length) {
+      final nextOp = schedule[opIdx + 1];
+      if (nextOp.kind == 'S2' && nextOp.cellId == currentCellId) {
+        // Turn-around S1: choose so approach (fromNode → S1 start) is perp to movement.
+        if (opIdx > 0 && fromNode != null) {
+          final prevCellId = schedule[opIdx - 1].cellId;
+          final dx = squares[currentCellId].x - squares[prevCellId].x;
+          final dy = squares[currentCellId].y - squares[prevCellId].y;
+          if (dx != 0 || dy != 0) {
+            bool approachIsPerp(int startNode) {
+              final (fx, fy) = nodeCoords[fromNode]!;
+              final (sx, sy) = nodeCoords[startNode]!;
+              final adx = (sx - fx).abs();
+              final ady = (sy - fy).abs();
+              if (dy == 0 && dx != 0 && adx < 1e-9) return true; // H move → V approach
+              if (dx == 0 && dy != 0 && ady < 1e-9) return true; // V move → H approach
+              return false;
+            }
+            final fwdP = approachIsPerp(fwdStart);
+            final revP = approachIsPerp(revStart);
+            if (fwdP != revP) return fwdP ? 'fwd' : 'rev';
+          }
+        }
+      }
+    } else if (currentOp.kind == 'S2' && opIdx > 0) {
+      final prevOp = schedule[opIdx - 1];
+      if (prevOp.kind == 'S1' && prevOp.cellId == currentCellId) {
+        // Turn-around S2: choose so departure (fromNode → S2 start) is perp to movement.
+        if (opIdx >= 2 && fromNode != null) {
+          final prevCellId = schedule[opIdx - 2].cellId;
+          final dx = squares[currentCellId].x - squares[prevCellId].x;
+          final dy = squares[currentCellId].y - squares[prevCellId].y;
+          if (dx != 0 || dy != 0) {
+            bool departureIsPerp(int startNode) {
+              final (fx, fy) = nodeCoords[fromNode]!;
+              final (sx, sy) = nodeCoords[startNode]!;
+              final adx = (sx - fx).abs();
+              final ady = (sy - fy).abs();
+              if (dy == 0 && dx != 0 && adx < 1e-9) return true; // H move → V dep
+              if (dx == 0 && dy != 0 && ady < 1e-9) return true; // V move → H dep
+              return false;
+            }
+            final fwdP = departureIsPerp(fwdStart);
+            final revP = departureIsPerp(revStart);
+            if (fwdP != revP) return fwdP ? 'fwd' : 'rev';
+          }
+        }
+      }
+    }
+
     // 3.5 Lookahead: if approach distances tie, prefer the end closer to the
     // nearest start of the next op (minimises the following back stitch).
     if (opIdx + 1 < schedule.length) {
