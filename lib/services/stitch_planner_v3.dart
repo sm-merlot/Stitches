@@ -353,39 +353,82 @@ PlannedAida planStitchingV3({
   // The shared [scheduled] map means cells already covered by an earlier sweep
   // are skipped (scheduled != 0).
   //
-  // MNCs are processed in LIFO order (stack) so that the most-recently
-  // detected MNC runs first and schedules its cells before earlier MNCs are
-  // evaluated.  Results are then assembled in ascending afterIdx order so
-  // each sub-sweep is inserted at the correct position in the final schedule.
+  // Phase A (v1 MNCs) — processed LIFO, spliced after their trigger S2.
+  // Phase B (v2a MNCs) — processed LIFO after Phase A, spliced before their
+  //   trigger cell's S1 (located by forward scan of the Phase A result).
   List<({int cellId, String kind})> expandSweep(
     List<({int cellId, String kind})> ops,
     List<({int afterIdx, int cellId})> mncs,
+    List<({int triggerCellId, int cellId})> mncv2as,
   ) {
-    if (mncs.isEmpty) return ops;
-    // Run sub-sweeps in LIFO order so the most-recently detected MNC is
-    // processed first.  afterIdx is unique per MNC (each fires on a distinct
-    // S2 op), so it serves as a stable key for later assembly.
-    final subResults = <int, List<({int cellId, String kind})>>{};
-    for (final mnc in mncs.reversed) {
-      if (scheduled[mnc.cellId] != 0) continue;
+    // ---- Phase A: expand v1 MNCs ----
+    List<({int cellId, String kind})> expanded = ops;
+    if (mncs.isNotEmpty) {
+      // Run sub-sweeps LIFO; afterIdx (index of the S2 op) is the unique key.
+      final subResults = <int, List<({int cellId, String kind})>>{};
+      for (final mnc in mncs.reversed) {
+        if (scheduled[mnc.cellId] != 0) continue;
+        final subOps = <({int cellId, String kind})>[];
+        final subMncs = <({int afterIdx, int cellId})>[];
+        final subMncv2as = <({int triggerCellId, int cellId})>[];
+        final subCellS1Idx = <int, int>{};
+        runOneSweep(mnc.cellId, subOps, subMncs, subMncv2as, subCellS1Idx);
+        subResults[mnc.afterIdx] = expandSweep(subOps, subMncs, subMncv2as);
+      }
+      // Splice sub-sweeps into ops in ascending afterIdx order.
+      final result = <({int cellId, String kind})>[];
+      int prev = 0;
+      for (final mnc in mncs) {
+        final sub = subResults[mnc.afterIdx];
+        if (sub == null) continue;
+        result.addAll(ops.getRange(prev, mnc.afterIdx));
+        prev = mnc.afterIdx;
+        result.addAll(sub);
+      }
+      result.addAll(ops.getRange(prev, ops.length));
+      expanded = result;
+    }
+
+    // ---- Phase B: expand v2a MNCs ----
+    if (mncv2as.isEmpty) return expanded;
+
+    // Run sub-sweeps LIFO so the most-recently detected v2a claims cells first.
+    // Key by position in mncv2as for stable lookup during assembly.
+    final v2aSubResults = <int, List<({int cellId, String kind})>>{};
+    for (var i = mncv2as.length - 1; i >= 0; i--) {
+      final v2a = mncv2as[i];
+      if (scheduled[v2a.cellId] != 0) continue;
       final subOps = <({int cellId, String kind})>[];
       final subMncs = <({int afterIdx, int cellId})>[];
       final subMncv2as = <({int triggerCellId, int cellId})>[];
       final subCellS1Idx = <int, int>{};
-      runOneSweep(mnc.cellId, subOps, subMncs, subMncv2as, subCellS1Idx);
-      subResults[mnc.afterIdx] = expandSweep(subOps, subMncs);
+      runOneSweep(v2a.cellId, subOps, subMncs, subMncv2as, subCellS1Idx);
+      v2aSubResults[i] = expandSweep(subOps, subMncs, subMncv2as);
     }
-    // Splice sub-sweeps into ops in ascending afterIdx order.
+
+    // Build insertion map: triggerCellId → ordered list of sub-sweeps to insert
+    // before that cell's S1.  Iterate LIFO so the first-run sub-sweep (last
+    // detected) appears first in the list, preserving LIFO scheduling order.
+    final insertions = <int, List<List<({int cellId, String kind})>>>{};
+    for (var i = mncv2as.length - 1; i >= 0; i--) {
+      final sub = v2aSubResults[i];
+      if (sub == null || sub.isEmpty) continue;
+      insertions.putIfAbsent(mncv2as[i].triggerCellId, () => []).add(sub);
+    }
+    if (insertions.isEmpty) return expanded;
+
+    // Forward pass: insert all pending sub-sweeps immediately before each
+    // trigger cell's S1 op.
     final result = <({int cellId, String kind})>[];
-    int prev = 0;
-    for (final mnc in mncs) {
-      final sub = subResults[mnc.afterIdx];
-      if (sub == null) continue;
-      result.addAll(ops.getRange(prev, mnc.afterIdx));
-      prev = mnc.afterIdx;
-      result.addAll(sub);
+    for (final op in expanded) {
+      if (op.kind == 'S1') {
+        final pending = insertions[op.cellId];
+        if (pending != null) {
+          for (final sub in pending) { result.addAll(sub); }
+        }
+      }
+      result.add(op);
     }
-    result.addAll(ops.getRange(prev, ops.length));
     return result;
   }
 
@@ -395,7 +438,7 @@ PlannedAida planStitchingV3({
   final p1Mncv2as = <({int triggerCellId, int cellId})>[];
   final p1CellS1Idx = <int, int>{};
   runOneSweep(cellToId[startCoord]!, p1Ops, p1Mncs, p1Mncv2as, p1CellS1Idx);
-  schedule.addAll(expandSweep(p1Ops, p1Mncs));
+  schedule.addAll(expandSweep(p1Ops, p1Mncs, p1Mncv2as));
 
   // ---- Pass 2: routing ----
   // For each scheduled op, choose fwd/rev to minimise back-stitch cost,
