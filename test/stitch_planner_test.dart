@@ -657,6 +657,42 @@ void main() {
         ],
       );
     });
+
+    test('MNCv2a case A — top-left diagonal inserted before trigger S1', () {
+      // X .     (0,0) isolated; (1,1)+(1,2) form the main column.
+      //  X      When (1,1) fires S2, the cell above (1,0) is absent →
+      //  X      MNCv2a detects top-left diagonal (0,0) and schedules it
+      //         before S1(1,1).
+      final aida = planStitchingV3(
+        title: 'MNCv2a-A',
+        cols: 2,
+        rows: 3,
+        cells: [(0, 0), (1, 1), (1, 2)],
+      );
+      expect(
+        aida.schedule,
+        ['S1(1,2)', 'S1(0,0)', 'S2(0,0)', 'S1(1,1)', 'S2(1,1)', 'S2(1,2)'],
+        reason: 'MNCv2a-A: (0,0) must be scheduled before S1(1,1)',
+      );
+    });
+
+    test('MNCv2a case B — bottom-right diagonal inserted before trigger S1', () {
+      // X X     (0,0)+(1,0) form the main row; (2,1) isolated.
+      //   . X   When (1,0) fires S2, the cell below (1,1) is absent →
+      //         MNCv2a detects bottom-right diagonal (2,1) and schedules
+      //         it before S1(1,0).
+      final aida = planStitchingV3(
+        title: 'MNCv2a-B',
+        cols: 3,
+        rows: 2,
+        cells: [(0, 0), (1, 0), (2, 1)],
+      );
+      expect(
+        aida.schedule,
+        ['S1(2,1)', 'S2(2,1)', 'S1(1,0)', 'S1(0,0)', 'S2(0,0)', 'S2(1,0)'],
+        reason: 'MNCv2a-B: (2,1) must be scheduled before S1(1,0)',
+      );
+    });
   });
 
   final fixturesDir = Directory('test/fixtures');
@@ -684,7 +720,7 @@ void main() {
 
       // Run planner.
       final aida =
-          planStitching(title: name, cols: cols, rows: rows, cells: cells);
+          planStitchingV3(title: name, cols: cols, rows: rows, cells: cells);
 
       // Load expected lines.
       final expectedLines = expectedFile

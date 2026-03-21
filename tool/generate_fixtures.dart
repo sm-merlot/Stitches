@@ -90,7 +90,7 @@ void main() {
     }
 
     final name = file.uri.pathSegments.last.replaceAll('.pattern', '');
-    final aida = planStitching(title: name, cols: cols, rows: rows, cells: cells);
+    final aida = planStitchingV3(title: name, cols: cols, rows: rows, cells: cells);
 
     final lines =
         aida.stitches.map((s) => serializeStitch(s, aida.squares)).toList();
