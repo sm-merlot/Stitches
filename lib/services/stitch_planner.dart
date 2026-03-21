@@ -415,6 +415,10 @@ PlannedAida planStitching({
     // Run sub-sweeps LIFO so the most-recently detected v2 claims cells first.
     // Key by position in mncv2s for stable lookup during assembly.
     final v2SubResults = <int, List<({int cellId, String kind})>>{};
+    // Step 1: snapshot raw ops + mncv2s before expansion for chain detection.
+    final v2RawOps    = <int, List<({int cellId, String kind})>>{};
+    final v2RawMncv2s =
+        <int, List<({int triggerCellId, int cellId, String kind})>>{};
     for (var i = mncv2s.length - 1; i >= 0; i--) {
       final v2 = mncv2s[i];
       if (scheduled[v2.cellId] != 0) continue;
@@ -423,8 +427,55 @@ PlannedAida planStitching({
       final subMncv2s = <({int triggerCellId, int cellId, String kind})>[];
       final subCellS1Idx = <int, int>{};
       runOneSweep(v2.cellId, subOps, subMncs, subMncv2s, subCellS1Idx);
+      v2RawOps[i]    = List.of(subOps);
+      v2RawMncv2s[i] = List.of(subMncv2s);
       v2SubResults[i] = expandSweep(subOps, subMncs, subMncv2s);
     }
+
+    // Step 1: detect same-direction diagonal chains.
+    // A chain exists for mncv2s entry i when the sub-sweep produced at least
+    // one MNCv2 detection with the SAME kind — i.e. the diagonal continues in
+    // the same direction (e.g. repeated bottom-right or repeated bottom-left).
+    //
+    // Step 2: collect chain links in traversal order (near → far).
+    // For entry i  (trigger T → cell D, kind k):
+    //   links[0] = D's own raw ops   (segment nearest the parent)
+    //   links[1] = continuation ops  (everything further along the chain)
+    //
+    // The parent segment (the T-containing portion of `ops`) is NOT in links;
+    // it is handled at linearisation time (Step 3).
+    //
+    // Extraction from the expanded sub-result:
+    //   kind='b' → continuation is appended AFTER D's raw ops  → tail
+    //   kind='a' → continuation is prepended BEFORE D's raw ops → head
+    final chainLinks =
+        <int, List<List<({int cellId, String kind})>>>{};
+    for (var i = 0; i < mncv2s.length; i++) {
+      final rawMncv2s = v2RawMncv2s[i];
+      final rawOps    = v2RawOps[i];
+      final subResult = v2SubResults[i];
+      if (rawMncv2s == null || rawOps == null || subResult == null) continue;
+
+      final entry = mncv2s[i];
+      // Step 1: same-kind sub-detection present?
+      if (!rawMncv2s.any((e) => e.kind == entry.kind)) continue;
+
+      // Step 2: extract continuation and build link list.
+      final n = rawOps.length;
+      final List<({int cellId, String kind})> cont;
+      if (entry.kind == 'b') {
+        // D's raw ops are at the start; continuation follows.
+        cont = subResult.length > n ? subResult.sublist(n) : const [];
+      } else {
+        // D's raw ops are at the end; continuation precedes.
+        cont = subResult.length > n
+            ? subResult.sublist(0, subResult.length - n)
+            : const [];
+      }
+      chainLinks[i] = [rawOps, cont];
+    }
+    // chainLinks maps entry index → [near-segment ops, far-segment ops, …].
+    // Available for Step 3 to linearise same-direction chains.
 
     // Build insertion maps (LIFO order so first-run sub-sweep appears first).
     // kind='a' → before trigger's S1; kind='b' → after trigger's S2.
