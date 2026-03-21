@@ -623,6 +623,29 @@ void main() {
         ],
         reason: 'Z-chain from top-right: all S1s along chain, all S2s in reverse — no long back stitch',
       );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(4,0,BR) B(4,0,TL)',
+          'B(3,0,TR) S(3,0,TL)',
+          'S(3,0,TL) B(3,0,BR)',
+          'B(3,0,BR) S(1,0,BR)',
+          'S(2,1,TL) B(2,1,BR)',
+          'B(2,1,BR) S(0,1,BR)',
+          'S(1,2,TL) B(1,2,BR)',
+          'B(1,2,BR) S(1,2,BL)',
+          'S(0,2,BR) B(0,2,TL)',
+          'B(0,2,TL) S(0,2,BL)',
+          'S(0,2,BL) B(0,2,TR)',
+          'B(0,2,TR) S(0,2,BR)',
+          'S(1,2,BL) B(1,2,TR)',
+          'S(2,1,BL) B(2,1,TR)',
+          'S(3,0,BL) B(3,0,TR)',
+          'B(3,0,TR) S(3,0,BR)',
+          'S(4,0,BL) B(4,0,TR)',
+        ],
+        reason: 'Z-chain from top-right: correct stitch sequence with corners',
+      );
     });
 
     test('Z-chain (top-right→bottom-left), start bottom-left', () {
@@ -645,6 +668,29 @@ void main() {
           'S2(4,0)', 'S2(3,0)', 'S2(2,1)', 'S2(1,2)', 'S2(0,2)',
         ],
         reason: 'Z-chain from bottom-left: all S1s along chain, all S2s in reverse — no long back stitch',
+      );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(0,2,TL) B(0,2,BR)',
+          'B(0,2,BR) S(0,2,TR)',
+          'S(1,2,TL) B(1,2,BR)',
+          'B(1,2,BR) S(1,0,BR)',
+          'S(2,1,TL) B(2,1,BR)',
+          'B(2,1,BR) S(2,0,TR)',
+          'S(3,0,TL) B(3,0,BR)',
+          'B(3,0,BR) S(3,0,TR)',
+          'S(4,0,TL) B(4,0,BR)',
+          'B(4,0,BR) S(4,0,TR)',
+          'S(4,0,TR) B(4,0,BL)',
+          'B(3,0,BR) S(3,0,TR)',
+          'S(3,0,TR) B(3,0,BL)',
+          'S(2,1,TR) B(2,1,BL)',
+          'S(1,2,TR) B(1,2,BL)',
+          'B(0,2,BR) S(0,2,TR)',
+          'S(0,2,TR) B(0,2,BL)',
+        ],
+        reason: 'Z-chain from bottom-left: correct stitch sequence with corners',
       );
     });
 
@@ -669,6 +715,29 @@ void main() {
         ],
         reason: 'S-chain from top-left: all S1s along chain, all S2s in reverse — no long back stitch',
       );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(0,0,TL) B(0,0,BR)',
+          'B(0,0,BR) S(0,0,TR)',
+          'S(1,0,TL) B(1,0,BR)',
+          'S(2,1,TL) B(2,1,BR)',
+          'S(3,2,TL) B(3,2,BR)',
+          'B(3,2,BR) S(3,2,TR)',
+          'S(4,2,TL) B(4,2,BR)',
+          'B(4,2,BR) S(4,2,TR)',
+          'S(4,2,TR) B(4,2,BL)',
+          'B(3,2,BR) S(3,2,TR)',
+          'S(3,2,TR) B(3,2,BL)',
+          'B(2,2,BR) S(2,0,BR)',
+          'S(2,1,TR) B(2,1,BL)',
+          'B(1,1,BR) S(1,0,TR)',
+          'S(1,0,TR) B(1,0,BL)',
+          'B(0,0,BR) S(0,0,TR)',
+          'S(0,0,TR) B(0,0,BL)',
+        ],
+        reason: 'S-chain from top-left: correct stitch sequence with corners',
+      );
     });
 
     test('S-chain (top-left→bottom-right), start bottom-right', () {
@@ -691,6 +760,29 @@ void main() {
           'S2(0,0)', 'S2(1,0)', 'S2(2,1)', 'S2(3,2)', 'S2(4,2)',
         ],
         reason: 'S-chain from bottom-right: all S1s along chain, all S2s in reverse — no long back stitch',
+      );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(4,2,BR) B(4,2,TL)',
+          'B(3,2,TR) S(3,2,BR)',
+          'S(3,2,BR) B(3,2,TL)',
+          'S(2,1,BR) B(2,1,TL)',
+          'S(1,0,BR) B(1,0,TL)',
+          'B(0,0,TR) S(0,0,BR)',
+          'S(0,0,BR) B(0,0,TL)',
+          'B(0,0,TL) S(0,0,BL)',
+          'S(0,0,BL) B(0,0,TR)',
+          'B(1,0,TL) S(1,0,TR)',
+          'S(1,0,TR) B(1,0,BL)',
+          'B(0,0,BR) S(2,0,BR)',
+          'S(2,1,TR) B(2,1,BL)',
+          'B(1,1,BR) S(3,1,BR)',
+          'S(3,2,TR) B(3,2,BL)',
+          'B(3,2,BL) S(3,2,BR)',
+          'S(4,2,BL) B(4,2,TR)',
+        ],
+        reason: 'S-chain from bottom-right: correct stitch sequence with corners',
       );
     });
   });
