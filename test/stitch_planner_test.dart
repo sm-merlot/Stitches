@@ -785,6 +785,186 @@ void main() {
         reason: 'S-chain from bottom-right: correct stitch sequence with corners',
       );
     });
+
+    // ── Longer diagonal chains (3 diagonal hops) ──────────────────────────
+
+    // Pattern 1 — S-like (top-left → bottom-right), 3 hops:
+    //   X X . . . .   y=0: (0,0),(1,0)
+    //   . . X . . .   y=1: (2,1)
+    //   . . . X . .   y=2: (3,2)
+    //   . . . . X X   y=3: (4,3),(5,3)
+    const _p1cells = [(0,0),(1,0),(2,1),(3,2),(4,3),(5,3)];
+
+    test('S-chain 3-hop, start top-left (0,0)', () {
+      final aida = planStitching(
+        title: 's3-from-top', cols: 6, rows: 4, cells: _p1cells,
+        startCell: (0, 0),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(0,0)', 'S1(1,0)', 'S1(2,1)', 'S1(3,2)', 'S1(4,3)', 'S1(5,3)',
+          'S2(5,3)', 'S2(4,3)', 'S2(3,2)', 'S2(2,1)', 'S2(1,0)', 'S2(0,0)',
+        ],
+        reason: 'S-chain 3-hop from top-left: all S1s along chain, all S2s reversed',
+      );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(0,0,TL) B(0,0,BR)',
+          'B(0,0,BR) S(0,0,TR)',
+          'S(1,0,TL) B(1,0,BR)',
+          'S(2,1,TL) B(2,1,BR)',  // BR(1,0)=TL(2,1): no back stitch
+          'S(3,2,TL) B(3,2,BR)',  // BR(2,1)=TL(3,2): no back stitch
+          'S(4,3,TL) B(4,3,BR)',  // BR(3,2)=TL(4,3): no back stitch
+          'B(4,3,BR) S(4,3,TR)',
+          'S(5,3,TL) B(5,3,BR)',
+          'B(5,3,BR) S(5,3,TR)',
+          'S(5,3,TR) B(5,3,BL)',
+          'B(4,3,BR) S(4,3,TR)',
+          'S(4,3,TR) B(4,3,BL)',
+          'B(3,3,BR) S(3,3,TL)',  // short diagonal hop (4,3)→(3,2)
+          'S(3,2,BL) B(3,2,TR)',
+          'B(3,1,BR) S(3,1,TL)',  // short diagonal hop (3,2)→(2,1)
+          'S(2,1,TR) B(2,1,BL)',
+          'B(1,1,BR) S(1,1,TL)',  // short diagonal hop (2,1)→(1,0)
+          'S(1,0,BL) B(1,0,TR)',
+          'B(1,0,TR) S(1,0,TL)',
+          'S(0,0,TR) B(0,0,BL)',
+        ],
+        reason: 'S-chain 3-hop from top-left: correct stitch sequence with corners',
+      );
+    });
+
+    test('S-chain 3-hop, start bottom-right (5,3)', () {
+      final aida = planStitching(
+        title: 's3-from-bottom', cols: 6, rows: 4, cells: _p1cells,
+        startCell: (5, 3),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(5,3)', 'S1(4,3)', 'S1(3,2)', 'S1(2,1)', 'S1(1,0)', 'S1(0,0)',
+          'S2(0,0)', 'S2(1,0)', 'S2(2,1)', 'S2(3,2)', 'S2(4,3)', 'S2(5,3)',
+        ],
+        reason: 'S-chain 3-hop from bottom-right: all S1s along chain, all S2s reversed',
+      );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(5,3,BR) B(5,3,TL)',
+          'B(4,3,TR) S(4,3,BR)',
+          'S(4,3,BR) B(4,3,TL)',
+          'S(3,2,BR) B(3,2,TL)',  // TL(4,3)=BR(3,2)... wait let me check
+          'S(2,1,BR) B(2,1,TL)',
+          'S(1,0,BR) B(1,0,TL)',
+          'B(0,0,TR) S(0,0,BR)',
+          'S(0,0,BR) B(0,0,TL)',
+          'B(0,0,TL) S(0,0,BL)',
+          'S(0,0,BL) B(0,0,TR)',
+          'B(1,0,TL) S(1,0,TR)',
+          'S(1,0,TR) B(1,0,BL)',
+          'B(1,1,TL) S(1,1,BR)',  // short diagonal hop (1,0)→(2,1)
+          'S(2,1,BL) B(2,1,TR)',
+          'B(3,1,TL) S(3,1,BR)',  // short diagonal hop (2,1)→(3,2)
+          'S(3,2,TR) B(3,2,BL)',
+          'B(3,3,TL) S(3,3,BR)',  // short diagonal hop (3,2)→(4,3)
+          'S(4,3,BL) B(4,3,TR)',
+          'B(4,3,TR) S(4,3,BR)',
+          'S(5,3,BL) B(5,3,TR)',
+        ],
+        reason: 'S-chain 3-hop from bottom-right: correct stitch sequence with corners',
+      );
+    });
+
+    // Pattern 2 — Z-like (top-right → bottom-left), 3 hops:
+    //   . . . . X X   y=0: (4,0),(5,0)
+    //   . . . X . .   y=1: (3,1)
+    //   . . X . . .   y=2: (2,2)
+    //   X X . . . .   y=3: (0,3),(1,3)
+    const _p2cells = [(4,0),(5,0),(3,1),(2,2),(0,3),(1,3)];
+
+    test('Z-chain 3-hop, start top-right (5,0)', () {
+      final aida = planStitching(
+        title: 'z3-from-top', cols: 6, rows: 4, cells: _p2cells,
+        startCell: (5, 0),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(5,0)', 'S1(4,0)', 'S1(3,1)', 'S1(2,2)', 'S1(1,3)', 'S1(0,3)',
+          'S2(0,3)', 'S2(1,3)', 'S2(2,2)', 'S2(3,1)', 'S2(4,0)', 'S2(5,0)',
+        ],
+        reason: 'Z-chain 3-hop from top-right: all S1s along chain, all S2s reversed',
+      );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(5,0,BR) B(5,0,TL)',
+          'B(4,0,TR) S(4,0,TL)',
+          'S(4,0,TL) B(4,0,BR)',
+          'B(4,1,TR) S(4,1,BL)',  // short diagonal hop (4,0)→(3,1)
+          'S(3,1,BR) B(3,1,TL)',
+          'B(2,1,TR) S(2,1,BL)',  // short diagonal hop (3,1)→(2,2)
+          'S(2,2,TL) B(2,2,BR)',
+          'B(2,3,TR) S(2,3,BL)',  // short diagonal hop (2,2)→(1,3)
+          'S(1,3,BR) B(1,3,TL)',
+          'B(0,3,TR) S(0,3,BR)',
+          'S(0,3,BR) B(0,3,TL)',
+          'B(0,3,TL) S(0,3,BL)',
+          'S(0,3,BL) B(0,3,TR)',
+          'B(0,3,TR) S(0,3,BR)',
+          'S(1,3,BL) B(1,3,TR)',
+          'S(2,2,BL) B(2,2,TR)',
+          'S(3,1,BL) B(3,1,TR)',
+          'S(4,0,BL) B(4,0,TR)',
+          'B(4,0,TR) S(4,0,BR)',
+          'S(5,0,BL) B(5,0,TR)',
+        ],
+        reason: 'Z-chain 3-hop from top-right: correct stitch sequence with corners',
+      );
+    });
+
+    test('Z-chain 3-hop, start bottom-left (0,3)', () {
+      final aida = planStitching(
+        title: 'z3-from-bottom', cols: 6, rows: 4, cells: _p2cells,
+        startCell: (0, 3),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(0,3)', 'S1(1,3)', 'S1(2,2)', 'S1(3,1)', 'S1(4,0)', 'S1(5,0)',
+          'S2(5,0)', 'S2(4,0)', 'S2(3,1)', 'S2(2,2)', 'S2(1,3)', 'S2(0,3)',
+        ],
+        reason: 'Z-chain 3-hop from bottom-left: all S1s along chain, all S2s reversed',
+      );
+      expect(
+        aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList(),
+        [
+          'S(0,3,TL) B(0,3,BR)',
+          'B(0,3,BR) S(0,3,TR)',
+          'S(1,3,TL) B(1,3,BR)',
+          'B(2,3,BL) S(2,3,TR)',  // short diagonal hop (1,3)→(2,2)
+          'S(2,2,BR) B(2,2,TL)',
+          'B(2,1,BL) S(2,1,TR)',  // short diagonal hop (2,2)→(3,1)
+          'S(3,1,TL) B(3,1,BR)',
+          'B(4,1,BL) S(4,1,TR)',  // short diagonal hop (3,1)→(4,0)
+          'S(4,0,BR) B(4,0,TL)',
+          'B(4,0,TL) S(4,0,TR)',
+          'S(5,0,TL) B(5,0,BR)',
+          'B(5,0,BR) S(5,0,TR)',
+          'S(5,0,TR) B(5,0,BL)',
+          'B(4,0,BR) S(4,0,TR)',
+          'S(4,0,TR) B(4,0,BL)',
+          'S(3,1,TR) B(3,1,BL)',
+          'S(2,2,TR) B(2,2,BL)',
+          'S(1,3,TR) B(1,3,BL)',
+          'B(0,3,BR) S(0,3,TR)',
+          'S(0,3,TR) B(0,3,BL)',
+        ],
+        reason: 'Z-chain 3-hop from bottom-left: correct stitch sequence with corners',
+      );
+    });
   });
 
   final fixturesDir = Directory('test/fixtures');

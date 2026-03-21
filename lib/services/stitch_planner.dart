@@ -461,17 +461,16 @@ PlannedAida planStitching({
       if (!rawMncv2s.any((e) => e.kind == entry.kind)) continue;
 
       // Step 2: extract continuation and build link list.
-      final n = rawOps.length;
-      final List<({int cellId, String kind})> cont;
-      if (entry.kind == 'b') {
-        // D's raw ops are at the start; continuation follows.
-        cont = subResult.length > n ? subResult.sublist(n) : const [];
-      } else {
-        // D's raw ops are at the end; continuation precedes.
-        cont = subResult.length > n
-            ? subResult.sublist(0, subResult.length - n)
-            : const [];
-      }
+      //
+      // Filter by cell ID rather than by position.  Positional slicing
+      // (sublist(n) / sublist(0, len-n)) breaks for chains longer than
+      // 2 hops: the inner recursive expansion already linearises the
+      // sub-chain, so D's own ops appear at the start *and* end of
+      // subResult rather than only at one end, causing duplicates.
+      final rawCellIds = rawOps.map((op) => op.cellId).toSet();
+      final cont = subResult
+          .where((op) => !rawCellIds.contains(op.cellId))
+          .toList();
       chainLinks[i] = [rawOps, cont];
     }
     // chainLinks maps entry index → [near-segment ops, far-segment ops, …].
