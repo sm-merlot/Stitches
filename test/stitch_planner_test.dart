@@ -127,46 +127,7 @@ bool _matches(
       c2 == spec.c2;
 }
 
-// ── Test runner ────────────────────────────────────────────────────────────
-
-// ── V2-specific inline tests ───────────────────────────────────────────────
-
-void _expectV2Sequence(
-  String label,
-  List<(int, int)> cells,
-  int cols,
-  int rows,
-  List<String> expected,
-) {
-  final aida = planStitchingV2(
-    title: label,
-    cols: cols,
-    rows: rows,
-    cells: cells,
-  );
-
-  final actual =
-      aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList();
-
-  // Build a readable diff for failures.
-  final maxLen = actual.length > expected.length ? actual.length : expected.length;
-  final diffLines = <String>[];
-  for (var i = 0; i < maxLen; i++) {
-    final a = i < actual.length ? actual[i] : '<missing>';
-    final e = i < expected.length ? expected[i] : '<missing>';
-    final mark = a == e ? '   ' : '***';
-    diffLines.add('$mark [$i] expected: $e');
-    if (a != e) diffLines.add('         got:      $a');
-  }
-
-  expect(
-    actual,
-    expected,
-    reason: '$label:\n${diffLines.join('\n')}',
-  );
-}
-
-// ── V3-specific inline tests ───────────────────────────────────────────────
+// ── Inline test helpers ────────────────────────────────────────────────────
 
 String _diffReason(String label, List<String> actual, List<String> expected) {
   final maxLen =
@@ -181,7 +142,7 @@ String _diffReason(String label, List<String> actual, List<String> expected) {
   return '$label:\n${lines.join('\n')}';
 }
 
-void _expectV3(
+void _expect(
   String label,
   List<(int, int)> cells,
   int cols,
@@ -190,7 +151,7 @@ void _expectV3(
   List<String> expectedStitches, {
   (int, int)? startCell,
 }) {
-  final aida = planStitchingV3(
+  final aida = planStitching(
     title: label,
     cols: cols,
     rows: rows,
@@ -214,109 +175,12 @@ void _expectV3(
 }
 
 void main() {
-  group('planStitchingV2', () {
-    test('2x2 full grid', () {
-      // XX
-      // XX
-      //
-      // Expected order (from design spec):
-      //   (0,0) TL->BR, BR->BL
-      //   (0,1) TL->BR, BR->TR
-      //   (1,1) TL->BR, BR->TR, TR->BL
-      //   (0,1) BR->BL, BL->TR          ← reversed S2 to route to (1,0)
-      //   (1,0) BL->TL, TL->BR, BR->TR, TR->BL
-      //   (0,0) BR->TR, TR->BL
-      _expectV2Sequence(
-        '2x2',
-        [(0, 0), (1, 0), (0, 1), (1, 1)],
-        2,
-        2,
-        [
-          'S(0,0,TL) B(0,0,BR)', // S1 (0,0)
-          'B(0,0,BR) S(0,0,BL)', // back BR→BL
-          'S(0,1,TL) B(0,1,BR)', // S1 (0,1)
-          'B(0,1,BR) S(0,1,TR)', // back BR→TR
-          'S(1,1,TL) B(1,1,BR)', // S1 (1,1)
-          'B(1,1,BR) S(1,1,TR)', // back BR→TR
-          'S(1,1,TR) B(1,1,BL)', // S2 (1,1)
-          'B(0,1,BR) S(0,1,BL)', // back BR→BL  (reversed-S2 routing for (0,1))
-          'S(0,1,BL) B(0,1,TR)', // S2 reversed (0,1)
-          'B(0,0,BR) S(0,0,TR)', // back (0.5,0.5)→(0.5,−0.5), serialised via (0,0) as lowest-sqId shared cell
-          'S(1,0,TL) B(1,0,BR)', // S1 (1,0)
-          'B(1,0,BR) S(1,0,TR)', // back BR→TR
-          'S(1,0,TR) B(1,0,BL)', // S2 (1,0)
-          'B(0,0,BR) S(0,0,TR)', // back BR→TR
-          'S(0,0,TR) B(0,0,BL)', // S2 (0,0)
-        ],
-      );
-    });
-
-    test('3x3 full grid', () {
-      // XXX
-      // XXX
-      // XXX
-      //
-      // Expected traversal:
-      //   S1 column: (0,0)→(0,1)→(0,2), then sweep right along bottom: (1,2)→(2,2)
-      //   S2 bottom-row: (2,2) forward, (1,2) forward (H back left), (0,2) reversed → needle at TR(0,2)=BL(1,1)
-      //   S1 mid-row: (1,1)→(2,1), S2: (2,1) forward, (1,1) forward (H back left), (0,1) reversed → needle at TR(0,1)=BL(1,0)
-      //   S1 top-row: (1,0)→(2,0), S2: (2,0) forward, (1,0) forward, (0,0) forward
-      _expectV2Sequence(
-        '3x3',
-        [
-          (0, 0), (1, 0), (2, 0),
-          (0, 1), (1, 1), (2, 1),
-          (0, 2), (1, 2), (2, 2),
-        ],
-        3,
-        3,
-        [
-          'S(0,0,TL) B(0,0,BR)', //  1 — S1 (0,0)
-          'B(0,0,BR) S(0,0,BL)', //  2 — back H to (0,1).TL
-          'S(0,1,TL) B(0,1,BR)', //  3 — S1 (0,1)
-          'B(0,1,BR) S(0,1,BL)', //  4 — back H to (0,2).TL
-          'S(0,2,TL) B(0,2,BR)', //  5 — S1 (0,2)
-          'B(0,2,BR) S(0,2,TR)', //  6 — back V up to (1,2).TL
-          'S(1,2,TL) B(1,2,BR)', //  7 — S1 (1,2)
-          'B(1,2,BR) S(1,2,TR)', //  8 — back V up to (2,2).TL
-          'S(2,2,TL) B(2,2,BR)', //  9 — S1 (2,2)
-          'B(2,2,BR) S(2,2,TR)', // 10 — back V up: S2 (2,2)
-          'S(2,2,TR) B(2,2,BL)', // 11 — S2 (2,2) forward
-          'B(1,2,BR) S(1,2,TR)', // 12 — back V up to TR(1,2)
-          'S(1,2,TR) B(1,2,BL)', // 13 — S2 (1,2) forward → needle at BL(1,2)=BR(0,2)
-          'B(0,2,BR) S(0,2,BL)', // 14 — back H left to BL(0,2)
-          'S(0,2,BL) B(0,2,TR)', // 15 — S2 (0,2) reversed → needle at TR(0,2)=BR(0,1)
-          'B(0,1,BR) S(0,1,TR)', // 16 — back V up to (1,1).TL
-          'S(1,1,TL) B(1,1,BR)', // 17 — S1 (1,1)
-          'B(1,1,BR) S(1,1,TR)', // 18 — back V up to (2,1).TL
-          'S(2,1,TL) B(2,1,BR)', // 19 — S1 (2,1)
-          'B(2,1,BR) S(2,1,TR)', // 20 — back V up: S2 (2,1)
-          'S(2,1,TR) B(2,1,BL)', // 21 — S2 (2,1) forward
-          'B(1,1,BR) S(1,1,TR)', // 22 — back V up to TR(1,1)
-          'S(1,1,TR) B(1,1,BL)', // 23 — S2 (1,1) forward → needle at BL(1,1)=BR(0,1)
-          'B(0,1,BR) S(0,1,BL)', // 24 — back H left to BL(0,1)
-          'S(0,1,BL) B(0,1,TR)', // 25 — S2 (0,1) reversed → needle at TR(0,1)=BR(0,0)
-          'B(0,0,BR) S(0,0,TR)', // 26 — back V up to (1,0).TL
-          'S(1,0,TL) B(1,0,BR)', // 27 — S1 (1,0)
-          'B(1,0,BR) S(1,0,TR)', // 28 — back V up to (2,0).TL
-          'S(2,0,TL) B(2,0,BR)', // 29 — S1 (2,0)
-          'B(2,0,BR) S(2,0,TR)', // 30 — back V up: S2 (2,0)
-          'S(2,0,TR) B(2,0,BL)', // 31 — S2 (2,0) forward
-          'B(1,0,BR) S(1,0,TR)', // 32 — back V (2nd pass): S2 (1,0)
-          'S(1,0,TR) B(1,0,BL)', // 33 — S2 (1,0) forward
-          'B(0,0,BR) S(0,0,TR)', // 34 — back V (2nd pass): S2 (0,0)
-          'S(0,0,TR) B(0,0,BL)', // 35 — S2 (0,0) forward
-        ],
-      );
-    });
-  });
-
-  group('planStitchingV3', () {
+  group('planStitching', () {
     test('3x3 full grid, start bottom-right (2,2)', () {
       // XXX     Start: (2,2) — bottom-right corner.
       // XXX
       // XXX
-      _expectV3(
+      _expect(
         '3x3 bottom-right start',
         [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
         3, 3,
@@ -378,7 +242,7 @@ void main() {
       // XXX     Start: (2,1) — middle of right column.
       // XXX
       // XXX
-      _expectV3(
+      _expect(
         '3x3 mid-right start',
         [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
         3, 3,
@@ -439,7 +303,7 @@ void main() {
       // XXX     Start: (2,0) — top of right column.
       // XXX
       // XXX
-      _expectV3(
+      _expect(
         '3x3 top-right start',
         [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
         3, 3,
@@ -497,7 +361,7 @@ void main() {
       // XXX     Start: (0,0) — top-left corner.
       // XXX
       // XXX
-      _expectV3(
+      _expect(
         '3x3 top-left start',
         [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
         3, 3,
@@ -556,7 +420,7 @@ void main() {
       // XXX     Start: (1,0) — top-middle.
       // XXX
       // XXX
-      _expectV3(
+      _expect(
         '3x3 top-mid start',
         [(0,0),(1,0),(2,0),(0,1),(1,1),(2,1),(0,2),(1,2),(2,2)],
         3, 3,
@@ -627,7 +491,7 @@ void main() {
       //            Back V via (1,0): TL(2,0)→BR(1,0) = TR(1,0)→BR(1,0). S1 rev. Needle at TL(1,0).
       //  (0,0) S1: fwd=TL(0,0) H dist=1; rev=BR(0,0) V dist=1 — TIE, no next op → fwd.
       //            Back H via (0,0): TL(1,0)=TR(0,0) → TL(0,0). S1 fwd. Needle at BR(0,0).
-      _expectV3(
+      _expect(
         '4x1 row tiebreaker',
         [(0, 0), (1, 0), (2, 0), (3, 0)],
         4,
@@ -663,7 +527,7 @@ void main() {
       //  X      When (1,1) fires S2, the cell above (1,0) is absent →
       //  X      MNCv2a detects top-left diagonal (0,0) and schedules it
       //         before S1(1,1).
-      final aida = planStitchingV3(
+      final aida = planStitching(
         title: 'MNCv2a-A',
         cols: 2,
         rows: 3,
@@ -681,7 +545,7 @@ void main() {
       //   . X   When (1,0) fires S2, the cell below (1,1) is absent →
       //         MNCv2a detects bottom-right diagonal (2,1) and schedules
       //         it before S1(1,0).
-      final aida = planStitchingV3(
+      final aida = planStitching(
         title: 'MNCv2a-B',
         cols: 3,
         rows: 2,
@@ -720,7 +584,7 @@ void main() {
 
       // Run planner.
       final aida =
-          planStitchingV3(title: name, cols: cols, rows: rows, cells: cells);
+          planStitching(title: name, cols: cols, rows: rows, cells: cells);
 
       // Load expected lines.
       final expectedLines = expectedFile
