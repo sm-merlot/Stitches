@@ -629,9 +629,9 @@ void main() {
           'S(4,0,BR) B(4,0,TL)',
           'B(3,0,TR) S(3,0,TL)',
           'S(3,0,TL) B(3,0,BR)',
-          'B(3,0,BR) S(1,0,BR)',
-          'S(2,1,TL) B(2,1,BR)',
-          'B(2,1,BR) S(0,1,BR)',
+          'B(3,1,TR) S(3,1,BL)',  // short diagonal hop (3,0)→(2,1)
+          'S(2,1,BR) B(2,1,TL)',
+          'B(1,1,TR) S(1,1,BL)',  // short diagonal hop (2,1)→(1,2)
           'S(1,2,TL) B(1,2,BR)',
           'B(1,2,BR) S(1,2,BL)',
           'S(0,2,BR) B(0,2,TL)',
@@ -675,9 +675,9 @@ void main() {
           'S(0,2,TL) B(0,2,BR)',
           'B(0,2,BR) S(0,2,TR)',
           'S(1,2,TL) B(1,2,BR)',
-          'B(1,2,BR) S(1,0,BR)',
-          'S(2,1,TL) B(2,1,BR)',
-          'B(2,1,BR) S(2,0,TR)',
+          'B(2,2,BL) S(2,2,TR)',  // short diagonal hop (1,2)→(2,1)
+          'S(2,1,BR) B(2,1,TL)',
+          'B(2,0,BL) S(2,0,TR)',  // short diagonal hop (2,1)→(3,0)
           'S(3,0,TL) B(3,0,BR)',
           'B(3,0,BR) S(3,0,TR)',
           'S(4,0,TL) B(4,0,BR)',
@@ -729,9 +729,9 @@ void main() {
           'S(4,2,TR) B(4,2,BL)',
           'B(3,2,BR) S(3,2,TR)',
           'S(3,2,TR) B(3,2,BL)',
-          'B(2,2,BR) S(2,0,BR)',
-          'S(2,1,TR) B(2,1,BL)',
-          'B(1,1,BR) S(1,0,TR)',
+          'B(2,2,BR) S(2,2,TL)',  // short diagonal hop (3,2)→(2,1)
+          'S(2,1,BL) B(2,1,TR)',
+          'B(2,0,BR) S(2,0,TL)',  // short diagonal hop (2,1)→(1,0)
           'S(1,0,TR) B(1,0,BL)',
           'B(0,0,BR) S(0,0,TR)',
           'S(0,0,TR) B(0,0,BL)',
@@ -775,9 +775,9 @@ void main() {
           'S(0,0,BL) B(0,0,TR)',
           'B(1,0,TL) S(1,0,TR)',
           'S(1,0,TR) B(1,0,BL)',
-          'B(0,0,BR) S(2,0,BR)',
-          'S(2,1,TR) B(2,1,BL)',
-          'B(1,1,BR) S(3,1,BR)',
+          'B(1,1,TL) S(1,1,BR)',  // short diagonal hop (1,0)→(2,1)
+          'S(2,1,BL) B(2,1,TR)',
+          'B(3,1,TL) S(3,1,BR)',  // short diagonal hop (2,1)→(3,2)
           'S(3,2,TR) B(3,2,BL)',
           'B(3,2,BL) S(3,2,BR)',
           'S(4,2,BL) B(4,2,TR)',

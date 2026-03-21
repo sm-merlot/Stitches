@@ -601,8 +601,11 @@ PlannedAida planStitching({
     final (fwdDiag, fwdDist) = approachCost(fwdStart);
     final (revDiag, revDist) = approachCost(revStart);
 
-    if (fwdDiag != revDiag) return fwdDiag ? 'rev' : 'fwd';
+    // Prefer the shorter approach; only use non-diagonal as a tiebreaker.
+    // (The old order — diagonal penalty before distance — caused 2-unit
+    // horizontal back stitches in diagonal chains instead of 1-unit diagonal hops.)
     if ((fwdDist - revDist).abs() > 1e-9) return fwdDist < revDist ? 'fwd' : 'rev';
+    if (fwdDiag != revDiag) return fwdDiag ? 'rev' : 'fwd';
 
     // Lookahead: prefer the end node closer to the nearest start of the next op.
     // This check comes before the turn-around rule so that a clear cost
