@@ -475,7 +475,40 @@ PlannedAida planStitching({
       chainLinks[i] = [rawOps, cont];
     }
     // chainLinks maps entry index → [near-segment ops, far-segment ops, …].
-    // Available for Step 3 to linearise same-direction chains.
+
+    // Steps 3 & 4: linearise same-direction diagonal chains.
+    //
+    // When every processed sub-sweep belongs to a single same-direction chain,
+    // the standard point-insertion produces a large back stitch (either the
+    // parent's last S2 is stranded far from its cell, or the needle teleports
+    // to the far end immediately after the first S1).
+    //
+    // Instead, produce a flat "all S1s then all S2s" sequence across the entire
+    // chain — the same schedule a straight column would receive:
+    //
+    //   [parent S1s | link0 S1s | … | linkN S1s | linkN S2s | … | link0 S2s | parent S2s]
+    //
+    // This applies to both kind='a' and kind='b' chains because the parent S1s
+    // and S2s are extracted by filtering `expanded` directly.
+    //
+    // Restriction: only applied when there is exactly one chain entry and no
+    // additional non-chain sub-sweeps at this level, ensuring correctness for
+    // more complex arrangements (multiple independent diagonals, etc.).
+    if (chainLinks.length == 1 && v2SubResults.length == 1) {
+      final links = chainLinks.values.first;
+      final parentS1s = expanded.where((op) => op.kind == 'S1').toList();
+      final parentS2s = expanded.where((op) => op.kind == 'S2').toList();
+
+      final result = <({int cellId, String kind})>[...parentS1s];
+      for (final link in links) {
+        result.addAll(link.where((op) => op.kind == 'S1'));
+      }
+      for (final link in links.reversed) {
+        result.addAll(link.where((op) => op.kind == 'S2'));
+      }
+      result.addAll(parentS2s);
+      return result;
+    }
 
     // Build insertion maps (LIFO order so first-run sub-sweep appears first).
     // kind='a' → before trigger's S1; kind='b' → after trigger's S2.
