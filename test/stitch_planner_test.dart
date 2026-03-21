@@ -557,6 +557,42 @@ void main() {
         reason: 'MNCv2a-B: (2,1) must be scheduled before S1(1,0)',
       );
     });
+
+    test('MNCv2b case A — top-right diagonal inserted after trigger S2', () {
+      // . . X   (1,1)+(1,2) form the main column; (2,0) isolated.
+      // . X .   When (1,1) fires S2, the cell above (1,0) is absent →
+      // . X .   MNCv2b detects top-right diagonal (2,0) and schedules
+      //         it after S2(1,1).
+      final aida = planStitching(
+        title: 'MNCv2b-A',
+        cols: 3,
+        rows: 3,
+        cells: [(1, 1), (1, 2), (2, 0)],
+      );
+      expect(
+        aida.schedule,
+        ['S1(1,2)', 'S1(1,1)', 'S2(1,1)', 'S1(2,0)', 'S2(2,0)', 'S2(1,2)'],
+        reason: 'MNCv2b-A: (2,0) must be scheduled after S2(1,1)',
+      );
+    });
+
+    test('MNCv2b case B — bottom-left diagonal inserted after trigger S2', () {
+      // . X X   (1,0)+(2,0) form the main row; (0,1) isolated.
+      // X . .   When (1,0) fires S2, the cell below (1,1) is absent →
+      //         MNCv2b detects bottom-left diagonal (0,1) and schedules
+      //         it after S2(1,0).
+      final aida = planStitching(
+        title: 'MNCv2b-B',
+        cols: 3,
+        rows: 2,
+        cells: [(0, 1), (1, 0), (2, 0)],
+      );
+      expect(
+        aida.schedule,
+        ['S1(2,0)', 'S1(1,0)', 'S2(1,0)', 'S1(0,1)', 'S2(0,1)', 'S2(2,0)'],
+        reason: 'MNCv2b-B: (0,1) must be scheduled after S2(1,0)',
+      );
+    });
   });
 
   final fixturesDir = Directory('test/fixtures');
