@@ -221,26 +221,26 @@ PlannedAida planStitching({
   // mncSet: shared dedup guard — prevents the same cell being added to MNC (v1) twice.
   final mncSet = <int>{};
 
-  // mncv2aSet: shared dedup guard — prevents the same cell being added to MNCv2a twice.
-  final mncv2aSet = <int>{};
+  // mncv2Set: shared dedup guard — prevents the same cell being added to MNCv2 (a or b) twice.
+  final mncv2Set = <int>{};
 
   // Runs one complete sweep from [startId] using the same down/left/right
   // logic regardless of whether this is Phase 1 or an MNC sub-sweep.
-  // Results go into caller-supplied [ops], [mncs], and [mncv2as] lists.
-  // [ops]     — the (cellId, kind) ops produced by this sweep.
-  // [mncs]    — MNC (v1) detections: (afterIdx, cellId).
-  //             afterIdx is the position in [ops] after which the sub-sweep
-  //             for cellId should be spliced into the final schedule.
-  // [mncv2as] — MNCv2a detections: (triggerCellId, cellId).
-  //             triggerCellId is the cell that was being S2-scheduled when the
-  //             diagonal cell was detected.  The sub-sweep for cellId is spliced
-  //             before the trigger cell's S1 in the final schedule.
+  // Results go into caller-supplied [ops], [mncs], and [mncv2s] lists.
+  // [ops]    — the (cellId, kind) ops produced by this sweep.
+  // [mncs]   — MNC (v1) detections: (afterIdx, cellId).
+  //            afterIdx is the position in [ops] after which the sub-sweep
+  //            for cellId should be spliced into the final schedule.
+  // [mncv2s] — MNCv2 detections: (triggerCellId, cellId, kind).
+  //            triggerCellId is the cell that was being S2-scheduled when the
+  //            diagonal cell was detected.  kind='a' splices before trigger's
+  //            S1; kind='b' splices after trigger's S2.
   // [cellS1Idx] — records the ops index at which each cell's S1 was emitted.
   void runOneSweep(
     int startId,
     List<({int cellId, String kind})> ops,
     List<({int afterIdx, int cellId})> mncs,
-    List<({int triggerCellId, int cellId})> mncv2as,
+    List<({int triggerCellId, int cellId, String kind})> mncv2s,
     Map<int, int> cellS1Idx,
   ) {
     var cur = startId;
@@ -301,29 +301,49 @@ PlannedAida planStitching({
               mncs.add((afterIdx: ops.length - 1, cellId: secondaryId));
             }
 
-            // MNCv2a: diagonal cells that may be unreachable from the main sweep
+            // MNCv2: diagonal cells that may be unreachable from the main sweep
             // because their only axial neighbour in this direction is already done.
+            // kind='a' → splice before trigger's S1 (top-left / bottom-right).
+            // kind='b' → splice after trigger's S2  (top-right / bottom-left).
             //
-            // Case A: cell above is S2 (done) or absent → check top-left diagonal.
+            // Case A: cell above is S2 (done) or absent.
             final aboveDone = aboveId == null || scheduled[aboveId] == 2;
             if (aboveDone) {
+              // v2a: top-left diagonal.
               final topLeftId = activeSqAt(sq.x - 1, sq.y - 1);
               if (topLeftId != null &&
                   scheduled[topLeftId] == 0 &&
-                  !mncv2aSet.contains(topLeftId)) {
-                mncv2aSet.add(topLeftId);
-                mncv2as.add((triggerCellId: cur, cellId: topLeftId));
+                  !mncv2Set.contains(topLeftId)) {
+                mncv2Set.add(topLeftId);
+                mncv2s.add((triggerCellId: cur, cellId: topLeftId, kind: 'a'));
+              }
+              // v2b: top-right diagonal.
+              final topRightId = activeSqAt(sq.x + 1, sq.y - 1);
+              if (topRightId != null &&
+                  scheduled[topRightId] == 0 &&
+                  !mncv2Set.contains(topRightId)) {
+                mncv2Set.add(topRightId);
+                mncv2s.add((triggerCellId: cur, cellId: topRightId, kind: 'b'));
               }
             }
-            // Case B: cell below is S2 (done) or absent → check bottom-right diagonal.
+            // Case B: cell below is S2 (done) or absent.
             final belowDone = belowId == null || scheduled[belowId] == 2;
             if (belowDone) {
+              // v2a: bottom-right diagonal.
               final botRightId = activeSqAt(sq.x + 1, sq.y + 1);
               if (botRightId != null &&
                   scheduled[botRightId] == 0 &&
-                  !mncv2aSet.contains(botRightId)) {
-                mncv2aSet.add(botRightId);
-                mncv2as.add((triggerCellId: cur, cellId: botRightId));
+                  !mncv2Set.contains(botRightId)) {
+                mncv2Set.add(botRightId);
+                mncv2s.add((triggerCellId: cur, cellId: botRightId, kind: 'a'));
+              }
+              // v2b: bottom-left diagonal.
+              final botLeftId = activeSqAt(sq.x - 1, sq.y + 1);
+              if (botLeftId != null &&
+                  scheduled[botLeftId] == 0 &&
+                  !mncv2Set.contains(botLeftId)) {
+                mncv2Set.add(botLeftId);
+                mncv2s.add((triggerCellId: cur, cellId: botLeftId, kind: 'b'));
               }
             }
 
@@ -353,12 +373,13 @@ PlannedAida planStitching({
   // are skipped (scheduled != 0).
   //
   // Phase A (v1 MNCs) — processed LIFO, spliced after their trigger S2.
-  // Phase B (v2a MNCs) — processed LIFO after Phase A, spliced before their
-  //   trigger cell's S1 (located by forward scan of the Phase A result).
+  // Phase B (v2 MNCs) — processed LIFO after Phase A, in combined detection
+  //   order.  kind='a' splices before trigger's S1; kind='b' splices after
+  //   trigger's S2 (both located by forward scan of the Phase A result).
   List<({int cellId, String kind})> expandSweep(
     List<({int cellId, String kind})> ops,
     List<({int afterIdx, int cellId})> mncs,
-    List<({int triggerCellId, int cellId})> mncv2as,
+    List<({int triggerCellId, int cellId, String kind})> mncv2s,
   ) {
     // ---- Phase A: expand v1 MNCs ----
     List<({int cellId, String kind})> expanded = ops;
@@ -369,10 +390,10 @@ PlannedAida planStitching({
         if (scheduled[mnc.cellId] != 0) continue;
         final subOps = <({int cellId, String kind})>[];
         final subMncs = <({int afterIdx, int cellId})>[];
-        final subMncv2as = <({int triggerCellId, int cellId})>[];
+        final subMncv2s = <({int triggerCellId, int cellId, String kind})>[];
         final subCellS1Idx = <int, int>{};
-        runOneSweep(mnc.cellId, subOps, subMncs, subMncv2as, subCellS1Idx);
-        subResults[mnc.afterIdx] = expandSweep(subOps, subMncs, subMncv2as);
+        runOneSweep(mnc.cellId, subOps, subMncs, subMncv2s, subCellS1Idx);
+        subResults[mnc.afterIdx] = expandSweep(subOps, subMncs, subMncv2s);
       }
       // Splice sub-sweeps into ops in ascending afterIdx order.
       final result = <({int cellId, String kind})>[];
@@ -388,45 +409,52 @@ PlannedAida planStitching({
       expanded = result;
     }
 
-    // ---- Phase B: expand v2a MNCs ----
-    if (mncv2as.isEmpty) return expanded;
+    // ---- Phase B: expand v2 MNCs (kinds 'a' and 'b') ----
+    if (mncv2s.isEmpty) return expanded;
 
-    // Run sub-sweeps LIFO so the most-recently detected v2a claims cells first.
-    // Key by position in mncv2as for stable lookup during assembly.
-    final v2aSubResults = <int, List<({int cellId, String kind})>>{};
-    for (var i = mncv2as.length - 1; i >= 0; i--) {
-      final v2a = mncv2as[i];
-      if (scheduled[v2a.cellId] != 0) continue;
+    // Run sub-sweeps LIFO so the most-recently detected v2 claims cells first.
+    // Key by position in mncv2s for stable lookup during assembly.
+    final v2SubResults = <int, List<({int cellId, String kind})>>{};
+    for (var i = mncv2s.length - 1; i >= 0; i--) {
+      final v2 = mncv2s[i];
+      if (scheduled[v2.cellId] != 0) continue;
       final subOps = <({int cellId, String kind})>[];
       final subMncs = <({int afterIdx, int cellId})>[];
-      final subMncv2as = <({int triggerCellId, int cellId})>[];
+      final subMncv2s = <({int triggerCellId, int cellId, String kind})>[];
       final subCellS1Idx = <int, int>{};
-      runOneSweep(v2a.cellId, subOps, subMncs, subMncv2as, subCellS1Idx);
-      v2aSubResults[i] = expandSweep(subOps, subMncs, subMncv2as);
+      runOneSweep(v2.cellId, subOps, subMncs, subMncv2s, subCellS1Idx);
+      v2SubResults[i] = expandSweep(subOps, subMncs, subMncv2s);
     }
 
-    // Build insertion map: triggerCellId → ordered list of sub-sweeps to insert
-    // before that cell's S1.  Iterate LIFO so the first-run sub-sweep (last
-    // detected) appears first in the list, preserving LIFO scheduling order.
-    final insertions = <int, List<List<({int cellId, String kind})>>>{};
-    for (var i = mncv2as.length - 1; i >= 0; i--) {
-      final sub = v2aSubResults[i];
+    // Build insertion maps (LIFO order so first-run sub-sweep appears first).
+    // kind='a' → before trigger's S1; kind='b' → after trigger's S2.
+    final insertionsBeforeS1 = <int, List<List<({int cellId, String kind})>>>{};
+    final insertionsAfterS2  = <int, List<List<({int cellId, String kind})>>>{};
+    for (var i = mncv2s.length - 1; i >= 0; i--) {
+      final sub = v2SubResults[i];
       if (sub == null || sub.isEmpty) continue;
-      insertions.putIfAbsent(mncv2as[i].triggerCellId, () => []).add(sub);
+      final entry = mncv2s[i];
+      final map = entry.kind == 'a' ? insertionsBeforeS1 : insertionsAfterS2;
+      map.putIfAbsent(entry.triggerCellId, () => []).add(sub);
     }
-    if (insertions.isEmpty) return expanded;
+    if (insertionsBeforeS1.isEmpty && insertionsAfterS2.isEmpty) return expanded;
 
-    // Forward pass: insert all pending sub-sweeps immediately before each
-    // trigger cell's S1 op.
+    // Forward pass: insert pending sub-sweeps at their respective trigger points.
     final result = <({int cellId, String kind})>[];
     for (final op in expanded) {
       if (op.kind == 'S1') {
-        final pending = insertions[op.cellId];
+        final pending = insertionsBeforeS1[op.cellId];
         if (pending != null) {
           for (final sub in pending) { result.addAll(sub); }
         }
       }
       result.add(op);
+      if (op.kind == 'S2') {
+        final pending = insertionsAfterS2[op.cellId];
+        if (pending != null) {
+          for (final sub in pending) { result.addAll(sub); }
+        }
+      }
     }
     return result;
   }
@@ -434,10 +462,10 @@ PlannedAida planStitching({
   // ---- Phase 1: downward sweep, with MNC sub-sweeps spliced inline ----
   final p1Ops = <({int cellId, String kind})>[];
   final p1Mncs = <({int afterIdx, int cellId})>[];
-  final p1Mncv2as = <({int triggerCellId, int cellId})>[];
+  final p1Mncv2s = <({int triggerCellId, int cellId, String kind})>[];
   final p1CellS1Idx = <int, int>{};
-  runOneSweep(cellToId[startCoord]!, p1Ops, p1Mncs, p1Mncv2as, p1CellS1Idx);
-  schedule.addAll(expandSweep(p1Ops, p1Mncs, p1Mncv2as));
+  runOneSweep(cellToId[startCoord]!, p1Ops, p1Mncs, p1Mncv2s, p1CellS1Idx);
+  schedule.addAll(expandSweep(p1Ops, p1Mncs, p1Mncv2s));
 
   // ---- Pass 2: routing ----
   // For each scheduled op, choose fwd/rev to minimise back-stitch cost,
