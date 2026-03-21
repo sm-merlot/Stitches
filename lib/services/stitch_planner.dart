@@ -520,9 +520,37 @@ PlannedAida planStitching({
     if (fwdDiag != revDiag) return fwdDiag ? 'rev' : 'fwd';
     if ((fwdDist - revDist).abs() > 1e-9) return fwdDist < revDist ? 'fwd' : 'rev';
 
+    // Lookahead: prefer the end node closer to the nearest start of the next op.
+    // This check comes before the turn-around rule so that a clear cost
+    // difference (e.g. straight vs diagonal back stitch to a v2b-inserted cell)
+    // always wins over a local perpendicularity preference.
+    if (opIdx + 1 < schedule.length) {
+      final nextOp = schedule[opIdx + 1];
+      final nextCn = cellNodes[nextOp.cellId]!;
+      final nextStarts = nextOp.kind == 'S1'
+          ? [nextCn[Corner.topLeft]!, nextCn[Corner.bottomRight]!]
+          : [nextCn[Corner.topRight]!, nextCn[Corner.bottomLeft]!];
+
+      double minDepDist(int endNode) {
+        final (ex, ey) = nodeCoords[endNode]!;
+        double best = double.infinity;
+        for (final ns in nextStarts) {
+          final (nx, ny) = nodeCoords[ns]!;
+          final d = sqrt((nx - ex) * (nx - ex) + (ny - ey) * (ny - ey));
+          if (d < best) best = d;
+        }
+        return best;
+      }
+
+      final fwdDep = minDepDist(fwdEnd);
+      final revDep = minDepDist(revEnd);
+      if ((fwdDep - revDep).abs() > 1e-9) return fwdDep < revDep ? 'fwd' : 'rev';
+    }
+
     // Turn-around rule: when S1 is immediately followed by S2 on the same cell,
     // choose directions so ALL back stitches are perpendicular to cell movement.
     // H cell movement → V back stitches; V cell movement → H back stitches.
+    // Only fires when the lookahead above found equal departure distances.
     final currentOp = schedule[opIdx];
     if (currentOp.kind == 'S1' && opIdx + 1 < schedule.length) {
       final nextOp = schedule[opIdx + 1];
@@ -572,31 +600,6 @@ PlannedAida planStitching({
           }
         }
       }
-    }
-
-    // 3.5 Lookahead: if approach distances tie, prefer the end closer to the
-    // nearest start of the next op (minimises the following back stitch).
-    if (opIdx + 1 < schedule.length) {
-      final nextOp = schedule[opIdx + 1];
-      final nextCn = cellNodes[nextOp.cellId]!;
-      final nextStarts = nextOp.kind == 'S1'
-          ? [nextCn[Corner.topLeft]!, nextCn[Corner.bottomRight]!]
-          : [nextCn[Corner.topRight]!, nextCn[Corner.bottomLeft]!];
-
-      double minDepDist(int endNode) {
-        final (ex, ey) = nodeCoords[endNode]!;
-        double best = double.infinity;
-        for (final ns in nextStarts) {
-          final (nx, ny) = nodeCoords[ns]!;
-          final d = sqrt((nx - ex) * (nx - ex) + (ny - ey) * (ny - ey));
-          if (d < best) best = d;
-        }
-        return best;
-      }
-
-      final fwdDep = minDepDist(fwdEnd);
-      final revDep = minDepDist(revEnd);
-      if ((fwdDep - revDep).abs() > 1e-9) return fwdDep < revDep ? 'fwd' : 'rev';
     }
 
     // Tie: prefer end that allows a perpendicular departure toward the next cell.
