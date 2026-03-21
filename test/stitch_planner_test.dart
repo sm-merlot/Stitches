@@ -593,6 +593,133 @@ void main() {
         reason: 'MNCv2b-B: (0,1) must be scheduled after S2(1,0)',
       );
     });
+
+    // ── Diagonal chain scheduling ────────────────────────────────────────────
+    //
+    // When cells form a chain of diagonal-only connections all running in the
+    // same direction (e.g. top-right → bottom-left, or top-left → bottom-right),
+    // the cascading MNCv2a/b insertions strand one end's S2 far from its cell:
+    //
+    //   MNCv2b cascade (Z-shape from top-right):
+    //     S1(4,0), S1(3,0), S2(3,0), S1(2,1), S2(2,1), S1(1,2), S1(0,2),
+    //     S2(0,2), S2(1,2), S2(4,0)   ← S2(4,0) stranded at the very end
+    //
+    //   MNCv2a cascade (S-shape from bottom-right):
+    //     S1(4,2), S1(1,0), S1(0,0), S2(0,0), S2(1,0), S1(2,1), S2(2,1),
+    //     S1(3,2), S2(3,2), S2(4,2)   ← needle jumps from (4,2) to (1,0) upfront
+    //
+    // The correct schedule for a same-direction diagonal chain is: all S1s along
+    // the chain in traversal order, then all S2s in reverse order.  Each back
+    // stitch is then only a short diagonal hop rather than a pattern-spanning jump.
+
+    test('Z-chain (top-right→bottom-left), start top-right — long back-stitch bug', () {
+      // . . . X X   y=0: (3,0),(4,0)
+      // . . X . .   y=1: (2,1)
+      // X X . . .   y=2: (0,2),(1,2)
+      //
+      // Current (broken) schedule via MNCv2b cascade:
+      //   S1(4,0), S1(3,0), S2(3,0), S1(2,1), S2(2,1), S1(1,2), S1(0,2),
+      //   S2(0,2), S2(1,2), S2(4,0)
+      // Problem: S2(4,0) deferred until after all bottom-left cells are done.
+      // The needle must travel diagonally from near (0,2)/(1,2) back to (4,0).
+      final aida = planStitching(
+        title: 'z-chain-from-top',
+        cols: 5,
+        rows: 3,
+        cells: [(3, 0), (4, 0), (2, 1), (0, 2), (1, 2)],
+        startCell: (4, 0),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(4,0)', 'S1(3,0)', 'S1(2,1)', 'S1(1,2)', 'S1(0,2)',
+          'S2(0,2)', 'S2(1,2)', 'S2(2,1)', 'S2(3,0)', 'S2(4,0)',
+        ],
+        reason: 'Z-chain from top-right: all S1s along chain, all S2s in reverse — no long back stitch',
+      );
+    });
+
+    test('Z-chain (top-right→bottom-left), start bottom-left — long back-stitch bug', () {
+      // . . . X X   y=0: (3,0),(4,0)
+      // . . X . .   y=1: (2,1)
+      // X X . . .   y=2: (0,2),(1,2)
+      //
+      // Current (broken) schedule via MNCv2b cascade:
+      //   S1(0,2), S1(1,2), S2(1,2), S1(2,1), S2(2,1), S1(3,0), S1(4,0),
+      //   S2(4,0), S2(3,0), S2(0,2)
+      // Problem: S2(0,2) deferred until after all top-right cells are done.
+      // The needle must travel from near (3,0)/(4,0) back to (0,2).
+      final aida = planStitching(
+        title: 'z-chain-from-bottom',
+        cols: 5,
+        rows: 3,
+        cells: [(3, 0), (4, 0), (2, 1), (0, 2), (1, 2)],
+        startCell: (0, 2),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(0,2)', 'S1(1,2)', 'S1(2,1)', 'S1(3,0)', 'S1(4,0)',
+          'S2(4,0)', 'S2(3,0)', 'S2(2,1)', 'S2(1,2)', 'S2(0,2)',
+        ],
+        reason: 'Z-chain from bottom-left: all S1s along chain, all S2s in reverse — no long back stitch',
+      );
+    });
+
+    test('S-chain (top-left→bottom-right), start top-left — long back-stitch bug', () {
+      // X X . . .   y=0: (0,0),(1,0)
+      // . . X . .   y=1: (2,1)
+      // . . . X X   y=2: (3,2),(4,2)
+      //
+      // Current (broken) schedule via MNCv2a cascade:
+      //   S1(0,0), S1(3,2), S1(4,2), S2(4,2), S2(3,2), S1(2,1), S2(2,1),
+      //   S1(1,0), S2(1,0), S2(0,0)
+      // Problem: MNCv2a inserts (3,2)+(4,2) before S1(1,0), so after S1(0,0)
+      // the needle immediately jumps to (3,2) at the far end — a long back
+      // stitch. S1(1,0), S2(1,0), and S2(0,0) end up stranded near the end.
+      final aida = planStitching(
+        title: 's-chain-from-top',
+        cols: 5,
+        rows: 3,
+        cells: [(0, 0), (1, 0), (2, 1), (3, 2), (4, 2)],
+        startCell: (0, 0),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(0,0)', 'S1(1,0)', 'S1(2,1)', 'S1(3,2)', 'S1(4,2)',
+          'S2(4,2)', 'S2(3,2)', 'S2(2,1)', 'S2(1,0)', 'S2(0,0)',
+        ],
+        reason: 'S-chain from top-left: all S1s along chain, all S2s in reverse — no long back stitch',
+      );
+    });
+
+    test('S-chain (top-left→bottom-right), start bottom-right — long back-stitch bug', () {
+      // X X . . .   y=0: (0,0),(1,0)
+      // . . X . .   y=1: (2,1)
+      // . . . X X   y=2: (3,2),(4,2)
+      //
+      // Current (broken) schedule via MNCv2a cascade:
+      //   S1(4,2), S1(1,0), S1(0,0), S2(0,0), S2(1,0), S1(2,1), S2(2,1),
+      //   S1(3,2), S2(3,2), S2(4,2)
+      // Problem: after S1(4,2) the needle immediately jumps to (1,0) at the
+      // far end of the pattern — a long back stitch spanning the full diagonal.
+      final aida = planStitching(
+        title: 's-chain-from-bottom',
+        cols: 5,
+        rows: 3,
+        cells: [(0, 0), (1, 0), (2, 1), (3, 2), (4, 2)],
+        startCell: (4, 2),
+      );
+      expect(
+        aida.schedule,
+        [
+          'S1(4,2)', 'S1(3,2)', 'S1(2,1)', 'S1(1,0)', 'S1(0,0)',
+          'S2(0,0)', 'S2(1,0)', 'S2(2,1)', 'S2(3,2)', 'S2(4,2)',
+        ],
+        reason: 'S-chain from bottom-right: all S1s along chain, all S2s in reverse — no long back stitch',
+      );
+    });
   });
 
   final fixturesDir = Directory('test/fixtures');
