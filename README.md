@@ -6,22 +6,15 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 
 ## Features
 
+### Pattern editing
 - **Pattern canvas** — draw full stitches, half stitches (forward `/` and backward `\`), quarter stitches, and backstitches on a scalable grid
-- **DMC / Anchor color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference
-- **Undo / redo** — full history stack; double-tap to undo on touch devices
-- **File format** — patterns saved as `.stitchx` files (YAML internally)
-- **Multi-platform** — macOS, iOS, Android; Apple Pencil double-tap toggles draw/erase mode
+- **DMC color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers
+- **Undo / redo** — full history stack (up to 200 steps); double-tap to undo on touch devices
 - **Zoom & pan** — pinch-to-zoom, scroll-wheel zoom, drag to pan; zoom range 0.1×–20×
-- **Keyboard shortcuts** — full shortcut set on desktop (undo, redo, tool switching, modes)
-- **Folder workspace** — open a local or Google Drive folder as a workspace with a file tree sidebar
-- **Google Drive sync** — connect a Google Drive account; patterns auto-save and sync in the background
-- **Reference image overlay** — import a photo as a semi-transparent overlay on the canvas to trace from
-- **Stitch mode** — simplified read-only view for stitching from a finished pattern; keep-screen-on option
-- **PDF export** — export patterns as printable PDFs
-- **Recent files** — quick access to recently opened files and folders, including Drive items
+- **Resize canvas** — adjust pattern dimensions after creation
+- **Reference image overlay** — import a photo as a semi-transparent overlay on the canvas to trace from; adjustable opacity
 
-## Tools
-
+### Tools
 - Full stitch
 - Half stitch (forward / backward)
 - Quarter stitch (any corner)
@@ -31,6 +24,26 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - Erase
 - Color picker (sample a stitch's thread)
 - Selection (copy, cut, paste, delete regions)
+
+### Files & workspace
+- **File format** — patterns saved as `.stitchx` files (YAML internally)
+- **Folder workspace** — open a local folder as a workspace with a file tree sidebar
+- **Google Drive sync** — connect a Google Drive account; patterns auto-save and sync in the background
+- **Recent files** — quick access to recently opened files and folders, including Drive items
+
+### Stitch demonstration
+- **Animated stitch order** — per-thread step-by-step animation showing exactly how to stitch the pattern, with configurable playback speed
+- **Stitch planner** — automatic path planning that determines an efficient stitch order, respecting front/back alternation rules
+- **Start cell selection** — tap any cell on the demo canvas to set the stitching start point
+- **GIF export** — download the stitch order animation as a GIF file
+- **Color-coded passes** — front passes (purple / green), back passes (gold / red / blue) with perpendicular offset rendering so overlapping stitches on the same line are all visible
+
+### Platform & input
+- **Multi-platform** — macOS, iOS, Android
+- **Apple Pencil** — double-tap toggles draw/erase mode
+- **Stitch mode** — simplified read-only view for stitching from a finished pattern; keep-screen-on option
+- **Keyboard shortcuts** — full shortcut set on desktop (undo, redo, tool switching, modes)
+- **PDF viewer** — view reference PDFs alongside the pattern canvas
 
 ## Getting Started
 
@@ -42,5 +55,5 @@ Requires Flutter 3.41.4+.
 
 ## Roadmap
 
-- **Phase 3** — PDF viewer, full keybinding system, Apple Pencil polish
+- **Phase 3** — full keybinding system, Apple Pencil polish
 - **Phase 4** — PDF → `.stitchx` scanning via Claude vision API, Proton Drive
