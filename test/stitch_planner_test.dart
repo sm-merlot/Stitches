@@ -57,6 +57,26 @@ String _serializeStitch(PlanStitchEntry stitch, List<PlannedSquare> squares) {
   throw ArgumentError('Unknown stitch type: $stitch');
 }
 
+// ── Alternation checker ────────────────────────────────────────────────────
+//
+// Every needle pierce must alternate surface→back (front stitch) and
+// back→surface (back stitch).  The serialised form starts with 'S' for a
+// front stitch and 'B' for a back stitch, so two consecutive entries with
+// the same leading letter indicate a missing pierce.
+
+String? _firstAlternationViolation(List<String> stitches) {
+  for (int i = 1; i < stitches.length; i++) {
+    final prev = stitches[i - 1][0]; // 'S' or 'B'
+    final curr = stitches[i][0];
+    if (prev == curr) {
+      return 'index ${i - 1}→$i both start with $curr:\n'
+          '  [${i - 1}] ${stitches[i - 1]}\n'
+          '  [$i] ${stitches[i]}';
+    }
+  }
+  return null;
+}
+
 // ── Expected-line parsing ──────────────────────────────────────────────────
 
 typedef _StitchSpec = ({
@@ -639,12 +659,20 @@ void main() {
           'S(0,2,BL) B(0,2,TR)',
           'B(0,2,TR) S(0,2,BR)',
           'S(1,2,BL) B(1,2,TR)',
-          'S(2,1,BL) B(2,1,TR)',
+          'B(2,1,BL) S(2,1,TR)',  // diagonal back (S2 conflict): BL(1,2)=TR(2,1)
+          'S(2,1,TR) B(2,1,BL)',  // reversed S2 front stitch
+          'B(2,1,BL) S(2,1,TR)',  // back to TR(2,1)=BL(3,0) to start next
           'S(3,0,BL) B(3,0,TR)',
           'B(3,0,TR) S(3,0,BR)',
           'S(4,0,BL) B(4,0,TR)',
         ],
         reason: 'Z-chain from top-right: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'Z-chain from top-right: stitches must strictly alternate front/back',
       );
     });
 
@@ -685,12 +713,20 @@ void main() {
           'S(4,0,TR) B(4,0,BL)',
           'B(3,0,BR) S(3,0,TR)',
           'S(3,0,TR) B(3,0,BL)',
-          'S(2,1,TR) B(2,1,BL)',
+          'B(2,1,TR) S(2,1,BL)',  // diagonal back (S2 conflict): BL(3,0)=TR(2,1)
+          'S(2,1,BL) B(2,1,TR)',  // reversed S2 front stitch
+          'B(2,1,TR) S(2,1,BL)',  // back to BL(2,1)=TR(1,2) to start next
           'S(1,2,TR) B(1,2,BL)',
           'B(0,2,BR) S(0,2,TR)',
           'S(0,2,TR) B(0,2,BL)',
         ],
         reason: 'Z-chain from bottom-left: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'Z-chain from bottom-left: stitches must strictly alternate front/back',
       );
     });
 
@@ -721,7 +757,9 @@ void main() {
           'S(0,0,TL) B(0,0,BR)',
           'B(0,0,BR) S(0,0,TR)',
           'S(1,0,TL) B(1,0,BR)',
-          'S(2,1,TL) B(2,1,BR)',
+          'B(2,1,TL) S(2,1,BR)',  // diagonal back (S1 conflict): BR(1,0)=TL(2,1)
+          'S(2,1,BR) B(2,1,TL)',  // reversed S1 front stitch
+          'B(2,1,TL) S(2,1,BR)',  // back to BR(2,1)=TL(3,2) to start next
           'S(3,2,TL) B(3,2,BR)',
           'B(3,2,BR) S(3,2,TR)',
           'S(4,2,TL) B(4,2,BR)',
@@ -737,6 +775,12 @@ void main() {
           'S(0,0,TR) B(0,0,BL)',
         ],
         reason: 'S-chain from top-left: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'S-chain from top-left: stitches must strictly alternate front/back',
       );
     });
 
@@ -767,7 +811,9 @@ void main() {
           'S(4,2,BR) B(4,2,TL)',
           'B(3,2,TR) S(3,2,BR)',
           'S(3,2,BR) B(3,2,TL)',
-          'S(2,1,BR) B(2,1,TL)',
+          'B(2,1,BR) S(2,1,TL)',  // diagonal back (S1 conflict): TL(3,2)=BR(2,1)
+          'S(2,1,TL) B(2,1,BR)',  // reversed S1 front stitch
+          'B(2,1,BR) S(2,1,TL)',  // back to TL(2,1)=BR(1,0) to start next
           'S(1,0,BR) B(1,0,TL)',
           'B(0,0,TR) S(0,0,BR)',
           'S(0,0,BR) B(0,0,TL)',
@@ -783,6 +829,12 @@ void main() {
           'S(4,2,BL) B(4,2,TR)',
         ],
         reason: 'S-chain from bottom-right: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'S-chain from bottom-right: stitches must strictly alternate front/back',
       );
     });
 
@@ -814,10 +866,13 @@ void main() {
           'S(0,0,TL) B(0,0,BR)',
           'B(0,0,BR) S(0,0,TR)',
           'S(1,0,TL) B(1,0,BR)',
-          'S(2,1,TL) B(2,1,BR)',  // BR(1,0)=TL(2,1): no back stitch
-          'S(3,2,TL) B(3,2,BR)',  // BR(2,1)=TL(3,2): no back stitch
-          'S(4,3,TL) B(4,3,BR)',  // BR(3,2)=TL(4,3): no back stitch
-          'B(4,3,BR) S(4,3,TR)',
+          'B(2,1,TL) S(2,1,BR)',  // diagonal back (S1 conflict): BR(1,0)=TL(2,1)
+          'S(2,1,BR) B(2,1,TL)',  // reversed S1 front stitch
+          'B(2,1,TL) S(2,1,BR)',  // back to BR(2,1)=TL(3,2) to start next
+          'S(3,2,TL) B(3,2,BR)',
+          'B(4,3,TL) S(4,3,BR)',  // diagonal back (S1 conflict): BR(3,2)=TL(4,3)
+          'S(4,3,BR) B(4,3,TL)',  // reversed S1 front stitch
+          'B(4,2,BL) S(4,2,BR)',  // back to TL(5,3)=BR(4,3) via BL(4,2): cross-cell
           'S(5,3,TL) B(5,3,BR)',
           'B(5,3,BR) S(5,3,TR)',
           'S(5,3,TR) B(5,3,BL)',
@@ -833,6 +888,12 @@ void main() {
           'S(0,0,TR) B(0,0,BL)',
         ],
         reason: 'S-chain 3-hop from top-left: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'S-chain 3-hop from top-left: stitches must strictly alternate front/back',
       );
     });
 
@@ -855,10 +916,13 @@ void main() {
           'S(5,3,BR) B(5,3,TL)',
           'B(4,3,TR) S(4,3,BR)',
           'S(4,3,BR) B(4,3,TL)',
-          'S(3,2,BR) B(3,2,TL)',  // TL(4,3)=BR(3,2)=(4,3): no back stitch
+          'B(3,2,BR) S(3,2,TL)',  // diagonal back (S1 conflict): TL(4,3)=BR(3,2)
+          'S(3,2,TL) B(3,2,BR)',  // reversed S1 front stitch
+          'B(3,2,BR) S(3,2,TL)',  // back to BR(3,2)=TL(2,1) to start next
           'S(2,1,BR) B(2,1,TL)',
-          'S(1,0,BR) B(1,0,TL)',
-          'B(0,0,TR) S(0,0,BR)',
+          'B(1,0,BR) S(1,0,TL)',  // diagonal back (S1 conflict): TL(2,1)=BR(1,0)
+          'S(1,0,TL) B(1,0,BR)',  // reversed S1 front stitch
+          'B(1,0,BR) S(1,0,BL)',  // back to BR(1,0)=BR(0,0) via BL(1,0): cross-cell
           'S(0,0,BR) B(0,0,TL)',
           'B(0,0,TL) S(0,0,BL)',
           'S(0,0,BL) B(0,0,TR)',
@@ -874,6 +938,12 @@ void main() {
           'S(5,3,BL) B(5,3,TR)',
         ],
         reason: 'S-chain 3-hop from bottom-right: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'S-chain 3-hop from bottom-right: stitches must strictly alternate front/back',
       );
     });
 
@@ -915,13 +985,22 @@ void main() {
           'S(0,3,BL) B(0,3,TR)',
           'B(0,3,TR) S(0,3,BR)',
           'S(1,3,BL) B(1,3,TR)',
-          'S(2,2,BL) B(2,2,TR)',
+          'B(2,2,BL) S(2,2,TR)',  // diagonal back (S2 conflict): TR(1,3)=BL(2,2)
+          'S(2,2,TR) B(2,2,BL)',  // reversed S2 front stitch
+          'B(2,2,BL) S(2,2,TR)',  // back to BL(2,2)=TR(3,1) to start next
           'S(3,1,BL) B(3,1,TR)',
-          'S(4,0,BL) B(4,0,TR)',
-          'B(4,0,TR) S(4,0,BR)',
+          'B(4,0,BL) S(4,0,TR)',  // diagonal back (S2 conflict): TR(3,1)=BL(4,0)
+          'S(4,0,TR) B(4,0,BL)',  // reversed S2 front stitch
+          'B(4,0,BL) S(4,0,BR)',  // back to BL(4,0)=TR(5,0)... cross-cell
           'S(5,0,BL) B(5,0,TR)',
         ],
         reason: 'Z-chain 3-hop from top-right: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'Z-chain 3-hop from top-right: stitches must strictly alternate front/back',
       );
     });
 
@@ -956,13 +1035,22 @@ void main() {
           'S(5,0,TR) B(5,0,BL)',
           'B(4,0,BR) S(4,0,TR)',
           'S(4,0,TR) B(4,0,BL)',
-          'S(3,1,TR) B(3,1,BL)',
+          'B(3,1,TR) S(3,1,BL)',  // diagonal back (S2 conflict): BL(4,0)=TR(3,1)
+          'S(3,1,BL) B(3,1,TR)',  // reversed S2 front stitch
+          'B(3,1,TR) S(3,1,BL)',  // back to TR(3,1)=BL(2,2) to start next
           'S(2,2,TR) B(2,2,BL)',
-          'S(1,3,TR) B(1,3,BL)',
-          'B(0,3,BR) S(0,3,TR)',
+          'B(1,3,TR) S(1,3,BL)',  // diagonal back (S2 conflict): BL(2,2)=TR(1,3)
+          'S(1,3,BL) B(1,3,TR)',  // reversed S2 front stitch
+          'B(1,2,BR) S(1,2,BL)',  // back to TR(0,3) via BR(1,2): cross-cell
           'S(0,3,TR) B(0,3,BL)',
         ],
         reason: 'Z-chain 3-hop from bottom-left: correct stitch sequence with corners',
+      );
+      expect(
+        _firstAlternationViolation(
+            aida.stitches.map((s) => _serializeStitch(s, aida.squares)).toList()),
+        isNull,
+        reason: 'Z-chain 3-hop from bottom-left: stitches must strictly alternate front/back',
       );
     });
   });

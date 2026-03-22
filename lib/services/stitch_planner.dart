@@ -781,9 +781,23 @@ PlannedAida planStitching({
     final startN = dir == 'fwd' ? fwdStart : revStart;
     final endN = dir == 'fwd' ? fwdEnd : revEnd;
 
-    if (needleNode != null && needleNode != startN) emitBack(needleNode!, startN);
-    emitFront(op.cellId, op.kind == 'S1' ? 'front1' : 'front2', dir);
-    needleNode = endN;
+    if (needleNode != null && needleNode == startN) {
+      // The needle is on the back at the same hole as the chosen front-stitch
+      // start corner.  Going straight to the front stitch would mean two
+      // consecutive front stitches sharing a hole, which is physically wrong.
+      //
+      // Fix: back-stitch diagonally to the OTHER end of this cell's diagonal,
+      // then emit the front stitch in the reverse direction.  The reversed
+      // stitch ends at the original start node, so needleNode stays the same.
+      emitBack(startN, endN);
+      emitFront(op.cellId, op.kind == 'S1' ? 'front1' : 'front2',
+          dir == 'fwd' ? 'rev' : 'fwd');
+      needleNode = startN;
+    } else {
+      if (needleNode != null) emitBack(needleNode!, startN);
+      emitFront(op.cellId, op.kind == 'S1' ? 'front1' : 'front2', dir);
+      needleNode = endN;
+    }
   }
 
   return PlannedAida(
