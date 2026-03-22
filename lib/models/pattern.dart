@@ -48,8 +48,11 @@ class CrossStitchPattern {
       name: name,
       width: width,
       height: height,
-      threads: const [],
+      threads: const [
+        Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black'),
+      ],
       stitches: const [],
+      editorSelectedThreadId: '310',
     );
   }
 
