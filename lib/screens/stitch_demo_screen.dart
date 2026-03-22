@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -9,7 +8,7 @@ import 'package:flutter/material.dart';
 import '../models/stitch_plan.dart';
 import '../services/gif_renderer.dart';
 import '../services/stitch_planner.dart';
-import '../services/stitch_renderer.dart' show stitchTypeArgb;
+import '../services/stitch_renderer.dart' show computeGridBounds, stitchTypeArgb;
 import '../widgets/stitch_demo_painter.dart';
 
 /// Plays back the step-by-step stitching demonstration and lets the user
@@ -50,6 +49,8 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
   double _fps = kDemoSubFrames.toDouble();
   Timer? _timer;
   bool _exporting = false;
+  bool _pickingStart = false;
+  Size _canvasSize = Size.zero;
 
   int get _stitchCount => _aida.stitches.length;
   int get _totalSubSteps => _stitchCount * kDemoSubFrames;
@@ -126,31 +127,41 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
     setState(() => _subStep = 0);
   }
 
-  Future<void> _pickStart() async {
-    final cell = await showDialog<(int, int)?>(
-      context: context,
-      builder: (_) => _StartCellPickerDialog(
-        cols: widget.cols,
-        rows: widget.rows,
-        activeCells: widget.cells.toSet(),
-        currentStart: _startCell,
-      ),
-    );
-    // null means cancelled (dialog dismissed without a choice).
-    if (cell == null || !mounted) return;
+  void _togglePickingStart() {
     _pause();
-    setState(() {
-      _startCell = cell;
-      _replan();
-    });
+    setState(() => _pickingStart = !_pickingStart);
   }
 
   void _clearStart() {
     _pause();
     setState(() {
       _startCell = null;
+      _pickingStart = false;
       _replan();
     });
+  }
+
+  /// Converts a tap position on the demo canvas to an active cell coordinate,
+  /// replicating the layout math used by [StitchDemoPainter].
+  (int, int)? _cellFromOffset(Offset pos) {
+    if (_canvasSize == Size.zero) return null;
+    final bounds = computeGridBounds(_aida, 1.0);
+    if (bounds.width == 0 || bounds.height == 0) return null;
+    const paddingFraction = 0.04;
+    final padPx = _canvasSize.shortestSide * paddingFraction;
+    final availW = _canvasSize.width - padPx * 2;
+    final availH = _canvasSize.height - padPx * 2;
+    final cellSize = (availW / bounds.width) < (availH / bounds.height)
+        ? availW / bounds.width
+        : availH / bounds.height;
+    final originX =
+        (_canvasSize.width - bounds.width * cellSize) / 2 - bounds.left * cellSize;
+    final originY =
+        (_canvasSize.height - bounds.height * cellSize) / 2 - bounds.top * cellSize;
+    final cx = ((pos.dx - originX) / cellSize).round();
+    final cy = ((pos.dy - originY) / cellSize).round();
+    final cell = (cx, cy);
+    return widget.cells.contains(cell) ? cell : null;
   }
 
   Future<void> _exportGif() async {
@@ -261,22 +272,63 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
 
             // ── Canvas ───────────────────────────────────────────────────────
             Expanded(
-              child: Stack(
-                children: [
-                  CustomPaint(
-                    painter: StitchDemoPainter(
-                      aida: _aida,
-                      currentSubStep: _subStep,
-                      aidaColor: widget.aidaColor,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  _canvasSize = constraints.biggest;
+                  return GestureDetector(
+                    onTapDown: _pickingStart
+                        ? (d) {
+                            final cell = _cellFromOffset(d.localPosition);
+                            if (cell == null) return;
+                            setState(() {
+                              _startCell = cell;
+                              _pickingStart = false;
+                              _replan();
+                            });
+                          }
+                        : null,
+                    child: Stack(
+                      children: [
+                        CustomPaint(
+                          painter: StitchDemoPainter(
+                            aida: _aida,
+                            currentSubStep: _subStep,
+                            aidaColor: widget.aidaColor,
+                            startCell: _startCell,
+                            pickingStart: _pickingStart,
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
+                        const Positioned(
+                          top: 8,
+                          right: 8,
+                          child: _StitchLegend(),
+                        ),
+                        if (_pickingStart)
+                          Positioned(
+                            bottom: 8,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Tap a cell to set start',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    child: const SizedBox.expand(),
-                  ),
-                  const Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _StitchLegend(),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
 
@@ -385,14 +437,19 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
                         ),
                         const Spacer(),
                         TextButton.icon(
-                          icon: const Icon(Icons.edit_location_alt, size: 14),
-                          label: const Text('Set start'),
+                          icon: Icon(
+                            _pickingStart
+                                ? Icons.close
+                                : Icons.edit_location_alt,
+                            size: 14,
+                          ),
+                          label: Text(_pickingStart ? 'Cancel' : 'Set start'),
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                           ),
-                          onPressed: _pickStart,
+                          onPressed: _togglePickingStart,
                         ),
-                        if (_startCell != null)
+                        if (_startCell != null && !_pickingStart)
                           TextButton(
                             style: TextButton.styleFrom(
                               visualDensity: VisualDensity.compact,
@@ -522,180 +579,6 @@ class _LineSamplePainter extends CustomPainter {
       old.color != color || old.isDashed != isDashed;
 }
 
-// ── Start cell picker ─────────────────────────────────────────────────────────
-
-/// Dialog that lets the user tap any active cell to set the stitching start.
-///
-/// Returns the chosen `(x, y)` cell when the user confirms, or `null` when
-/// they cancel.
-class _StartCellPickerDialog extends StatefulWidget {
-  final int cols;
-  final int rows;
-  final Set<(int, int)> activeCells;
-  final (int, int)? currentStart;
-
-  const _StartCellPickerDialog({
-    required this.cols,
-    required this.rows,
-    required this.activeCells,
-    this.currentStart,
-  });
-
-  @override
-  State<_StartCellPickerDialog> createState() => _StartCellPickerDialogState();
-}
-
-class _StartCellPickerDialogState extends State<_StartCellPickerDialog> {
-  (int, int)? _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = widget.currentStart;
-  }
-
-  double get _cellSize {
-    const maxCanvas = 420.0;
-    return (maxCanvas / max(widget.cols, widget.rows)).clamp(10.0, 40.0);
-  }
-
-  (int, int)? _cellAt(Offset pos, double cellSize) {
-    final x = (pos.dx / cellSize).floor();
-    final y = (pos.dy / cellSize).floor();
-    if (x < 0 || x >= widget.cols || y < 0 || y >= widget.rows) return null;
-    final cell = (x, y);
-    return widget.activeCells.contains(cell) ? cell : null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final cellSize = _cellSize;
-    final canvasW = cellSize * widget.cols;
-    final canvasH = cellSize * widget.rows;
-
-    return AlertDialog(
-      title: const Text('Set start position'),
-      content: SizedBox(
-        width: min(canvasW + 32, 500),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Tap any filled cell to set where stitching begins.',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 300),
-              child: ClipRect(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: GestureDetector(
-                      onTapDown: (d) {
-                        final cell = _cellAt(d.localPosition, cellSize);
-                        if (cell != null) setState(() => _selected = cell);
-                      },
-                      child: CustomPaint(
-                        size: Size(canvasW, canvasH),
-                        painter: _CellPickerPainter(
-                          cols: widget.cols,
-                          rows: widget.rows,
-                          activeCells: widget.activeCells,
-                          selected: _selected,
-                          cellSize: cellSize,
-                          activeColor: cs.primaryContainer,
-                          selectedColor: cs.primary,
-                          gridColor: cs.outlineVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _selected != null
-                  ? 'Start: (${_selected!.$1}, ${_selected!.$2})'
-                  : 'No cell selected',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: _selected != null ? cs.primary : cs.onSurfaceVariant,
-                fontWeight:
-                    _selected != null ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(null),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _selected != null
-              ? () => Navigator.of(context).pop(_selected)
-              : null,
-          child: const Text('Confirm'),
-        ),
-      ],
-    );
-  }
-}
-
-class _CellPickerPainter extends CustomPainter {
-  final int cols;
-  final int rows;
-  final Set<(int, int)> activeCells;
-  final (int, int)? selected;
-  final double cellSize;
-  final Color activeColor;
-  final Color selectedColor;
-  final Color gridColor;
-
-  const _CellPickerPainter({
-    required this.cols,
-    required this.rows,
-    required this.activeCells,
-    required this.selected,
-    required this.cellSize,
-    required this.activeColor,
-    required this.selectedColor,
-    required this.gridColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = gridColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
-    final activePaint = Paint()..color = activeColor;
-    final selectedPaint = Paint()..color = selectedColor;
-
-    for (var y = 0; y < rows; y++) {
-      for (var x = 0; x < cols; x++) {
-        final rect = Rect.fromLTWH(
-            x * cellSize, y * cellSize, cellSize, cellSize);
-        final cell = (x, y);
-        if (selected == cell) {
-          canvas.drawRect(rect, selectedPaint);
-        } else if (activeCells.contains(cell)) {
-          canvas.drawRect(rect, activePaint);
-        }
-        canvas.drawRect(rect, gridPaint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_CellPickerPainter old) =>
-      old.selected != selected || old.activeCells != activeCells;
-}
 
 // ── Isolate helpers ───────────────────────────────────────────────────────────
 
