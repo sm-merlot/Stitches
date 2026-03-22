@@ -855,7 +855,7 @@ void main() {
           'S(5,3,BR) B(5,3,TL)',
           'B(4,3,TR) S(4,3,BR)',
           'S(4,3,BR) B(4,3,TL)',
-          'S(3,2,BR) B(3,2,TL)',  // TL(4,3)=BR(3,2)... wait let me check
+          'S(3,2,BR) B(3,2,TL)',  // TL(4,3)=BR(3,2)=(4,3): no back stitch
           'S(2,1,BR) B(2,1,TL)',
           'S(1,0,BR) B(1,0,TL)',
           'B(0,0,TR) S(0,0,BR)',
