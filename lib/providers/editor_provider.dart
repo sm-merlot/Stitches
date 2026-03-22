@@ -460,7 +460,12 @@ class EditorNotifier extends Notifier<EditorState> {
     final threadIds = clips.map((s) => s.threadId).toSet();
     final threads = state.pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
     await Clipboard.setData(ClipboardData(text: _serializeClipboard(threads, clips)));
-    state = state.copyWith(clipboard: clips, clipboardThreads: threads);
+    state = state.copyWith(
+      clipboard: clips,
+      clipboardThreads: threads,
+      drawingMode: DrawingMode.paste,
+      selectionRect: null,
+    );
   }
 
   Future<void> cutSelection() async {
@@ -483,6 +488,7 @@ class EditorNotifier extends Notifier<EditorState> {
       clipboard: clips,
       clipboardThreads: threads,
       selectionRect: null,
+      drawingMode: DrawingMode.paste,
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],

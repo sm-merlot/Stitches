@@ -179,9 +179,8 @@ class EditorToolbar extends ConsumerWidget {
                     vDivider,
                   ],
 
-                  // Copy/cut/paste/delete (select/paste mode only)
-                  if (state.drawingMode == DrawingMode.select ||
-                      state.drawingMode == DrawingMode.paste) ...[
+                  // Copy/cut/delete — shown when a selection is active
+                  if (state.drawingMode == DrawingMode.select) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Row(
@@ -210,15 +209,6 @@ class EditorToolbar extends ConsumerWidget {
                             ),
                           ),
                           Tooltip(
-                            message: 'Paste  [Cmd+V]',
-                            child: IconButton(
-                              iconSize: 20,
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.paste_outlined),
-                              onPressed: () => notifier.enterPasteMode(),
-                            ),
-                          ),
-                          Tooltip(
                             message: 'Delete selection  [Del]',
                             child: IconButton(
                               iconSize: 20,
@@ -235,6 +225,25 @@ class EditorToolbar extends ConsumerWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                    vDivider,
+                  ],
+                  // Cancel button — shown while paste preview is active
+                  if (state.drawingMode == DrawingMode.paste) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Tooltip(
+                        message: 'Cancel paste  [Esc]',
+                        child: TextButton.icon(
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: theme.colorScheme.error,
+                          ),
+                          icon: const Icon(Icons.close, size: 18),
+                          label: const Text('Cancel'),
+                          onPressed: () => notifier.cancelSelection(),
+                        ),
                       ),
                     ),
                     vDivider,
