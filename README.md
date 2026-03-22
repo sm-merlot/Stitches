@@ -31,12 +31,14 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - **Google Drive sync** — connect a Google Drive account; patterns auto-save and sync in the background
 - **Recent files** — quick access to recently opened files and folders, including Drive items
 
-### Stitch demonstration
+### Stitch demonstration *(beta)*
 - **Animated stitch order** — per-thread step-by-step animation showing exactly how to stitch the pattern, with configurable playback speed
 - **Stitch planner** — automatic path planning that determines an efficient stitch order, respecting front/back alternation rules
 - **Start cell selection** — tap any cell on the demo canvas to set the stitching start point
 - **GIF export** — download the stitch order animation as a GIF file
 - **Color-coded passes** — front passes (purple / green), back passes (gold / red / blue) with perpendicular offset rendering so overlapping stitches on the same line are all visible
+
+> The stitch demonstration is in beta. Some pattern shapes may produce incorrect or suboptimal stitch paths.
 
 ### Platform & input
 - **Multi-platform** — macOS, iOS, Android

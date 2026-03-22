@@ -1220,23 +1220,50 @@ class _DemonstrateButton extends StatelessWidget {
 
     return Tooltip(
       message: hasSelection
-          ? 'Demonstrate selected stitches'
-          : 'Demonstrate stitching',
-      child: FilledButton.tonalIcon(
-        icon: Icon(
-          hasSelection ? Icons.play_circle_filled : Icons.play_circle_outline,
-          size: 18,
-        ),
-        label: Text(
-          'Demo',
-          style: const TextStyle(fontSize: 12),
-        ),
-        style: FilledButton.styleFrom(
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          minimumSize: const Size(0, 36),
-        ),
-        onPressed: hasFullStitches ? () => _onDemonstrate(context) : null,
+          ? 'Demonstrate selected stitches (beta)'
+          : 'Demonstrate stitching (beta)',
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          FilledButton.tonalIcon(
+            icon: Icon(
+              hasSelection ? Icons.play_circle_filled : Icons.play_circle_outline,
+              size: 18,
+            ),
+            label: const Text(
+              'Demo',
+              style: TextStyle(fontSize: 12),
+            ),
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+              minimumSize: const Size(0, 36),
+            ),
+            onPressed: hasFullStitches ? () => _onDemonstrate(context) : null,
+          ),
+          Positioned(
+            top: -6,
+            right: -6,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade700,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'β',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
