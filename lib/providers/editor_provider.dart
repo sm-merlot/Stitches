@@ -239,13 +239,6 @@ class EditorNotifier extends Notifier<EditorState> {
   @override
   EditorState build() => EditorState(pattern: CrossStitchPattern.empty());
 
-  /// DMC 310 Black — added automatically to every new pattern.
-  static const _defaultBlackThread = Thread(
-    dmcCode: '310',
-    color: Color(0xFF000000),
-    name: 'Black',
-  );
-
   void loadPattern(
     CrossStitchPattern pattern, {
     String? filePath,
@@ -306,9 +299,7 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   void newPattern(CrossStitchPattern pattern) {
-    // Seed with DMC 310 Black if no threads provided, then assign symbols
-    final threads = _assignSymbols(
-        pattern.threads.isNotEmpty ? pattern.threads : [_defaultBlackThread]);
+    final threads = _assignSymbols(pattern.threads);
     final seeded = pattern.copyWith(threads: threads);
 
     state = EditorState(
