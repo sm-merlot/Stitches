@@ -51,6 +51,42 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Paste preview origin (grid cell coords, top-left of where clipboard will land)
   Offset? _pasteOrigin;
 
+  @override
+  void initState() {
+    super.initState();
+    // Global route catches PointerAddedEvent (pencil enters hover range) and
+    // PointerRemovedEvent (pencil leaves), which Listener has no callbacks for.
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
+  }
+
+  @override
+  void dispose() {
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointerEvent);
+    super.dispose();
+  }
+
+  void _onGlobalPointerEvent(PointerEvent event) {
+    if (!mounted) return;
+    if (event.kind != PointerDeviceKind.stylus &&
+        event.kind != PointerDeviceKind.invertedStylus) { return; }
+
+    if (event is PointerAddedEvent) {
+      // Pencil entered hover range — try to update hover cell from global position.
+      final box = context.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) return;
+      final local = box.globalToLocal(event.position);
+      final c = _screenToCanvas(local);
+      final cell = _canvasToCell(c);
+      final p = ref.read(editorProvider).pattern;
+      if (cell.$1 >= 0 && cell.$1 < p.width && cell.$2 >= 0 && cell.$2 < p.height) {
+        setState(() => _stylusHoverCell = cell);
+      }
+    } else if (event is PointerRemovedEvent) {
+      // Pencil left hover range — clear cell.
+      setState(() => _stylusHoverCell = null);
+    }
+  }
+
   double get _cellSize => _baseCellSize;
 
   Offset _screenToCanvas(Offset screen) {
@@ -399,19 +435,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         event.kind == PointerDeviceKind.mouse) {
       if (mounted) setState(() => _mouseScreenPos = event.localPosition);
 
-      // Keep stylus hover cell updated during active strokes (hover events may
-      // not fire reliably on all iOS devices, so move events are the fallback).
-      if (event.kind == PointerDeviceKind.stylus ||
-          event.kind == PointerDeviceKind.invertedStylus) {
-        final c = _screenToCanvas(event.localPosition);
-        final cell = _canvasToCell(c);
-        final p = ref.read(editorProvider).pattern;
-        if (cell.$1 >= 0 && cell.$1 < p.width &&
-            cell.$2 >= 0 && cell.$2 < p.height) {
-          if (mounted) setState(() => _stylusHoverCell = cell);
-        } else {
-          if (mounted) setState(() => _stylusHoverCell = null);
-        }
+      // Keep hover cell updated during active strokes.
+      final c = _screenToCanvas(event.localPosition);
+      final cell = _canvasToCell(c);
+      final p = ref.read(editorProvider).pattern;
+      if (cell.$1 >= 0 && cell.$1 < p.width &&
+          cell.$2 >= 0 && cell.$2 < p.height) {
+        if (mounted) setState(() => _stylusHoverCell = cell);
+      } else {
+        if (mounted) setState(() => _stylusHoverCell = null);
       }
 
       if (_isPanMode) {
@@ -500,9 +532,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final now = DateTime.now();
     final wasSinglePointer = _activePointers.length == 1;
 
-    // Stylus lifted — clear hover cell
-    if (event.kind == PointerDeviceKind.stylus ||
-        event.kind == PointerDeviceKind.invertedStylus) {
+    // Non-touch pointer lifted — clear hover cell
+    if (event.kind != PointerDeviceKind.touch) {
       if (mounted) setState(() => _stylusHoverCell = null);
     }
 
@@ -607,9 +638,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     final state = ref.read(editorProvider);
 
-    // Apple Pencil hover: highlight the cell the stylus is pointing at.
-    if (event.kind == PointerDeviceKind.stylus ||
-        event.kind == PointerDeviceKind.invertedStylus) {
+    // Highlight the cell under any hovering pointer (stylus, mouse, or unknown).
+    // We don't guard by kind because Apple Pencil hover events on iPadOS may not
+    // always arrive as PointerDeviceKind.stylus through this path.
+    if (event.kind != PointerDeviceKind.touch) {
       final c = _screenToCanvas(event.localPosition);
       final cell = _canvasToCell(c);
       final p = state.pattern;
