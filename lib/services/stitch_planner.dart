@@ -117,13 +117,21 @@ PlannedAida planStitching({
         segs.add('h:${(fy * 2).round()}:${(x * 2).round()}');
         x += 1.0;
       }
-    } else {
+    } else if ((fx - tx).abs() < 1e-9) {
+      // Pure vertical
       var y = min(fy, ty);
       final yHi = max(fy, ty);
       while (y < yHi - 1e-9) {
         segs.add('v:${(fx * 2).round()}:${(y * 2).round()}');
         y += 1.0;
       }
+    } else {
+      // Diagonal — use normalized 4-component key to avoid collisions
+      final (ax, ay, bx, by) = fx < tx || (fx == tx && fy < ty)
+          ? (fx, fy, tx, ty)
+          : (tx, ty, fx, fy);
+      segs.add('d:${(ax * 2).round()}:${(ay * 2).round()}'
+          ':${(bx * 2).round()}:${(by * 2).round()}');
     }
     return segs;
   }
