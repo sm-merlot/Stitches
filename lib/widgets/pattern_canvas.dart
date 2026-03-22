@@ -39,6 +39,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
   Offset? _mouseScreenPos;
+  (int, int)? _stylusHoverCell;
 
   // Selection / move state
   Offset? _selectionAnchor;      // grid cell where rubber-band drag started
@@ -296,6 +297,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     _activePointers[event.pointer] = event.localPosition;
     if (mounted) setState(() => _mouseScreenPos = event.localPosition);
 
+    // Stylus touching down — clear hover preview
+    if (event.kind == PointerDeviceKind.stylus ||
+        event.kind == PointerDeviceKind.invertedStylus) {
+      if (mounted) setState(() => _stylusHoverCell = null);
+    }
+
     // Apple Pencil double-tap → toggle erase/draw (disabled in stitch mode)
     if (event.kind == PointerDeviceKind.stylus &&
         event.buttons == kSecondaryStylusButton) {
@@ -525,6 +532,20 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     final state = ref.read(editorProvider);
 
+    // Apple Pencil hover: highlight the cell the stylus is pointing at.
+    if (event.kind == PointerDeviceKind.stylus ||
+        event.kind == PointerDeviceKind.invertedStylus) {
+      final c = _screenToCanvas(event.localPosition);
+      final cell = _canvasToCell(c);
+      final p = state.pattern;
+      if (cell.$1 >= 0 && cell.$1 < p.width &&
+          cell.$2 >= 0 && cell.$2 < p.height) {
+        if (mounted) setState(() => _stylusHoverCell = cell);
+      } else {
+        if (mounted) setState(() => _stylusHoverCell = null);
+      }
+    }
+
     if (state.drawingMode == DrawingMode.paste) {
       final c = _screenToCanvas(event.localPosition);
       final (cx, cy) = _canvasToCell(c);
@@ -584,7 +605,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     return MouseRegion(
       cursor: _cursor(state),
-      onExit: (_) { if (mounted) setState(() => _mouseScreenPos = null); },
+      onExit: (_) { if (mounted) setState(() { _mouseScreenPos = null; _stylusHoverCell = null; }); },
       child: Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: _onPointerMove,
@@ -620,6 +641,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             referenceImage: state.referenceImage,
             referenceOpacity: state.referenceOpacity,
             referenceVisible: state.referenceVisible,
+            stylusHoverCell: _stylusHoverCell,
+            stylusHoverColor: state.selectedThread?.color,
           ),
           size: Size.infinite,
         ),
