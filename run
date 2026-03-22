@@ -38,6 +38,10 @@ case "$cmd" in
     exec $FLUTTER run -d macos --dart-define-from-file=secrets.json "$@"
     ;;
 
+  ipad)
+    exec $FLUTTER run -d "00008112-0014785E0168A01E" --dart-define-from-file=secrets.json "$@"
+    ;;
+
   ios)
     exec $FLUTTER run -d ios "$@"
     ;;
