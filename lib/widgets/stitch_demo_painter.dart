@@ -24,11 +24,15 @@ class StitchDemoPainter extends CustomPainter {
   final PlannedAida aida;
   final int currentSubStep;
   final Color aidaColor;
+  final (int, int)? startCell;
+  final bool pickingStart;
 
   const StitchDemoPainter({
     required this.aida,
     required this.currentSubStep,
     this.aidaColor = const Color(0xFFFAF6F0),
+    this.startCell,
+    this.pickingStart = false,
   });
 
   @override
@@ -86,6 +90,41 @@ class StitchDemoPainter extends CustomPainter {
       final r = originX + (sq.x + 0.5) * cellSize;
       final b = originY + (sq.y + 0.5) * cellSize;
       canvas.drawRect(Rect.fromLTRB(l, t, r, b), gridPaint);
+    }
+
+    // ── Start-cell affordance (picking mode) / marker ────────────────────────
+    if (pickingStart) {
+      final hoverPaint = Paint()
+        ..color = const Color(0x339B30D0)
+        ..style = PaintingStyle.fill;
+      for (final sqId in aida.activeSquareIds) {
+        final sq = aida.squares[sqId];
+        final l = originX + (sq.x - 0.5) * cellSize;
+        final t = originY + (sq.y - 0.5) * cellSize;
+        final r = originX + (sq.x + 0.5) * cellSize;
+        final b = originY + (sq.y + 0.5) * cellSize;
+        canvas.drawRect(Rect.fromLTRB(l, t, r, b), hoverPaint);
+      }
+    }
+
+    if (startCell != null) {
+      final (scx, scy) = startCell!;
+      final cx = originX + scx * cellSize;
+      final cy = originY + scy * cellSize;
+      final r = (cellSize * 0.22).clamp(4.0, 10.0);
+      canvas.drawCircle(
+        Offset(cx, cy),
+        r,
+        Paint()..color = const Color(0xFF9B30D0),
+      );
+      canvas.drawCircle(
+        Offset(cx, cy),
+        r,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
     }
 
     // ── Completed stitches ───────────────────────────────────────────────────
@@ -272,5 +311,7 @@ class StitchDemoPainter extends CustomPainter {
   bool shouldRepaint(StitchDemoPainter old) =>
       old.currentSubStep != currentSubStep ||
       old.aida != aida ||
-      old.aidaColor != aidaColor;
+      old.aidaColor != aidaColor ||
+      old.startCell != startCell ||
+      old.pickingStart != pickingStart;
 }
