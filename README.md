@@ -8,7 +8,7 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 
 ### Pattern editing
 - **Pattern canvas** — draw full stitches, half stitches (forward `/` and backward `\`), quarter stitches, and backstitches on a scalable grid
-- **DMC color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers
+- **DMC / Anchor color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers; toggle between DMC and Anchor codes in Settings
 - **Undo / redo** — full history stack (up to 200 steps); double-tap to undo on touch devices
 - **Zoom & pan** — pinch-to-zoom, scroll-wheel zoom, drag to pan; zoom range 0.1×–20×
 - **Resize canvas** — adjust pattern dimensions after creation
