@@ -16,9 +16,9 @@ class Thread {
 
   Map<String, dynamic> toYaml() => {
         'dmcCode': dmcCode,
-        'color': '#${color.r.round().toRadixString(16).padLeft(2, '0')}'
-            '${color.g.round().toRadixString(16).padLeft(2, '0')}'
-            '${color.b.round().toRadixString(16).padLeft(2, '0')}',
+        'color': '#${(color.r * 255).round().toRadixString(16).padLeft(2, '0')}'
+            '${(color.g * 255).round().toRadixString(16).padLeft(2, '0')}'
+            '${(color.b * 255).round().toRadixString(16).padLeft(2, '0')}',
         'name': name,
         'symbol': symbol,
       };
