@@ -429,6 +429,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         case LogicalKeyboardKey.delete:
         case LogicalKeyboardKey.backspace:
           notifier.deleteSelection();
+        case LogicalKeyboardKey.slash:
+          if (shift) {
+            showDialog(
+                context: context,
+                builder: (_) => const _ShortcutsDialog());
+          } else {
+            return KeyEventResult.ignored;
+          }
         default:
           return KeyEventResult.ignored;
       }
@@ -534,6 +542,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   isScrollControlled: true,
                   builder: (_) => const ReferenceImageSheet(),
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.keyboard_outlined),
+                tooltip: 'Keyboard Shortcuts (?)',
+                onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => const _ShortcutsDialog()),
               ),
             ],
             // Keep screen on — only shown in stitch mode with a file open
@@ -825,6 +840,131 @@ class _InfoRow extends StatelessWidget {
               child: Text(value, style: const TextStyle(fontSize: 13))),
         ],
       ),
+    );
+  }
+}
+
+// ─── Keyboard shortcuts reference ─────────────────────────────────────────────
+
+class _ShortcutsDialog extends StatelessWidget {
+  const _ShortcutsDialog();
+
+  static const _sections = [
+    (
+      'Modes',
+      [
+        ('D', 'Draw mode'),
+        ('E', 'Erase mode'),
+        ('P  or  Space', 'Pan / navigate'),
+        ('C', 'Colour picker'),
+        ('S', 'Select mode'),
+      ]
+    ),
+    (
+      'Stitch Tools  (draw mode)',
+      [
+        ('1', 'Full stitch'),
+        ('2', 'Half stitch  /'),
+        ('3', 'Half stitch  \\'),
+        ('4', 'Half-cell cross'),
+        ('5', 'Quarter diagonal'),
+        ('6', 'Quarter-cell cross'),
+        ('7', 'Backstitch'),
+      ]
+    ),
+    (
+      'Edit',
+      [
+        ('⌘ Z', 'Undo'),
+        ('⌘ ⇧ Z', 'Redo'),
+        ('⌘ A', 'Select all'),
+        ('⌘ C', 'Copy selection'),
+        ('⌘ X', 'Cut selection'),
+        ('⌘ V', 'Paste'),
+        ('⌫  or  Del', 'Delete selection'),
+        ('Esc', 'Cancel / deselect'),
+      ]
+    ),
+    (
+      'File',
+      [
+        ('⌘ S', 'Save'),
+      ]
+    ),
+    (
+      'PDF viewer',
+      [
+        ('⌘ =', 'Zoom in'),
+        ('⌘ −', 'Zoom out'),
+      ]
+    ),
+    (
+      'Stitch mode',
+      [
+        ('P  or  Space', 'Pan'),
+        ('S', 'Select'),
+        ('Esc', 'Exit stitch mode'),
+      ]
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return AlertDialog(
+      title: const Text('Keyboard Shortcuts'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (heading, rows) in _sections) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 4),
+                  child: Text(
+                    heading,
+                    style: theme.textTheme.labelMedium
+                        ?.copyWith(color: cs.primary),
+                  ),
+                ),
+                for (final (key, desc) in rows)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 120,
+                          child: Text(
+                            key,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(desc,
+                              style: theme.textTheme.bodySmall),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }

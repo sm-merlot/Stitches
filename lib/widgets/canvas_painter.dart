@@ -34,6 +34,12 @@ class CanvasPainter extends CustomPainter {
   final double referenceOpacity;
   final bool referenceVisible;
 
+  // ── Apple Pencil hover preview ────────────────────────────────────────────
+  /// Grid cell (col, row) currently hovered by a stylus, or null.
+  final (int, int)? stylusHoverCell;
+  /// Colour used for the hover highlight (typically the selected thread colour).
+  final Color? stylusHoverColor;
+
   late final Map<String, Thread> _threadMap = {
     for (final t in pattern.threads) t.dmcCode: t,
   };
@@ -59,6 +65,8 @@ class CanvasPainter extends CustomPainter {
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
+    this.stylusHoverCell,
+    this.stylusHoverColor,
   });
 
   @override
@@ -159,6 +167,22 @@ class CanvasPainter extends CustomPainter {
 
     // ── Selection rect ───────────────────────────────────────────────────────
     if (selectionRect != null) _drawSelectionRect(canvas, selectionRect!);
+
+    // ── Stylus hover preview ─────────────────────────────────────────────────
+    if (stylusHoverCell != null) {
+      final (hx, hy) = stylusHoverCell!;
+      final hColor = stylusHoverColor ?? const Color(0xFF9B30D0);
+      final rect = Rect.fromLTWH(
+          hx * cellSize, hy * cellSize, cellSize, cellSize);
+      canvas.drawRect(rect,
+          Paint()..color = hColor.withValues(alpha: 0.25));
+      canvas.drawRect(
+          rect,
+          Paint()
+            ..color = hColor.withValues(alpha: 0.7)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5 / scale);
+    }
 
     // ── Pattern border ───────────────────────────────────────────────────────
     final borderBase = aidaColor.computeLuminance() > 0.4 ? Colors.black : Colors.white;
@@ -917,6 +941,8 @@ class CanvasPainter extends CustomPainter {
         oldDelegate.stitchFocusThreadId != stitchFocusThreadId ||
         oldDelegate.referenceImage != referenceImage ||
         oldDelegate.referenceOpacity != referenceOpacity ||
-        oldDelegate.referenceVisible != referenceVisible;
+        oldDelegate.referenceVisible != referenceVisible ||
+        oldDelegate.stylusHoverCell != stylusHoverCell ||
+        oldDelegate.stylusHoverColor != stylusHoverColor;
   }
 }
