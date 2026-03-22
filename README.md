@@ -42,9 +42,10 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 
 ### Platform & input
 - **Multi-platform** — macOS, iOS, Android
-- **Apple Pencil** — double-tap toggles draw/erase mode
+- **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode
+- **Touch** — rubber-band selection, copy/paste, and pan all work with finger on iPad
 - **Stitch mode** — simplified read-only view for stitching from a finished pattern; keep-screen-on option
-- **Keyboard shortcuts** — full shortcut set on desktop (undo, redo, tool switching, modes)
+- **Keyboard shortcuts** — full shortcut set on desktop (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
 
 ## Getting Started
@@ -57,5 +58,6 @@ Requires Flutter 3.41.4+.
 
 ## Roadmap
 
-- **Phase 3** — full keybinding system, Apple Pencil polish
-- **Phase 4** — PDF → `.stitchx` scanning via Claude vision API, Proton Drive
+- **Sprite sheet importer** — open a sprite sheet image, select or crop a single sprite, copy it to the clipboard and paste into any pattern; pixel colours are matched to the nearest DMC thread
+- **PDF pattern scanner** — rasterise a PDF page and send it to an AI vision model (Gemini by default; provider-agnostic interface for future options) to extract the stitch grid as a new pattern
+- **Proton Drive sync**
