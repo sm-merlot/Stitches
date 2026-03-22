@@ -49,12 +49,18 @@ class StitchDemoPainter extends CustomPainter {
     final originY =
         (size.height - bounds.height * cellSize) / 2 - bounds.top * cellSize;
 
-    final segments = resolveSegments(
+    final rawSegments = resolveSegments(
       aida,
       cellSize: cellSize,
       originX: originX,
       originY: originY,
     );
+
+    // Stroke width is needed for offset scaling — compute before drawing.
+    final strokeW = (cellSize * 0.06).clamp(1.0, 3.0);
+
+    // Spread overlapping segments so every stitch on the same line is visible.
+    final segments = _applyLineOffsets(rawSegments, strokeW);
 
     // Derive complete / in-progress state from the sub-step counter.
     final completeCount = currentSubStep ~/ kDemoSubFrames;
@@ -83,14 +89,30 @@ class StitchDemoPainter extends CustomPainter {
     }
 
     // ── Completed stitches ───────────────────────────────────────────────────
-    final strokeW = (cellSize * 0.06).clamp(1.0, 3.0);
+    // Back stitches are drawn first so front stitches paint on top of them,
+    // matching the physical reality where the back thread sits under the fabric.
     final basePaint = Paint()
       ..strokeWidth = strokeW
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
+    // Pass 1: back stitches (backOne / backTwo / backThree)
     for (var i = 0; i < completeCount && i < segments.length; i++) {
       final seg = segments[i];
+      if (seg.type == StitchType.frontOne || seg.type == StitchType.frontTwo) {
+        continue;
+      }
+      final color = _typeColors[seg.type] ?? const Color(0xFF888888);
+      _drawSegment(canvas, seg.x1, seg.y1, seg.x2, seg.y2, seg.type, color,
+          basePaint..color = color..strokeWidth = strokeW);
+    }
+
+    // Pass 2: front stitches (frontOne / frontTwo) — drawn on top
+    for (var i = 0; i < completeCount && i < segments.length; i++) {
+      final seg = segments[i];
+      if (seg.type != StitchType.frontOne && seg.type != StitchType.frontTwo) {
+        continue;
+      }
       final color = _typeColors[seg.type] ?? const Color(0xFF888888);
       _drawSegment(canvas, seg.x1, seg.y1, seg.x2, seg.y2, seg.type, color,
           basePaint..color = color..strokeWidth = strokeW);
@@ -132,6 +154,64 @@ class StitchDemoPainter extends CustomPainter {
     }
   }
 
+  /// Returns a stable key for a segment's geometric line, direction-independent.
+  /// Coordinates are multiplied by 2 and rounded to handle half-pixel values.
+  static String _segKey(double x1, double y1, double x2, double y2) {
+    if (x1 > x2 || (x1 == x2 && y1 > y2)) {
+      return '${(x2 * 2).round()},${(y2 * 2).round()},${(x1 * 2).round()},${(y1 * 2).round()}';
+    }
+    return '${(x1 * 2).round()},${(y1 * 2).round()},${(x2 * 2).round()},${(y2 * 2).round()}';
+  }
+
+  /// Shifts co-linear segments by a small perpendicular offset each so that
+  /// all threads on the same line remain individually visible.
+  ///
+  /// The step between adjacent parallel copies is [strokeW] × 1.6, just wide
+  /// enough for a visible gap between strokes.
+  static List<StitchSegment> _applyLineOffsets(
+      List<StitchSegment> segs, double strokeW) {
+    // Group segment indices by their geometric line.
+    final groups = <String, List<int>>{};
+    for (var i = 0; i < segs.length; i++) {
+      final s = segs[i];
+      groups.putIfAbsent(_segKey(s.x1, s.y1, s.x2, s.y2), () => []).add(i);
+    }
+
+    // Fast path: nothing overlaps.
+    if (groups.values.every((g) => g.length <= 1)) return segs;
+
+    final result = List<StitchSegment>.from(segs);
+    final step = strokeW * 1.6;
+
+    for (final indices in groups.values) {
+      if (indices.length <= 1) continue;
+      final n = indices.length;
+
+      // Compute a consistent perpendicular unit vector from the first segment.
+      final s0 = segs[indices[0]];
+      final lineVec = Offset(s0.x2 - s0.x1, s0.y2 - s0.y1);
+      if (lineVec.distance < 1e-6) continue;
+      final perpUnit = Offset(-lineVec.dy, lineVec.dx) / lineVec.distance;
+
+      for (var i = 0; i < n; i++) {
+        // Centre the fan of offsets around 0 so the average stays on the line.
+        final offset = (i - (n - 1) / 2.0) * step;
+        final dx = perpUnit.dx * offset;
+        final dy = perpUnit.dy * offset;
+        final orig = segs[indices[i]];
+        result[indices[i]] = StitchSegment(
+          x1: orig.x1 + dx,
+          y1: orig.y1 + dy,
+          x2: orig.x2 + dx,
+          y2: orig.y2 + dy,
+          type: orig.type,
+        );
+      }
+    }
+
+    return result;
+  }
+
   /// Draws one segment, using dashes for back2/back3 to match the GIF renderer:
   /// back2 = long dashes (8 on / 5 off), back3 = short dashes (3 on / 5 off).
   void _drawSegment(
@@ -144,12 +224,11 @@ class StitchDemoPainter extends CustomPainter {
     Color color,
     Paint paint,
   ) {
-    if (type == StitchType.backTwo) {
+    if (type == StitchType.backOne ||
+        type == StitchType.backTwo ||
+        type == StitchType.backThree) {
       _drawDashedLine(canvas, x1, y1, x2, y2, paint,
-          dashLen: 8.0, gapLen: 5.0);
-    } else if (type == StitchType.backThree) {
-      _drawDashedLine(canvas, x1, y1, x2, y2, paint,
-          dashLen: 3.0, gapLen: 5.0);
+          dashLen: 5.0, gapLen: 4.0);
     } else {
       canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paint);
     }
