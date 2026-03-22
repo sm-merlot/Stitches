@@ -297,12 +297,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     _activePointers[event.pointer] = event.localPosition;
     if (mounted) setState(() => _mouseScreenPos = event.localPosition);
 
-    // Stylus touching down — clear hover preview
-    if (event.kind == PointerDeviceKind.stylus ||
-        event.kind == PointerDeviceKind.invertedStylus) {
-      if (mounted) setState(() => _stylusHoverCell = null);
-    }
-
     // Apple Pencil double-tap → toggle erase/draw (disabled in stitch mode)
     if (event.kind == PointerDeviceKind.stylus &&
         event.buttons == kSecondaryStylusButton) {
@@ -353,6 +347,38 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
+    // Touch — handle special modes before pan/pinch setup
+    if (_activePointers.length == 1) {
+      final mode = ref.read(editorProvider).drawingMode;
+      if (mode == DrawingMode.select) {
+        final cell = _screenToSelCell(event.localPosition);
+        final sel = ref.read(editorProvider).selectionRect;
+        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+          setState(() {
+            _isMovingSelection = true;
+            _moveDragStartCell = cell;
+            _moveDelta = Offset.zero;
+          });
+        } else {
+          ref.read(editorProvider.notifier).setSelectionRect(null);
+          setState(() {
+            _selectionAnchor = cell;
+            _isMovingSelection = false;
+            _hasDraggedSelection = false;
+          });
+        }
+        return;
+      }
+
+      if (mode == DrawingMode.paste) {
+        final c = _screenToCanvas(event.localPosition);
+        final (cx, cy) = _canvasToCell(c);
+        setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+        // Commit on pointer up to avoid double-tap undo collision
+        return;
+      }
+    }
+
     // Touch — set up pan/pinch start state
     if (_activePointers.length == 1) {
       _gestureStartOffset = _panOffset;
@@ -372,6 +398,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         event.kind == PointerDeviceKind.invertedStylus ||
         event.kind == PointerDeviceKind.mouse) {
       if (mounted) setState(() => _mouseScreenPos = event.localPosition);
+
+      // Keep stylus hover cell updated during active strokes (hover events may
+      // not fire reliably on all iOS devices, so move events are the fallback).
+      if (event.kind == PointerDeviceKind.stylus ||
+          event.kind == PointerDeviceKind.invertedStylus) {
+        final c = _screenToCanvas(event.localPosition);
+        final cell = _canvasToCell(c);
+        final p = ref.read(editorProvider).pattern;
+        if (cell.$1 >= 0 && cell.$1 < p.width &&
+            cell.$2 >= 0 && cell.$2 < p.height) {
+          if (mounted) setState(() => _stylusHoverCell = cell);
+        } else {
+          if (mounted) setState(() => _stylusHoverCell = null);
+        }
+      }
 
       if (_isPanMode) {
         _pan(event.delta);
@@ -432,7 +473,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         });
       }
     } else if (_activePointers.length == 1) {
-      if (_isPanMode) {
+      final mode = ref.read(editorProvider).drawingMode;
+      if (mode == DrawingMode.select) {
+        final cell = _screenToSelCell(event.localPosition);
+        if (_isMovingSelection && _moveDragStartCell != null) {
+          setState(() => _moveDelta = cell - _moveDragStartCell!);
+        } else if (_selectionAnchor != null) {
+          setState(() => _hasDraggedSelection = true);
+          ref.read(editorProvider.notifier).setSelectionRect(
+              _buildSelRect(_selectionAnchor!, cell));
+        }
+      } else if (mode == DrawingMode.paste) {
+        final c = _screenToCanvas(event.localPosition);
+        final (cx, cy) = _canvasToCell(c);
+        setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+      } else if (_isPanMode) {
         _pan(event.delta);
       } else {
         _handleDrawAt(event.localPosition);
@@ -444,6 +499,26 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final pos = event.localPosition;
     final now = DateTime.now();
     final wasSinglePointer = _activePointers.length == 1;
+
+    // Stylus lifted — clear hover cell
+    if (event.kind == PointerDeviceKind.stylus ||
+        event.kind == PointerDeviceKind.invertedStylus) {
+      if (mounted) setState(() => _stylusHoverCell = null);
+    }
+
+    // Touch paste — commit at current origin (set in _onPointerDown / _onPointerMove)
+    if (event.kind == PointerDeviceKind.touch &&
+        ref.read(editorProvider).drawingMode == DrawingMode.paste &&
+        _pasteOrigin != null) {
+      final clips = ref.read(editorProvider).clipboard;
+      if (clips != null) {
+        final (dx, dy) = _centeredPasteOffset(_pasteOrigin!, clips);
+        ref.read(editorProvider.notifier).commitPaste(dx, dy);
+      }
+      setState(() => _pasteOrigin = null);
+      _activePointers.remove(event.pointer);
+      return;
+    }
 
     // Commit move drag
     if (_isMovingSelection) {
