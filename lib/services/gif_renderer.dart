@@ -53,24 +53,16 @@ List<int> renderDemoGif({
   final originY = padding - bounds.top;
   final canvasWidth = (bounds.width + padding * 2).ceil();
   final canvasHeight = (bounds.height + padding * 2).ceil();
-  final segments = resolveSegments(
+  final rawSegments = resolveSegments(
     aida,
     cellSize: cellSize,
     originX: originX,
     originY: originY,
   );
 
-  // Pre-compute the layer index for each segment: how many earlier segments
-  // share the same canonical edge. Layer 0 = solid, 1 = long dashes, 2 = dots.
-  final segmentLayerIndices = List<int>.filled(segments.length, 0);
-  {
-    final edgeSeen = <String, int>{};
-    for (var i = 0; i < segments.length; i++) {
-      final key = _segKey(segments[i]);
-      segmentLayerIndices[i] = edgeSeen[key] ?? 0;
-      edgeSeen[key] = (edgeSeen[key] ?? 0) + 1;
-    }
-  }
+  // Spread co-linear segments perpendicularly so all are visible (mirrors UI).
+  final strokeW = _lineThickness(cellSize).toDouble();
+  final segments = _applyLineOffsets(rawSegments, strokeW);
 
   final frameDelayMs = (1000 / fps).round();
   // Hold ~2 s on the finished frame before looping.
@@ -93,7 +85,6 @@ List<int> renderDemoGif({
     final frame = _renderFrame(
       aida: aida,
       segments: segments,
-      segmentLayerIndices: segmentLayerIndices,
       completeCount: completeCount,
       subProgress: subProgress,
       width: canvasWidth,
@@ -131,7 +122,6 @@ List<int> renderDemoGif({
 img.Image _renderFrame({
   required PlannedAida aida,
   required List<StitchSegment> segments,
-  required List<int> segmentLayerIndices,
   required int completeCount,
   required double subProgress,
   required int width,
@@ -169,13 +159,20 @@ img.Image _renderFrame({
     img.drawLine(image, x1: l, y1: t, x2: l, y2: b, color: gridColor);
   }
 
-  // Completed stitches.
+  // Completed stitches — backs drawn first, fronts on top (mirrors UI Z-order).
   for (var i = 0; i < completeCount && i < segments.length; i++) {
-    _drawSegment(image, segments[i],
-        colors: colors,
-        thick: false,
-        cellSize: cellSize,
-        layerIndex: segmentLayerIndices[i]);
+    final seg = segments[i];
+    if (seg.type == StitchType.frontOne || seg.type == StitchType.frontTwo) {
+      continue;
+    }
+    _drawSegment(image, seg, colors: colors, thick: false, cellSize: cellSize);
+  }
+  for (var i = 0; i < completeCount && i < segments.length; i++) {
+    final seg = segments[i];
+    if (seg.type != StitchType.frontOne && seg.type != StitchType.frontTwo) {
+      continue;
+    }
+    _drawSegment(image, seg, colors: colors, thick: false, cellSize: cellSize);
   }
 
   // In-progress stitch: draw from start toward end at [subProgress].
@@ -226,23 +223,19 @@ void _drawSegment(
   required Map<StitchType, int> colors,
   required bool thick,
   required double cellSize,
-  int layerIndex = 0,
 }) {
   final argb = colors[seg.type] ?? 0xFF888888;
   final color =
       img.ColorRgba8((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, 255);
   final thickness = thick ? _activeLineThickness(cellSize) : _lineThickness(cellSize);
 
-  if (layerIndex == 0) {
-    _drawThreadLine(image, seg.x1, seg.y1, seg.x2, seg.y2, color, thickness);
-  } else {
-    // Overlapping backstitch: draw as dashes so the lower layer shows through.
-    // Layer 1 = long dashes (8 on / 5 off).
-    // Layer 2 = short dashes / dots (3 on / 5 off).
-    final dashLen = layerIndex == 1 ? 8.0 : 3.0;
-    const gapLen = 5.0;
+  if (seg.type == StitchType.backOne ||
+      seg.type == StitchType.backTwo ||
+      seg.type == StitchType.backThree) {
     _drawDashedLine(image, seg.x1, seg.y1, seg.x2, seg.y2, color,
-        thickness: thickness, dashLen: dashLen, gapLen: gapLen);
+        thickness: thickness, dashLen: 5.0, gapLen: 4.0);
+  } else {
+    _drawThreadLine(image, seg.x1, seg.y1, seg.x2, seg.y2, color, thickness);
   }
 }
 
@@ -335,8 +328,54 @@ void _drawDashedLine(
 }
 
 /// Canonical edge key: order-independent so A→B == B→A.
+/// Coordinates are multiplied by 2 and rounded to handle half-pixel values.
 String _segKey(StitchSegment seg) {
-  final ax = seg.x1, ay = seg.y1, bx = seg.x2, by = seg.y2;
+  final ax = (seg.x1 * 2).round();
+  final ay = (seg.y1 * 2).round();
+  final bx = (seg.x2 * 2).round();
+  final by = (seg.y2 * 2).round();
   if (ax < bx || (ax == bx && ay <= by)) return '$ax,$ay,$bx,$by';
   return '$bx,$by,$ax,$ay';
+}
+
+/// Shifts co-linear segments by a small perpendicular offset each so that
+/// all threads on the same line remain individually visible (mirrors UI).
+List<StitchSegment> _applyLineOffsets(
+    List<StitchSegment> segs, double strokeW) {
+  final groups = <String, List<int>>{};
+  for (var i = 0; i < segs.length; i++) {
+    groups.putIfAbsent(_segKey(segs[i]), () => []).add(i);
+  }
+
+  if (groups.values.every((g) => g.length <= 1)) return segs;
+
+  final result = List<StitchSegment>.from(segs);
+  final step = strokeW * 1.6;
+
+  for (final indices in groups.values) {
+    if (indices.length <= 1) continue;
+    final n = indices.length;
+    final s0 = segs[indices[0]];
+    final dx = s0.x2 - s0.x1;
+    final dy = s0.y2 - s0.y1;
+    final dist = math.sqrt(dx * dx + dy * dy);
+    if (dist < 1e-6) continue;
+    final perpX = -dy / dist;
+    final perpY = dx / dist;
+
+    for (var i = 0; i < n; i++) {
+      final offset = (i - (n - 1) / 2.0) * step;
+      final ox = perpX * offset;
+      final oy = perpY * offset;
+      final orig = segs[indices[i]];
+      result[indices[i]] = StitchSegment(
+        x1: orig.x1 + ox,
+        y1: orig.y1 + oy,
+        x2: orig.x2 + ox,
+        y2: orig.y2 + oy,
+        type: orig.type,
+      );
+    }
+  }
+  return result;
 }

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../models/stitch_plan.dart';
 import '../services/gif_renderer.dart';
 import '../services/stitch_planner.dart';
+import '../services/stitch_renderer.dart' show stitchTypeArgb;
 import '../widgets/stitch_demo_painter.dart';
 
 /// Plays back the step-by-step stitching demonstration and lets the user
@@ -155,7 +156,7 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
   Future<void> _exportGif() async {
     setState(() => _exporting = true);
     try {
-      final colorMap = singleThreadColorMap(widget.threadColor.toARGB32());
+      final colorMap = Map<StitchType, int>.from(stitchTypeArgb);
 
       final gifBytes = await compute(
         _renderGifIsolate,
