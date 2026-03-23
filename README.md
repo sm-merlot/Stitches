@@ -30,6 +30,7 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / edit / delete
 - **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size
 - **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
+- **Sprite sheet importer** — open any sprite sheet image, select a tile or crop a region, pixel colours matched to nearest DMC thread via CIE Lab colour space; output saved directly as a snippet
 
 ### Files & workspace
 - **File format** — patterns saved as `.stitchx` files (YAML internally)
@@ -50,7 +51,7 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - **Multi-platform** — macOS, iOS, Android
 - **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode
 - **Touch** — rubber-band selection, copy/paste, and pan all work with finger on iPad
-- **Stitch mode** — simplified read-only view for stitching from a finished pattern; keep-screen-on option
+- **Stitch mode** — simplified read-only view for stitching from a finished pattern; accessible via a floating action button; keep-screen-on option
 - **Keyboard shortcuts** — full shortcut set on desktop and in snippet editor (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
 
@@ -64,6 +65,5 @@ Requires Flutter 3.41.4+.
 
 ## Roadmap
 
-- **Sprite sheet importer** — open a sprite sheet image, select or crop a single sprite, pixel colours matched to nearest DMC thread; output saved as a snippet in the current pattern
 - **PDF pattern scanner** — rasterise a PDF page and send it to an AI vision model (Gemini by default; provider-agnostic interface for future options) to extract the stitch grid as a new pattern
 - **Proton Drive sync**
