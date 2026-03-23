@@ -9,6 +9,8 @@ import '../providers/settings_provider.dart';
 import '../screens/color_picker_screen.dart';
 import '../screens/stitch_demo_screen.dart';
 import 'color_select_dialog.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../screens/sprite_sheet_screen.dart';
 import 'snippets_panel.dart';
 
 const _aidaPresets = [
@@ -29,10 +31,12 @@ const _aidaPresets = [
 class EditorToolbar extends ConsumerWidget {
   final bool showSnippetsButton;
   final bool showSaveAsSnippetButton;
+  final bool showSpriteSheetButton;
   const EditorToolbar({
     super.key,
     this.showSnippetsButton = true,
     this.showSaveAsSnippetButton = true,
+    this.showSpriteSheetButton = true,
   });
 
   @override
@@ -271,6 +275,22 @@ class EditorToolbar extends ConsumerWidget {
                     ),
                     vDivider,
                   ],
+                  // Sprite sheet button
+                  if (showSpriteSheetButton)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      child: Tooltip(
+                        message: 'Import sprite sheet',
+                        child: IconButton(
+                          iconSize: 20,
+                          visualDensity: VisualDensity.compact,
+                          icon: const FaIcon(FontAwesomeIcons.ghost),
+                          onPressed: state.isFileOpen
+                              ? () => _openSpriteSheet(context, ref)
+                              : null,
+                        ),
+                      ),
+                    ),
                   // Snippets button
                   if (showSnippetsButton)
                     Padding(
@@ -1248,6 +1268,24 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
     ..strokeWidth = 0.8;
   canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
   canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
+}
+
+// ─── Sprite sheet ─────────────────────────────────────────────────────────────
+
+Future<void> _openSpriteSheet(BuildContext context, WidgetRef ref) async {
+  final addedAny = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => const SpriteSheetScreen(),
+      fullscreenDialog: true,
+    ),
+  );
+  if ((addedAny ?? false) && context.mounted) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const SnippetsPanel(),
+    );
+  }
 }
 
 // ─── Save as snippet ──────────────────────────────────────────────────────────
