@@ -54,6 +54,8 @@ class SettingsScreen extends ConsumerWidget {
                       ),
           ),
           const Divider(),
+
+          // ── Thread Colours ────────────────────────────────────────────────
           const _SectionHeader('Thread Colours'),
           SwitchListTile(
             title: const Text('Colour system'),
@@ -139,6 +141,7 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
+
 
 class _ShortcutTile extends StatelessWidget {
   final String action;

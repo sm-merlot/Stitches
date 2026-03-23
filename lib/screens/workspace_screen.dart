@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,11 +17,20 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import '../services/pdf_service.dart';
+import '../services/grid_detector.dart';
+import '../services/grid_symbol_matcher.dart';
+import '../services/pdf_scanner.dart';
+import 'pattern_scan_symbol_screen.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/file_sidebar.dart';
 import '../widgets/pattern_canvas.dart';
+import '../widgets/pdf_page_picker.dart';
 import '../widgets/pdf_viewer_panel.dart';
 import 'new_pattern_dialog.dart';
+import 'pattern_scan_cell_screen.dart';
+import 'pattern_scan_crop_screen.dart';
+import 'pattern_scan_preview.dart';
+import 'pattern_scan_review_screen.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
@@ -33,13 +43,97 @@ class WorkspaceScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkspaceScreen> createState() => _WorkspaceScreenState();
 }
 
+
 class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Timer? _autoSaveTimer;
   final _pdfPanelKey = GlobalKey<PdfViewerPanelState>();
 
+  // PDF scan overlay — full-screen Overlay entry so AppBar is also blocked.
+  final _scanStatus = ValueNotifier<String?>(null);
+  final _scanSubtitle = ValueNotifier<String?>(null);
+  bool _scanCancelled = false;
+  OverlayEntry? _scanOverlayEntry;
+
+  void _showScanOverlay(BuildContext context, String initialStatus) {
+    _scanStatus.value = initialStatus;
+    _scanOverlayEntry?.remove();
+    _scanOverlayEntry = OverlayEntry(
+      builder: (_) => Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            // Full-screen dim absorbs all taps (AppBar, back button, body).
+            Positioned.fill(
+              child: AbsorbPointer(
+                child: ColoredBox(color: const Color(0x66000000)),
+              ),
+            ),
+            // Card is a sibling — NOT inside AbsorbPointer — so cancel works.
+            Center(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 32, vertical: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 20),
+                      ValueListenableBuilder<String?>(
+                        valueListenable: _scanStatus,
+                        builder: (context, status, child) =>
+                            Text(status ?? ''),
+                      ),
+                      const SizedBox(height: 6),
+                      ValueListenableBuilder<String?>(
+                        valueListenable: _scanSubtitle,
+                        builder: (context, subtitle, child) => subtitle != null
+                            ? Text(
+                                subtitle,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.6),
+                                    ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () {
+                          _scanCancelled = true;
+                          _removeScanOverlay();
+                        },
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_scanOverlayEntry!);
+  }
+
+  void _removeScanOverlay() {
+    _scanStatus.value = null;
+    _scanSubtitle.value = null;
+    _scanOverlayEntry?.remove();
+    _scanOverlayEntry = null;
+  }
+
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
+    _scanOverlayEntry?.remove();
+    _scanStatus.dispose();
     super.dispose();
   }
 
@@ -303,6 +397,371 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     );
   }
 
+  Future<void> _scanPage(
+      BuildContext context,
+      String pdfPath,
+      List<int> legendPageNumbers,
+      List<int> gridPageNumbers,
+      String title) async {
+    _scanCancelled = false;
+    final allPageNumbers = {
+      ...legendPageNumbers,
+      ...gridPageNumbers,
+    }.toList()..sort();
+    final renderMsg = allPageNumbers.length == 1
+        ? 'Rendering page…'
+        : 'Rendering ${allPageNumbers.length} pages…';
+    _showScanOverlay(context, renderMsg);
+
+    try {
+      // Rasterise all unique pages in one batch.
+      final allPages = await PdfScanner.rasterisePages(pdfPath, allPageNumbers);
+      if (_scanCancelled) return;
+
+      // Build page-number → bytes lookup.
+      final pageByNumber = <int, Uint8List>{
+        for (var i = 0; i < allPageNumbers.length; i++)
+          allPageNumbers[i]: allPages[i],
+      };
+
+      final legendPages =
+          legendPageNumbers.map((n) => pageByNumber[n]!).toList();
+      final gridPages =
+          gridPageNumbers.map((n) => pageByNumber[n]!).toList();
+
+      final totalKb = allPages.fold(0, (s, p) => s + p.length) ~/ 1024;
+      debugPrint('[PdfScanner] ${allPages.length} page(s) rendered: '
+          '$totalKb KB total '
+          '(legend: ${legendPages.length}, grid: ${gridPages.length})');
+
+      // Auto-detect the grid layout on each page while the overlay is showing.
+      _scanStatus.value = 'Detecting grid layout…';
+      _scanSubtitle.value = null;
+      final detections = await GridDetector.detectPages(gridPages);
+      if (_scanCancelled) return;
+
+      for (var i = 0; i < detections.length; i++) {
+        final d = detections[i];
+        if (d != null) {
+          debugPrint('[GridDetector] page $i: '
+              'cellW=${d.cellW.toStringAsFixed(1)} '
+              'cellH=${d.cellH.toStringAsFixed(1)} '
+              'conf=${d.confidence.toStringAsFixed(2)}');
+        } else {
+          debugPrint('[GridDetector] page $i: no result');
+        }
+      }
+
+      // Present the grid-crop selection UI, pre-populated from detection.
+      final initialCrops = detections
+          .map((d) => d == null
+              ? null
+              : Rect.fromLTRB(
+                  d.gridLeft, d.gridTop, d.gridRight, d.gridBottom))
+          .toList();
+
+      _removeScanOverlay();
+      if (!context.mounted) return;
+      final crops = await PatternScanCropScreen.show(
+        context,
+        pages: gridPages,
+        initialCrops: initialCrops,
+      );
+      if (crops == null || !context.mounted) return;
+      debugPrint('[PdfScanner] crop(s): ${crops.map((c) => c.cropRect).join(', ')}');
+
+      // Step 2a — Prompt for pattern dimensions (cols × rows).
+      _removeScanOverlay();
+      if (!context.mounted) return;
+      final size = await _promptPatternSize(context);
+      if (size == null || !context.mounted) return;
+      final (patternW, patternH) = size;
+
+      // Step 2c — Build GridCellResult for each page directly from pattern dims.
+      final pageCount = crops.length;
+      final rowsPerPage = patternH ~/ pageCount;
+      final extraRows   = patternH - rowsPerPage * pageCount;
+
+      final cellResults = <GridCellResult>[];
+      for (var i = 0; i < crops.length; i++) {
+        final crop     = crops[i];
+        final pageRows = rowsPerPage + (i == pageCount - 1 ? extraRows : 0);
+        final cellW    = crop.cropRect.width  / patternW;
+        final cellH    = crop.cropRect.height / pageRows;
+
+        // Re-express the detected grid phase relative to this crop.
+        // Clamp to 0 when the offset is > half a cell to avoid losing a column/row.
+        final det = i < detections.length ? detections[i] : null;
+        double phaseX = 0;
+        double phaseY = 0;
+        if (det != null) {
+          final dx = det.gridLeft - crop.cropRect.left;
+          final dy = det.gridTop  - crop.cropRect.top;
+          phaseX = ((det.phaseX + dx) % cellW + cellW) % cellW;
+          phaseY = ((det.phaseY + dy) % cellH + cellH) % cellH;
+          if (phaseX > cellW * 0.5) phaseX = 0;
+          if (phaseY > cellH * 0.5) phaseY = 0;
+        }
+
+        cellResults.add(GridCellResult(
+          crop: crop,
+          cellW: cellW,
+          cellH: cellH,
+          cellOffsetX: phaseX,
+          cellOffsetY: phaseY,
+          columns: ((crop.cropRect.width  - phaseX) / cellW).round().clamp(1, 9999),
+          rows:    ((crop.cropRect.height - phaseY) / cellH).round().clamp(1, 9999),
+        ));
+      }
+      debugPrint(
+        '[PdfScanner] cell size(s): '
+        '${cellResults.map((c) => '${c.columns}×${c.rows}').join(', ')}',
+      );
+
+      // Step 3 — Symbol sampling: user taps one cell per symbol type.
+      final samples = await PatternScanSymbolScreen.show(
+        context,
+        cellResults: cellResults,
+        legendPages: legendPages,
+      );
+      if (samples == null || !context.mounted) return;
+      debugPrint('[PdfScanner] ${samples.length} symbol type(s) sampled');
+
+      // Step 4 — Per-cell template matching.
+      final matchResults = <GridMatchResult>[];
+      for (int i = 0; i < cellResults.length; i++) {
+        if (_scanCancelled) return;
+        if (!context.mounted) return;
+        final cellResult = cellResults[i];
+
+        _showScanOverlay(context,
+            'Scanning page ${i + 1} of ${cellResults.length}…');
+        _scanSubtitle.value =
+            '${cellResult.columns}×${cellResult.rows} cells';
+
+        debugPrint('[CellScanner] page $i: '
+            'cols=${cellResult.columns} rows=${cellResult.rows} '
+            'cellW=${cellResult.cellW.toStringAsFixed(1)} '
+            'cellH=${cellResult.cellH.toStringAsFixed(1)} '
+            'offsetX=${cellResult.cellOffsetX.toStringAsFixed(1)} '
+            'offsetY=${cellResult.cellOffsetY.toStringAsFixed(1)} '
+            'samples=${samples.length}');
+
+        final matchResult = await GridSymbolMatcher.matchGrid(
+          gridResult: cellResult,
+          samples: samples,
+        );
+        debugPrint(
+            '[CellScanner] page $i: ${matchResult.cells.where((c) => !c.isEmpty).length} occupied, '
+            '${matchResult.cells.where((c) => c.isEmpty).length} empty');
+        matchResults.add(matchResult);
+      }
+      if (_scanCancelled) return;
+
+      // Step 5 — Review / correct low-confidence cells.
+      final totalLowConf =
+          matchResults.fold<int>(0, (s, r) => s + r.lowConfidenceCount);
+      var reviewedResults = matchResults;
+      if (totalLowConf > 0) {
+        _removeScanOverlay();
+        if (!context.mounted) return;
+        final reviewed = await PatternScanReviewScreen.show(
+          context,
+          matchResults: matchResults,
+          cellResults: cellResults,
+        );
+        if (reviewed == null || !context.mounted) return;
+        reviewedResults = reviewed;
+      }
+
+      final result = GridMatchResult.combineFromSamples(reviewedResults, samples);
+      _removeScanOverlay();
+      if (!context.mounted) return;
+
+      if (reviewedResults.length == 1) {
+        // ── Single grid: preview then load as a new full pattern ─────────────
+        final pattern = await Navigator.of(context).push<CrossStitchPattern>(
+          MaterialPageRoute(
+            builder: (_) => PatternScanPreviewScreen(
+              result: result,
+              patternName: title,
+            ),
+          ),
+        );
+        if (pattern != null && context.mounted) {
+          // Auto-save the new pattern next to the source PDF.
+          final savePath =
+              '${File(pdfPath).parent.path}${Platform.pathSeparator}$title.stitchx';
+          try {
+            await FileService.saveFile(pattern, savePath);
+          } catch (_) {
+            // Saving failed (e.g. read-only location) — load without a file path.
+          }
+          if (!context.mounted) return;
+          ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: File(savePath).existsSync() ? savePath : null,
+          );
+          ref.read(pdfViewerProvider.notifier).set(null);
+        }
+      } else {
+        // ── Multiple grids: each page becomes a Snippet ──────────────────────
+        // The user arranges them on the canvas via the Snippets panel.
+        final notifier = ref.read(editorProvider.notifier);
+        for (var i = 0; i < reviewedResults.length; i++) {
+          notifier.addSnippet(
+            reviewedResults[i].toSnippet('$title — page ${i + 1}'),
+          );
+        }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${reviewedResults.length} grids added as snippets — '
+                'open the Snippets panel to place them on the canvas.',
+              ),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e, st) {
+      if (_scanCancelled) return;
+      debugPrint('[PdfScanner] caught: $e\n$st');
+      _removeScanOverlay();
+      if (!context.mounted) return;
+      _showScanError(context, e);
+    } finally {
+      _removeScanOverlay();
+    }
+  }
+
+  /// Dialog shown when the AI did not detect pattern dimensions.
+  /// Returns (cols, rows) or null if the user cancelled.
+  Future<(int, int)?> _promptPatternSize(BuildContext context) async {
+    final colsCtrl = TextEditingController();
+    final rowsCtrl = TextEditingController();
+    final formKey  = GlobalKey<FormState>();
+
+    final result = await showDialog<(int, int)>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter pattern size'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter the pattern size in stitches. '
+                'You can find this on the legend page of the PDF.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: colsCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Columns',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) {
+                        final n = int.tryParse(v ?? '');
+                        if (n == null || n < 1) return 'Enter a number';
+                        return null;
+                      },
+                      autofocus: true,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('×', style: TextStyle(fontSize: 20)),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: rowsCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Rows',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) {
+                        final n = int.tryParse(v ?? '');
+                        if (n == null || n < 1) return 'Enter a number';
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop((
+                  int.parse(colsCtrl.text),
+                  int.parse(rowsCtrl.text),
+                ));
+              }
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    return result;
+  }
+
+  void _showScanError(BuildContext context, Object e) {
+    debugPrint('[PdfScanner] error: $e');
+    final msg = e.toString();
+    final isRateLimit = msg.contains('Quota exceeded') ||
+        msg.contains('quota') ||
+        msg.contains('rate') ||
+        msg.contains('RESOURCE_EXHAUSTED');
+
+    if (isRateLimit) {
+      // Try to extract the retry-after seconds from the message.
+      final retryMatch =
+          RegExp(r'retry in ([\d.]+)s', caseSensitive: false).firstMatch(msg);
+      final retryStr = retryMatch != null
+          ? ' Try again in ~${retryMatch.group(1)!.split('.').first}s.'
+          : '';
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Rate limit reached.$retryStr'),
+        backgroundColor: Colors.orange.shade700,
+        duration: const Duration(seconds: 6),
+      ));
+    } else if (msg.contains('API key') || msg.contains('api_key') ||
+        msg.contains('API_KEY_INVALID')) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text(
+            'Invalid API key. Check your Gemini key in Settings.'),
+        backgroundColor: Colors.red.shade700,
+        duration: const Duration(seconds: 6),
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Scan failed: $msg'),
+        backgroundColor: Colors.red.shade700,
+        duration: const Duration(seconds: 6),
+      ));
+    }
+  }
+
   @override
   @override
   Widget build(BuildContext context) {
@@ -461,6 +920,26 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           actions: [
             // PDF viewer actions
             if (openPdf != null) ...[
+              IconButton(
+                icon: const Icon(Icons.document_scanner_outlined),
+                tooltip: 'Scan page as pattern (Beta)',
+                onPressed: () async {
+                  final picked = await PdfPagePickerDialog.show(
+                    context,
+                    pdfPath: openPdf.localPath,
+                    initialPage: _pdfPanelKey.currentState?.currentPage ?? 1,
+                  );
+                  if (picked != null && context.mounted) {
+                    _scanPage(
+                      context,
+                      openPdf.localPath,
+                      picked.legendPages,
+                      picked.gridPages,
+                      openPdf.title,
+                    );
+                  }
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.zoom_out),
                 tooltip: 'Zoom out',
