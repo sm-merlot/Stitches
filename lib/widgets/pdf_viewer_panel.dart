@@ -21,6 +21,8 @@ class PdfViewerPanelState extends State<PdfViewerPanel> {
   int _currentPage = 1;
   int _totalPages = 0;
 
+  int get currentPage => _currentPage;
+
   void zoomIn() {
     if (_controller.isReady) _controller.zoomUp();
   }

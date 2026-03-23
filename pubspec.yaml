@@ -27,6 +27,7 @@ dependencies:
   http: ^1.2.0
   font_awesome_flutter: ^10.8.0
   pdfrx: ^2.2.24
+  google_generative_ai: ^0.4.7
 
 dev_dependencies:
   flutter_test:

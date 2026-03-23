@@ -48,6 +48,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyKeepScreenOn, value);
   }
+
 }
 
 final settingsProvider =
