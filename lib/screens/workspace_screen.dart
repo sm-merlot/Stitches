@@ -24,6 +24,8 @@ import 'new_pattern_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
+enum _MenuAction { exportPdf, resize, patternInfo, referenceImage, shortcuts }
+
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
 
@@ -284,7 +286,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             _InfoRow('Threads', '${p.threads.length}'),
             _InfoRow('Stitches', '${p.stitches.length}'),
             if (state.filePath != null)
-              _InfoRow('File', state.filePath!.split('/').last),
+              _InfoRow(
+                'File',
+                state.driveParentFolderId != null
+                    ? '${p.name}.stitchx  (Google Drive)'
+                    : state.filePath!.split('/').last,
+              ),
           ],
         ),
         actions: [
@@ -505,45 +512,67 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 tooltip: 'Save As…',
                 onPressed: () => _saveAs(context),
               ),
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf_outlined),
-                tooltip: 'Export PDF…',
-                onPressed: () => _exportPdf(context, editorState),
-              ),
-              IconButton(
-                icon: const Icon(Icons.crop_outlined),
-                tooltip: 'Resize Aida',
-                onPressed: () =>
-                    _showResizeDialog(context, editorState),
-              ),
-              IconButton(
-                icon: const Icon(Icons.info_outline),
-                tooltip: 'Pattern Info',
-                onPressed: () => _showPatternInfo(context, editorState),
-              ),
-              IconButton(
-                icon: Icon(
-                  editorState.referenceImage != null
-                      ? Icons.photo_filter
-                      : Icons.photo_filter_outlined,
-                  color: editorState.referenceImage != null &&
-                          editorState.referenceVisible
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                tooltip: 'Reference Image',
-                onPressed: () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => const ReferenceImageSheet(),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.keyboard_outlined),
-                tooltip: 'Keyboard Shortcuts (?)',
-                onPressed: () => showDialog(
-                    context: context,
-                    builder: (_) => const _ShortcutsDialog()),
+              PopupMenuButton<_MenuAction>(
+                tooltip: 'More',
+                onSelected: (action) {
+                  switch (action) {
+                    case _MenuAction.exportPdf:
+                      _exportPdf(context, editorState);
+                    case _MenuAction.resize:
+                      _showResizeDialog(context, editorState);
+                    case _MenuAction.patternInfo:
+                      _showPatternInfo(context, editorState);
+                    case _MenuAction.referenceImage:
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => const ReferenceImageSheet(),
+                      );
+                    case _MenuAction.shortcuts:
+                      showDialog(
+                        context: context,
+                        builder: (_) => const _ShortcutsDialog(),
+                      );
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: _MenuAction.referenceImage,
+                    child: _MenuRow(
+                      icon: Icons.image_outlined,
+                      label: 'Reference Image',
+                      trailing: editorState.referenceImage != null &&
+                              editorState.referenceVisible
+                          ? Icon(Icons.check,
+                              size: 16,
+                              color: Theme.of(ctx).colorScheme.primary)
+                          : null,
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.resize,
+                    child: _MenuRow(
+                        icon: Icons.aspect_ratio, label: 'Resize Aida'),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.patternInfo,
+                    child: _MenuRow(
+                        icon: Icons.info_outline, label: 'Pattern Info'),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: _MenuAction.exportPdf,
+                    child: _MenuRow(
+                        icon: Icons.picture_as_pdf_outlined,
+                        label: 'Export PDF…'),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.shortcuts,
+                    child: _MenuRow(
+                        icon: Icons.keyboard_outlined,
+                        label: 'Keyboard Shortcuts'),
+                  ),
+                ],
               ),
             ],
             // Keep screen on — only shown in stitch mode with a file open
@@ -564,18 +593,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ],
               ),
             ],
-            // Stitch mode toggle — only visible with a file open
-            if (editorState.isFileOpen && openPdf == null)
-              Tooltip(
-                message: editorState.stitchMode
-                    ? 'Exit Stitch Mode'
-                    : 'Stitch Mode',
-                child: Switch(
-                  value: editorState.stitchMode,
-                  onChanged: (_) =>
-                      ref.read(editorProvider.notifier).toggleStitchMode(),
-                ),
-              ),
           ],
         ),
         body: Stack(
@@ -658,6 +675,27 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
           ],
         ),
+        floatingActionButton: (editorState.isFileOpen && openPdf == null)
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: 58),
+                child: FloatingActionButton.extended(
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).toggleStitchMode(),
+                  icon: Icon(editorState.stitchMode
+                      ? Icons.edit_outlined
+                      : Icons.auto_stories_outlined),
+                  label: Text(editorState.stitchMode
+                      ? 'Exit Stitch Mode'
+                      : 'Stitch Mode'),
+                  backgroundColor: editorState.stitchMode
+                      ? Theme.of(context).colorScheme.secondaryContainer
+                      : null,
+                  foregroundColor: editorState.stitchMode
+                      ? Theme.of(context).colorScheme.onSecondaryContainer
+                      : null,
+                ),
+              )
+            : null,
         endDrawer: (editorState.isFileOpen && openPdf == null) ? const _StitchPalettePanel() : null,
         endDrawerEnableOpenDragGesture: false,
       ),
@@ -807,6 +845,27 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Shared popup menu row ────────────────────────────────────────────────────
+
+class _MenuRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Widget? trailing;
+  const _MenuRow({required this.icon, required this.label, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 12),
+        Text(label),
+        if (trailing != null) ...[const Spacer(), trailing!],
+      ],
     );
   }
 }
