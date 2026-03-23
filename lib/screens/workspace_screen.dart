@@ -385,10 +385,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           notifier.copySelection();
           return KeyEventResult.handled;
         }
-        if (key == LogicalKeyboardKey.keyX) {
-          notifier.cutSelection();
-          return KeyEventResult.handled;
-        }
         if (key == LogicalKeyboardKey.keyV) {
           notifier.enterPasteMode();
           return KeyEventResult.handled;
@@ -879,7 +875,6 @@ class _ShortcutsDialog extends StatelessWidget {
         ('⌘ ⇧ Z', 'Redo'),
         ('⌘ A', 'Select all'),
         ('⌘ C', 'Copy selection'),
-        ('⌘ X', 'Cut selection'),
         ('⌘ V', 'Paste'),
         ('⌫  or  Del', 'Delete selection'),
         ('Esc', 'Cancel / deselect'),

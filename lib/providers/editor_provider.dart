@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/symbols.dart';
 import '../models/pattern.dart';
+import '../models/snippet.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../services/file_service.dart';
@@ -48,6 +49,8 @@ class EditorState {
   final List<Stitch>? clipboard;
   /// Thread data for stitches on the clipboard — needed when pasting across patterns.
   final List<Thread>? clipboardThreads;
+  /// True when the clipboard was loaded from a snippet (not a canvas selection).
+  final bool clipboardFromSnippet;
 
   // ── Stitch mode ───────────────────────────────────────────────────────────
   /// Whether stitch mode is active (canvas readonly, simplified toolbar).
@@ -90,6 +93,7 @@ class EditorState {
     this.selectionRect,
     this.clipboard,
     this.clipboardThreads,
+    this.clipboardFromSnippet = false,
     this.stitchMode = false,
     this.stitchViewMode = StitchViewMode.normal,
     this.stitchFocusThreadId,
@@ -181,6 +185,7 @@ class EditorState {
     Object? selectionRect = _sentinel,
     Object? clipboard = _sentinel,
     Object? clipboardThreads = _sentinel,
+    bool? clipboardFromSnippet,
     bool? stitchMode,
     StitchViewMode? stitchViewMode,
     Object? stitchFocusThreadId = _sentinel,
@@ -209,6 +214,7 @@ class EditorState {
       selectionRect: selectionRect == _sentinel ? this.selectionRect : selectionRect as Rect?,
       clipboard: clipboard == _sentinel ? this.clipboard : clipboard as List<Stitch>?,
       clipboardThreads: clipboardThreads == _sentinel ? this.clipboardThreads : clipboardThreads as List<Thread>?,
+      clipboardFromSnippet: clipboardFromSnippet ?? this.clipboardFromSnippet,
       stitchMode: stitchMode ?? this.stitchMode,
       stitchViewMode: stitchViewMode ?? this.stitchViewMode,
       stitchFocusThreadId: stitchFocusThreadId == _sentinel
@@ -264,6 +270,14 @@ class EditorNotifier extends Notifier<EditorState> {
       threadId = withSymbols.threads.isNotEmpty ? withSymbols.threads.first.dmcCode : null;
     }
 
+    // Preserve clipboard across pattern switches so users can paste into a
+    // different pattern without re-copying. If there was an active clipboard,
+    // the new pattern opens directly in paste mode.
+    final prevClipboard = state.clipboard;
+    final prevClipboardThreads = state.clipboardThreads;
+    final prevClipboardFromSnippet = state.clipboardFromSnippet;
+    final hasClipboard = prevClipboard != null && prevClipboard.isNotEmpty;
+
     state = EditorState(
       pattern: withSymbols,
       filePath: filePath,
@@ -271,7 +285,12 @@ class EditorNotifier extends Notifier<EditorState> {
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
       stitchMode: pattern.editorStitchMode,
-      drawingMode: pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw,
+      drawingMode: hasClipboard
+          ? DrawingMode.paste
+          : (pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw),
+      clipboard: hasClipboard ? prevClipboard : null,
+      clipboardThreads: hasClipboard ? prevClipboardThreads : null,
+      clipboardFromSnippet: hasClipboard && prevClipboardFromSnippet,
       referenceOpacity: withSymbols.referenceOpacity,
       driveFileId: driveFileId,
       driveParentFolderId: driveParentFolderId,
@@ -465,33 +484,7 @@ class EditorNotifier extends Notifier<EditorState> {
       clipboardThreads: threads,
       drawingMode: DrawingMode.paste,
       selectionRect: null,
-    );
-  }
-
-  Future<void> cutSelection() async {
-    final rect = state.selectionRect;
-    if (rect == null) return;
-    final inSel =
-        state.pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
-    if (inSel.isEmpty) return;
-    final clips = inSel
-        .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
-        .toList();
-    final threadIds = clips.map((s) => s.threadId).toSet();
-    final threads = state.pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
-    await Clipboard.setData(ClipboardData(text: _serializeClipboard(threads, clips)));
-    final remaining =
-        state.pattern.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
-    final newPattern = state.pattern.copyWith(stitches: remaining);
-    state = state.copyWith(
-      pattern: newPattern,
-      clipboard: clips,
-      clipboardThreads: threads,
-      selectionRect: null,
-      drawingMode: DrawingMode.paste,
-      undoStack: _buildUndoStack(),
-      isDirty: true,
-      redoStack: [],
+      clipboardFromSnippet: false,
     );
   }
 
@@ -869,6 +862,99 @@ class EditorNotifier extends Notifier<EditorState> {
     final bs = s as BackStitch;
     return bs.x1 >= 0 && bs.x1 <= maxX && bs.y1 >= 0 && bs.y1 <= maxY &&
         bs.x2 >= 0 && bs.x2 <= maxX && bs.y2 >= 0 && bs.y2 <= maxY;
+  }
+
+  // ─── Snippets ─────────────────────────────────────────────────────────────
+
+  void addSnippet(Snippet snippet) {
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(
+        snippets: [...state.pattern.snippets, snippet],
+      ),
+      isDirty: true,
+    );
+  }
+
+  void updateSnippet(Snippet snippet) {
+    final updated = state.pattern.snippets
+        .map((s) => s.id == snippet.id ? snippet : s)
+        .toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: updated),
+      isDirty: true,
+    );
+  }
+
+  void deleteSnippet(String id) {
+    final updated = state.pattern.snippets.where((s) => s.id != id).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: updated),
+      isDirty: true,
+    );
+  }
+
+  /// Saves the current selection (select mode) or clipboard (paste mode) as a new snippet.
+  void saveSelectionAsSnippet(String name) {
+    final List<Stitch> stitches;
+    final List<Thread> threads;
+
+    if (state.drawingMode == DrawingMode.paste) {
+      stitches = state.clipboard ?? [];
+      threads = state.clipboardThreads ?? [];
+    } else {
+      final rect = state.selectionRect;
+      if (rect == null) return;
+      final inSel = state.pattern.stitches
+          .where((s) => EditorState.isStitchInRect(s, rect))
+          .toList();
+      if (inSel.isEmpty) return;
+      stitches = inSel
+          .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
+          .toList();
+      final threadIds = stitches.map((s) => s.threadId).toSet();
+      threads = state.pattern.threads
+          .where((t) => threadIds.contains(t.dmcCode))
+          .toList();
+    }
+
+    if (stitches.isEmpty) return;
+
+    // Derive bounding dimensions from the normalised stitch coords.
+    var maxX = 0, maxY = 0;
+    for (final s in stitches) {
+      final coords = EditorState.cellCoords(s);
+      if (coords != null) {
+        if (coords.$1 + 1 > maxX) maxX = coords.$1 + 1;
+        if (coords.$2 + 1 > maxY) maxY = coords.$2 + 1;
+      }
+    }
+
+    addSnippet(Snippet.create(
+      name: name,
+      width: maxX,
+      height: maxY,
+      threads: threads,
+      stitches: stitches,
+    ));
+
+    // Return to select mode after saving (exits paste mode if active).
+    if (state.drawingMode == DrawingMode.paste) {
+      cancelSelection();
+    }
+  }
+
+  /// Loads a snippet's stitches into the in-memory and system clipboard, then enters paste mode.
+  Future<void> loadSnippetToClipboard(Snippet snippet) async {
+    await Clipboard.setData(
+      ClipboardData(text: _serializeClipboard(snippet.threads, snippet.stitches)),
+    );
+    state = state.copyWith(
+      clipboard: snippet.stitches,
+      clipboardThreads: snippet.threads,
+      drawingMode: DrawingMode.paste,
+      selectionRect: null,
+      clipboardFromSnippet: true,
+    );
   }
 }
 

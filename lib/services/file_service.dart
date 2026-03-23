@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/pattern.dart';
+import '../models/snippet.dart';
 
 class FileService {
   static const String _ext = 'stitchx';
@@ -128,26 +129,56 @@ class FileService {
 
     buf.writeln('stitches:');
     for (final s in pattern.stitches) {
-      final m = s.toYaml();
-      final type = m['type'] as String;
-      final thread = _yamlStr(m['thread'] as String);
-      switch (type) {
-        case 'full':
-          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, thread: $thread}');
-        case 'half':
-          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, dir: ${m['dir']}, thread: $thread}');
-        case 'quarter':
-          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
-        case 'halfcross':
-          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, half: ${m['half']}, thread: $thread}');
-        case 'quartercross':
-          buf.writeln('  - {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
-        case 'back':
-          buf.writeln('  - {type: $type, x1: ${m['x1']}, y1: ${m['y1']}, x2: ${m['x2']}, y2: ${m['y2']}, thread: $thread}');
+      _writeStitch(buf, s, indent: '  ');
+    }
+
+    if (pattern.snippets.isNotEmpty) {
+      buf.writeln('snippets:');
+      for (final snippet in pattern.snippets) {
+        _writeSnippet(buf, snippet);
       }
     }
 
     return buf.toString();
+  }
+
+  static void _writeStitch(StringBuffer buf, s, {String indent = '  '}) {
+    final m = s.toYaml();
+    final type = m['type'] as String;
+    final thread = _yamlStr(m['thread'] as String);
+    switch (type) {
+      case 'full':
+        buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, thread: $thread}');
+      case 'half':
+        buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, dir: ${m['dir']}, thread: $thread}');
+      case 'quarter':
+        buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
+      case 'halfcross':
+        buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, half: ${m['half']}, thread: $thread}');
+      case 'quartercross':
+        buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
+      case 'back':
+        buf.writeln('$indent- {type: $type, x1: ${m['x1']}, y1: ${m['y1']}, x2: ${m['x2']}, y2: ${m['y2']}, thread: $thread}');
+    }
+  }
+
+  static void _writeSnippet(StringBuffer buf, Snippet snippet) {
+    buf.writeln('  - id: ${_yamlStr(snippet.id)}');
+    buf.writeln('    name: ${_yamlStr(snippet.name)}');
+    buf.writeln('    width: ${snippet.width}');
+    buf.writeln('    height: ${snippet.height}');
+    buf.writeln('    threads:');
+    for (final t in snippet.threads) {
+      final m = t.toYaml();
+      buf.writeln('      - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
+      buf.writeln('        color: ${_yamlStr(m['color'] as String)}');
+      buf.writeln('        name: ${_yamlStr(m['name'] as String)}');
+      buf.writeln('        symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
+    }
+    buf.writeln('    stitches:');
+    for (final s in snippet.stitches) {
+      _writeStitch(buf, s, indent: '      ');
+    }
   }
 
   /// Wrap a string in YAML single quotes, escaping any internal single quotes.
