@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'snippet.dart';
 import 'stitch.dart';
 import 'thread.dart';
 
@@ -25,6 +26,9 @@ class CrossStitchPattern {
   /// Opacity of the reference image overlay (0.0–1.0).
   final double referenceOpacity;
 
+  /// Saved snippets belonging to this pattern.
+  final List<Snippet> snippets;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -37,6 +41,7 @@ class CrossStitchPattern {
     this.editorStitchMode = false,
     this.referenceImagePath,
     this.referenceOpacity = 0.5,
+    this.snippets = const [],
   });
 
   factory CrossStitchPattern.empty({
@@ -68,6 +73,7 @@ class CrossStitchPattern {
     bool? editorStitchMode,
     Object? referenceImagePath = _sentinel,
     double? referenceOpacity,
+    List<Snippet>? snippets,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -87,6 +93,7 @@ class CrossStitchPattern {
           ? this.referenceImagePath
           : referenceImagePath as String?,
       referenceOpacity: referenceOpacity ?? this.referenceOpacity,
+      snippets: snippets ?? this.snippets,
     );
   }
 
@@ -126,6 +133,10 @@ class CrossStitchPattern {
           [],
       stitches: (yaml['stitches'] as List?)
               ?.map((s) => Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
+              .toList() ??
+          [],
+      snippets: (yaml['snippets'] as List?)
+              ?.map((s) => Snippet.fromYaml(Map<String, dynamic>.from(s as Map)))
               .toList() ??
           [],
     );

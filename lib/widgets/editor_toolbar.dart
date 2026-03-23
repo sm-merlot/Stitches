@@ -9,6 +9,7 @@ import '../providers/settings_provider.dart';
 import '../screens/color_picker_screen.dart';
 import '../screens/stitch_demo_screen.dart';
 import 'color_select_dialog.dart';
+import 'snippets_panel.dart';
 
 const _aidaPresets = [
   (label: 'White',         color: Color(0xFFFFFFFF)),
@@ -26,7 +27,13 @@ const _aidaPresets = [
 ];
 
 class EditorToolbar extends ConsumerWidget {
-  const EditorToolbar({super.key});
+  final bool showSnippetsButton;
+  final bool showSaveAsSnippetButton;
+  const EditorToolbar({
+    super.key,
+    this.showSnippetsButton = true,
+    this.showSaveAsSnippetButton = true,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -179,7 +186,7 @@ class EditorToolbar extends ConsumerWidget {
                     vDivider,
                   ],
 
-                  // Copy/cut/delete — shown when a selection is active
+                  // Copy/delete — shown when a selection is active
                   if (state.drawingMode == DrawingMode.select) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -197,17 +204,18 @@ class EditorToolbar extends ConsumerWidget {
                                   : null,
                             ),
                           ),
-                          Tooltip(
-                            message: 'Cut  [Cmd+X]',
-                            child: IconButton(
-                              iconSize: 20,
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.cut_outlined),
-                              onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                  ? () => notifier.cutSelection()
-                                  : null,
+                          if (showSaveAsSnippetButton)
+                            Tooltip(
+                              message: 'Save as snippet',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.bookmark_add_outlined),
+                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                    ? () => _saveAsSnippet(context, ref)
+                                    : null,
+                              ),
                             ),
-                          ),
                           Tooltip(
                             message: 'Delete selection  [Del]',
                             child: IconButton(
@@ -229,25 +237,60 @@ class EditorToolbar extends ConsumerWidget {
                     ),
                     vDivider,
                   ],
-                  // Cancel button — shown while paste preview is active
+                  // Cancel + save-as-snippet — shown while paste preview is active
                   if (state.drawingMode == DrawingMode.paste) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      child: Tooltip(
-                        message: 'Cancel paste  [Esc]',
-                        child: TextButton.icon(
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            foregroundColor: theme.colorScheme.error,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (showSaveAsSnippetButton && !state.clipboardFromSnippet)
+                            Tooltip(
+                              message: 'Save as snippet',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.bookmark_add_outlined),
+                                onPressed: () => _saveAsSnippet(context, ref),
+                              ),
+                            ),
+                          Tooltip(
+                            message: 'Cancel paste  [Esc]',
+                            child: TextButton.icon(
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                foregroundColor: theme.colorScheme.error,
+                              ),
+                              icon: const Icon(Icons.close, size: 18),
+                              label: const Text('Cancel'),
+                              onPressed: () => notifier.cancelSelection(),
+                            ),
                           ),
-                          icon: const Icon(Icons.close, size: 18),
-                          label: const Text('Cancel'),
-                          onPressed: () => notifier.cancelSelection(),
-                        ),
+                        ],
                       ),
                     ),
                     vDivider,
                   ],
+                  // Snippets button
+                  if (showSnippetsButton)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      child: Tooltip(
+                        message: 'Snippets',
+                        child: IconButton(
+                          iconSize: 20,
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.collections_bookmark_outlined),
+                          onPressed: state.isFileOpen
+                              ? () => showModalBottomSheet<void>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (_) => const SnippetsPanel(),
+                                  )
+                              : null,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1205,6 +1248,28 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
     ..strokeWidth = 0.8;
   canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
   canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
+}
+
+// ─── Save as snippet ──────────────────────────────────────────────────────────
+
+void _saveAsSnippet(BuildContext context, WidgetRef ref) {
+  ref.read(editorProvider.notifier).saveSelectionAsSnippet('');
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    SnackBar(
+      content: const Text('Saved as snippet'),
+      duration: const Duration(seconds: 3),
+      action: SnackBarAction(
+        label: 'Open',
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const SnippetsPanel(),
+        ),
+      ),
+    ),
+  );
+  Future.delayed(const Duration(seconds: 3), messenger.hideCurrentSnackBar);
 }
 
 // ─── Demonstrate button ───────────────────────────────────────────────────────

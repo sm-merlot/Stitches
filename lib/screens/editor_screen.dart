@@ -195,10 +195,6 @@ class EditorScreen extends ConsumerWidget {
           notifier.copySelection();
           return KeyEventResult.handled;
         }
-        if (key == LogicalKeyboardKey.keyX) {
-          notifier.cutSelection();
-          return KeyEventResult.handled;
-        }
         if (key == LogicalKeyboardKey.keyV) {
           notifier.enterPasteMode();
           return KeyEventResult.handled;

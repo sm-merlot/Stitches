@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stitch.dart';
 import '../providers/editor_provider.dart';
@@ -51,18 +52,27 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Paste preview origin (grid cell coords, top-left of where clipboard will land)
   Offset? _pasteOrigin;
 
+  // Whether Ctrl is currently held — switches paste from single-stamp to multi-stamp.
+  bool _ctrlHeld = false;
+
   @override
   void initState() {
     super.initState();
-    // Global route catches PointerAddedEvent (pencil enters hover range) and
-    // PointerRemovedEvent (pencil leaves), which Listener has no callbacks for.
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
   }
 
   @override
   void dispose() {
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointerEvent);
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     super.dispose();
+  }
+
+  bool _onHardwareKey(KeyEvent event) {
+    final ctrl = HardwareKeyboard.instance.isControlPressed;
+    if (ctrl != _ctrlHeld) setState(() => _ctrlHeld = ctrl);
+    return false; // don't consume the event
   }
 
   void _onGlobalPointerEvent(PointerEvent event) {
@@ -375,6 +385,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         if (origin != null && clips != null) {
           final (dx, dy) = _centeredPasteOffset(origin, clips);
           ref.read(editorProvider.notifier).commitPaste(dx, dy);
+          if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
         }
         return;
       }
@@ -545,6 +556,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (clips != null) {
         final (dx, dy) = _centeredPasteOffset(_pasteOrigin!, clips);
         ref.read(editorProvider.notifier).commitPaste(dx, dy);
+        if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
       }
       setState(() => _pasteOrigin = null);
       _activePointers.remove(event.pointer);
@@ -767,7 +779,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       DrawingMode.colorPicker => SystemMouseCursors.none,
       DrawingMode.draw => SystemMouseCursors.none,
       DrawingMode.select => SystemMouseCursors.precise,
-      DrawingMode.paste => SystemMouseCursors.precise,
+      DrawingMode.paste =>
+        _ctrlHeld ? SystemMouseCursors.copy : SystemMouseCursors.cell,
     };
   }
 }
