@@ -23,7 +23,13 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - Navigate (pan without drawing)
 - Erase
 - Color picker (sample a stitch's thread)
-- Selection (copy, cut, paste, delete regions)
+- Selection (rubber-band, copy, paste, delete regions)
+
+### Snippets
+- **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
+- **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / edit / delete
+- **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size
+- **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
 
 ### Files & workspace
 - **File format** — patterns saved as `.stitchx` files (YAML internally)
@@ -45,7 +51,7 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode
 - **Touch** — rubber-band selection, copy/paste, and pan all work with finger on iPad
 - **Stitch mode** — simplified read-only view for stitching from a finished pattern; keep-screen-on option
-- **Keyboard shortcuts** — full shortcut set on desktop (undo, redo, tool switching, modes); `?` opens shortcut reference
+- **Keyboard shortcuts** — full shortcut set on desktop and in snippet editor (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
 
 ## Getting Started
@@ -58,6 +64,6 @@ Requires Flutter 3.41.4+.
 
 ## Roadmap
 
-- **Sprite sheet importer** — open a sprite sheet image, select or crop a single sprite, copy it to the clipboard and paste into any pattern; pixel colours are matched to the nearest DMC thread
+- **Sprite sheet importer** — open a sprite sheet image, select or crop a single sprite, pixel colours matched to nearest DMC thread; output saved as a snippet in the current pattern
 - **PDF pattern scanner** — rasterise a PDF page and send it to an AI vision model (Gemini by default; provider-agnostic interface for future options) to extract the stitch grid as a new pattern
 - **Proton Drive sync**
