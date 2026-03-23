@@ -845,11 +845,11 @@ void main() {
     //   . . X . . .   y=1: (2,1)
     //   . . . X . .   y=2: (3,2)
     //   . . . . X X   y=3: (4,3),(5,3)
-    const _p1cells = [(0,0),(1,0),(2,1),(3,2),(4,3),(5,3)];
+    const p1cells = [(0,0),(1,0),(2,1),(3,2),(4,3),(5,3)];
 
     test('S-chain 3-hop, start top-left (0,0)', () {
       final aida = planStitching(
-        title: 's3-from-top', cols: 6, rows: 4, cells: _p1cells,
+        title: 's3-from-top', cols: 6, rows: 4, cells: p1cells,
         startCell: (0, 0),
       );
       expect(
@@ -899,7 +899,7 @@ void main() {
 
     test('S-chain 3-hop, start bottom-right (5,3)', () {
       final aida = planStitching(
-        title: 's3-from-bottom', cols: 6, rows: 4, cells: _p1cells,
+        title: 's3-from-bottom', cols: 6, rows: 4, cells: p1cells,
         startCell: (5, 3),
       );
       expect(
@@ -952,11 +952,11 @@ void main() {
     //   . . . X . .   y=1: (3,1)
     //   . . X . . .   y=2: (2,2)
     //   X X . . . .   y=3: (0,3),(1,3)
-    const _p2cells = [(4,0),(5,0),(3,1),(2,2),(0,3),(1,3)];
+    const p2cells = [(4,0),(5,0),(3,1),(2,2),(0,3),(1,3)];
 
     test('Z-chain 3-hop, start top-right (5,0)', () {
       final aida = planStitching(
-        title: 'z3-from-top', cols: 6, rows: 4, cells: _p2cells,
+        title: 'z3-from-top', cols: 6, rows: 4, cells: p2cells,
         startCell: (5, 0),
       );
       expect(
@@ -1006,7 +1006,7 @@ void main() {
 
     test('Z-chain 3-hop, start bottom-left (0,3)', () {
       final aida = planStitching(
-        title: 'z3-from-bottom', cols: 6, rows: 4, cells: _p2cells,
+        title: 'z3-from-bottom', cols: 6, rows: 4, cells: p2cells,
         startCell: (0, 3),
       );
       expect(

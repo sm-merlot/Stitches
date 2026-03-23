@@ -35,7 +35,6 @@ class EditorScreen extends ConsumerWidget {
           final notifier = ref.read(googleDriveProvider.notifier);
           final newId = await notifier.uploadPattern(
             state.patternForSave,
-            state.filePath!,
             driveFileId,
             parentFolderId,
           );
