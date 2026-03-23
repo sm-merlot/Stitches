@@ -13,6 +13,8 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
+enum _MenuAction { saveAs, exportPdf, resize, patternInfo, referenceImage }
+
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
 
@@ -277,41 +279,63 @@ class EditorScreen extends ConsumerWidget {
                 tooltip: 'Save  (Cmd+S)',
                 onPressed: () => _save(context, ref),
               ),
-              IconButton(
-                icon: const Icon(Icons.save_as_outlined),
-                tooltip: 'Save As…',
-                onPressed: () => _saveAs(context, ref),
-              ),
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf_outlined),
-                tooltip: 'Export PDF…',
-                onPressed: () => _exportPdf(context, state),
-              ),
-              IconButton(
-                icon: const Icon(Icons.crop_outlined),
-                tooltip: 'Resize Aida',
-                onPressed: () => _showResizeDialog(context, ref, state),
-              ),
-              IconButton(
-                icon: const Icon(Icons.info_outline),
-                tooltip: 'Pattern Info',
-                onPressed: () => _showPatternInfo(context, state),
-              ),
-              IconButton(
-                icon: Icon(
-                  state.referenceImage != null
-                      ? Icons.photo_filter
-                      : Icons.photo_filter_outlined,
-                  color: state.referenceImage != null && state.referenceVisible
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                tooltip: 'Reference Image',
-                onPressed: () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => const ReferenceImageSheet(),
-                ),
+              PopupMenuButton<_MenuAction>(
+                tooltip: 'More',
+                onSelected: (action) {
+                  switch (action) {
+                    case _MenuAction.saveAs:
+                      _saveAs(context, ref);
+                    case _MenuAction.exportPdf:
+                      _exportPdf(context, state);
+                    case _MenuAction.resize:
+                      _showResizeDialog(context, ref, state);
+                    case _MenuAction.patternInfo:
+                      _showPatternInfo(context, state);
+                    case _MenuAction.referenceImage:
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => const ReferenceImageSheet(),
+                      );
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: _MenuAction.referenceImage,
+                    child: _MenuRow(
+                      icon: Icons.image_outlined,
+                      label: 'Reference Image',
+                      trailing: state.referenceImage != null &&
+                              state.referenceVisible
+                          ? Icon(Icons.check,
+                              size: 16,
+                              color: Theme.of(ctx).colorScheme.primary)
+                          : null,
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.resize,
+                    child: _MenuRow(
+                        icon: Icons.aspect_ratio, label: 'Resize Aida'),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.patternInfo,
+                    child:
+                        _MenuRow(icon: Icons.info_outline, label: 'Pattern Info'),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: _MenuAction.saveAs,
+                    child: _MenuRow(
+                        icon: Icons.save_as_outlined, label: 'Save As…'),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.exportPdf,
+                    child: _MenuRow(
+                        icon: Icons.picture_as_pdf_outlined,
+                        label: 'Export PDF…'),
+                  ),
+                ],
               ),
             ],
             // Keep screen on — only shown in stitch mode
@@ -332,15 +356,6 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Stitch mode toggle — always visible, pinned to right edge
-            Tooltip(
-              message: state.stitchMode ? 'Exit Stitch Mode' : 'Stitch Mode',
-              child: Switch(
-                value: state.stitchMode,
-                onChanged: (_) =>
-                    ref.read(editorProvider.notifier).toggleStitchMode(),
-              ),
-            ),
           ],
         ),
         body: Focus(
@@ -353,6 +368,26 @@ class EditorScreen extends ConsumerWidget {
             ],
           ),
         ),
+        floatingActionButton: state.isFileOpen
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: 58),
+                child: FloatingActionButton.extended(
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).toggleStitchMode(),
+                  icon: Icon(state.stitchMode
+                      ? Icons.edit_outlined
+                      : Icons.auto_stories_outlined),
+                  label: Text(
+                      state.stitchMode ? 'Exit Stitch Mode' : 'Stitch Mode'),
+                  backgroundColor: state.stitchMode
+                      ? Theme.of(context).colorScheme.secondaryContainer
+                      : null,
+                  foregroundColor: state.stitchMode
+                      ? Theme.of(context).colorScheme.onSecondaryContainer
+                      : null,
+                ),
+              )
+            : null,
         endDrawer: const _StitchPalettePanel(),
         endDrawerEnableOpenDragGesture: false,
       ),
@@ -406,7 +441,12 @@ class EditorScreen extends ConsumerWidget {
             _InfoRow('Threads', '${p.threads.length}'),
             _InfoRow('Stitches', '${p.stitches.length}'),
             if (state.filePath != null)
-              _InfoRow('File', state.filePath!.split('/').last),
+              _InfoRow(
+                'File',
+                state.driveParentFolderId != null
+                    ? '${p.name}.stitchx  (Google Drive)'
+                    : state.filePath!.split('/').last,
+              ),
           ],
         ),
         actions: [
@@ -415,6 +455,27 @@ class EditorScreen extends ConsumerWidget {
               child: const Text('Close'))
         ],
       ),
+    );
+  }
+}
+
+// ─── Shared popup menu row ───────────────────────────────────────────────────
+
+class _MenuRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Widget? trailing;
+  const _MenuRow({required this.icon, required this.label, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 12),
+        Text(label),
+        if (trailing != null) ...[const Spacer(), trailing!],
+      ],
     );
   }
 }
