@@ -77,7 +77,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           final notifier = ref.read(googleDriveProvider.notifier);
           await notifier.uploadPattern(
             _patternWithEditorState(state),
-            state.filePath!,
             driveFileId,
             parentFolderId,
           );
@@ -221,7 +220,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Future<void> _uploadNewFileToDrive(
       DriveFolder folder, CrossStitchPattern pattern, String tempPath) async {
     final newFileId = await ref.read(googleDriveProvider.notifier).uploadPattern(
-      pattern, tempPath, null, folder.folderId);
+      pattern, null, folder.folderId);
     if (!mounted) return;
     // Remove the optimistic placeholder before refreshing from Drive.
     clearPendingDriveFiles(ref, folder.folderId);

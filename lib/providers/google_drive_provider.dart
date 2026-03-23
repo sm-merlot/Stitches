@@ -141,7 +141,6 @@ class DriveNotifier extends Notifier<DriveState> {
   /// Returns the Drive file ID of the uploaded file.
   Future<String?> uploadPattern(
     CrossStitchPattern pattern,
-    String localPath,
     String? driveFileId,
     String parentFolderId,
   ) async {
@@ -159,7 +158,8 @@ class DriveNotifier extends Notifier<DriveState> {
 
       final yamlString = FileService.toYamlString(pattern);
       final bytes = Uint8List.fromList(yamlString.codeUnits);
-      final name = localPath.split('/').last;
+      final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
+      final name = '$safeName.stitchx';
 
       final newId = await service.uploadFile(
         fileId: driveFileId,

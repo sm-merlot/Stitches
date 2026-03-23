@@ -650,7 +650,7 @@ PlannedAida planStitching({
       final nextOp = schedule[opIdx + 1];
       if (nextOp.kind == 'S2' && nextOp.cellId == currentCellId) {
         // Turn-around S1: choose so approach (fromNode → S1 start) is perp to movement.
-        if (opIdx > 0 && fromNode != null) {
+        if (opIdx > 0) {
           final prevCellId = schedule[opIdx - 1].cellId;
           final dx = squares[currentCellId].x - squares[prevCellId].x;
           final dy = squares[currentCellId].y - squares[prevCellId].y;
@@ -674,7 +674,7 @@ PlannedAida planStitching({
       final prevOp = schedule[opIdx - 1];
       if (prevOp.kind == 'S1' && prevOp.cellId == currentCellId) {
         // Turn-around S2: choose so departure (fromNode → S2 start) is perp to movement.
-        if (opIdx >= 2 && fromNode != null) {
+        if (opIdx >= 2) {
           final prevCellId = schedule[opIdx - 2].cellId;
           final dx = squares[currentCellId].x - squares[prevCellId].x;
           final dy = squares[currentCellId].y - squares[prevCellId].y;
@@ -802,7 +802,7 @@ PlannedAida planStitching({
           dir == 'fwd' ? 'rev' : 'fwd');
       needleNode = startN;
     } else {
-      if (needleNode != null) emitBack(needleNode!, startN);
+      if (needleNode != null) emitBack(needleNode, startN);
       emitFront(op.cellId, op.kind == 'S1' ? 'front1' : 'front2', dir);
       needleNode = endN;
     }
