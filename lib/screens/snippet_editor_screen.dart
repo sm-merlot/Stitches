@@ -316,7 +316,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         child: Column(
           children: [
             Expanded(child: PatternCanvas()),
-            EditorToolbar(showSnippetsButton: false, showSaveAsSnippetButton: false),
+            EditorToolbar(showSnippetsButton: false, showSaveAsSnippetButton: false, showSpriteSheetButton: false),
           ],
         ),
       ),
