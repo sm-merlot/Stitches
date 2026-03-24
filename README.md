@@ -38,6 +38,20 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - **Google Drive sync** — connect a Google Drive account; patterns auto-save and sync in the background
 - **Recent files** — quick access to recently opened files and folders, including Drive items
 
+### PDF pattern scanner *(beta)*
+Convert a printed cross-stitch chart PDF into an editable pattern without any AI or internet connection required.
+
+1. **Page selection** — choose which PDF pages contain the legend and the stitch grid
+2. **Grid crop** — auto-detect the grid bounds on each page; adjust manually if needed
+3. **Pattern dimensions** — enter the stitch count (cols × rows) for the design
+4. **Symbol sampling** — tap one or more cells in the grid for each unique symbol and assign the matching DMC thread code; the app builds reference templates from your samples
+5. **Template matching** — every cell is compared against the sampled templates using mean absolute pixel difference; cells with ambiguous matches are flagged for manual review
+6. **Review** — tap any flagged cell to reassign it; confirm to finish
+
+The resulting pattern is saved automatically as a `.stitchx` file next to the source PDF.
+
+> The scanner works best on clean, high-contrast charts. Backstitches and half-stitches are not extracted (full stitches only in this release).
+
 ### Stitch demonstration *(beta)*
 - **Animated stitch order** — per-thread step-by-step animation showing exactly how to stitch the pattern, with configurable playback speed
 - **Stitch planner** — automatic path planning that determines an efficient stitch order, respecting front/back alternation rules
@@ -65,5 +79,4 @@ Requires Flutter 3.41.4+.
 
 ## Roadmap
 
-- **PDF pattern scanner** — rasterise a PDF page and send it to an AI vision model (Gemini by default; provider-agnostic interface for future options) to extract the stitch grid as a new pattern
 - **Proton Drive sync**
