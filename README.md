@@ -80,3 +80,25 @@ Requires Flutter 3.41.4+.
 ## Roadmap
 
 - **Proton Drive sync**
+
+### Improvements & polish
+
+1. **Canvas performance** — split `CanvasPainter` into a static layer (stitches + grid, only repaints on data change) and an overlay layer (cursor, ghost stitches, selection rect), plus viewport culling and grid-line batching. Fixes choppiness on large patterns (256×220+).
+
+2. **Resize snippets** — add a "Resize…" option to the snippet ⋮ menu. Supports three modes: *Clip* (trim stitches outside new bounds), *Scale* (proportionally remap stitch positions), and *Expand* (change declared size, keep all stitches).
+
+3. **Paste opacity / colour blend** — set an opacity slider in paste mode. Ghost stitches render at the chosen opacity. On stamp, each stitch's colour is blended (via CIE Lab nearest-DMC lookup) with whatever is already at that cell, so the snippet colour interacts with the canvas underneath.
+
+4. **Block view** — toggle that renders all stitches as solid filled squares instead of X-shapes. Makes it easy to see the overall colour distribution of a pattern. Toggle in the AppBar.
+
+5. **Images in folder view** — `.png`, `.jpg`, `.gif`, `.webp` files visible in the workspace folder tree. Tap to view full-screen. Right-click → "Import as Sprite Sheet" when a pattern is open.
+
+6. **Snippet colour palette** — each snippet in the panel shows a row of colour swatches derived from its thread list. No interaction needed — purely informational at a glance.
+
+7. **Colour replacement** — long-press any thread swatch in the palette to replace all stitches of that colour with a new DMC colour. Works on both main canvas and snippet editor. Pushes an undo step.
+
+8. **Thread count in palette** — palette shows stitch count per thread and a total at the top (e.g. "14 colours · 3,240 stitches"). Optionally shows estimated thread length (full stitch ≈ 45 cm).
+
+9. **Edge snapping for paste** — hold **Shift** while positioning a paste/snippet ghost to snap its edges to the canvas boundary (left, right, top, bottom, or centre). Separate from Ctrl (multi-stamp).
+
+10. **Snippets from snippets** — while editing a snippet, import any other snippet from the library as a paste operation onto the current canvas. A picker sheet shows all sibling snippets; tap one to enter paste mode with it as the clipboard.
