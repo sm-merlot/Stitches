@@ -61,6 +61,10 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 
 > The stitch demonstration is in beta. Some pattern shapes may produce incorrect or suboptimal stitch paths.
 
+### View options
+- **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle in the ⋮ overflow menu. In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean.
+- **Zoom-adaptive rendering** — below a zoom threshold, stitches automatically switch to block rendering; backstitches and grid lines fade out at very low zoom
+
 ### Platform & input
 - **Multi-platform** — macOS, iOS, Android
 - **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode
@@ -83,13 +87,13 @@ Requires Flutter 3.41.4+.
 
 ### Improvements & polish
 
-1. **Canvas performance** — split `CanvasPainter` into a static layer (stitches + grid, only repaints on data change) and an overlay layer (cursor, ghost stitches, selection rect), plus viewport culling and grid-line batching. Fixes choppiness on large patterns (256×220+).
+1. ~~**Canvas performance**~~ ✓ — `CanvasPainter` split into a static layer (stitches + grid, RepaintBoundary-cached) and a lightweight overlay layer (cursor, ghost stitches, selection rect), plus viewport culling, grid-line path batching, zoom-adaptive rendering, and frame coalescing. Fixes choppiness on large patterns (256×220+).
 
 2. **Resize snippets** — add a "Resize…" option to the snippet ⋮ menu. Supports three modes: *Clip* (trim stitches outside new bounds), *Scale* (proportionally remap stitch positions), and *Expand* (change declared size, keep all stitches).
 
 3. **Paste opacity / colour blend** — set an opacity slider in paste mode. Ghost stitches render at the chosen opacity. On stamp, each stitch's colour is blended (via CIE Lab nearest-DMC lookup) with whatever is already at that cell, so the snippet colour interacts with the canvas underneath.
 
-4. **Block view** — toggle that renders all stitches as solid filled squares instead of X-shapes. Makes it easy to see the overall colour distribution of a pattern. Toggle in the AppBar.
+4. ~~**Block view**~~ ✓ — toggle in the ⋮ overflow menu renders all stitches as solid coloured rectangles. Half stitches draw as half-cell rects, quarter stitches as quarter-cell rects. In stitch mode, symbols remain visible when zoomed in. In design mode, the view stays clean with no symbols.
 
 5. **Images in folder view** — `.png`, `.jpg`, `.gif`, `.webp` files visible in the workspace folder tree. Tap to view full-screen. Right-click → "Import as Sprite Sheet" when a pattern is open.
 
