@@ -765,6 +765,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   scale: _scale,
                   aidaColor: state.pattern.aidaColor,
                   stitchMode: state.stitchMode,
+                  blockMode: state.blockMode,
                   stitchViewMode: state.stitchViewMode,
                   stitchFocusThreadId: state.stitchFocusThreadId,
                   referenceImage: state.referenceImage,

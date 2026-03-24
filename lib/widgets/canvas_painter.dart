@@ -382,6 +382,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   @override final double scale;
   @override final Color aidaColor;
   final bool stitchMode;
+  final bool blockMode;
   final StitchViewMode stitchViewMode;
   final String? stitchFocusThreadId;
   final ui.Image? referenceImage;
@@ -399,6 +400,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     required this.scale,
     required this.aidaColor,
     this.stitchMode = false,
+    this.blockMode = false,
     this.stitchViewMode = StitchViewMode.normal,
     this.stitchFocusThreadId,
     this.referenceImage,
@@ -457,8 +459,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     const kNoGrid          = 1.5;
 
     // ── Stitches (culled) ────────────────────────────────────────────────────
-    if (effectivePx < kBlockThreshold) {
-      // Block mode: one solid rect per occupied cell — much cheaper.
+    // blockMode (user toggle) always renders solid rects regardless of zoom.
+    // Auto block kicks in below kBlockThreshold when blockMode is off.
+    if (blockMode || effectivePx < kBlockThreshold) {
       _drawStitchesAsBlocks(canvas, minCX, minCY, maxCX, maxCY);
     } else {
       for (final stitch in pattern.stitches) {
@@ -502,8 +505,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
     }
 
-    // ── Stitch symbols (culled; only legible at sufficient zoom) ────────────
-    if (effectivePx >= 8) {
+    // ── Stitch symbols ───────────────────────────────────────────────────────
+    // Shown when zoomed in enough (>= 8 px/cell) AND:
+    //   • blockMode off  → always show (both edit and stitch mode)
+    //   • blockMode on   → only in stitch mode (edit mode keeps a clean block view)
+    if (effectivePx >= 8 && (!blockMode || stitchMode)) {
       for (final stitch in pattern.stitches) {
         if (stitch is BackStitch) continue;
         if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
@@ -580,10 +586,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // Cells with multiple stitch layers use the topmost stitch's colour.
 
   void _drawStitchesAsBlocks(Canvas canvas, int minX, int minY, int maxX, int maxY) {
-    // One pass: collect the "top" colour for each visible cell.
-    // Iterating in stitch order means later entries overwrite earlier ones,
-    // matching the normal front-to-back layering.
-    final Map<(int, int), Color> cells = {};
+    final halfCell    = cellSize * 0.5;
+    final quarterCell = cellSize * 0.5; // same value; named for clarity below
+
+    // Collect (rect, color) for each visible stitch.
+    // Full stitches → full cell; halves → half cell; quarters → quarter cell.
+    final List<(Rect, Color)> rects = [];
     for (final stitch in pattern.stitches) {
       if (stitch is BackStitch) continue;
       if (!_inCellRange(stitch, minX, minY, maxX, maxY)) continue;
@@ -591,23 +599,50 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       if (thread == null) continue;
       final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
       if (c == null) continue;
-      final pos = switch (stitch) {
-        FullStitch(:final x, :final y)        => (x, y),
-        HalfStitch(:final x, :final y)        => (x, y),
-        QuarterStitch(:final x, :final y)     => (x, y),
-        HalfCrossStitch(:final x, :final y)   => (x, y),
-        QuarterCrossStitch(:final x, :final y)=> (x, y),
-        _                                      => (-1, -1),
+
+      final Rect? rect = switch (stitch) {
+        FullStitch(:final x, :final y) =>
+          Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize),
+
+        // HalfStitch (diagonal): isForward=true → `/` → right half of cell.
+        HalfStitch(:final x, :final y, isForward: true) =>
+          Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize),
+        HalfStitch(:final x, :final y, isForward: false) =>
+          Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize),
+
+        // HalfCrossStitch: occupies one explicit half of the cell.
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.left) =>
+          Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize),
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.right) =>
+          Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize),
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.top) =>
+          Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell),
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom) =>
+          Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell),
+
+        // QuarterStitch / QuarterCrossStitch: one quarter of the cell.
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
+          Rect.fromLTWH(x * cellSize, y * cellSize, quarterCell, quarterCell),
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
+          Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize, quarterCell, quarterCell),
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
+          Rect.fromLTWH(x * cellSize, y * cellSize + quarterCell, quarterCell, quarterCell),
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
+          Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize + quarterCell, quarterCell, quarterCell),
+
+        _ => null,
       };
-      if (pos.$1 >= 0) cells[pos] = c;
+      if (rect != null) rects.add((rect, c));
     }
 
     // Batch rects by colour to minimise Paint object churn.
     final Map<Color, List<Rect>> byColor = {};
-    for (final entry in cells.entries) {
-      final (x, y) = entry.key;
-      (byColor[entry.value] ??= []).add(
-          Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize));
+    for (final (rect, color) in rects) {
+      (byColor[color] ??= []).add(rect);
     }
     for (final entry in byColor.entries) {
       final paint = Paint()..color = entry.key;
@@ -810,6 +845,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.scale != scale ||
       old.aidaColor != aidaColor ||
       old.stitchMode != stitchMode ||
+      old.blockMode != blockMode ||
       old.stitchViewMode != stitchViewMode ||
       old.stitchFocusThreadId != stitchFocusThreadId ||
       old.referenceImage != referenceImage ||
