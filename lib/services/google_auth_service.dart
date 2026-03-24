@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../secrets.dart';
 
@@ -10,7 +10,6 @@ class GoogleAuthService {
   GoogleAuthService._();
   static final GoogleAuthService instance = GoogleAuthService._();
 
-  static const _storage = FlutterSecureStorage();
   static const _keyRefreshToken = 'google_refresh_token';
   static const _keyEmail = 'google_email';
 
@@ -24,13 +23,15 @@ class GoogleAuthService {
 
   /// Returns true if a refresh token is stored (i.e. the user is signed in).
   Future<bool> isSignedIn() async {
-    final token = await _storage.read(key: _keyRefreshToken);
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(_keyRefreshToken);
     return token != null && token.isNotEmpty;
   }
 
   /// Returns the stored account identifier, or null if not signed in.
   Future<String?> accountEmail() async {
-    return await _storage.read(key: _keyEmail);
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyEmail);
   }
 
   /// Runs the OAuth2 loopback flow to sign in.
@@ -59,7 +60,8 @@ class GoogleAuthService {
         throw Exception('No refresh token received from Google OAuth2 flow.');
       }
 
-      await _storage.write(key: _keyRefreshToken, value: refreshToken);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyRefreshToken, refreshToken);
 
       // Try to extract email from idToken, fall back to 'connected'
       String email = 'connected';
@@ -88,7 +90,7 @@ class GoogleAuthService {
         // Silently ignore email extraction errors
       }
 
-      await _storage.write(key: _keyEmail, value: email);
+      await prefs.setString(_keyEmail, email);
     } finally {
       client.close();
     }
@@ -96,13 +98,15 @@ class GoogleAuthService {
 
   /// Clears stored tokens.
   Future<void> signOut() async {
-    await _storage.delete(key: _keyRefreshToken);
-    await _storage.delete(key: _keyEmail);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyRefreshToken);
+    await prefs.remove(_keyEmail);
   }
 
   /// Returns an auto-refreshing HTTP client, or null if not signed in.
   Future<http.Client?> authClient() async {
-    final refreshToken = await _storage.read(key: _keyRefreshToken);
+    final prefs = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString(_keyRefreshToken);
     if (refreshToken == null || refreshToken.isEmpty) return null;
 
     // Use an expired access token — autoRefreshingClient will refresh on first use
