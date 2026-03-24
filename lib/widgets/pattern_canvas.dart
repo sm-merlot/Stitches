@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stitch.dart';
@@ -55,6 +56,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Whether Ctrl is currently held — switches paste from single-stamp to multi-stamp.
   bool _ctrlHeld = false;
 
+  // ── Frame-coalesced rebuild ────────────────────────────────────────────────
+  // Pointer events (pan, hover, pinch) can fire at 120 Hz. Calling setState on
+  // every event saturates the UI thread and causes a backlog that freezes input
+  // after gestures end. Instead, mutate fields directly and schedule at most
+  // one rebuild per display frame.
+  bool _rebuildScheduled = false;
+
+  void _scheduleRebuild() {
+    if (_rebuildScheduled || !mounted) return;
+    _rebuildScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _rebuildScheduled = false;
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -89,11 +106,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final cell = _canvasToCell(c);
       final p = ref.read(editorProvider).pattern;
       if (cell.$1 >= 0 && cell.$1 < p.width && cell.$2 >= 0 && cell.$2 < p.height) {
-        setState(() => _stylusHoverCell = cell);
+        _stylusHoverCell = cell;
+        _scheduleRebuild();
       }
     } else if (event is PointerRemovedEvent) {
       // Pencil left hover range — clear cell.
-      setState(() => _stylusHoverCell = null);
+      _stylusHoverCell = null;
+      _scheduleRebuild();
     }
   }
 
@@ -143,16 +162,16 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   void _pan(Offset delta) {
-    setState(() => _panOffset += delta);
+    _panOffset += delta;
+    _scheduleRebuild();
   }
 
   void _zoomAround(Offset focalPoint, double factor) {
-    setState(() {
-      final newScale = (_scale * factor).clamp(0.1, 20.0);
-      final scaleFactor = newScale / _scale;
-      _panOffset = focalPoint - (focalPoint - _panOffset) * scaleFactor;
-      _scale = newScale;
-    });
+    final newScale = (_scale * factor).clamp(0.1, 20.0);
+    final scaleFactor = newScale / _scale;
+    _panOffset = focalPoint - (focalPoint - _panOffset) * scaleFactor;
+    _scale = newScale;
+    _scheduleRebuild();
   }
 
   /// Returns the threadId of the topmost cell-based stitch at [cellX],[cellY].
@@ -341,7 +360,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   void _onPointerDown(PointerDownEvent event) {
     _activePointers[event.pointer] = event.localPosition;
-    if (mounted) setState(() => _mouseScreenPos = event.localPosition);
+    _mouseScreenPos = event.localPosition;
+    _scheduleRebuild();
 
     // Apple Pencil double-tap → toggle erase/draw (disabled in stitch mode)
     if (event.kind == PointerDeviceKind.stylus &&
@@ -444,18 +464,17 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (event.kind == PointerDeviceKind.stylus ||
         event.kind == PointerDeviceKind.invertedStylus ||
         event.kind == PointerDeviceKind.mouse) {
-      if (mounted) setState(() => _mouseScreenPos = event.localPosition);
+      _mouseScreenPos = event.localPosition;
 
       // Keep hover cell updated during active strokes.
       final c = _screenToCanvas(event.localPosition);
       final cell = _canvasToCell(c);
       final p = ref.read(editorProvider).pattern;
-      if (cell.$1 >= 0 && cell.$1 < p.width &&
-          cell.$2 >= 0 && cell.$2 < p.height) {
-        if (mounted) setState(() => _stylusHoverCell = cell);
-      } else {
-        if (mounted) setState(() => _stylusHoverCell = null);
-      }
+      _stylusHoverCell = (cell.$1 >= 0 && cell.$1 < p.width &&
+              cell.$2 >= 0 && cell.$2 < p.height)
+          ? cell
+          : null;
+      _scheduleRebuild();
 
       if (_isPanMode) {
         _pan(event.delta);
@@ -467,9 +486,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (mode == DrawingMode.select) {
         final cell = _screenToSelCell(event.localPosition);
         if (_isMovingSelection && _moveDragStartCell != null) {
-          setState(() => _moveDelta = cell - _moveDragStartCell!);
+          _moveDelta = cell - _moveDragStartCell!;
+          _scheduleRebuild();
         } else if (_selectionAnchor != null) {
-          setState(() => _hasDraggedSelection = true);
+          _hasDraggedSelection = true;
           ref.read(editorProvider.notifier).setSelectionRect(
               _buildSelRect(_selectionAnchor!, cell));
         }
@@ -479,7 +499,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (mode == DrawingMode.paste) {
         final c = _screenToCanvas(event.localPosition);
         final (cx, cy) = _canvasToCell(c);
-        setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+        _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
+        _scheduleRebuild();
         return;
       }
 
@@ -489,8 +510,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
       if (ref.read(editorProvider).currentTool == DrawingTool.backstitch) {
         final canvas = _screenToCanvas(event.localPosition);
-        final gp = _canvasToGridPoint(canvas);
-        if (mounted) setState(() => _backstitchHoverPoint = gp);
+        _backstitchHoverPoint = _canvasToGridPoint(canvas);
+        _scheduleRebuild();
       }
       return;
     }
@@ -507,29 +528,29 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             (_gestureStartScale * currentDist / _pinchStartDistance)
                 .clamp(0.1, 20.0);
         final scaleFactor = newScale / _gestureStartScale;
-        final newOffset = _pinchStartCenter -
+        _scale = newScale;
+        _panOffset = _pinchStartCenter -
             (_pinchStartCenter - _gestureStartOffset) * scaleFactor +
             (currentCenter - _pinchStartCenter);
-        setState(() {
-          _scale = newScale;
-          _panOffset = newOffset;
-        });
+        _scheduleRebuild();
       }
     } else if (_activePointers.length == 1) {
       final mode = ref.read(editorProvider).drawingMode;
       if (mode == DrawingMode.select) {
         final cell = _screenToSelCell(event.localPosition);
         if (_isMovingSelection && _moveDragStartCell != null) {
-          setState(() => _moveDelta = cell - _moveDragStartCell!);
+          _moveDelta = cell - _moveDragStartCell!;
+          _scheduleRebuild();
         } else if (_selectionAnchor != null) {
-          setState(() => _hasDraggedSelection = true);
+          _hasDraggedSelection = true;
           ref.read(editorProvider.notifier).setSelectionRect(
               _buildSelRect(_selectionAnchor!, cell));
         }
       } else if (mode == DrawingMode.paste) {
         final c = _screenToCanvas(event.localPosition);
         final (cx, cy) = _canvasToCell(c);
-        setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+        _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
+        _scheduleRebuild();
       } else if (_isPanMode) {
         _pan(event.delta);
       } else {
@@ -545,7 +566,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     // Non-touch pointer lifted — clear hover cell
     if (event.kind != PointerDeviceKind.touch) {
-      if (mounted) setState(() => _stylusHoverCell = null);
+      _stylusHoverCell = null;
+      _scheduleRebuild();
     }
 
     // Touch paste — commit at current origin (set in _onPointerDown / _onPointerMove)
@@ -558,7 +580,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         ref.read(editorProvider.notifier).commitPaste(dx, dy);
         if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
       }
-      setState(() => _pasteOrigin = null);
+      _pasteOrigin = null;
+      _scheduleRebuild();
       _activePointers.remove(event.pointer);
       return;
     }
@@ -573,11 +596,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         // Single click inside selection with no movement → deselect
         ref.read(editorProvider.notifier).setSelectionRect(null);
       }
-      setState(() {
-        _isMovingSelection = false;
-        _moveDragStartCell = null;
-        _moveDelta = Offset.zero;
-      });
+      _isMovingSelection = false;
+      _moveDragStartCell = null;
+      _moveDelta = Offset.zero;
+      _scheduleRebuild();
       _activePointers.remove(event.pointer);
       return;
     }
@@ -589,10 +611,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       // Only keep selection if the user actually dragged; a bare click deselects
       ref.read(editorProvider.notifier).setSelectionRect(
           _hasDraggedSelection && rect.width >= 1 && rect.height >= 1 ? rect : null);
-      setState(() {
-        _selectionAnchor = null;
-        _hasDraggedSelection = false;
-      });
+      _selectionAnchor = null;
+      _hasDraggedSelection = false;
+      _scheduleRebuild();
       _activePointers.remove(event.pointer);
       return;
     }
@@ -632,21 +653,17 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   void _onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
-    setState(() {
-      final newScale =
-          (_trackpadStartScale * event.scale).clamp(0.1, 20.0);
-      // Zoom around the focal point and apply cumulative pan from the gesture.
-      // event.scale and event.pan are both cumulative since the gesture started.
-      _panOffset = event.localPosition -
-          (event.localPosition - _trackpadStartPanOffset) *
-              (newScale / _trackpadStartScale) +
-          event.pan;
-      _scale = newScale;
-    });
+    final newScale = (_trackpadStartScale * event.scale).clamp(0.1, 20.0);
+    _panOffset = event.localPosition -
+        (event.localPosition - _trackpadStartPanOffset) *
+            (newScale / _trackpadStartScale) +
+        event.pan;
+    _scale = newScale;
+    _scheduleRebuild();
   }
 
   void _onPointerHover(PointerHoverEvent event) {
-    if (mounted) setState(() => _mouseScreenPos = event.localPosition);
+    _mouseScreenPos = event.localPosition;
 
     final state = ref.read(editorProvider);
 
@@ -657,27 +674,27 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final c = _screenToCanvas(event.localPosition);
       final cell = _canvasToCell(c);
       final p = state.pattern;
-      if (cell.$1 >= 0 && cell.$1 < p.width &&
-          cell.$2 >= 0 && cell.$2 < p.height) {
-        if (mounted) setState(() => _stylusHoverCell = cell);
-      } else {
-        if (mounted) setState(() => _stylusHoverCell = null);
-      }
+      _stylusHoverCell = (cell.$1 >= 0 && cell.$1 < p.width &&
+              cell.$2 >= 0 && cell.$2 < p.height)
+          ? cell
+          : null;
     }
 
     if (state.drawingMode == DrawingMode.paste) {
       final c = _screenToCanvas(event.localPosition);
       final (cx, cy) = _canvasToCell(c);
-      if (mounted) setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+      _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
+      _scheduleRebuild();
       return;
     }
 
     if (state.currentTool == DrawingTool.backstitch &&
         state.backstitchStartPoint != null) {
       final canvas = _screenToCanvas(event.localPosition);
-      final gp = _canvasToGridPoint(canvas);
-      setState(() => _backstitchHoverPoint = gp);
+      _backstitchHoverPoint = _canvasToGridPoint(canvas);
     }
+
+    _scheduleRebuild();
   }
 
   // ─── Scroll wheel: zoom + shift-scroll pan ────────────────────────────────
@@ -724,7 +741,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     return MouseRegion(
       cursor: _cursor(state),
-      onExit: (_) { if (mounted) setState(() { _mouseScreenPos = null; _stylusHoverCell = null; }); },
+      onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
       child: Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: _onPointerMove,
@@ -734,36 +751,58 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         onPointerPanZoomStart: _onPointerPanZoomStart,
         onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
         behavior: HitTestBehavior.opaque,
-        child: CustomPaint(
-          painter: CanvasPainter(
-            pattern: state.pattern,
-            cellSize: _cellSize,
-            panOffset: _panOffset,
-            scale: _scale,
-            backstitchStartPoint: state.backstitchStartPoint,
-            backstitchCurrentPoint: _backstitchHoverPoint,
-            isErasing: isErasing,
-            isDrawCursor: isDrawCursor,
-            isColorPickerCursor: isColorPickerCursor,
-            cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
-                ? null
-                : _mouseScreenPos,
-            aidaColor: state.pattern.aidaColor,
-            selectionRect: state.selectionRect,
-            ghostStitches: ghostStitches,
-            ghostThreads: state.drawingMode == DrawingMode.paste
-                ? state.clipboardThreads
-                : null,
-            stitchMode: state.stitchMode,
-            stitchViewMode: state.stitchViewMode,
-            stitchFocusThreadId: state.stitchFocusThreadId,
-            referenceImage: state.referenceImage,
-            referenceOpacity: state.referenceOpacity,
-            referenceVisible: state.referenceVisible,
-            stylusHoverCell: _stylusHoverCell,
-            stylusHoverColor: state.selectedThread?.color,
-          ),
-          size: Size.infinite,
+        child: Stack(
+          children: [
+            // Static layer: stitches, grid, labels.
+            // Wrapped in RepaintBoundary so Flutter caches the GPU texture and
+            // skips re-rasterisation when only cursor/hover/ghost state changes.
+            RepaintBoundary(
+              child: CustomPaint(
+                painter: CanvasStaticPainter(
+                  pattern: state.pattern,
+                  cellSize: _cellSize,
+                  panOffset: _panOffset,
+                  scale: _scale,
+                  aidaColor: state.pattern.aidaColor,
+                  stitchMode: state.stitchMode,
+                  stitchViewMode: state.stitchViewMode,
+                  stitchFocusThreadId: state.stitchFocusThreadId,
+                  referenceImage: state.referenceImage,
+                  referenceOpacity: state.referenceOpacity,
+                  referenceVisible: state.referenceVisible,
+                ),
+                isComplex: true,
+                size: Size.infinite,
+              ),
+            ),
+            // Overlay layer: cursor, ghost stitches, selection, hover.
+            // Repaints freely without touching the cached static layer.
+            CustomPaint(
+              painter: CanvasOverlayPainter(
+                cellSize: _cellSize,
+                panOffset: _panOffset,
+                scale: _scale,
+                aidaColor: state.pattern.aidaColor,
+                patternThreads: state.pattern.threads,
+                backstitchStartPoint: state.backstitchStartPoint,
+                backstitchCurrentPoint: _backstitchHoverPoint,
+                isErasing: isErasing,
+                isDrawCursor: isDrawCursor,
+                isColorPickerCursor: isColorPickerCursor,
+                cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+                    ? null
+                    : _mouseScreenPos,
+                selectionRect: state.selectionRect,
+                ghostStitches: ghostStitches,
+                ghostThreads: state.drawingMode == DrawingMode.paste
+                    ? state.clipboardThreads
+                    : null,
+                stylusHoverCell: _stylusHoverCell,
+                stylusHoverColor: state.selectedThread?.color,
+              ),
+              size: Size.infinite,
+            ),
+          ],
         ),
       ),
     );
