@@ -10,6 +10,7 @@
 #   cli              Run the CLI via dart run (interpreted); pass args after --
 #                      e.g.  ./run cli -- -p "╳ ▞\n▚ ╳" -o out.gif
 #   build            Build the macOS release app
+#   build-ipad       Build and install the iOS release app on a connected iPad
 #   build-cli        Compile the CLI to a standalone binary
 #   animate [--push] Generate GIF animations from test/fixtures/*.pattern into
 #                      animations/. With --push: pulls first, ensures GIFs are
@@ -57,6 +58,12 @@ case "$cmd" in
   build)
     $FLUTTER build macos --release "$@"
     echo "Built: build/macos/Build/Products/Release/stitchx.app"
+    ;;
+
+  build-ipad)
+    $FLUTTER build ios --release --dart-define-from-file=secrets.json "$@"
+    $FLUTTER install --release
+    echo "Installed on iPad. You can now disconnect the Mac."
     ;;
 
   build-cli)
