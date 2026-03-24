@@ -34,7 +34,7 @@ import 'pattern_scan_review_screen.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
-enum _MenuAction { exportPdf, resize, patternInfo, referenceImage, shortcuts }
+enum _MenuAction { exportPdf, resize, patternInfo, referenceImage, shortcuts, blockMode }
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -1012,6 +1012,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         context: context,
                         builder: (_) => const _ShortcutsDialog(),
                       );
+                    case _MenuAction.blockMode:
+                      ref.read(editorProvider.notifier).toggleBlockMode();
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -1022,6 +1024,18 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       label: 'Reference Image',
                       trailing: editorState.referenceImage != null &&
                               editorState.referenceVisible
+                          ? Icon(Icons.check,
+                              size: 16,
+                              color: Theme.of(ctx).colorScheme.primary)
+                          : null,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.blockMode,
+                    child: _MenuRow(
+                      icon: Icons.grid_view_outlined,
+                      label: 'Block Mode',
+                      trailing: editorState.blockMode
                           ? Icon(Icons.check,
                               size: 16,
                               color: Theme.of(ctx).colorScheme.primary)

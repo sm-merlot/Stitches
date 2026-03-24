@@ -55,6 +55,8 @@ class EditorState {
   // ── Stitch mode ───────────────────────────────────────────────────────────
   /// Whether stitch mode is active (canvas readonly, simplified toolbar).
   final bool stitchMode;
+  /// Whether block mode is active (stitches rendered as solid colour rects).
+  final bool blockMode;
   /// How cross stitches are rendered in stitch mode.
   final StitchViewMode stitchViewMode;
   /// If set, only this thread is shown at full colour; all others are greyed.
@@ -95,6 +97,7 @@ class EditorState {
     this.clipboardThreads,
     this.clipboardFromSnippet = false,
     this.stitchMode = false,
+    this.blockMode = false,
     this.stitchViewMode = StitchViewMode.normal,
     this.stitchFocusThreadId,
     this.referenceImage,
@@ -187,6 +190,7 @@ class EditorState {
     Object? clipboardThreads = _sentinel,
     bool? clipboardFromSnippet,
     bool? stitchMode,
+    bool? blockMode,
     StitchViewMode? stitchViewMode,
     Object? stitchFocusThreadId = _sentinel,
     Object? referenceImage = _sentinel,
@@ -216,6 +220,7 @@ class EditorState {
       clipboardThreads: clipboardThreads == _sentinel ? this.clipboardThreads : clipboardThreads as List<Thread>?,
       clipboardFromSnippet: clipboardFromSnippet ?? this.clipboardFromSnippet,
       stitchMode: stitchMode ?? this.stitchMode,
+      blockMode: blockMode ?? this.blockMode,
       stitchViewMode: stitchViewMode ?? this.stitchViewMode,
       stitchFocusThreadId: stitchFocusThreadId == _sentinel
           ? this.stitchFocusThreadId
@@ -385,6 +390,11 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   // ─── Stitch mode ──────────────────────────────────────────────────────────
+
+  /// Toggle block mode on/off (stitches drawn as solid colour rects).
+  void toggleBlockMode() {
+    state = state.copyWith(blockMode: !state.blockMode);
+  }
 
   /// Toggle stitch mode on/off. Entering stitch mode switches to pan.
   /// Auto-saves the new value to the file immediately if a file path is set.

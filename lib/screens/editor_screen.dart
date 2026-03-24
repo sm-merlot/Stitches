@@ -13,7 +13,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, exportPdf, resize, patternInfo, referenceImage }
+enum _MenuAction { saveAs, exportPdf, resize, patternInfo, referenceImage, blockMode }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -297,6 +297,8 @@ class EditorScreen extends ConsumerWidget {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
+                    case _MenuAction.blockMode:
+                      ref.read(editorProvider.notifier).toggleBlockMode();
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -307,6 +309,18 @@ class EditorScreen extends ConsumerWidget {
                       label: 'Reference Image',
                       trailing: state.referenceImage != null &&
                               state.referenceVisible
+                          ? Icon(Icons.check,
+                              size: 16,
+                              color: Theme.of(ctx).colorScheme.primary)
+                          : null,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _MenuAction.blockMode,
+                    child: _MenuRow(
+                      icon: Icons.grid_view_outlined,
+                      label: 'Block Mode',
+                      trailing: state.blockMode
                           ? Icon(Icons.check,
                               size: 16,
                               color: Theme.of(ctx).colorScheme.primary)
