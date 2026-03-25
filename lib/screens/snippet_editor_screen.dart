@@ -6,6 +6,7 @@ import '../models/snippet.dart';
 import '../providers/editor_provider.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
+import '../widgets/snippet_thumbnail.dart';
 
 /// Preset canvas sizes shown in the size picker for new snippets.
 const _presetSizes = [
@@ -18,11 +19,17 @@ const _presetSizes = [
 /// Full-screen editor for creating or editing a [Snippet].
 ///
 /// Pass [snippet] to edit an existing one; pass null to create a new one.
+/// Pass [siblingSnippets] to allow importing other snippets as paste content.
 /// On save, pops with the resulting [Snippet].
 class SnippetEditorScreen extends StatelessWidget {
   final Snippet? snippet;
+  final List<Snippet> siblingSnippets;
 
-  const SnippetEditorScreen({super.key, this.snippet});
+  const SnippetEditorScreen({
+    super.key,
+    this.snippet,
+    this.siblingSnippets = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -30,14 +37,15 @@ class SnippetEditorScreen extends StatelessWidget {
     // PatternCanvas and EditorToolbar operate on the snippet canvas.
     return ProviderScope(
       overrides: [editorProvider.overrideWith(EditorNotifier.new)],
-      child: _SnippetEditorBody(snippet: snippet),
+      child: _SnippetEditorBody(snippet: snippet, siblingSnippets: siblingSnippets),
     );
   }
 }
 
 class _SnippetEditorBody extends ConsumerStatefulWidget {
   final Snippet? snippet;
-  const _SnippetEditorBody({required this.snippet});
+  final List<Snippet> siblingSnippets;
+  const _SnippetEditorBody({required this.snippet, required this.siblingSnippets});
 
   @override
   ConsumerState<_SnippetEditorBody> createState() => _SnippetEditorBodyState();
@@ -246,6 +254,23 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     return KeyEventResult.handled;
   }
 
+  void _loadSnippetIntoClipboard(Snippet other) {
+    ref.read(editorProvider.notifier).loadSnippetToClipboard(other);
+  }
+
+  void _showSnippetPicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => _SnippetPickerSheet(
+        snippets: widget.siblingSnippets,
+        onPick: (s) {
+          Navigator.of(ctx).pop();
+          _loadSnippetIntoClipboard(s);
+        },
+      ),
+    );
+  }
+
   void _save(BuildContext context) {
     final editorState = ref.read(editorProvider);
     final pattern = editorState.pattern;
@@ -316,13 +341,106 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         child: Column(
           children: [
             Expanded(child: PatternCanvas()),
-            EditorToolbar(showSnippetsButton: false, showSaveAsSnippetButton: false, showSpriteSheetButton: false),
+            EditorToolbar(
+              showSnippetsButton: false,
+              showSaveAsSnippetButton: false,
+              showSpriteSheetButton: false,
+              onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
+                  ? () => _showSnippetPicker(context)
+                  : null,
+            ),
           ],
         ),
       ),
     );
   }
 }
+
+// ─── Snippet picker sheet ──────────────────────────────────────────────────
+
+class _SnippetPickerSheet extends ConsumerWidget {
+  final List<Snippet> snippets;
+  final void Function(Snippet) onPick;
+
+  const _SnippetPickerSheet({required this.snippets, required this.onPick});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    // Read the parent pattern's aida color for the thumbnail backgrounds.
+    // We're inside a ProviderScope override, so we need the root container
+    // to access the parent pattern. Use a neutral fallback instead.
+    const aidaColor = Color(0xFFFFFAF0); // linen
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Text('Paste from snippet', style: theme.textTheme.titleSmall),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280),
+            child: GridView.builder(
+              padding: const EdgeInsets.all(16),
+              shrinkWrap: true,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 100,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.75,
+              ),
+              itemCount: snippets.length,
+              itemBuilder: (context, i) {
+                final s = snippets[i];
+                final hasName = s.name.isNotEmpty;
+                final label = hasName ? s.name : '${s.width}×${s.height}';
+                return GestureDetector(
+                  onTap: () => onPick(s),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: theme.dividerColor),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: SnippetThumbnail(
+                            snippet: s,
+                            aidaColor: aidaColor,
+                            size: double.infinity,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        label,
+                        style: hasName
+                            ? theme.textTheme.labelSmall
+                            : theme.textTheme.labelSmall?.copyWith(color: theme.disabledColor),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Size picker ───────────────────────────────────────────────────────────
 
 class _SizePicker extends StatelessWidget {
   /// Index into [_presetSizes], or null if a custom size is active.

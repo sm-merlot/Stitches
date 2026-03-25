@@ -33,11 +33,15 @@ class EditorToolbar extends ConsumerWidget {
   final bool showSnippetsButton;
   final bool showSaveAsSnippetButton;
   final bool showSpriteSheetButton;
+  /// When non-null, replaces the snippets button with a "Paste from snippet"
+  /// button (used inside the snippet editor).
+  final VoidCallback? onPasteFromSnippet;
   const EditorToolbar({
     super.key,
     this.showSnippetsButton = true,
     this.showSaveAsSnippetButton = true,
     this.showSpriteSheetButton = true,
+    this.onPasteFromSnippet,
   });
 
   @override
@@ -292,25 +296,35 @@ class EditorToolbar extends ConsumerWidget {
                         ),
                       ),
                     ),
-                  // Snippets button
-                  if (showSnippetsButton)
+                  // Snippets / paste-from-snippet button
+                  if (showSnippetsButton || onPasteFromSnippet != null)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                      child: Tooltip(
-                        message: 'Snippets',
-                        child: IconButton(
-                          iconSize: 20,
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.collections_bookmark_outlined),
-                          onPressed: state.isFileOpen
-                              ? () => showModalBottomSheet<void>(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (_) => const SnippetsPanel(),
-                                  )
-                              : null,
-                        ),
-                      ),
+                      child: onPasteFromSnippet != null
+                          ? Tooltip(
+                              message: 'Paste from snippet',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.library_add_outlined),
+                                onPressed: onPasteFromSnippet,
+                              ),
+                            )
+                          : Tooltip(
+                              message: 'Snippets',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.collections_bookmark_outlined),
+                                onPressed: state.isFileOpen
+                                    ? () => showModalBottomSheet<void>(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          builder: (_) => const SnippetsPanel(),
+                                        )
+                                    : null,
+                              ),
+                            ),
                     ),
                 ],
               ),
