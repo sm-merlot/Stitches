@@ -1,0 +1,157 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+
+import '../models/pattern.dart';
+import '../services/format_service.dart';
+import '../services/pdf_service.dart';
+
+/// Shows a format-picker dialog then exports the pattern.
+/// Returns true if the export succeeded.
+Future<bool> showExportDialog(
+    BuildContext context, CrossStitchPattern pattern) async {
+  final choice = await showDialog<_ExportChoice>(
+    context: context,
+    builder: (_) => const _ExportPickerDialog(),
+  );
+  if (choice == null || !context.mounted) return false;
+
+  try {
+    if (choice == _ExportChoice.pdf) {
+      await PdfService.exportPattern(pattern);
+      return true;
+    }
+
+    // For cross-stitch formats, ask the user for a save path.
+    final format = choice.format!;
+    final suggested =
+        pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
+    final path = await FilePicker.platform.saveFile(
+      fileName: '$suggested.${format.extension}',
+      type: FileType.custom,
+      allowedExtensions: [format.extension],
+    );
+    if (path == null) return false;
+
+    final finalPath =
+        path.endsWith('.${format.extension}') ? path : '$path.${format.extension}';
+    await FormatService.exportFile(pattern, finalPath, format);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Exported as ${finalPath.split(Platform.pathSeparator).last}'),
+        ),
+      );
+    }
+    return true;
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+    return false;
+  }
+}
+
+// ─── Internal ────────────────────────────────────────────────────────────────
+
+enum _ExportChoice {
+  pdf(null),
+  oxs(CrossStitchFormat.oxs),
+  ;
+
+  const _ExportChoice(this.format);
+  final CrossStitchFormat? format;
+}
+
+class _ExportPickerDialog extends StatefulWidget {
+  const _ExportPickerDialog();
+
+  @override
+  State<_ExportPickerDialog> createState() => _ExportPickerDialogState();
+}
+
+class _ExportPickerDialogState extends State<_ExportPickerDialog> {
+  _ExportChoice _selected = _ExportChoice.pdf;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Export Pattern As…'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _FormatTile(
+            value: _ExportChoice.pdf,
+            groupValue: _selected,
+            label: 'PDF Pattern Chart',
+            subtitle: 'Printable chart with legend',
+            icon: Icons.picture_as_pdf_outlined,
+            onChanged: (v) => setState(() => _selected = v!),
+          ),
+          const Divider(height: 1),
+          _FormatTile(
+            value: _ExportChoice.oxs,
+            groupValue: _selected,
+            label: 'Open Cross Stitch (.oxs)',
+            subtitle: 'WinStitch / MacStitch compatible',
+            icon: Icons.swap_horiz,
+            onChanged: (v) => setState(() => _selected = v!),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selected),
+          child: const Text('Export'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FormatTile extends StatelessWidget {
+  final _ExportChoice value;
+  final _ExportChoice groupValue;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final ValueChanged<_ExportChoice?> onChanged;
+
+  const _FormatTile({
+    required this.value,
+    required this.groupValue,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return RadioListTile<_ExportChoice>(
+      value: value,
+      groupValue: groupValue,
+      onChanged: onChanged,
+      title: Row(
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Text(label),
+        ],
+      ),
+      subtitle: Text(subtitle),
+    );
+  }
+}

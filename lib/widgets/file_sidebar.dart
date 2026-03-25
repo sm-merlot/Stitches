@@ -12,6 +12,7 @@ import '../providers/google_drive_provider.dart';
 import '../providers/pdf_viewer_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../services/format_service.dart';
 import '../providers/image_viewer_provider.dart';
 import '../screens/new_pattern_dialog.dart';
 import '../screens/sprite_sheet_screen.dart';
@@ -104,6 +105,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
     final isPdf = file is LocalPdfFile || file is DrivePdfFile;
     final isImage = file is LocalImageFile || file is DriveImageFile;
+    final isImportable =
+        file is LocalImportableFile || file is DriveImportableFile;
     final isFileOpen = ref.read(editorProvider).filePath != null;
 
     if (isImage) {
@@ -138,7 +141,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           position.dx, position.dy, position.dx + 1, position.dy + 1),
       items: [
         const PopupMenuItem(value: 'open', child: Text('Open')),
-        if (!isPdf) ...[
+        if (!isPdf && !isImportable) ...[
           const PopupMenuItem(value: 'rename', child: Text('Rename')),
           const PopupMenuItem(value: 'copy', child: Text('Copy')),
           const PopupMenuItem(value: 'cut', child: Text('Cut')),
@@ -302,6 +305,59 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         }
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not open PDF: $e');
+      }
+      return;
+    }
+
+    if (file is LocalImportableFile) {
+      try {
+        ref.read(fileLoadingProvider.notifier).set(true);
+        final pattern = await FormatService.importFile(file.path);
+        if (!context.mounted) return;
+        _switchToEditor();
+        ref.read(editorProvider.notifier).loadPattern(pattern,
+            filePath: file.path);
+      } catch (e) {
+        if (context.mounted) _showError(context, 'Could not import file: $e');
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
+      }
+      return;
+    }
+
+    if (file is DriveImportableFile) {
+      try {
+        final tempDir = await getTemporaryDirectory();
+        await Directory(tempDir.path).create(recursive: true);
+        final tempPath = '${tempDir.path}/${file.fileId}${file.extension}';
+        final cached = File(tempPath);
+
+        ref.read(fileLoadingProvider.notifier).set(true);
+        try {
+          if (!await cached.exists()) {
+            final service =
+                await ref.read(googleDriveProvider.notifier).getService();
+            if (!context.mounted) return;
+            if (service == null) {
+              _showError(context, 'Not connected to Google Drive.');
+              return;
+            }
+            final bytes = await service.downloadFile(file.fileId);
+            await cached.writeAsBytes(bytes);
+          }
+          if (!context.mounted) return;
+          final pattern = await FormatService.importFile(tempPath);
+          if (!context.mounted) return;
+          _switchToEditor();
+          ref.read(editorProvider.notifier).loadPattern(pattern,
+              filePath: tempPath);
+        } finally {
+          if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
+        }
+      } catch (e) {
+        if (context.mounted) {
+          _showError(context, 'Could not import Drive file: $e');
+        }
       }
       return;
     }

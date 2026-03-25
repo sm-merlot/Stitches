@@ -11,6 +11,12 @@ bool _isDriveImage(String name) {
   return _kDriveImageExtensions.any((ext) => lower.endsWith(ext));
 }
 
+const _kDriveImportableExtensions = {'.oxs'};
+bool _isDriveImportable(String name) {
+  final lower = name.toLowerCase();
+  return _kDriveImportableExtensions.any((ext) => lower.endsWith(ext));
+}
+
 /// Wrapper around the Google Drive API v3.
 class GoogleDriveService {
   final drive.DriveApi _api;
@@ -50,6 +56,13 @@ class GoogleDriveService {
         ));
       } else if (name.endsWith('.pdf')) {
         files.add(DrivePdfFile(
+          fileId: id,
+          name: name,
+          parentFolder: parent,
+          modified: file.modifiedTime,
+        ));
+      } else if (_isDriveImportable(name)) {
+        files.add(DriveImportableFile(
           fileId: id,
           name: name,
           parentFolder: parent,

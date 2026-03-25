@@ -233,6 +233,15 @@ class _FileTile extends StatelessWidget {
     if (file is DrivePdfFile) {
       return (file as DrivePdfFile).fileId == selectedDrivePdfId;
     }
+    if (file is LocalImportableFile) {
+      return (file as LocalImportableFile).path == selectedFilePath;
+    }
+    if (file is DriveImportableFile) {
+      // Imported Drive file: cached temp path is used as filePath.
+      final f = file as DriveImportableFile;
+      return selectedFilePath != null &&
+          selectedFilePath!.contains(f.fileId);
+    }
     if (file is LocalImageFile) {
       return (file as LocalImageFile).path == selectedImagePath;
     }
@@ -244,6 +253,8 @@ class _FileTile extends StatelessWidget {
 
   bool get _isPdf => file is LocalPdfFile || file is DrivePdfFile;
   bool get _isImage => file is LocalImageFile || file is DriveImageFile;
+  bool get _isImportable =>
+      file is LocalImportableFile || file is DriveImportableFile;
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +282,9 @@ class _FileTile extends StatelessWidget {
                     ? Icons.image_outlined
                     : _isPdf
                         ? Icons.picture_as_pdf_outlined
-                        : Icons.grid_4x4,
+                        : _isImportable
+                            ? Icons.swap_horiz
+                            : Icons.grid_4x4,
                 size: 14,
                 color: selected
                     ? theme.colorScheme.primary

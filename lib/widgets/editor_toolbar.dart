@@ -324,12 +324,14 @@ class EditorToolbar extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                       child: Tooltip(
-                        message: 'Import sprite sheet',
+                        message: state.isNativeFormat
+                            ? 'Import sprite sheet'
+                            : 'Sprite sheet import requires .stitchx format — Save As to convert',
                         child: IconButton(
                           iconSize: 20,
                           visualDensity: VisualDensity.compact,
                           icon: const FaIcon(FontAwesomeIcons.ghost),
-                          onPressed: state.isFileOpen
+                          onPressed: state.isFileOpen && state.isNativeFormat
                               ? () => _openSpriteSheet(context, ref)
                               : null,
                         ),
@@ -350,12 +352,14 @@ class EditorToolbar extends ConsumerWidget {
                               ),
                             )
                           : Tooltip(
-                              message: 'Snippets',
+                              message: state.isNativeFormat
+                                  ? 'Snippets'
+                                  : 'Snippets require .stitchx format — Save As to convert',
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
                                 icon: const Icon(Icons.collections_bookmark_outlined),
-                                onPressed: state.isFileOpen
+                                onPressed: state.isFileOpen && state.isNativeFormat
                                     ? () => showModalBottomSheet<void>(
                                           context: context,
                                           isScrollControlled: true,
