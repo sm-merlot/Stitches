@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/snippet.dart';
 import '../providers/editor_provider.dart';
@@ -141,6 +142,14 @@ class SnippetsPanel extends ConsumerWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.open_with_outlined),
+              title: const Text('Resize…'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showResize(context, ref, snippet);
+              },
+            ),
+            ListTile(
               leading: Icon(Icons.delete_outline,
                   color: Theme.of(ctx).colorScheme.error),
               title: Text('Delete',
@@ -190,6 +199,18 @@ class SnippetsPanel extends ConsumerWidget {
         .read(editorProvider.notifier)
         .updateSnippet(snippet.copyWith(name: name.trim()));
     Navigator.of(context).pop();
+  }
+
+  void _showResize(BuildContext context, WidgetRef ref, Snippet snippet) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => _SnippetResizeDialog(
+        snippet: snippet,
+        onResize: (newW, newH, mode) {
+          ref.read(editorProvider.notifier).resizeSnippet(snippet.id, newW, newH, mode);
+        },
+      ),
+    );
   }
 }
 
@@ -264,6 +285,120 @@ class _SnippetCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SnippetResizeDialog extends StatefulWidget {
+  final Snippet snippet;
+  final void Function(int newW, int newH, SnippetResizeMode mode) onResize;
+
+  const _SnippetResizeDialog({required this.snippet, required this.onResize});
+
+  @override
+  State<_SnippetResizeDialog> createState() => _SnippetResizeDialogState();
+}
+
+class _SnippetResizeDialogState extends State<_SnippetResizeDialog> {
+  late final TextEditingController _wCtrl;
+  late final TextEditingController _hCtrl;
+  SnippetResizeMode _mode = SnippetResizeMode.clip;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _wCtrl = TextEditingController(text: widget.snippet.width.toString());
+    _hCtrl = TextEditingController(text: widget.snippet.height.toString());
+  }
+
+  @override
+  void dispose() {
+    _wCtrl.dispose();
+    _hCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final w = int.tryParse(_wCtrl.text.trim());
+    final h = int.tryParse(_hCtrl.text.trim());
+    if (w == null || h == null || w <= 0 || h <= 0) {
+      setState(() => _error = 'Enter positive integers for width and height.');
+      return;
+    }
+    Navigator.of(context).pop();
+    widget.onResize(w, h, _mode);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Resize snippet'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Current size: ${widget.snippet.width} × ${widget.snippet.height}',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _wCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(labelText: 'Width', border: OutlineInputBorder()),
+                  onSubmitted: (_) => _submit(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _hCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(labelText: 'Height', border: OutlineInputBorder()),
+                  onSubmitted: (_) => _submit(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SegmentedButton<SnippetResizeMode>(
+            segments: const [
+              ButtonSegment(value: SnippetResizeMode.clip, label: Text('Clip')),
+              ButtonSegment(value: SnippetResizeMode.scale, label: Text('Scale')),
+              ButtonSegment(value: SnippetResizeMode.expand, label: Text('Expand')),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (s) => setState(() => _mode = s.first),
+            style: const ButtonStyle(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            switch (_mode) {
+              SnippetResizeMode.clip =>
+                'Stitches outside the new bounds are removed.',
+              SnippetResizeMode.scale =>
+                'All stitch positions are scaled proportionally.',
+              SnippetResizeMode.expand =>
+                'Only the declared size changes; no stitches are moved.',
+            },
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(onPressed: _submit, child: const Text('Resize')),
+      ],
     );
   }
 }

@@ -23,6 +23,8 @@ enum DrawingTool {
 /// Cursor mode — controls what pointer/touch interactions do.
 enum DrawingMode { draw, erase, pan, colorPicker, select, paste }
 
+enum SnippetResizeMode { clip, scale, expand }
+
 /// Controls how stitches are rendered in stitch mode.
 enum StitchViewMode {
   /// Stitches shown at full colour (default).
@@ -900,6 +902,60 @@ class EditorNotifier extends Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(snippets: updated),
       isDirty: true,
+    );
+  }
+
+  void resizeSnippet(String id, int newW, int newH, SnippetResizeMode mode) {
+    final snippet = state.pattern.snippets.firstWhere((s) => s.id == id);
+    final oldW = snippet.width;
+    final oldH = snippet.height;
+
+    List<Stitch> newStitches;
+    switch (mode) {
+      case SnippetResizeMode.clip:
+        newStitches = snippet.stitches.where((s) {
+          return switch (s) {
+            FullStitch(:final x, :final y) => x < newW && y < newH,
+            HalfStitch(:final x, :final y) => x < newW && y < newH,
+            QuarterStitch(:final x, :final y) => x < newW && y < newH,
+            HalfCrossStitch(:final x, :final y) => x < newW && y < newH,
+            QuarterCrossStitch(:final x, :final y) => x < newW && y < newH,
+            BackStitch(:final x1, :final y1, :final x2, :final y2) =>
+              x1 < newW && y1 < newH && x2 < newW && y2 < newH,
+          };
+        }).toList();
+      case SnippetResizeMode.scale:
+        newStitches = snippet.stitches.map((s) {
+          int sx(int x) => (x / oldW * newW).round().clamp(0, newW - 1);
+          int sy(int y) => (y / oldH * newH).round().clamp(0, newH - 1);
+          double sdx(double x) => (x / oldW * newW).clamp(0.0, newW.toDouble());
+          double sdy(double y) => (y / oldH * newH).clamp(0.0, newH.toDouble());
+          return switch (s) {
+            FullStitch(:final x, :final y, :final threadId) =>
+              FullStitch(x: sx(x), y: sy(y), threadId: threadId),
+            HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+              HalfStitch(x: sx(x), y: sy(y), isForward: isForward, threadId: threadId),
+            QuarterStitch(:final x, :final y, :final quadrant, :final threadId) =>
+              QuarterStitch(x: sx(x), y: sy(y), quadrant: quadrant, threadId: threadId),
+            HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+              HalfCrossStitch(x: sx(x), y: sy(y), half: half, threadId: threadId),
+            QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
+              QuarterCrossStitch(x: sx(x), y: sy(y), quadrant: quadrant, threadId: threadId),
+            BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
+              BackStitch(x1: sdx(x1), y1: sdy(y1), x2: sdx(x2), y2: sdy(y2), threadId: threadId),
+          };
+        }).toList();
+      case SnippetResizeMode.expand:
+        newStitches = snippet.stitches;
+    }
+
+    final resized = snippet.copyWith(width: newW, height: newH, stitches: newStitches);
+    final updated = state.pattern.snippets.map((s) => s.id == id ? resized : s).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: updated),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
     );
   }
 

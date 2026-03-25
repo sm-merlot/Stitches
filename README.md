@@ -27,7 +27,7 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 
 ### Snippets
 - **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
-- **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / edit / delete
+- **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / edit / delete
 - **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size
 - **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
 - **Sprite sheet importer** — open any sprite sheet image, select a tile or crop a region, pixel colours matched to nearest DMC thread via CIE Lab colour space; output saved directly as a snippet
@@ -89,7 +89,7 @@ Requires Flutter 3.41.4+.
 
 1. ~~**Canvas performance**~~ ✓ — `CanvasPainter` split into a static layer (stitches + grid, RepaintBoundary-cached) and a lightweight overlay layer (cursor, ghost stitches, selection rect), plus viewport culling, grid-line path batching, zoom-adaptive rendering, and frame coalescing. Fixes choppiness on large patterns (256×220+).
 
-2. **Resize snippets** — add a "Resize…" option to the snippet ⋮ menu. Supports three modes: *Clip* (trim stitches outside new bounds), *Scale* (proportionally remap stitch positions), and *Expand* (change declared size, keep all stitches).
+2. ~~**Resize snippets**~~ ✓ — "Resize…" in the snippet ⋮ menu. Three modes: *Clip* (trim stitches outside new bounds), *Scale* (proportionally remap all stitch positions), and *Expand* (change declared size, keep all stitches). Supports undo.
 
 3. **Paste opacity / colour blend** — set an opacity slider in paste mode. Ghost stitches render at the chosen opacity. On stamp, each stitch's colour is blended (via CIE Lab nearest-DMC lookup) with whatever is already at that cell, so the snippet colour interacts with the canvas underneath.
 
