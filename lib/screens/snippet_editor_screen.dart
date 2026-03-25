@@ -24,11 +24,13 @@ const _presetSizes = [
 class SnippetEditorScreen extends StatelessWidget {
   final Snippet? snippet;
   final List<Snippet> siblingSnippets;
+  final bool initialBlockMode;
 
   const SnippetEditorScreen({
     super.key,
     this.snippet,
     this.siblingSnippets = const [],
+    this.initialBlockMode = false,
   });
 
   @override
@@ -37,7 +39,11 @@ class SnippetEditorScreen extends StatelessWidget {
     // PatternCanvas and EditorToolbar operate on the snippet canvas.
     return ProviderScope(
       overrides: [editorProvider.overrideWith(EditorNotifier.new)],
-      child: _SnippetEditorBody(snippet: snippet, siblingSnippets: siblingSnippets),
+      child: _SnippetEditorBody(
+        snippet: snippet,
+        siblingSnippets: siblingSnippets,
+        initialBlockMode: initialBlockMode,
+      ),
     );
   }
 }
@@ -45,7 +51,12 @@ class SnippetEditorScreen extends StatelessWidget {
 class _SnippetEditorBody extends ConsumerStatefulWidget {
   final Snippet? snippet;
   final List<Snippet> siblingSnippets;
-  const _SnippetEditorBody({required this.snippet, required this.siblingSnippets});
+  final bool initialBlockMode;
+  const _SnippetEditorBody({
+    required this.snippet,
+    required this.siblingSnippets,
+    required this.initialBlockMode,
+  });
 
   @override
   ConsumerState<_SnippetEditorBody> createState() => _SnippetEditorBodyState();
@@ -80,6 +91,9 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       } else {
         // New snippet — load empty pattern at selected size.
         _loadEmptyPattern();
+      }
+      if (widget.initialBlockMode) {
+        ref.read(editorProvider.notifier).toggleBlockMode();
       }
     });
   }
@@ -308,6 +322,8 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isNew = widget.snippet == null;
+    final state = ref.watch(editorProvider);
+    final notifier = ref.read(editorProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(
@@ -332,6 +348,13 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             ),
             const SizedBox(width: 8),
           ],
+          IconButton(
+            tooltip: 'Block mode',
+            isSelected: state.blockMode,
+            icon: const Icon(Icons.grid_view_outlined),
+            selectedIcon: const Icon(Icons.grid_view),
+            onPressed: () => notifier.toggleBlockMode(),
+          ),
           TextButton(
             onPressed: () => _save(context),
             child: const Text('Save'),
