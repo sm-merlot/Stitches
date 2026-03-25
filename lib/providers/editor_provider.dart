@@ -26,6 +26,8 @@ enum DrawingMode { draw, erase, pan, colorPicker, select, paste }
 
 enum SnippetResizeMode { clip, scale, expand }
 
+enum SnippetTransform { flipH, flipV, rotateCW }
+
 /// Controls how stitches are rendered in stitch mode.
 enum StitchViewMode {
   /// Stitches shown at full colour (default).
@@ -1117,6 +1119,117 @@ class EditorNotifier extends Notifier<EditorState> {
 
     final resized = snippet.copyWith(width: newW, height: newH, stitches: newStitches);
     final updated = state.pattern.snippets.map((s) => s.id == id ? resized : s).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: updated),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  void transformSnippet(String id, SnippetTransform transform) {
+    final snippet = state.pattern.snippets.firstWhere((s) => s.id == id);
+    final w = snippet.width;
+    final h = snippet.height;
+
+    // ── per-transform orientation maps ─────────────────────────────────────
+
+    QuadrantPosition flipHQuad(QuadrantPosition q) => switch (q) {
+          QuadrantPosition.topLeft    => QuadrantPosition.topRight,
+          QuadrantPosition.topRight   => QuadrantPosition.topLeft,
+          QuadrantPosition.bottomLeft => QuadrantPosition.bottomRight,
+          QuadrantPosition.bottomRight => QuadrantPosition.bottomLeft,
+        };
+    HalfOrientation flipHHalf(HalfOrientation o) => switch (o) {
+          HalfOrientation.left   => HalfOrientation.right,
+          HalfOrientation.right  => HalfOrientation.left,
+          HalfOrientation.top    => HalfOrientation.top,
+          HalfOrientation.bottom => HalfOrientation.bottom,
+        };
+
+    QuadrantPosition flipVQuad(QuadrantPosition q) => switch (q) {
+          QuadrantPosition.topLeft    => QuadrantPosition.bottomLeft,
+          QuadrantPosition.topRight   => QuadrantPosition.bottomRight,
+          QuadrantPosition.bottomLeft => QuadrantPosition.topLeft,
+          QuadrantPosition.bottomRight => QuadrantPosition.topRight,
+        };
+    HalfOrientation flipVHalf(HalfOrientation o) => switch (o) {
+          HalfOrientation.top    => HalfOrientation.bottom,
+          HalfOrientation.bottom => HalfOrientation.top,
+          HalfOrientation.left   => HalfOrientation.left,
+          HalfOrientation.right  => HalfOrientation.right,
+        };
+
+    // CW 90°: TL→TR→BR→BL→TL, top→right→bottom→left→top
+    QuadrantPosition cwQuad(QuadrantPosition q) => switch (q) {
+          QuadrantPosition.topLeft    => QuadrantPosition.topRight,
+          QuadrantPosition.topRight   => QuadrantPosition.bottomRight,
+          QuadrantPosition.bottomRight => QuadrantPosition.bottomLeft,
+          QuadrantPosition.bottomLeft => QuadrantPosition.topLeft,
+        };
+    HalfOrientation cwHalf(HalfOrientation o) => switch (o) {
+          HalfOrientation.top    => HalfOrientation.right,
+          HalfOrientation.right  => HalfOrientation.bottom,
+          HalfOrientation.bottom => HalfOrientation.left,
+          HalfOrientation.left   => HalfOrientation.top,
+        };
+
+    // ── stitch transformers ─────────────────────────────────────────────────
+
+    Stitch applyFlipH(Stitch s) => switch (s) {
+          FullStitch(:final x, :final y, :final threadId) =>
+            FullStitch(x: w - 1 - x, y: y, threadId: threadId),
+          HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+            HalfStitch(x: w - 1 - x, y: y, isForward: !isForward, threadId: threadId),
+          QuarterStitch(:final x, :final y, :final quadrant, :final threadId) =>
+            QuarterStitch(x: w - 1 - x, y: y, quadrant: flipHQuad(quadrant), threadId: threadId),
+          HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+            HalfCrossStitch(x: w - 1 - x, y: y, half: flipHHalf(half), threadId: threadId),
+          QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
+            QuarterCrossStitch(x: w - 1 - x, y: y, quadrant: flipHQuad(quadrant), threadId: threadId),
+          BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
+            BackStitch(x1: w - x1, y1: y1, x2: w - x2, y2: y2, threadId: threadId),
+        };
+
+    Stitch applyFlipV(Stitch s) => switch (s) {
+          FullStitch(:final x, :final y, :final threadId) =>
+            FullStitch(x: x, y: h - 1 - y, threadId: threadId),
+          HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+            HalfStitch(x: x, y: h - 1 - y, isForward: !isForward, threadId: threadId),
+          QuarterStitch(:final x, :final y, :final quadrant, :final threadId) =>
+            QuarterStitch(x: x, y: h - 1 - y, quadrant: flipVQuad(quadrant), threadId: threadId),
+          HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+            HalfCrossStitch(x: x, y: h - 1 - y, half: flipVHalf(half), threadId: threadId),
+          QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
+            QuarterCrossStitch(x: x, y: h - 1 - y, quadrant: flipVQuad(quadrant), threadId: threadId),
+          BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
+            BackStitch(x1: x1, y1: h - y1, x2: x2, y2: h - y2, threadId: threadId),
+        };
+
+    // CW 90°: cell (x,y) → (h-1-y, x); BackStitch grid point (x,y) → (h-y, x)
+    Stitch applyRotateCW(Stitch s) => switch (s) {
+          FullStitch(:final x, :final y, :final threadId) =>
+            FullStitch(x: h - 1 - y, y: x, threadId: threadId),
+          HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+            HalfStitch(x: h - 1 - y, y: x, isForward: !isForward, threadId: threadId),
+          QuarterStitch(:final x, :final y, :final quadrant, :final threadId) =>
+            QuarterStitch(x: h - 1 - y, y: x, quadrant: cwQuad(quadrant), threadId: threadId),
+          HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+            HalfCrossStitch(x: h - 1 - y, y: x, half: cwHalf(half), threadId: threadId),
+          QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
+            QuarterCrossStitch(x: h - 1 - y, y: x, quadrant: cwQuad(quadrant), threadId: threadId),
+          BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
+            BackStitch(x1: h - y1, y1: x1, x2: h - y2, y2: x2, threadId: threadId),
+        };
+
+    final (newW, newH, newStitches) = switch (transform) {
+      SnippetTransform.flipH    => (w, h, snippet.stitches.map(applyFlipH).toList()),
+      SnippetTransform.flipV    => (w, h, snippet.stitches.map(applyFlipV).toList()),
+      SnippetTransform.rotateCW => (h, w, snippet.stitches.map(applyRotateCW).toList()),
+    };
+
+    final transformed = snippet.copyWith(width: newW, height: newH, stitches: newStitches);
+    final updated = state.pattern.snippets.map((s) => s.id == id ? transformed : s).toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(snippets: updated),
       undoStack: _buildUndoStack(),

@@ -152,6 +152,45 @@ class SnippetsPanel extends ConsumerWidget {
                 _showResize(context, ref, snippet);
               },
             ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  _TransformButton(
+                    icon: Icons.flip,
+                    label: 'Flip H',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      ref.read(editorProvider.notifier)
+                          .transformSnippet(snippet.id, SnippetTransform.flipH);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _TransformButton(
+                    icon: Icons.flip,
+                    label: 'Flip V',
+                    iconFlip: true,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      ref.read(editorProvider.notifier)
+                          .transformSnippet(snippet.id, SnippetTransform.flipV);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _TransformButton(
+                    icon: Icons.rotate_90_degrees_cw_outlined,
+                    label: 'Rotate 90°',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      ref.read(editorProvider.notifier)
+                          .transformSnippet(snippet.id, SnippetTransform.rotateCW);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
             ListTile(
               leading: Icon(Icons.delete_outline,
                   color: Theme.of(ctx).colorScheme.error),
@@ -442,6 +481,51 @@ class _SnippetPaletteDots extends StatelessWidget {
             style: const TextStyle(fontSize: 7, color: Colors.grey),
           ),
       ],
+    );
+  }
+}
+
+// ─── Transform button ──────────────────────────────────────────────────────────
+
+class _TransformButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool iconFlip;
+  final VoidCallback onTap;
+
+  const _TransformButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.iconFlip = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.dividerColor),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Transform.rotate(
+                angle: iconFlip ? 1.5708 : 0, // π/2 = 90° to turn flip icon vertical
+                child: Icon(icon, size: 20),
+              ),
+              const SizedBox(height: 4),
+              Text(label, style: theme.textTheme.labelSmall),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
