@@ -1,8 +1,10 @@
 # StitchX
+> [!NOTE]
+> Built with the assistance of AI tools (Claude Code).
 
-> Built with the assistance of AI tools (Claude Code / Anthropic Claude).
-
-A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you design and edit counted cross-stitch patterns using DMC thread colors, with a touch- and Apple Pencil-friendly canvas.
+A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows), Mobile, and Tablet (iOS, Android). StitchX lets you design and edit counted cross-stitch patterns using DMC (or Anchor) thread colors, with a touch- and Apple Pencil-friendly canvas.
+> [!NOTE]
+> *may not be free on Apple App Store (when it's eventually published there) to offset the Apple Developer Program fees (99USD/year).
 
 ## Features
 
@@ -104,9 +106,9 @@ Requires Flutter 3.41.4+.
 
 7. ~~**Colour replacement**~~ ✓ — long-press any thread row in the palette dialog to get a "Replace colour…" action. Opens the colour picker in replace mode; selecting a new DMC colour remaps every stitch of the old colour to the new one, merging palette entries if the target colour is already in use. Preserves the thread's symbol. Pushes an undo step. Works identically in the snippet editor (via its isolated `editorProvider`).
 
-8. **Thread count in palette** — palette shows stitch count per thread and a total at the top (e.g. "14 colours · 3,240 stitches"). Optionally shows estimated thread length (full stitch ≈ 45 cm).
+8. ~~**Thread count in palette**~~ ✓ — palette header shows "N colours · M stitches". Each thread row shows its stitch count. Threads added to the palette but not used are flagged "unused".
 
-9. **Edge snapping for paste** — hold **Shift** while positioning a paste/snippet ghost to snap its edges to the canvas boundary (left, right, top, bottom, or centre). Separate from Ctrl (multi-stamp).
+9. ~~**Edge snapping for paste**~~ ✓ — hold **Shift** while positioning a paste/snippet ghost to snap its edges to: (a) the canvas boundary (left, right, top, bottom, centre); (b) the nearest same-colour stitch in each axis — if any clipboard thread colour exists on the canvas, the ghost snaps so its edge butts flush against the closest same-colour stitch in the drag direction. X and Y axes snap independently so corner placement always works correctly. Separate from Ctrl (multi-stamp).
 
 10. ~~**Snippets from snippets**~~ ✓
 
