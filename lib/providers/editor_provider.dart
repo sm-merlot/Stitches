@@ -645,6 +645,94 @@ class EditorNotifier extends Notifier<EditorState> {
     );
   }
 
+  /// Replaces every stitch using [oldDmcCode] with [newDmcCode], and updates
+  /// the thread entry in the palette. The old thread's symbol is preserved.
+  /// Pushes an undo step.
+  void replaceThread(String oldDmcCode, String newDmcCode, Color newColor, String newName) {
+    if (oldDmcCode == newDmcCode) return;
+    final oldThread = state.pattern.threads
+        .where((t) => t.dmcCode == oldDmcCode)
+        .firstOrNull;
+    if (oldThread == null) return;
+
+    final newThread = Thread(
+      dmcCode: newDmcCode,
+      color: newColor,
+      name: newName,
+      symbol: oldThread.symbol,
+    );
+
+    // Remap stitches.
+    final stitches = state.pattern.stitches
+        .map((s) => s.threadId == oldDmcCode ? _withThreadId(s, newDmcCode) : s)
+        .toList();
+
+    // Replace or merge threads.
+    var threads = state.pattern.threads.toList();
+    final oldIdx = threads.indexWhere((t) => t.dmcCode == oldDmcCode);
+    final newExists = threads.any((t) => t.dmcCode == newDmcCode);
+    if (newExists) {
+      threads.removeAt(oldIdx);
+    } else {
+      threads[oldIdx] = newThread;
+    }
+
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(threads: threads, stitches: stitches),
+      selectedThreadId: state.selectedThreadId == oldDmcCode ? newDmcCode : state.selectedThreadId,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  /// Same as [replaceThread] but operates on a snippet (used in snippet editor).
+  void replaceSnippetThread(String snippetId, String oldDmcCode, String newDmcCode, Color newColor, String newName) {
+    if (oldDmcCode == newDmcCode) return;
+    final snippet = state.pattern.snippets
+        .where((s) => s.id == snippetId)
+        .firstOrNull;
+    if (snippet == null) return;
+
+    final oldThread = snippet.threads
+        .where((t) => t.dmcCode == oldDmcCode)
+        .firstOrNull;
+    if (oldThread == null) return;
+
+    final newThread = Thread(
+      dmcCode: newDmcCode,
+      color: newColor,
+      name: newName,
+      symbol: oldThread.symbol,
+    );
+
+    final stitches = snippet.stitches
+        .map((s) => s.threadId == oldDmcCode ? _withThreadId(s, newDmcCode) : s)
+        .toList();
+
+    var threads = snippet.threads.toList();
+    final oldIdx = threads.indexWhere((t) => t.dmcCode == oldDmcCode);
+    final newExists = threads.any((t) => t.dmcCode == newDmcCode);
+    if (newExists) {
+      threads.removeAt(oldIdx);
+    } else {
+      threads[oldIdx] = newThread;
+    }
+
+    final updated = state.pattern.snippets
+        .map((s) => s.id == snippetId
+            ? s.copyWith(threads: threads, stitches: stitches)
+            : s)
+        .toList();
+
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: updated),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
   void resizePattern(int newWidth, int newHeight, int anchorX, int anchorY) {
     final old = state.pattern;
     final dx = (anchorX / 2.0 * (newWidth - old.width)).round();
@@ -772,6 +860,21 @@ class EditorNotifier extends Notifier<EditorState> {
       isDirty: true,
     );
   }
+
+  static Stitch _withThreadId(Stitch s, String id) => switch (s) {
+    FullStitch(:final x, :final y) =>
+        FullStitch(x: x, y: y, threadId: id),
+    HalfStitch(:final x, :final y, :final isForward) =>
+        HalfStitch(x: x, y: y, isForward: isForward, threadId: id),
+    QuarterStitch(:final x, :final y, :final quadrant) =>
+        QuarterStitch(x: x, y: y, quadrant: quadrant, threadId: id),
+    HalfCrossStitch(:final x, :final y, :final half) =>
+        HalfCrossStitch(x: x, y: y, half: half, threadId: id),
+    QuarterCrossStitch(:final x, :final y, :final quadrant) =>
+        QuarterCrossStitch(x: x, y: y, quadrant: quadrant, threadId: id),
+    BackStitch(:final x1, :final y1, :final x2, :final y2) =>
+        BackStitch(x1: x1, y1: y1, x2: x2, y2: y2, threadId: id),
+  };
 
   List<CrossStitchPattern> _buildUndoStack() {
     var stack = [...state._undoStack, state.pattern];

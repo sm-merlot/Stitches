@@ -100,9 +100,9 @@ Requires Flutter 3.41.4+.
 
 5. ~~**Images in folder view**~~ ✓ — `.png`, `.jpg`, `.gif`, `.bmp`, `.webp` files appear in the workspace folder tree with an image icon. Tap to view inline in the canvas area (pinch/scroll to zoom). Right-click → "Import as Sprite Sheet" when a pattern is open; for Google Drive images the file is downloaded to a local cache first. Sidebar PDF and image visibility can be toggled independently via header icon buttons. Sidebar width is now draggable and persisted.
 
-6. **Snippet colour palette** — each snippet in the panel shows a row of colour swatches derived from its thread list. No interaction needed — purely informational at a glance.
+6. ~~**Snippet colour palette**~~ ✓ — each snippet card in the panel shows a row of 8 px colour dots (up to 12; "+N" if more) derived from its thread list. Purely informational — no interaction required.
 
-7. **Colour replacement** — long-press any thread swatch in the palette to replace all stitches of that colour with a new DMC colour. Works on both main canvas and snippet editor. Pushes an undo step.
+7. ~~**Colour replacement**~~ ✓ — long-press any thread row in the palette dialog to get a "Replace colour…" action. Opens the colour picker in replace mode; selecting a new DMC colour remaps every stitch of the old colour to the new one, merging palette entries if the target colour is already in use. Preserves the thread's symbol. Pushes an undo step. Works identically in the snippet editor (via its isolated `editorProvider`).
 
 8. **Thread count in palette** — palette shows stitch count per thread and a total at the top (e.g. "14 colours · 3,240 stitches"). Optionally shows estimated thread length (full stitch ≈ 45 cm).
 

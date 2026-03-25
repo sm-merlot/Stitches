@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
@@ -421,7 +422,10 @@ class _PaletteButton extends StatelessWidget {
         visualDensity: VisualDensity.compact,
         onPressed: () => showDialog<void>(
           context: context,
-          builder: (_) => const _PaletteDialog(),
+          builder: (_) => UncontrolledProviderScope(
+            container: ProviderScope.containerOf(context),
+            child: const _PaletteDialog(),
+          ),
         ),
       ),
     );
@@ -439,6 +443,9 @@ class _PaletteDialog extends ConsumerWidget {
     final useDmc = ref.watch(settingsProvider).useDmc;
     final threads = state.pattern.threads;
     final theme = Theme.of(context);
+    final isDesktop = defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
 
     return Dialog(
       clipBehavior: Clip.hardEdge,
@@ -493,12 +500,32 @@ class _PaletteDialog extends ConsumerWidget {
                         child: _ThreadSwatch(thread: t, size: 24),
                       ),
                       title: Text('$displayCode – ${t.name}'),
+                      onLongPress: isDesktop
+                          ? null
+                          : () => _showReplaceDialog(context, t),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (isSelected)
                             Icon(Icons.check,
                                 size: 16, color: theme.colorScheme.primary),
+                          if (isDesktop)
+                            Tooltip(
+                              message: 'Replace colour',
+                              child: InkWell(
+                                onTap: () => _showReplaceDialog(context, t),
+                                borderRadius: BorderRadius.circular(4),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    Icons.swap_horiz,
+                                    size: 16,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.45),
+                                  ),
+                                ),
+                              ),
+                            ),
                           const SizedBox(width: 4),
                           Tooltip(
                             message: 'Change symbol',
@@ -556,12 +583,61 @@ class _PaletteDialog extends ConsumerWidget {
   void _showSymbolPicker(BuildContext context, WidgetRef ref, Thread t) {
     showDialog<void>(
       context: context,
-      builder: (ctx) => _SymbolPickerDialog(
-        thread: t,
-        onSelect: (s) {
-          ref.read(editorProvider.notifier).changeThreadSymbol(t.dmcCode, s);
-          Navigator.of(ctx).pop();
-        },
+      builder: (_) => UncontrolledProviderScope(
+        container: ProviderScope.containerOf(context),
+        child: _SymbolPickerDialog(
+          thread: t,
+          onSelect: (s) {
+            ref.read(editorProvider.notifier).changeThreadSymbol(t.dmcCode, s);
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showReplaceDialog(BuildContext context, Thread t) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => UncontrolledProviderScope(
+        container: ProviderScope.containerOf(context),
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: t.color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black12),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${t.dmcCode} – ${t.name}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+              'Replace all stitches using this colour with a different DMC colour.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                showColorPicker(context, replacingThreadId: t.dmcCode);
+              },
+              child: const Text('Replace colour…'),
+            ),
+          ],
+        ),
       ),
     );
   }

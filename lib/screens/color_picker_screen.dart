@@ -7,29 +7,42 @@ import '../providers/editor_provider.dart';
 import '../providers/settings_provider.dart';
 
 /// Opens the colour picker as a modal dialog on desktop, full-screen push on mobile.
-void showColorPicker(BuildContext context) {
+///
+/// If [replacingThreadId] is provided, selecting a colour calls
+/// [EditorNotifier.replaceThread] instead of adding a new thread.
+void showColorPicker(
+  BuildContext context, {
+  String? replacingThreadId,
+}) {
   final isDesktop = defaultTargetPlatform == TargetPlatform.macOS ||
       defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.linux;
 
+  final screen = ColorPickerScreen(replacingThreadId: replacingThreadId);
+
   if (isDesktop) {
     showDialog<void>(
       context: context,
-      builder: (_) => Dialog(
-        clipBehavior: Clip.hardEdge,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
-        child: const SizedBox(width: 440, height: 600, child: ColorPickerScreen()),
+      builder: (_) => UncontrolledProviderScope(
+        container: ProviderScope.containerOf(context),
+        child: Dialog(
+          clipBehavior: Clip.hardEdge,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+          child: SizedBox(width: 440, height: 600, child: screen),
+        ),
       ),
     );
   } else {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ColorPickerScreen()),
+      MaterialPageRoute(builder: (_) => screen),
     );
   }
 }
 
 class ColorPickerScreen extends ConsumerStatefulWidget {
-  const ColorPickerScreen({super.key});
+  final String? replacingThreadId;
+
+  const ColorPickerScreen({super.key, this.replacingThreadId});
 
   @override
   ConsumerState<ColorPickerScreen> createState() => _ColorPickerScreenState();
@@ -58,10 +71,23 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
   }
 
   void _selectColor(DmcColor dmcColor) {
-    final editorState = ref.read(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
 
-    // Check if this DMC code already exists in the pattern's thread list
+    final replacingId = widget.replacingThreadId;
+    if (replacingId != null) {
+      // Replace mode — swap all stitches from the old thread to this one.
+      notifier.replaceThread(
+        replacingId,
+        dmcColor.code,
+        dmcColor.color,
+        dmcColor.name,
+      );
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // Normal mode — add / select thread.
+    final editorState = ref.read(editorProvider);
     final existing = editorState.pattern.threads
         .where((t) => t.dmcCode == dmcColor.code)
         .firstOrNull;
@@ -89,7 +115,9 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(settings.useDmc ? 'DMC Colours' : 'Anchor Colours'),
+        title: Text(widget.replacingThreadId != null
+            ? 'Replace Colour'
+            : settings.useDmc ? 'DMC Colours' : 'Anchor Colours'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
