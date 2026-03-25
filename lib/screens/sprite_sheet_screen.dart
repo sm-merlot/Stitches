@@ -25,7 +25,11 @@ const _tileSizes = [8, 16, 32, 64];
 /// Pops with `true` if at least one snippet was added (so the caller can
 /// open the snippets panel automatically), or `false` otherwise.
 class SpriteSheetScreen extends ConsumerStatefulWidget {
-  const SpriteSheetScreen({super.key});
+  /// If provided, the image at this path is loaded automatically on open,
+  /// skipping the file-picker step.
+  final String? imagePath;
+
+  const SpriteSheetScreen({super.key, this.imagePath});
 
   @override
   ConsumerState<SpriteSheetScreen> createState() => _SpriteSheetScreenState();
@@ -68,6 +72,34 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: 'Sprite 1');
+    if (widget.imagePath != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _loadImageFromPath(widget.imagePath!));
+    }
+  }
+
+  Future<void> _loadImageFromPath(String path) async {
+    final bytes = await File(path).readAsBytes();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not decode image')),
+        );
+      }
+      return;
+    }
+    setState(() {
+      _imageBytes = bytes;
+      _image = decoded;
+      _autoFit = true;
+      _selTileX = null;
+      _selTileY = null;
+      _cropStart = null;
+      _cropEnd = null;
+      _addedCount = 0;
+      _nameCtrl.text = 'Sprite 1';
+    });
   }
 
   @override

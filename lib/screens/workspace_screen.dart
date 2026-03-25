@@ -12,6 +12,7 @@ import '../providers/editor_provider.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
+import '../providers/image_viewer_provider.dart';
 import '../providers/pdf_viewer_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -25,6 +26,7 @@ import '../widgets/editor_toolbar.dart';
 import '../widgets/file_sidebar.dart';
 import '../widgets/pattern_canvas.dart';
 import '../widgets/pdf_page_picker.dart';
+import '../widgets/image_viewer_panel.dart';
 import '../widgets/pdf_viewer_panel.dart';
 import 'new_pattern_dialog.dart';
 import 'pattern_scan_cell_screen.dart';
@@ -226,6 +228,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
     ref.read(editorProvider.notifier).closeFile();
     ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(null);
     return true;
   }
 
@@ -256,6 +259,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       try {
         await FileService.saveFile(pattern, filePath);
         ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(null);
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
         refreshFolder(ref, workspace);
       } catch (e) {
@@ -603,6 +607,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             filePath: File(savePath).existsSync() ? savePath : null,
           );
           ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(null);
         }
       } else {
         // ── Multiple grids: each page becomes a Snippet ──────────────────────
@@ -770,6 +775,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final driveState = ref.watch(googleDriveProvider);
     final isFileLoading = ref.watch(fileLoadingProvider);
     final openPdf = ref.watch(pdfViewerProvider);
+    final openImage = ref.watch(imageViewerProvider);
 
     // ── Auto-save listener ────────────────────────────────────────────────
     ref.listen<EditorState>(editorProvider, (prev, next) {
@@ -1093,12 +1099,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Sidebar
+                // Sidebar + draggable resize handle
                 if (wsState.sidebarVisible) ...[
-                  const FileSidebar(),
-                  const VerticalDivider(width: 1, thickness: 1),
+                  SizedBox(width: wsState.sidebarWidth, child: const FileSidebar()),
+                  _ResizeDivider(
+                    onDrag: (delta) => ref
+                        .read(workspaceProvider.notifier)
+                        .setSidebarWidth(wsState.sidebarWidth + delta),
+                  ),
                 ],
-                // Editor, PDF viewer, or empty state
+                // Editor, PDF viewer, image viewer, or empty state
                 Expanded(
                   child: openPdf != null
                       ? Focus(
@@ -1106,22 +1116,28 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                           onKeyEvent: handleKeys,
                           child: PdfViewerPanel(key: _pdfPanelKey, path: openPdf.localPath),
                         )
-                      : editorState.isFileOpen
+                      : openImage != null
                           ? Focus(
                               autofocus: true,
                               onKeyEvent: handleKeys,
-                              child: const Column(
-                                children: [
-                                  Expanded(child: PatternCanvas()),
-                                  EditorToolbar(),
-                                ],
-                              ),
+                              child: ImageViewerPanel(path: openImage.localPath),
                             )
-                          : _EmptyState(
-                              workspace: wsState.workspace,
-                              onNewFile: () => _newFileInWorkspace(
-                                  context, wsState.workspace),
-                            ),
+                          : editorState.isFileOpen
+                              ? Focus(
+                                  autofocus: true,
+                                  onKeyEvent: handleKeys,
+                                  child: const Column(
+                                    children: [
+                                      Expanded(child: PatternCanvas()),
+                                      EditorToolbar(),
+                                    ],
+                                  ),
+                                )
+                              : _EmptyState(
+                                  workspace: wsState.workspace,
+                                  onNewFile: () => _newFileInWorkspace(
+                                      context, wsState.workspace),
+                                ),
                 ),
               ],
             ),
@@ -1279,6 +1295,34 @@ class _StitchPalettePanel extends ConsumerWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Resize divider ───────────────────────────────────────────────────────────
+
+class _ResizeDivider extends StatelessWidget {
+  final void Function(double delta) onDrag;
+
+  const _ResizeDivider({required this.onDrag});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
+        child: Container(
+          width: 5,
+          color: Colors.transparent,
+          child: VerticalDivider(
+            width: 1,
+            thickness: 1,
+            color: theme.dividerColor,
+          ),
         ),
       ),
     );

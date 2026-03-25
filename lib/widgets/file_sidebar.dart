@@ -12,7 +12,10 @@ import '../providers/google_drive_provider.dart';
 import '../providers/pdf_viewer_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../providers/image_viewer_provider.dart';
 import '../screens/new_pattern_dialog.dart';
+import '../screens/sprite_sheet_screen.dart';
+import 'snippets_panel.dart';
 import 'folder_tree_node.dart';
 
 class FileSidebar extends ConsumerStatefulWidget {
@@ -100,6 +103,34 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     final workspace = workspaceState.workspace;
 
     final isPdf = file is LocalPdfFile || file is DrivePdfFile;
+    final isImage = file is LocalImageFile || file is DriveImageFile;
+    final isFileOpen = ref.read(editorProvider).filePath != null;
+
+    if (isImage) {
+      final selected = await showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+            position.dx, position.dy, position.dx + 1, position.dy + 1),
+        items: [
+          const PopupMenuItem(value: 'view', child: Text('View')),
+          if (isFileOpen)
+            const PopupMenuItem(
+              value: 'sprite_sheet',
+              child: Text('Import as Sprite Sheet'),
+            ),
+        ],
+      );
+
+      if (!context.mounted) return;
+
+      switch (selected) {
+        case 'view':
+          await _openFile(context, file);
+        case 'sprite_sheet':
+          await _openAsSpriteSheet(context, file);
+      }
+      return;
+    }
 
     final selected = await showMenu<String>(
       context: context,
@@ -136,10 +167,90 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     }
   }
 
+  Future<void> _openDriveImage(
+      BuildContext context, DriveImageFile file) async {
+    final localPath = await _downloadDriveImage(context, file);
+    if (localPath == null || !context.mounted) return;
+    ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(OpenImage(
+      localPath: localPath,
+      driveFileId: file.fileId,
+      displayName: file.displayName,
+    ));
+  }
+
+  Future<String?> _downloadDriveImage(
+      BuildContext context, DriveImageFile file) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final tempPath = '${tempDir.path}/${file.fileId}_${file.name}';
+      final cached = File(tempPath);
+      if (await cached.exists()) return tempPath;
+
+      ref.read(fileLoadingProvider.notifier).set(true);
+      try {
+        final service =
+            await ref.read(googleDriveProvider.notifier).getService();
+        if (!context.mounted) return null;
+        if (service == null) {
+          _showError(context, 'Not connected to Google Drive.');
+          return null;
+        }
+        final bytes = await service.downloadFile(file.fileId);
+        await cached.writeAsBytes(bytes);
+        return tempPath;
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
+      }
+    } catch (e) {
+      if (context.mounted) _showError(context, 'Could not open image: $e');
+      return null;
+    }
+  }
+
+  Future<void> _openAsSpriteSheet(
+      BuildContext context, PatternFile file) async {
+    String? imagePath;
+    if (file is LocalImageFile) {
+      imagePath = file.path;
+    } else if (file is DriveImageFile) {
+      imagePath = await _downloadDriveImage(context, file);
+      if (imagePath == null || !context.mounted) return;
+    } else {
+      return;
+    }
+
+    final addedAny = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => SpriteSheetScreen(imagePath: imagePath),
+        fullscreenDialog: true,
+      ),
+    );
+    if ((addedAny ?? false) && context.mounted) {
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => const SnippetsPanel(),
+      );
+    }
+  }
+
   Future<void> _openFile(BuildContext context, PatternFile file) async {
+    if (file is LocalImageFile) {
+      ref.read(pdfViewerProvider.notifier).set(null);
+      ref.read(imageViewerProvider.notifier).set(
+          OpenImage(localPath: file.path));
+      return;
+    }
+
+    if (file is DriveImageFile) {
+      await _openDriveImage(context, file);
+      return;
+    }
+
     if (file is LocalPdfFile) {
-      // Clear any open pattern and open the PDF directly from disk.
       ref.read(editorProvider.notifier).closeFile();
+      ref.read(imageViewerProvider.notifier).set(null);
       ref.read(pdfViewerProvider.notifier).set(OpenPdf(localPath: file.path));
       return;
     }
@@ -186,8 +297,9 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       try {
         final (pattern, path) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
-        // Clear any open PDF when switching to a pattern.
+        // Clear any open PDF/image when switching to a pattern.
         ref.read(pdfViewerProvider.notifier).set(null);
+        ref.read(imageViewerProvider.notifier).set(null);
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not open file: $e');
@@ -637,17 +749,17 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
   Widget build(BuildContext context) {
     final workspaceState = ref.watch(workspaceProvider);
     final editorState = ref.watch(editorProvider);
+    final openImage = ref.watch(imageViewerProvider);
     final workspace = workspaceState.workspace;
     final theme = Theme.of(context);
 
     if (workspace == null) {
-      return const SizedBox(width: 240);
+      return const SizedBox.expand();
     }
 
     final clipboard = workspaceState.clipboard;
 
-    return SizedBox(
-      width: 240,
+    return SizedBox.expand(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -672,6 +784,36 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.picture_as_pdf_outlined,
+                    size: 14,
+                    color: workspaceState.showPdfs
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.25),
+                  ),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: workspaceState.showPdfs ? 'Hide PDFs' : 'Show PDFs',
+                  onPressed: () => ref
+                      .read(workspaceProvider.notifier)
+                      .setShowPdfs(!workspaceState.showPdfs),
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.image_outlined,
+                    size: 14,
+                    color: workspaceState.showImages
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.25),
+                  ),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: workspaceState.showImages ? 'Hide images' : 'Show images',
+                  onPressed: () => ref
+                      .read(workspaceProvider.notifier)
+                      .setShowImages(!workspaceState.showImages),
                 ),
                 IconButton(
                   icon: const Icon(Icons.add, size: 16),
@@ -769,6 +911,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                   selectedDriveFileId: editorState.driveFileId,
                   selectedPdfPath: ref.watch(pdfViewerProvider)?.localPath,
                   selectedDrivePdfId: ref.watch(pdfViewerProvider)?.driveFileId,
+                  selectedImagePath: openImage?.localPath,
+                  selectedDriveImageId: openImage?.driveFileId,
+                  showPdfs: workspaceState.showPdfs,
+                  showImages: workspaceState.showImages,
                   filter: _filter,
                   onFileTap: (file) => _openFile(context, file),
                   onFolderContextMenu: (folder, pos) =>

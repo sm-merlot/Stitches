@@ -15,6 +15,12 @@ bool _isHidden(String name) => name.startsWith('.');
 bool _isPatternFile(String path) => path.endsWith('.stitchx');
 bool _isPdfFile(String path) => path.endsWith('.pdf');
 
+const _kImageExtensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'};
+bool _isImageFile(String path) {
+  final lower = path.toLowerCase();
+  return _kImageExtensions.any((ext) => lower.endsWith(ext));
+}
+
 Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
   final dir = Directory(folder.path);
   if (!await dir.exists()) return FolderContents.empty;
@@ -37,6 +43,12 @@ Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
     } else if (entity is File && _isPdfFile(entity.path)) {
       final stat = await entity.stat();
       files.add(LocalPdfFile(
+        path: entity.path,
+        modified: stat.modified,
+      ));
+    } else if (entity is File && _isImageFile(entity.path)) {
+      final stat = await entity.stat();
+      files.add(LocalImageFile(
         path: entity.path,
         modified: stat.modified,
       ));

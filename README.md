@@ -72,6 +72,9 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Stitch mode** — simplified read-only view for stitching from a finished pattern; accessible via a floating action button; keep-screen-on option
 - **Keyboard shortcuts** — full shortcut set on desktop and in snippet editor (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
+- **Image viewer** — view `.png`, `.jpg`, `.gif`, `.webp`, and other image files inline in the canvas area; click any image in the sidebar to open it, click another to switch instantly
+- **Resizable sidebar** — drag the sidebar edge to any width between 160–480 px; width is remembered between sessions
+- **Sidebar type filters** — toggle PDF and image visibility in the folder tree independently; settings are persisted
 
 ## Getting Started
 
@@ -95,7 +98,7 @@ Requires Flutter 3.41.4+.
 
 4. ~~**Block view**~~ ✓ — toggle in the ⋮ overflow menu renders all stitches as solid coloured rectangles. Half stitches draw as half-cell rects, quarter stitches as quarter-cell rects. In stitch mode, symbols remain visible when zoomed in. In design mode, the view stays clean with no symbols.
 
-5. **Images in folder view** — `.png`, `.jpg`, `.gif`, `.webp` files visible in the workspace folder tree. Tap to view full-screen. Right-click → "Import as Sprite Sheet" when a pattern is open.
+5. ~~**Images in folder view**~~ ✓ — `.png`, `.jpg`, `.gif`, `.bmp`, `.webp` files appear in the workspace folder tree with an image icon. Tap to view inline in the canvas area (pinch/scroll to zoom). Right-click → "Import as Sprite Sheet" when a pattern is open; for Google Drive images the file is downloaded to a local cache first. Sidebar PDF and image visibility can be toggled independently via header icon buttons. Sidebar width is now draggable and persisted.
 
 6. **Snippet colour palette** — each snippet in the panel shows a row of colour swatches derived from its thread list. No interaction needed — purely informational at a glance.
 
