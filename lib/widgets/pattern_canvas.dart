@@ -496,6 +496,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (event.kind == PointerDeviceKind.stylus ||
         event.kind == PointerDeviceKind.invertedStylus ||
         event.kind == PointerDeviceKind.mouse) {
+      if (event.buttons == kMiddleMouseButton) return; // pan on move
       if (_isPanMode) return;
 
       final mode = ref.read(editorProvider).drawingMode;
@@ -597,7 +598,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           : null;
       _scheduleRebuild();
 
-      if (_isPanMode) {
+      if (_isPanMode || event.buttons == kMiddleMouseButton) {
         _pan(event.delta);
         return;
       }
