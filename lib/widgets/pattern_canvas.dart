@@ -798,6 +798,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 ghostThreads: state.drawingMode == DrawingMode.paste
                     ? state.clipboardThreads
                     : null,
+                ghostOpacity: state.drawingMode == DrawingMode.paste
+                    ? state.pasteOpacity
+                    : 1.0,
                 stylusHoverCell: _stylusHoverCell,
                 stylusHoverColor: state.selectedThread?.color,
               ),
