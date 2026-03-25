@@ -28,7 +28,7 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 ### Snippets
 - **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
 - **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / edit / delete
-- **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size
+- **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar
 - **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
 - **Sprite sheet importer** — open any sprite sheet image, select a tile or crop a region, pixel colours matched to nearest DMC thread via CIE Lab colour space; output saved directly as a snippet
 
@@ -108,4 +108,4 @@ Requires Flutter 3.41.4+.
 
 9. **Edge snapping for paste** — hold **Shift** while positioning a paste/snippet ghost to snap its edges to the canvas boundary (left, right, top, bottom, or centre). Separate from Ctrl (multi-stamp).
 
-10. **Snippets from snippets** — while editing a snippet, import any other snippet from the library as a paste operation onto the current canvas. A picker sheet shows all sibling snippets; tap one to enter paste mode with it as the clipboard.
+10. ~~**Snippets from snippets**~~ ✓ — while editing a snippet, a `library_add_outlined` button appears in the toolbar (same slot as the snippets button on the main canvas) when sibling snippets exist. Tapping it opens a picker sheet showing all other snippets as thumbnails; tap one to enter paste mode with it as the clipboard on the snippet canvas.
