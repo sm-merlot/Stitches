@@ -59,6 +59,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Whether Shift is currently held — enables edge snapping in paste mode.
   bool _shiftHeld = false;
 
+  // Guard to fire flood fill only once per tap (not repeatedly on drag).
+  bool _fillFired = false;
+
   // ── Frame-coalesced rebuild ────────────────────────────────────────────────
   // Pointer events (pan, hover, pinch) can fire at 120 Hz. Calling setState on
   // every event saturates the UI thread and causes a backlog that freezes input
@@ -233,6 +236,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
+    if (state.currentTool == DrawingTool.fill ||
+        state.currentTool == DrawingTool.fillErase) {
+      final (cellX, cellY) = _canvasToCell(canvas);
+      if (!_inBounds(cellX, cellY)) return;
+      // Flood fill is triggered once per tap, not on drag — guard with a flag.
+      if (_fillFired) return;
+      _fillFired = true;
+      notifier.floodFill(cellX, cellY,
+          erase: state.currentTool == DrawingTool.fillErase);
+      return;
+    }
+
     if (state.currentTool == DrawingTool.backstitch) {
       final gridPt = _canvasToGridPoint(canvas);
       final p = state.pattern;
@@ -295,6 +310,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           quadrant: _detectQuadrant(subX, subY),
           threadId: threadId),
       DrawingTool.backstitch => null,
+      DrawingTool.fill => null,
+      DrawingTool.fillErase => null,
     };
   }
 
@@ -664,6 +681,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    _fillFired = false;
     final pos = event.localPosition;
     final now = DateTime.now();
     final wasSinglePointer = _activePointers.length == 1;

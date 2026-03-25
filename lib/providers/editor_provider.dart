@@ -19,6 +19,8 @@ enum DrawingTool {
   quarterDiag,   // Diagonal quarter (auto)   [5]
   quarterCross,  // Full X in quarter cell    [6]
   backstitch,    // Backstitch line           [7]
+  fill,          // Flood fill colour         [8]
+  fillErase,     // Flood fill erase          [9]
 }
 
 /// Cursor mode — controls what pointer/touch interactions do.
@@ -875,6 +877,103 @@ class EditorNotifier extends Notifier<EditorState> {
     final newStitches =
         state.pattern.stitches.where((s) => !hit(s)).toList();
     final newPattern = state.pattern.copyWith(stitches: newStitches);
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  /// 8-connected flood fill.
+  ///
+  /// [erase] == false: fill connected cells that have the same colour as
+  /// (x,y) (or are empty if (x,y) is empty) with [FullStitch]es of the
+  /// current thread.
+  ///
+  /// [erase] == true: remove all FullStitches connected (8-way) to (x,y)
+  /// that share the same threadId.
+  void floodFill(int startX, int startY, {required bool erase}) {
+    final p = state.pattern;
+    if (startX < 0 || startX >= p.width || startY < 0 || startY >= p.height) return;
+
+    // Determine the "seed" colour (null = empty cell).
+    String? seedThreadId;
+    for (final s in p.stitches) {
+      if (s is FullStitch && s.x == startX && s.y == startY) {
+        seedThreadId = s.threadId;
+        break;
+      }
+    }
+
+    if (erase && seedThreadId == null) return; // nothing to erase
+
+    // For fill: we need a selected thread.
+    final fillThreadId = state.selectedThreadId;
+    if (!erase && fillThreadId == null) return;
+
+    // If filling and the cell already has the target colour, nothing to do.
+    if (!erase && seedThreadId == fillThreadId) return;
+
+    // Build a fast lookup set of occupied cells (FullStitch only).
+    // key = x * 100000 + y
+    final Map<int, String> occupied = {};
+    for (final s in p.stitches) {
+      if (s is FullStitch) occupied[s.x * 100000 + s.y] = s.threadId;
+    }
+
+    int key(int x, int y) => x * 100000 + y;
+
+    bool matches(int x, int y) {
+      final t = occupied[key(x, y)];
+      return t == seedThreadId;
+    }
+
+    // BFS
+    final visited = <int>{};
+    final queue = <(int, int)>[(startX, startY)];
+    visited.add(key(startX, startY));
+    final toChange = <(int, int)>[];
+
+    while (queue.isNotEmpty) {
+      final (cx, cy) = queue.removeAt(0);
+      toChange.add((cx, cy));
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          if (dx == 0 && dy == 0) continue;
+          final nx = cx + dx;
+          final ny = cy + dy;
+          if (nx < 0 || nx >= p.width || ny < 0 || ny >= p.height) continue;
+          final k = key(nx, ny);
+          if (visited.contains(k)) continue;
+          visited.add(k);
+          if (matches(nx, ny)) queue.add((nx, ny));
+        }
+      }
+    }
+
+    if (toChange.isEmpty) return;
+
+    List<Stitch> newStitches = [...p.stitches];
+    if (erase) {
+      final removeKeys = toChange.map((c) => key(c.$1, c.$2)).toSet();
+      newStitches = newStitches.where((s) {
+        if (s is! FullStitch) return true;
+        return !removeKeys.contains(key(s.x, s.y));
+      }).toList();
+    } else {
+      // Remove existing FullStitches at target cells, then add new ones.
+      final changeKeys = toChange.map((c) => key(c.$1, c.$2)).toSet();
+      newStitches = newStitches.where((s) {
+        if (s is! FullStitch) return true;
+        return !changeKeys.contains(key(s.x, s.y));
+      }).toList();
+      for (final (cx, cy) in toChange) {
+        newStitches.add(FullStitch(x: cx, y: cy, threadId: fillThreadId!));
+      }
+    }
+
+    final newPattern = p.copyWith(stitches: newStitches);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
