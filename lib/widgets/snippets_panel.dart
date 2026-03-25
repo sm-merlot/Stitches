@@ -101,14 +101,20 @@ class SnippetsPanel extends ConsumerWidget {
     // making ref and the original context unsafe to use.
     final notifier = ref.read(editorProvider.notifier);
     final navigator = Navigator.of(context);
-    final allSnippets = ref.read(editorProvider.select((s) => s.pattern.snippets));
+    final editorState = ref.read(editorProvider);
+    final allSnippets = editorState.pattern.snippets;
     final siblings = allSnippets.where((s) => s.id != snippet?.id).toList();
+    final blockMode = editorState.blockMode;
 
     navigator.pop(); // close the panel
 
     final result = await navigator.push<Snippet>(
       MaterialPageRoute(
-        builder: (_) => SnippetEditorScreen(snippet: snippet, siblingSnippets: siblings),
+        builder: (_) => SnippetEditorScreen(
+          snippet: snippet,
+          siblingSnippets: siblings,
+          initialBlockMode: blockMode,
+        ),
         fullscreenDialog: true,
       ),
     );
