@@ -246,13 +246,38 @@ class EditorToolbar extends ConsumerWidget {
                     ),
                     vDivider,
                   ],
-                  // Cancel + save-as-snippet — shown while paste preview is active
+                  // Cancel + opacity + save-as-snippet — shown while paste preview is active
                   if (state.drawingMode == DrawingMode.paste) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Opacity slider
+                          Tooltip(
+                            message: 'Paste opacity',
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.opacity, size: 16),
+                                SizedBox(
+                                  width: 80,
+                                  child: Slider(
+                                    value: state.pasteOpacity,
+                                    min: 0.05,
+                                    max: 1.0,
+                                    divisions: 19,
+                                    onChanged: (v) => notifier.setPasteOpacity(v),
+                                  ),
+                                ),
+                                Text(
+                                  '${(state.pasteOpacity * 100).round()}%',
+                                  style: theme.textTheme.labelSmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
                           if (showSaveAsSnippetButton && !state.clipboardFromSnippet)
                             Tooltip(
                               message: 'Save as snippet',

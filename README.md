@@ -23,7 +23,7 @@ A cross-stitch pattern editor for macOS, iOS, and Android. StitchX lets you desi
 - Navigate (pan without drawing)
 - Erase
 - Color picker (sample a stitch's thread)
-- Selection (rubber-band, copy, paste, delete regions)
+- Selection (rubber-band, copy, paste, delete regions); paste opacity slider blends colours with the canvas via CIE Lab nearest-DMC lookup
 
 ### Snippets
 - **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
@@ -94,7 +94,7 @@ Requires Flutter 3.41.4+.
 
 2. ~~**Resize snippets**~~ ✓ — "Resize…" in the snippet ⋮ menu. Three modes: *Clip* (trim stitches outside new bounds), *Scale* (proportionally remap all stitch positions), and *Expand* (change declared size, keep all stitches). Supports undo.
 
-3. **Paste opacity / colour blend** — set an opacity slider in paste mode. Ghost stitches render at the chosen opacity. On stamp, each stitch's colour is blended (via CIE Lab nearest-DMC lookup) with whatever is already at that cell, so the snippet colour interacts with the canvas underneath.
+3. ~~**Paste opacity / colour blend**~~ ✓ — opacity slider (5–100%) appears in the toolbar during paste mode. Ghost stitches render at the chosen opacity. On stamp at < 100%, each stitch's colour is linearly blended with the background (existing stitch or aida) then snapped to the nearest DMC colour via CIE Lab distance matching.
 
 4. ~~**Block view**~~ ✓ — toggle in the ⋮ overflow menu renders all stitches as solid coloured rectangles. Half stitches draw as half-cell rects, quarter stitches as quarter-cell rects. In stitch mode, symbols remain visible when zoomed in. In design mode, the view stays clean with no symbols.
 

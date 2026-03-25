@@ -232,8 +232,9 @@ mixin _DrawingMethods {
   // ─── Ghost stitches (paste / move preview) ──────────────────────────────────
 
   void _drawGhostStitches(
-      Canvas canvas, List<Stitch> stitches, Map<String, Thread> threadMap) {
-    canvas.saveLayer(null, Paint()..color = Colors.white.withValues(alpha: 0.55));
+      Canvas canvas, List<Stitch> stitches, Map<String, Thread> threadMap,
+      {double opacity = 1.0}) {
+    canvas.saveLayer(null, Paint()..color = Colors.white.withValues(alpha: opacity));
     for (final stitch in stitches) {
       final thread = threadMap[stitch.threadId];
       if (thread == null) continue;
@@ -871,6 +872,7 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
   final Rect? selectionRect;
   final List<Stitch>? ghostStitches;
   final List<Thread>? ghostThreads;
+  final double ghostOpacity;
   final List<Thread> patternThreads;
   final (int, int)? stylusHoverCell;
   final Color? stylusHoverColor;
@@ -890,6 +892,7 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     this.selectionRect,
     this.ghostStitches,
     this.ghostThreads,
+    this.ghostOpacity = 1.0,
     this.stylusHoverCell,
     this.stylusHoverColor,
   });
@@ -918,7 +921,7 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
         for (final t in patternThreads) t.dmcCode: t,
         if (ghostThreads != null) for (final t in ghostThreads!) t.dmcCode: t,
       };
-      _drawGhostStitches(canvas, ghostStitches!, threadMap);
+      _drawGhostStitches(canvas, ghostStitches!, threadMap, opacity: ghostOpacity);
     }
 
     // Selection rect
@@ -963,6 +966,7 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       old.selectionRect != selectionRect ||
       old.ghostStitches != ghostStitches ||
       old.ghostThreads != ghostThreads ||
+      old.ghostOpacity != ghostOpacity ||
       old.patternThreads != patternThreads ||
       old.stylusHoverCell != stylusHoverCell ||
       old.stylusHoverColor != stylusHoverColor;

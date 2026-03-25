@@ -9,6 +9,7 @@ import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../services/file_service.dart';
 import '../services/reference_image_service.dart';
+import '../services/sprite_importer.dart';
 
 enum DrawingTool {
   fullStitch,    // Full X stitch             [1]
@@ -53,6 +54,9 @@ class EditorState {
   final List<Thread>? clipboardThreads;
   /// True when the clipboard was loaded from a snippet (not a canvas selection).
   final bool clipboardFromSnippet;
+  /// Opacity applied when stamping paste contents (0.0–1.0). At < 1.0 each
+  /// stitch colour is blended with the background via CIE Lab nearest-DMC lookup.
+  final double pasteOpacity;
 
   // ── Stitch mode ───────────────────────────────────────────────────────────
   /// Whether stitch mode is active (canvas readonly, simplified toolbar).
@@ -98,6 +102,7 @@ class EditorState {
     this.clipboard,
     this.clipboardThreads,
     this.clipboardFromSnippet = false,
+    this.pasteOpacity = 1.0,
     this.stitchMode = false,
     this.blockMode = false,
     this.stitchViewMode = StitchViewMode.normal,
@@ -191,6 +196,7 @@ class EditorState {
     Object? clipboard = _sentinel,
     Object? clipboardThreads = _sentinel,
     bool? clipboardFromSnippet,
+    double? pasteOpacity,
     bool? stitchMode,
     bool? blockMode,
     StitchViewMode? stitchViewMode,
@@ -221,6 +227,7 @@ class EditorState {
       clipboard: clipboard == _sentinel ? this.clipboard : clipboard as List<Stitch>?,
       clipboardThreads: clipboardThreads == _sentinel ? this.clipboardThreads : clipboardThreads as List<Thread>?,
       clipboardFromSnippet: clipboardFromSnippet ?? this.clipboardFromSnippet,
+      pasteOpacity: pasteOpacity ?? this.pasteOpacity,
       stitchMode: stitchMode ?? this.stitchMode,
       blockMode: blockMode ?? this.blockMode,
       stitchViewMode: stitchViewMode ?? this.stitchViewMode,
@@ -525,13 +532,21 @@ class EditorNotifier extends Notifier<EditorState> {
     );
   }
 
+  /// Sets the opacity used when stamping pasted stitches (0.0–1.0).
+  void setPasteOpacity(double v) {
+    state = state.copyWith(pasteOpacity: v.clamp(0.0, 1.0));
+  }
+
   /// Stamps the clipboard contents at offset [dx],[dy] from origin (0,0).
   /// Any clipboard threads not yet in the pattern are added automatically.
+  /// When [pasteOpacity] < 1.0 each stitch colour is blended with the background
+  /// colour via CIE Lab nearest-DMC lookup before being placed.
   void commitPaste(int dx, int dy) {
     final clips = state.clipboard;
     if (clips == null || clips.isEmpty) return;
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
+    final opacity = state.pasteOpacity;
 
     // Add any clipboard threads not already in the pattern, resolving symbol conflicts
     var threads = [...state.pattern.threads];
@@ -544,8 +559,16 @@ class EditorNotifier extends Notifier<EditorState> {
     var stitches = [...state.pattern.stitches];
     for (final s in clips) {
       final placed = EditorState.offsetStitch(s, dx, dy);
-      if (_isInBounds(placed, maxX, maxY)) {
+      if (!_isInBounds(placed, maxX, maxY)) continue;
+
+      if (opacity >= 1.0) {
         stitches = _stitchesWithAdded(stitches, placed);
+      } else {
+        final result = _blendedStitch(placed, stitches, state.pattern.aidaColor, opacity, threads);
+        if (!threads.any((t) => t.dmcCode == result.thread.dmcCode)) {
+          threads.add(_resolveThreadSymbol(result.thread, threads));
+        }
+        stitches = _stitchesWithAdded(stitches, result.stitch);
       }
     }
     final newPattern = state.pattern.copyWith(stitches: stitches, threads: threads);
@@ -555,6 +578,46 @@ class EditorNotifier extends Notifier<EditorState> {
       isDirty: true,
       redoStack: [],
     );
+  }
+
+  /// Blends [s]'s thread colour with the background at its cell position and
+  /// returns a new stitch + thread snapped to the nearest DMC colour.
+  ({Stitch stitch, Thread thread}) _blendedStitch(
+    Stitch s,
+    List<Stitch> existing,
+    Color bgColor,
+    double opacity,
+    List<Thread> threads,
+  ) {
+    // Determine the background colour: existing stitch at cell, or aida.
+    Color base = bgColor;
+    final coords = EditorState.cellCoords(s);
+    if (coords != null) {
+      final at = existing.where((e) {
+        final c = EditorState.cellCoords(e);
+        return c != null && c.$1 == coords.$1 && c.$2 == coords.$2;
+      }).firstOrNull;
+      if (at != null) {
+        final t = threads.where((t) => t.dmcCode == at.threadId).firstOrNull;
+        if (t != null) base = t.color;
+      }
+    }
+
+    final src = threads.where((t) => t.dmcCode == s.threadId).firstOrNull;
+    final fg = src?.color ?? bgColor;
+
+    // Linear sRGB lerp then snap to nearest DMC via CIE Lab.
+    final br = (base.r * 255).round(), fgr = (fg.r * 255).round();
+    final bg = (base.g * 255).round(), fgg = (fg.g * 255).round();
+    final bb = (base.b * 255).round(), fgb = (fg.b * 255).round();
+    final r = (br + (fgr - br) * opacity).round().clamp(0, 255);
+    final g = (bg + (fgg - bg) * opacity).round().clamp(0, 255);
+    final b = (bb + (fgb - bb) * opacity).round().clamp(0, 255);
+    final dmc = SpriteImporter.matchPixel(r, g, b, 255);
+    if (dmc == null) return (stitch: s, thread: src ?? Thread(dmcCode: s.threadId, color: bgColor, name: ''));
+
+    final thread = Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
+    return (stitch: _withThreadId(s, dmc.code), thread: thread);
   }
 
   /// Moves the selected stitches by [dx],[dy] cells. Updates selectionRect too.
