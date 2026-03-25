@@ -56,7 +56,7 @@ case "$cmd" in
     ;;
 
   build)
-    $FLUTTER build macos --release "$@"
+    $FLUTTER build macos --release --dart-define-from-file=secrets.json "$@"
     echo "Built: build/macos/Build/Products/Release/stitchx.app"
     ;;
 
