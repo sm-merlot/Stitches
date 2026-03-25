@@ -12,7 +12,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - **Pattern canvas** — draw full stitches, half stitches (forward `/` and backward `\`), quarter stitches, and backstitches on a scalable grid
 - **DMC / Anchor color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers; toggle between DMC and Anchor codes in Settings
 - **Undo / redo** — full history stack (up to 200 steps); double-tap to undo on touch devices
-- **Zoom & pan** — pinch-to-zoom, scroll-wheel zoom, drag to pan; zoom range 0.1×–20×
+- **Zoom & pan** — pinch-to-zoom, scroll-wheel zoom, drag to pan, middle-click drag to pan; zoom range 0.1×–20×
 - **Resize canvas** — adjust pattern dimensions after creation
 - **Reference image overlay** — import a photo as a semi-transparent overlay on the canvas to trace from; adjustable opacity
 
@@ -26,11 +26,13 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - Erase
 - Color picker (sample a stitch's thread)
 - Selection (rubber-band, copy, paste, delete regions); paste opacity slider blends colours with the canvas via CIE Lab nearest-DMC lookup
+- **Fill colour** — 8-connected flood fill; fills all connected cells of the same colour (or empty) with the selected thread `[8]`
+- **Fill erase** — 8-connected flood fill erase; removes all connected full stitches of the same colour `[9]`
 
 ### Snippets
 - **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
-- **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / edit / delete
-- **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar
+- **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / flip / rotate / edit / delete
+- **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar; block mode toggle in the AppBar inherits the main canvas state
 - **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
 - **Sprite sheet importer** — open any sprite sheet image, select a tile or crop a region, pixel colours matched to nearest DMC thread via CIE Lab colour space; output saved directly as a snippet
 
@@ -64,7 +66,7 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 > The stitch demonstration is in beta. Some pattern shapes may produce incorrect or suboptimal stitch paths.
 
 ### View options
-- **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle in the ⋮ overflow menu. In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean.
+- **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle in the ⋮ overflow menu (main canvas) or the AppBar (snippet editor). In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean.
 - **Zoom-adaptive rendering** — below a zoom threshold, stitches automatically switch to block rendering; backstitches and grid lines fade out at very low zoom
 
 ### Platform & input
