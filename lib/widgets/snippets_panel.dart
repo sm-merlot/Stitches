@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/snippet.dart';
+import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../screens/snippet_editor_screen.dart';
 import 'snippet_thumbnail.dart';
@@ -69,7 +70,7 @@ class SnippetsPanel extends ConsumerWidget {
                         maxCrossAxisExtent: 120,
                         mainAxisSpacing: 12,
                         crossAxisSpacing: 12,
-                        childAspectRatio: 0.8,
+                        childAspectRatio: 0.72,
                       ),
                       itemCount: snippets.length,
                       itemBuilder: (context, i) => _SnippetCard(
@@ -283,6 +284,10 @@ class _SnippetCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          if (snippet.threads.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            _SnippetPaletteDots(threads: snippet.threads),
+          ],
         ],
       ),
     );
@@ -398,6 +403,42 @@ class _SnippetResizeDialogState extends State<_SnippetResizeDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         TextButton(onPressed: _submit, child: const Text('Resize')),
+      ],
+    );
+  }
+}
+
+// ─── Palette dots ─────────────────────────────────────────────────────────────
+
+class _SnippetPaletteDots extends StatelessWidget {
+  final List<Thread> threads;
+
+  const _SnippetPaletteDots({required this.threads});
+
+  @override
+  Widget build(BuildContext context) {
+    const maxDots = 12;
+    final shown = threads.take(maxDots).toList();
+    final overflow = threads.length - shown.length;
+
+    return Wrap(
+      spacing: 2,
+      runSpacing: 2,
+      children: [
+        ...shown.map((t) => Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: t.color,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black12, width: 0.5),
+              ),
+            )),
+        if (overflow > 0)
+          Text(
+            '+$overflow',
+            style: const TextStyle(fontSize: 7, color: Colors.grey),
+          ),
       ],
     );
   }
