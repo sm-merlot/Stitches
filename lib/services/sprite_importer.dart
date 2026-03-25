@@ -113,11 +113,17 @@ class SpriteImporter {
     final Map<int, Map<int, String>> grid = {}; // grid[sy][sx] = dmcCode
     final Map<String, int> codeCounts = {};
 
+    // Images without an alpha channel (e.g. 4-bit palette PNGs) return
+    // pixel.a == 0, which would falsely mark every pixel as transparent.
+    // Treat missing-alpha images as fully opaque.
+    final hasAlpha = image.numChannels >= 4;
+
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
         final match = matchPixel(
-          pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(), pixel.a.toInt(),
+          pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(),
+          hasAlpha ? pixel.a.toInt() : 255,
         );
         if (match == null) continue;
         final sx = px - x0;
