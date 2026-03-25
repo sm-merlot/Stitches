@@ -167,11 +167,27 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     }
   }
 
+  /// Prepares for showing a read-only viewer (PDF or image).
+  /// Closes the pattern editor and clears both viewer providers so only the
+  /// newly opened file is active.
+  void _switchToViewer() {
+    ref.read(editorProvider.notifier).closeFile();
+    ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(null);
+  }
+
+  /// Prepares for opening a pattern file.
+  /// Clears both viewer providers without touching the editor state.
+  void _switchToEditor() {
+    ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(null);
+  }
+
   Future<void> _openDriveImage(
       BuildContext context, DriveImageFile file) async {
     final localPath = await _downloadDriveImage(context, file);
     if (localPath == null || !context.mounted) return;
-    ref.read(pdfViewerProvider.notifier).set(null);
+    _switchToViewer();
     ref.read(imageViewerProvider.notifier).set(OpenImage(
       localPath: localPath,
       driveFileId: file.fileId,
@@ -237,9 +253,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
   Future<void> _openFile(BuildContext context, PatternFile file) async {
     if (file is LocalImageFile) {
-      ref.read(pdfViewerProvider.notifier).set(null);
-      ref.read(imageViewerProvider.notifier).set(
-          OpenImage(localPath: file.path));
+      _switchToViewer();
+      ref.read(imageViewerProvider.notifier).set(OpenImage(localPath: file.path));
       return;
     }
 
@@ -249,8 +264,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     }
 
     if (file is LocalPdfFile) {
-      ref.read(editorProvider.notifier).closeFile();
-      ref.read(imageViewerProvider.notifier).set(null);
+      _switchToViewer();
       ref.read(pdfViewerProvider.notifier).set(OpenPdf(localPath: file.path));
       return;
     }
@@ -262,7 +276,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final tempPath = '${tempDir.path}/${file.fileId}.pdf';
         final cached = File(tempPath);
 
-        ref.read(editorProvider.notifier).closeFile();
+        _switchToViewer();
 
         if (await cached.exists()) {
           ref.read(pdfViewerProvider.notifier).set(
@@ -270,8 +284,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         } else {
           ref.read(fileLoadingProvider.notifier).set(true);
           try {
-            final service =
-                await ref.read(googleDriveProvider.notifier).getService();
+            final service = await ref.read(googleDriveProvider.notifier).getService();
             if (!context.mounted) return;
             if (service == null) {
               _showError(context, 'Not connected to Google Drive.');
@@ -297,9 +310,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       try {
         final (pattern, path) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
-        // Clear any open PDF/image when switching to a pattern.
-        ref.read(pdfViewerProvider.notifier).set(null);
-        ref.read(imageViewerProvider.notifier).set(null);
+        _switchToEditor();
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
       } catch (e) {
         if (context.mounted) _showError(context, 'Could not open file: $e');
@@ -317,8 +328,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           // Load from cache immediately, then refresh from Drive in background.
           final (pattern, path) = await FileService.openFileFromPath(tempPath);
           if (!context.mounted) return;
-          // Clear any open PDF when switching to a pattern.
-          ref.read(pdfViewerProvider.notifier).set(null);
+          _switchToEditor();
           ref.read(editorProvider.notifier).loadPattern(
             pattern,
             filePath: path,
@@ -343,8 +353,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             if (!context.mounted) return;
             final (pattern, path) = await FileService.openFileFromPath(tempPath);
             if (!context.mounted) return;
-            // Clear any open PDF when switching to a pattern.
-            ref.read(pdfViewerProvider.notifier).set(null);
+            _switchToEditor();
             ref.read(editorProvider.notifier).loadPattern(
               pattern,
               filePath: path,
@@ -796,9 +805,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
                   tooltip: workspaceState.showPdfs ? 'Hide PDFs' : 'Show PDFs',
-                  onPressed: () => ref
-                      .read(workspaceProvider.notifier)
-                      .setShowPdfs(!workspaceState.showPdfs),
+                  onPressed: () {
+                    if (workspaceState.showPdfs) _switchToViewer();
+                    ref.read(workspaceProvider.notifier).setShowPdfs(!workspaceState.showPdfs);
+                  },
                 ),
                 IconButton(
                   icon: Icon(
@@ -811,9 +821,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
                   tooltip: workspaceState.showImages ? 'Hide images' : 'Show images',
-                  onPressed: () => ref
-                      .read(workspaceProvider.notifier)
-                      .setShowImages(!workspaceState.showImages),
+                  onPressed: () {
+                    if (workspaceState.showImages) _switchToViewer();
+                    ref.read(workspaceProvider.notifier).setShowImages(!workspaceState.showImages);
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.add, size: 16),
