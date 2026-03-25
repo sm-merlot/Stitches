@@ -56,6 +56,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Whether Ctrl is currently held — switches paste from single-stamp to multi-stamp.
   bool _ctrlHeld = false;
 
+  // Whether Shift is currently held — enables edge snapping in paste mode.
+  bool _shiftHeld = false;
+
   // ── Frame-coalesced rebuild ────────────────────────────────────────────────
   // Pointer events (pan, hover, pinch) can fire at 120 Hz. Calling setState on
   // every event saturates the UI thread and causes a backlog that freezes input
@@ -88,7 +91,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   bool _onHardwareKey(KeyEvent event) {
     final ctrl = HardwareKeyboard.instance.isControlPressed;
-    if (ctrl != _ctrlHeld) setState(() => _ctrlHeld = ctrl);
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+    if (ctrl != _ctrlHeld || shift != _shiftHeld) {
+      setState(() {
+        _ctrlHeld = ctrl;
+        _shiftHeld = shift;
+      });
+    }
     return false; // don't consume the event
   }
 
@@ -331,6 +340,90 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     );
   }
 
+  /// Like [_centeredPasteOffset] but, when Shift is held, snaps clipboard edges
+  /// to canvas boundaries and same-colour stitches. X and Y are snapped
+  /// independently so corner placement always works correctly.
+  ///
+  /// Canvas-edge snapping triggers based on **cursor proximity** to the canvas
+  /// edge (not clipboard-edge distance) so it works regardless of clipboard size.
+  (int, int) _pasteOffset(Offset cursorCell, List<Stitch> clips) {
+    final (cx, cy) = _centeredPasteOffset(cursorCell, clips);
+    if (!_shiftHeld || clips.isEmpty) return (cx, cy);
+
+    // Clipboard bounding box in stitch coords.
+    var clipMinX = double.infinity, clipMaxX = double.negativeInfinity;
+    var clipMinY = double.infinity, clipMaxY = double.negativeInfinity;
+    for (final s in clips) {
+      final (bx0, bx1, by0, by1) = _stitchBounds(s);
+      if (bx0 < clipMinX) clipMinX = bx0;
+      if (bx1 > clipMaxX) clipMaxX = bx1;
+      if (by0 < clipMinY) clipMinY = by0;
+      if (by1 > clipMaxY) clipMaxY = by1;
+    }
+
+    final state = ref.read(editorProvider);
+    final w = state.pattern.width.toDouble();
+    final h = state.pattern.height.toDouble();
+    const edgeThreshold = 3.0;
+
+    // Canvas-edge snapping: trigger when the cursor itself is within
+    // edgeThreshold cells of the canvas edge/centre.  This way, snapping to the
+    // top/left works just as well as right/bottom regardless of clipboard size.
+    double? snapDx, snapDy;
+    if (cursorCell.dx <= edgeThreshold) {
+      snapDx = -clipMinX;                              // clipboard left → canvas left
+    } else if (cursorCell.dx >= w - 1 - edgeThreshold) {
+      snapDx = w - clipMaxX;                           // clipboard right → canvas right
+    } else if ((cursorCell.dx - w / 2).abs() <= edgeThreshold) {
+      snapDx = w / 2 - (clipMinX + clipMaxX) / 2;     // clipboard centre → canvas centre
+    }
+    if (cursorCell.dy <= edgeThreshold) {
+      snapDy = -clipMinY;                              // clipboard top → canvas top
+    } else if (cursorCell.dy >= h - 1 - edgeThreshold) {
+      snapDy = h - clipMaxY;                           // clipboard bottom → canvas bottom
+    } else if ((cursorCell.dy - h / 2).abs() <= edgeThreshold) {
+      snapDy = h / 2 - (clipMinY + clipMaxY) / 2;     // clipboard centre → canvas centre
+    }
+
+    // Same-colour stitch snapping: butt clipboard edge flush against the nearest
+    // canvas stitch sharing a thread colour.  Only runs on axes not already
+    // locked to a canvas edge, and uses a distance-from-placed-edge threshold.
+    const stitchThreshold = 3.0;
+    final clipThreadIds = clips.map((s) => s.threadId).toSet();
+    if (snapDx == null || snapDy == null) {
+      final xCandidates = <double>[];
+      final yCandidates = <double>[];
+      for (final cs in state.pattern.stitches) {
+        if (!clipThreadIds.contains(cs.threadId)) continue;
+        final (bx0, bx1, by0, by1) = _stitchBounds(cs);
+        if (snapDx == null) {
+          xCandidates.add(bx1 - clipMinX); // clipboard left butts canvas stitch right
+          xCandidates.add(bx0 - clipMaxX); // clipboard right butts canvas stitch left
+        }
+        if (snapDy == null) {
+          yCandidates.add(by1 - clipMinY); // clipboard top butts canvas stitch bottom
+          yCandidates.add(by0 - clipMaxY); // clipboard bottom butts canvas stitch top
+        }
+      }
+      double? pickNearest(List<double> candidates, double current) {
+        double? best;
+        double bestDist = stitchThreshold;
+        for (final c in candidates) {
+          final d = (c - current).abs();
+          if (d <= bestDist) { bestDist = d; best = c; }
+        }
+        return best;
+      }
+      snapDx ??= pickNearest(xCandidates, cx.toDouble());
+      snapDy ??= pickNearest(yCandidates, cy.toDouble());
+    }
+
+    return (
+      (snapDx ?? cx.toDouble()).round(),
+      (snapDy ?? cy.toDouble()).round(),
+    );
+  }
+
   // ─── Selection helpers ────────────────────────────────────────────────────
 
   Rect _buildSelRect(Offset a, Offset b) {
@@ -403,7 +496,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final origin = _pasteOrigin;
         final clips = ref.read(editorProvider).clipboard;
         if (origin != null && clips != null) {
-          final (dx, dy) = _centeredPasteOffset(origin, clips);
+          final (dx, dy) = _pasteOffset(origin, clips);
           ref.read(editorProvider.notifier).commitPaste(dx, dy);
           if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
         }
@@ -576,7 +669,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         _pasteOrigin != null) {
       final clips = ref.read(editorProvider).clipboard;
       if (clips != null) {
-        final (dx, dy) = _centeredPasteOffset(_pasteOrigin!, clips);
+        final (dx, dy) = _pasteOffset(_pasteOrigin!, clips);
         ref.read(editorProvider.notifier).commitPaste(dx, dy);
         if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
       }
@@ -729,7 +822,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (state.drawingMode == DrawingMode.paste &&
         _pasteOrigin != null &&
         state.clipboard != null) {
-      final (dx, dy) = _centeredPasteOffset(_pasteOrigin!, state.clipboard!);
+      final (dx, dy) = _pasteOffset(_pasteOrigin!, state.clipboard!);
       ghostStitches =
           state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
     } else if (_isMovingSelection && state.selectionRect != null) {
@@ -822,8 +915,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       DrawingMode.colorPicker => SystemMouseCursors.none,
       DrawingMode.draw => SystemMouseCursors.none,
       DrawingMode.select => SystemMouseCursors.precise,
-      DrawingMode.paste =>
-        _ctrlHeld ? SystemMouseCursors.copy : SystemMouseCursors.cell,
+      DrawingMode.paste => _ctrlHeld
+          ? SystemMouseCursors.copy
+          : _shiftHeld
+              ? SystemMouseCursors.move
+              : SystemMouseCursors.cell,
     };
   }
 }

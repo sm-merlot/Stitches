@@ -486,6 +486,16 @@ class _PaletteDialog extends ConsumerWidget {
         defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.linux;
 
+    // Stitch counts per thread and overall total.
+    final stitchCounts = <String, int>{};
+    for (final s in state.pattern.stitches) {
+      stitchCounts[s.threadId] = (stitchCounts[s.threadId] ?? 0) + 1;
+    }
+    final totalStitches = state.pattern.stitches.length;
+
+    String fmtCount(int n) =>
+        n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
+
     return Dialog(
       clipBehavior: Clip.hardEdge,
       insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
@@ -500,7 +510,20 @@ class _PaletteDialog extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
               child: Row(
                 children: [
-                  Text('Threads in Pattern', style: theme.textTheme.titleMedium),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Threads in Pattern', style: theme.textTheme.titleMedium),
+                      if (threads.isNotEmpty)
+                        Text(
+                          '${threads.length} colour${threads.length == 1 ? '' : 's'} · ${fmtCount(totalStitches)} stitches',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                          ),
+                        ),
+                    ],
+                  ),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
@@ -525,13 +548,14 @@ class _PaletteDialog extends ConsumerWidget {
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: threads.length,
-                  itemExtent: 48,
+                  itemExtent: 60,
                   itemBuilder: (_, i) {
                     final t = threads[i];
                     final displayCode = useDmc
                         ? t.dmcCode
                         : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
                     final isSelected = state.selectedThreadId == t.dmcCode;
+                    final count = stitchCounts[t.dmcCode] ?? 0;
                     return ListTile(
                       dense: true,
                       leading: GestureDetector(
@@ -539,6 +563,14 @@ class _PaletteDialog extends ConsumerWidget {
                         child: _ThreadSwatch(thread: t, size: 24),
                       ),
                       title: Text('$displayCode – ${t.name}'),
+                      subtitle: Text(
+                        count == 0 ? 'unused' : '${fmtCount(count)} stitches',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: count == 0
+                              ? theme.colorScheme.error.withValues(alpha: 0.7)
+                              : theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                        ),
+                      ),
                       onLongPress: isDesktop
                           ? null
                           : () => _showReplaceDialog(context, t),
