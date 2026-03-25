@@ -11,6 +11,14 @@ class FolderTreeNode extends ConsumerStatefulWidget {
   final String? selectedPdfPath;
   /// Drive file ID of the currently open PDF (for selection highlight).
   final String? selectedDrivePdfId;
+  /// Local path of the currently open image (for selection highlight).
+  final String? selectedImagePath;
+  /// Drive file ID of the currently open image (for selection highlight).
+  final String? selectedDriveImageId;
+  /// Whether PDF files are shown in the tree.
+  final bool showPdfs;
+  /// Whether image files are shown in the tree.
+  final bool showImages;
   final String filter;
   final void Function(PatternFile) onFileTap;
   final void Function(StorageLocation, Offset) onFolderContextMenu;
@@ -25,6 +33,10 @@ class FolderTreeNode extends ConsumerStatefulWidget {
     required this.selectedDriveFileId,
     this.selectedPdfPath,
     this.selectedDrivePdfId,
+    this.selectedImagePath,
+    this.selectedDriveImageId,
+    this.showPdfs = true,
+    this.showImages = true,
     required this.filter,
     required this.onFileTap,
     required this.onFolderContextMenu,
@@ -135,6 +147,10 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
                         selectedDriveFileId: widget.selectedDriveFileId,
                         selectedPdfPath: widget.selectedPdfPath,
                         selectedDrivePdfId: widget.selectedDrivePdfId,
+                        selectedImagePath: widget.selectedImagePath,
+                        selectedDriveImageId: widget.selectedDriveImageId,
+                        showPdfs: widget.showPdfs,
+                        showImages: widget.showImages,
                         filter: widget.filter,
                         onFileTap: widget.onFileTap,
                         onFolderContextMenu: widget.onFolderContextMenu,
@@ -143,16 +159,22 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
                         startExpanded: false,
                       )),
 
-                  // Files (filtered) + optimistic pending files
+                  // Files (filtered by type, text filter) + optimistic pending files
                   ...[...contents.files, ...pendingFiles]
-                      .where((f) => filterLower.isEmpty ||
-                          f.displayName.toLowerCase().contains(filterLower))
+                      .where((f) {
+                        if (!widget.showPdfs && (f is LocalPdfFile || f is DrivePdfFile)) return false;
+                        if (!widget.showImages && (f is LocalImageFile || f is DriveImageFile)) return false;
+                        return filterLower.isEmpty ||
+                            f.displayName.toLowerCase().contains(filterLower);
+                      })
                       .map((file) => _FileTile(
                             file: file,
                             selectedFilePath: widget.selectedFilePath,
                             selectedDriveFileId: widget.selectedDriveFileId,
                             selectedPdfPath: widget.selectedPdfPath,
                             selectedDrivePdfId: widget.selectedDrivePdfId,
+                            selectedImagePath: widget.selectedImagePath,
+                            selectedDriveImageId: widget.selectedDriveImageId,
                             depth: widget.depth + 1,
                             onTap: () => widget.onFileTap(file),
                             onContextMenu: (pos) =>
@@ -175,6 +197,8 @@ class _FileTile extends StatelessWidget {
   final String? selectedDriveFileId;
   final String? selectedPdfPath;
   final String? selectedDrivePdfId;
+  final String? selectedImagePath;
+  final String? selectedDriveImageId;
   final int depth;
   final VoidCallback onTap;
   final void Function(Offset) onContextMenu;
@@ -185,6 +209,8 @@ class _FileTile extends StatelessWidget {
     required this.selectedDriveFileId,
     this.selectedPdfPath,
     this.selectedDrivePdfId,
+    this.selectedImagePath,
+    this.selectedDriveImageId,
     required this.depth,
     required this.onTap,
     required this.onContextMenu,
@@ -207,10 +233,17 @@ class _FileTile extends StatelessWidget {
     if (file is DrivePdfFile) {
       return (file as DrivePdfFile).fileId == selectedDrivePdfId;
     }
+    if (file is LocalImageFile) {
+      return (file as LocalImageFile).path == selectedImagePath;
+    }
+    if (file is DriveImageFile) {
+      return (file as DriveImageFile).fileId == selectedDriveImageId;
+    }
     return false;
   }
 
   bool get _isPdf => file is LocalPdfFile || file is DrivePdfFile;
+  bool get _isImage => file is LocalImageFile || file is DriveImageFile;
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +267,11 @@ class _FileTile extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                _isPdf ? Icons.picture_as_pdf_outlined : Icons.grid_4x4,
+                _isImage
+                    ? Icons.image_outlined
+                    : _isPdf
+                        ? Icons.picture_as_pdf_outlined
+                        : Icons.grid_4x4,
                 size: 14,
                 color: selected
                     ? theme.colorScheme.primary

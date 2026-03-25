@@ -27,6 +27,15 @@ class WorkspaceState {
   /// Whether the file sidebar is visible.
   final bool sidebarVisible;
 
+  /// Width of the file sidebar in logical pixels.
+  final double sidebarWidth;
+
+  /// Whether PDF files are shown in the folder tree.
+  final bool showPdfs;
+
+  /// Whether image files are shown in the folder tree.
+  final bool showImages;
+
   /// IDs of folders whose tree nodes are expanded in the sidebar.
   final Set<String> expandedFolderIds;
 
@@ -36,6 +45,9 @@ class WorkspaceState {
   const WorkspaceState({
     this.workspace,
     this.sidebarVisible = true,
+    this.sidebarWidth = 240,
+    this.showPdfs = true,
+    this.showImages = true,
     this.expandedFolderIds = const {},
     this.clipboard,
   });
@@ -44,6 +56,9 @@ class WorkspaceState {
     StorageLocation? workspace,
     bool clearWorkspace = false,
     bool? sidebarVisible,
+    double? sidebarWidth,
+    bool? showPdfs,
+    bool? showImages,
     Set<String>? expandedFolderIds,
     ClipboardEntry? clipboard,
     bool clearClipboard = false,
@@ -51,6 +66,9 @@ class WorkspaceState {
     return WorkspaceState(
       workspace: clearWorkspace ? null : workspace ?? this.workspace,
       sidebarVisible: sidebarVisible ?? this.sidebarVisible,
+      sidebarWidth: sidebarWidth ?? this.sidebarWidth,
+      showPdfs: showPdfs ?? this.showPdfs,
+      showImages: showImages ?? this.showImages,
       expandedFolderIds: expandedFolderIds ?? this.expandedFolderIds,
       clipboard: clearClipboard ? null : clipboard ?? this.clipboard,
     );
@@ -64,9 +82,25 @@ class WorkspaceState {
 class WorkspaceNotifier extends Notifier<WorkspaceState> {
   static const _keyPinnedLocations = 'pinned_locations';
   static const _keyLastWorkspace = 'last_workspace';
+  static const _keySidebarWidth = 'sidebar_width';
+  static const _keyShowPdfs = 'sidebar_show_pdfs';
+  static const _keyShowImages = 'sidebar_show_images';
 
   @override
-  WorkspaceState build() => const WorkspaceState();
+  WorkspaceState build() {
+    _loadPrefs();
+    return const WorkspaceState();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      sidebarWidth: prefs.getDouble(_keySidebarWidth) ?? 240,
+      showPdfs: prefs.getBool(_keyShowPdfs) ?? true,
+      showImages: prefs.getBool(_keyShowImages) ?? true,
+    );
+  }
 
   // -------------------------------------------------------------------------
   // Workspace
@@ -94,6 +128,25 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
 
   void setSidebarVisible(bool visible) {
     state = state.copyWith(sidebarVisible: visible);
+  }
+
+  Future<void> setSidebarWidth(double width) async {
+    final clamped = width.clamp(160.0, 480.0);
+    state = state.copyWith(sidebarWidth: clamped);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keySidebarWidth, clamped);
+  }
+
+  Future<void> setShowPdfs(bool value) async {
+    state = state.copyWith(showPdfs: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyShowPdfs, value);
+  }
+
+  Future<void> setShowImages(bool value) async {
+    state = state.copyWith(showImages: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyShowImages, value);
   }
 
   // -------------------------------------------------------------------------

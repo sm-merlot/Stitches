@@ -3,6 +3,14 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import '../models/storage_location.dart';
 
+const _kDriveImageExtensions = {
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'
+};
+bool _isDriveImage(String name) {
+  final lower = name.toLowerCase();
+  return _kDriveImageExtensions.any((ext) => lower.endsWith(ext));
+}
+
 /// Wrapper around the Google Drive API v3.
 class GoogleDriveService {
   final drive.DriveApi _api;
@@ -42,6 +50,13 @@ class GoogleDriveService {
         ));
       } else if (name.endsWith('.pdf')) {
         files.add(DrivePdfFile(
+          fileId: id,
+          name: name,
+          parentFolder: parent,
+          modified: file.modifiedTime,
+        ));
+      } else if (_isDriveImage(name)) {
+        files.add(DriveImageFile(
           fileId: id,
           name: name,
           parentFolder: parent,

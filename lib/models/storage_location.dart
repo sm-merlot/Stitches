@@ -156,6 +156,31 @@ class LocalPdfFile extends PatternFile {
   String toString() => 'LocalPdfFile($path)';
 }
 
+class LocalImageFile extends PatternFile {
+  final String path;
+  @override
+  final DateTime? modified;
+
+  const LocalImageFile({required this.path, this.modified});
+
+  @override
+  String get displayName => path.split(Platform.pathSeparator).last;
+
+  @override
+  StorageLocation get parent =>
+      LocalFolder(path.substring(0, path.lastIndexOf(Platform.pathSeparator)));
+
+  @override
+  bool operator ==(Object other) =>
+      other is LocalImageFile && other.path == path;
+
+  @override
+  int get hashCode => path.hashCode;
+
+  @override
+  String toString() => 'LocalImageFile($path)';
+}
+
 class DrivePdfFile extends PatternFile {
   final String fileId;
   final String name;
@@ -185,6 +210,37 @@ class DrivePdfFile extends PatternFile {
 
   @override
   String toString() => 'DrivePdfFile($name, $fileId)';
+}
+
+class DriveImageFile extends PatternFile {
+  final String fileId;
+  final String name;
+  final DriveFolder parentFolder;
+  @override
+  final DateTime? modified;
+
+  const DriveImageFile({
+    required this.fileId,
+    required this.name,
+    required this.parentFolder,
+    this.modified,
+  });
+
+  @override
+  String get displayName => name;
+
+  @override
+  StorageLocation get parent => parentFolder;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DriveImageFile && other.fileId == fileId;
+
+  @override
+  int get hashCode => fileId.hashCode;
+
+  @override
+  String toString() => 'DriveImageFile($name, $fileId)';
 }
 
 // ---------------------------------------------------------------------------
