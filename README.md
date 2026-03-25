@@ -108,4 +108,6 @@ Requires Flutter 3.41.4+.
 
 9. **Edge snapping for paste** — hold **Shift** while positioning a paste/snippet ghost to snap its edges to the canvas boundary (left, right, top, bottom, or centre). Separate from Ctrl (multi-stamp).
 
-10. ~~**Snippets from snippets**~~ ✓ — while editing a snippet, a `library_add_outlined` button appears in the toolbar (same slot as the snippets button on the main canvas) when sibling snippets exist. Tapping it opens a picker sheet showing all other snippets as thumbnails; tap one to enter paste mode with it as the clipboard on the snippet canvas.
+10. ~~**Snippets from snippets**~~ ✓
+
+11. **Cross-stitch file format import/export** — import and export as many third-party cross-stitch formats as possible. Candidates: Pattern Maker (`.xsd`), PC Stitch (`.pat`), KG Chart (`.chart`), Cross Stitch Professional (`.xsp`), MyPhotoStitch (`.mps`), Ursa Software (`.URF`), Stitch Art Easy (`.sae`), and the open XML-based formats WinStitch/MacStitch (`.oxs`) and Ink/Stitch (`.svg` with stitch metadata). Priority: OXS (documented open format) first, then PAT. — while editing a snippet, a `library_add_outlined` button appears in the toolbar (same slot as the snippets button on the main canvas) when sibling snippets exist. Tapping it opens a picker sheet showing all other snippets as thumbnails; tap one to enter paste mode with it as the clipboard on the snippet canvas.
