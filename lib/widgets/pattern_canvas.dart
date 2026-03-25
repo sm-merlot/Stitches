@@ -366,22 +366,33 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final h = state.pattern.height.toDouble();
     const edgeThreshold = 3.0;
 
-    // Canvas-edge snapping: trigger when the cursor itself is within
-    // edgeThreshold cells of the canvas edge/centre.  This way, snapping to the
-    // top/left works just as well as right/bottom regardless of clipboard size.
+    // Canvas-edge snapping: trigger when the clipboard EDGE would land within
+    // edgeThreshold cells of the canvas edge/centre (natural centered placement,
+    // before snapping).  This is more intuitive than cursor-proximity — the user
+    // just drags the snippet close to the edge and it locks on.  When both left
+    // and right (or top and bottom) are equidistant, left/top wins.
+    final cxd = cx.toDouble();
+    final cyd = cy.toDouble();
+    final leftDist    = (clipMinX + cxd).abs();
+    final rightDist   = (w - clipMaxX - cxd).abs();
+    final topDist     = (clipMinY + cyd).abs();
+    final bottomDist  = (h - clipMaxY - cyd).abs();
+    final centreXDist = ((clipMinX + clipMaxX) / 2 + cxd - w / 2).abs();
+    final centreYDist = ((clipMinY + clipMaxY) / 2 + cyd - h / 2).abs();
+
     double? snapDx, snapDy;
-    if (cursorCell.dx <= edgeThreshold) {
+    if (leftDist <= edgeThreshold && leftDist <= rightDist) {
       snapDx = -clipMinX;                              // clipboard left → canvas left
-    } else if (cursorCell.dx >= w - 1 - edgeThreshold) {
+    } else if (rightDist <= edgeThreshold) {
       snapDx = w - clipMaxX;                           // clipboard right → canvas right
-    } else if ((cursorCell.dx - w / 2).abs() <= edgeThreshold) {
+    } else if (centreXDist <= edgeThreshold) {
       snapDx = w / 2 - (clipMinX + clipMaxX) / 2;     // clipboard centre → canvas centre
     }
-    if (cursorCell.dy <= edgeThreshold) {
+    if (topDist <= edgeThreshold && topDist <= bottomDist) {
       snapDy = -clipMinY;                              // clipboard top → canvas top
-    } else if (cursorCell.dy >= h - 1 - edgeThreshold) {
+    } else if (bottomDist <= edgeThreshold) {
       snapDy = h - clipMaxY;                           // clipboard bottom → canvas bottom
-    } else if ((cursorCell.dy - h / 2).abs() <= edgeThreshold) {
+    } else if (centreYDist <= edgeThreshold) {
       snapDy = h / 2 - (clipMinY + clipMaxY) / 2;     // clipboard centre → canvas centre
     }
 
