@@ -7,13 +7,14 @@ import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/file_service.dart';
 import '../services/pdf_service.dart';
+import 'export_dialog.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, exportPdf, resize, patternInfo, referenceImage, blockMode }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, blockMode }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -289,8 +290,8 @@ class EditorScreen extends ConsumerWidget {
                   switch (action) {
                     case _MenuAction.saveAs:
                       _saveAs(context, ref);
-                    case _MenuAction.exportPdf:
-                      _exportPdf(context, state);
+                    case _MenuAction.export:
+                      showExportDialog(context, state.pattern);
                     case _MenuAction.resize:
                       _showResizeDialog(context, ref, state);
                     case _MenuAction.patternInfo:
@@ -348,10 +349,10 @@ class EditorScreen extends ConsumerWidget {
                         icon: Icons.save_as_outlined, label: 'Save As…'),
                   ),
                   const PopupMenuItem(
-                    value: _MenuAction.exportPdf,
+                    value: _MenuAction.export,
                     child: _MenuRow(
-                        icon: Icons.picture_as_pdf_outlined,
-                        label: 'Export PDF…'),
+                        icon: Icons.upload_outlined,
+                        label: 'Export…'),
                   ),
                 ],
               ),
@@ -381,6 +382,11 @@ class EditorScreen extends ConsumerWidget {
           onKeyEvent: handleKeys,
           child: Column(
             children: [
+              if (!state.isNativeFormat)
+                _ImportBanner(
+                  filePath: state.filePath!,
+                  onSaveAs: () => _saveAs(context, ref),
+                ),
               const Expanded(child: PatternCanvas()),
               const EditorToolbar(),
             ],
@@ -412,19 +418,6 @@ class EditorScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportPdf(BuildContext context, EditorState state) async {
-    try {
-      await PdfService.exportPattern(state.pattern);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('PDF export failed: $e'),
-              backgroundColor: Colors.red.shade700),
-        );
-      }
-    }
-  }
 
   Future<void> _showResizeDialog(
       BuildContext context, WidgetRef ref, EditorState state) async {
@@ -615,3 +608,50 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
+
+// ─── Import format banner ─────────────────────────────────────────────────────
+
+class _ImportBanner extends StatelessWidget {
+  final String filePath;
+  final VoidCallback onSaveAs;
+
+  const _ImportBanner({required this.filePath, required this.onSaveAs});
+
+  String get _ext {
+    final dot = filePath.lastIndexOf('.');
+    return dot >= 0 ? filePath.substring(dot + 1).toUpperCase() : '?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: cs.onTertiaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Imported \$_ext file — snippets require .stitchx format.',
+                style: TextStyle(fontSize: 12, color: cs.onTertiaryContainer),
+              ),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: cs.onTertiaryContainer,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: onSaveAs,
+              child: const Text('Save As .stitchx', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

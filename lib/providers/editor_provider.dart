@@ -91,6 +91,14 @@ class EditorState {
   /// open and after the open file is deleted.
   final bool isFileOpen;
 
+  /// True when the current file is in the native .stitchx format (or unsaved).
+  /// False when an imported foreign-format file (.oxs etc.) is open.
+  bool get isNativeFormat {
+    final path = filePath;
+    if (path == null) return true; // unsaved → will save as .stitchx
+    return path.endsWith('.stitchx');
+  }
+
   const EditorState({
     required this.pattern,
     this.filePath,

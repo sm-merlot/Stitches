@@ -21,6 +21,13 @@ bool _isImageFile(String path) {
   return _kImageExtensions.any((ext) => lower.endsWith(ext));
 }
 
+/// Third-party cross-stitch formats that can be imported.
+const _kImportableExtensions = {'.oxs'};
+bool _isImportableFile(String path) {
+  final lower = path.toLowerCase();
+  return _kImportableExtensions.any((ext) => lower.endsWith(ext));
+}
+
 Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
   final dir = Directory(folder.path);
   if (!await dir.exists()) return FolderContents.empty;
@@ -43,6 +50,12 @@ Future<FolderContents> _loadLocalFolder(LocalFolder folder) async {
     } else if (entity is File && _isPdfFile(entity.path)) {
       final stat = await entity.stat();
       files.add(LocalPdfFile(
+        path: entity.path,
+        modified: stat.modified,
+      ));
+    } else if (entity is File && _isImportableFile(entity.path)) {
+      final stat = await entity.stat();
+      files.add(LocalImportableFile(
         path: entity.path,
         modified: stat.modified,
       ));

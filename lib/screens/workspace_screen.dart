@@ -17,7 +17,9 @@ import '../providers/pdf_viewer_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../services/format_service.dart';
 import '../services/pdf_service.dart';
+import 'export_dialog.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
 import '../services/pdf_scanner.dart';
@@ -36,7 +38,7 @@ import 'pattern_scan_review_screen.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
-enum _MenuAction { exportPdf, resize, patternInfo, referenceImage, shortcuts, blockMode }
+enum _MenuAction { export, resize, patternInfo, referenceImage, shortcuts, blockMode }
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -159,8 +161,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final state = ref.read(editorProvider);
     try {
       if (state.filePath != null) {
-        await FileService.saveFile(
-            _patternWithEditorState(state), state.filePath!);
+        // If the open file is in a foreign format, write back in that format.
+        if (!state.isNativeFormat) {
+          final format = CrossStitchFormat.forPath(state.filePath!);
+          if (format != null) {
+            await FormatService.exportFile(
+                _patternWithEditorState(state), state.filePath!, format);
+          }
+        } else {
+          await FileService.saveFile(
+              _patternWithEditorState(state), state.filePath!);
+        }
         ref.read(editorProvider.notifier).markSaved();
         if (!quiet && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -168,16 +179,18 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           );
         }
 
-        // Auto-upload to Drive if this file is Drive-backed
-        final driveFileId = state.driveFileId;
-        final parentFolderId = state.driveParentFolderId;
-        if (driveFileId != null && parentFolderId != null) {
-          final notifier = ref.read(googleDriveProvider.notifier);
-          await notifier.uploadPattern(
-            _patternWithEditorState(state),
-            driveFileId,
-            parentFolderId,
-          );
+        // Auto-upload to Drive only for native .stitchx files.
+        if (state.isNativeFormat) {
+          final driveFileId = state.driveFileId;
+          final parentFolderId = state.driveParentFolderId;
+          if (driveFileId != null && parentFolderId != null) {
+            final notifier = ref.read(googleDriveProvider.notifier);
+            await notifier.uploadPattern(
+              _patternWithEditorState(state),
+              driveFileId,
+              parentFolderId,
+            );
+          }
         }
       } else {
         await _saveAs(context);
@@ -337,18 +350,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
   }
 
-  Future<void> _exportPdf(BuildContext context, EditorState state) async {
-    try {
-      await PdfService.exportPattern(state.pattern);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('PDF export failed: $e'),
-              backgroundColor: Colors.red.shade700),
-        );
-      }
-    }
+  Future<void> _showExportDialog(
+      BuildContext context, EditorState state) async {
+    await showExportDialog(context, state.pattern);
   }
 
   Future<void> _showResizeDialog(
@@ -1005,8 +1009,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 tooltip: 'More',
                 onSelected: (action) {
                   switch (action) {
-                    case _MenuAction.exportPdf:
-                      _exportPdf(context, editorState);
+                    case _MenuAction.export:
+                      _showExportDialog(context, editorState);
                     case _MenuAction.resize:
                       _showResizeDialog(context, editorState);
                     case _MenuAction.patternInfo:
@@ -1064,10 +1068,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   ),
                   const PopupMenuDivider(),
                   const PopupMenuItem(
-                    value: _MenuAction.exportPdf,
+                    value: _MenuAction.export,
                     child: _MenuRow(
-                        icon: Icons.picture_as_pdf_outlined,
-                        label: 'Export PDF…'),
+                        icon: Icons.upload_outlined,
+                        label: 'Export…'),
                   ),
                   const PopupMenuItem(
                     value: _MenuAction.shortcuts,
@@ -1130,10 +1134,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                               ? Focus(
                                   autofocus: true,
                                   onKeyEvent: handleKeys,
-                                  child: const Column(
+                                  child: Column(
                                     children: [
-                                      Expanded(child: PatternCanvas()),
-                                      EditorToolbar(),
+                                      if (!editorState.isNativeFormat)
+                                        _ImportBanner(
+                                          filePath: editorState.filePath!,
+                                          onSaveAs: () => _saveAs(context),
+                                        ),
+                                      const Expanded(child: PatternCanvas()),
+                                      const EditorToolbar(),
                                     ],
                                   ),
                                 )
@@ -1559,6 +1568,57 @@ class _ShortcutsDialog extends StatelessWidget {
           child: const Text('Close'),
         ),
       ],
+    );
+  }
+}
+
+// ─── Import format banner ────────────────────────────────────────────────────
+
+class _ImportBanner extends StatelessWidget {
+  final String filePath;
+  final VoidCallback onSaveAs;
+
+  const _ImportBanner({required this.filePath, required this.onSaveAs});
+
+  String get _ext {
+    final dot = filePath.lastIndexOf('.');
+    return dot >= 0 ? filePath.substring(dot + 1).toUpperCase() : '?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline,
+                size: 16, color: cs.onTertiaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Imported $_ext file — snippets and Drive sync require .stitchx format.',
+                style: TextStyle(
+                    fontSize: 12, color: cs.onTertiaryContainer),
+              ),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: cs.onTertiaryContainer,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: onSaveAs,
+              child: const Text('Save As .stitchx',
+                  style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

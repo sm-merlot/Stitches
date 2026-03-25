@@ -156,6 +156,85 @@ class LocalPdfFile extends PatternFile {
   String toString() => 'LocalPdfFile($path)';
 }
 
+/// A cross-stitch file in a third-party format (.oxs, etc.) on local storage.
+/// Loaded as a pattern but not in .stitchx format, so some features are gated.
+class LocalImportableFile extends PatternFile {
+  final String path;
+  @override
+  final DateTime? modified;
+
+  const LocalImportableFile({required this.path, this.modified});
+
+  @override
+  String get displayName {
+    final name = path.split(Platform.pathSeparator).last;
+    // Strip the last extension for display.
+    final dot = name.lastIndexOf('.');
+    return dot > 0 ? name.substring(0, dot) : name;
+  }
+
+  /// The file extension including dot, e.g. `.oxs`.
+  String get extension {
+    final name = path.split(Platform.pathSeparator).last;
+    final dot = name.lastIndexOf('.');
+    return dot >= 0 ? name.substring(dot).toLowerCase() : '';
+  }
+
+  @override
+  StorageLocation get parent =>
+      LocalFolder(path.substring(0, path.lastIndexOf(Platform.pathSeparator)));
+
+  @override
+  bool operator ==(Object other) =>
+      other is LocalImportableFile && other.path == path;
+
+  @override
+  int get hashCode => path.hashCode;
+
+  @override
+  String toString() => 'LocalImportableFile($path)';
+}
+
+/// A cross-stitch file in a third-party format (.oxs, etc.) on Google Drive.
+class DriveImportableFile extends PatternFile {
+  final String fileId;
+  final String name;
+  final DriveFolder parentFolder;
+  @override
+  final DateTime? modified;
+
+  const DriveImportableFile({
+    required this.fileId,
+    required this.name,
+    required this.parentFolder,
+    this.modified,
+  });
+
+  @override
+  String get displayName {
+    final dot = name.lastIndexOf('.');
+    return dot > 0 ? name.substring(0, dot) : name;
+  }
+
+  String get extension {
+    final dot = name.lastIndexOf('.');
+    return dot >= 0 ? name.substring(dot).toLowerCase() : '';
+  }
+
+  @override
+  StorageLocation get parent => parentFolder;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DriveImportableFile && other.fileId == fileId;
+
+  @override
+  int get hashCode => fileId.hashCode;
+
+  @override
+  String toString() => 'DriveImportableFile($name, $fileId)';
+}
+
 class LocalImageFile extends PatternFile {
   final String path;
   @override

@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
+import 'format_service.dart';
 
 class FileService {
   static const String _ext = 'stitchx';
@@ -11,11 +13,13 @@ class FileService {
   static bool get _isMobile =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
-  /// Pick a .stitchx file and return (pattern, filePath), or null if cancelled.
+  static const List<String> _openExtensions = [_ext, 'oxs'];
+
+  /// Pick a .stitchx or .oxs file; returns (pattern, filePath), or null if cancelled.
   static Future<(CrossStitchPattern, String)?> openFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: _isMobile ? FileType.any : FileType.custom,
-      allowedExtensions: _isMobile ? null : [_ext],
+      allowedExtensions: _isMobile ? null : _openExtensions,
       allowMultiple: false,
     );
     if (result == null || result.files.isEmpty) return null;
@@ -25,13 +29,36 @@ class FileService {
   }
 
   /// Load a pattern directly from a known file path.
+  /// Supports both .stitchx (YAML) and .oxs (XML) formats.
   static Future<(CrossStitchPattern, String)> openFileFromPath(
       String path) async {
     final file = File(path);
     if (!await file.exists()) throw Exception('File not found: $path');
-    final content = await file.readAsString();
+    if (path.toLowerCase().endsWith('.oxs')) {
+      final pattern = await FormatService.importFile(path);
+      return (pattern, path);
+    }
+    final bytes = await file.readAsBytes();
+    final content = _decodeBytes(bytes);
     final pattern = parseYamlString(content);
     return (pattern, path);
+  }
+
+  /// Decode file bytes as UTF-8, stripping a BOM if present.
+  /// Falls back to latin1 for files with non-UTF-8 byte sequences.
+  static String _decodeBytes(List<int> bytes) {
+    // Strip UTF-8 BOM (EF BB BF) if present.
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xEF &&
+        bytes[1] == 0xBB &&
+        bytes[2] == 0xBF) {
+      bytes = bytes.sublist(3);
+    }
+    try {
+      return utf8.decode(bytes);
+    } catch (_) {
+      return latin1.decode(bytes);
+    }
   }
 
   /// Open a known directory path and return all .stitchx file paths within it.
