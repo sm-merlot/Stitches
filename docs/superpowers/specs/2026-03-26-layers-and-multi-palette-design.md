@@ -126,7 +126,9 @@ Row([
 
 ```dart
 // New fields:
-String activeLayerId;        // which layer drawing targets
+String activeLayerId;          // which layer drawing targets
+bool showCompositeThreads;     // palette toggle: false = layer view, true = canvas view (session-only)
+Map<String, Thread>? compositeThreadCache;  // lazily computed; null = needs recompute
 ```
 
 **Getters to add:**
@@ -184,9 +186,43 @@ for (final layer in pattern.layers) {
 
 **Cache invalidation:** static painter re-caches on any `layer.visible` or `layer.opacity` change, in addition to existing triggers. Active layer switch does not require static repaint (only the overlay chip updates).
 
-### Stitch mode
+### Opacity & composite thread colours
 
-Layers panel is hidden entirely in stitch mode. Stitch mode renders all visible layers composited as usual.
+Layer opacity is a **design concept, not a stitching concept** — physical thread has no transparency. When any layer has opacity < 1.0, the visual colour of a cell is a blend of multiple layers, which may not correspond to any source thread. The app resolves this by computing a **composite thread** for each cell: blend all visible layers bottom-to-top at their opacities → nearest DMC via CIE Lab matching (same algorithm as `SpriteImporter.matchPixel`).
+
+Two distinct thread lists exist at all times:
+
+- **Source threads** — what's stored in each layer; what the user draws with
+- **Composite threads** — nearest DMC for each cell after blending all visible layers; what the user actually needs to stitch
+
+`pattern.threads` remains the union of all source threads across all layers (unchanged role — used for the drawing palette). Composite threads are computed lazily and cached until any layer changes.
+
+#### Edit mode — palette toggle
+
+The editor toolbar palette gains a small toggle chip with two states:
+
+- **Layer** (default) — shows threads for the active layer only; this is the drawing palette. Tapping a colour draws with that source thread.
+- **Canvas** — shows composite threads for the full visible canvas (read-only reference). No drawing action; purely informational.
+
+When a layer has opacity < 1.0 and the user is in **Layer** view, a subtle indicator appears near the palette: *"Opacity active — Canvas view shows resulting stitch colours."* Tapping it switches to Canvas view.
+
+#### Stitch mode
+
+Layers panel is hidden entirely in stitch mode. Stitch mode **always shows composite threads** — the thread list, stitch count, and progress tracking all use the composite result. The user never has to toggle; stitch mode simply presents the correct "what to buy and stitch" view automatically.
+
+#### Composite computation
+
+```dart
+// For each cell (x, y) in the canvas:
+// 1. Start with aida background colour
+// 2. For each visible layer, bottom to top:
+//    - Find stitch at (x, y) in that layer (if any)
+//    - Blend: result = Color.lerp(result, stitchColour, layer.opacity)
+// 3. Match blended colour → nearest DMC via SpriteImporter._rgbToLab / CIE Lab distance
+// 4. Build Map<(x,y), DmcCode> → group into composite thread list
+```
+
+Computation is O(width × height × layerCount) — fast for typical cross-stitch canvas sizes. Cached as `_compositeThreadCache` on `EditorState`; invalidated whenever any layer's stitches, visibility, or opacity changes.
 
 ---
 
