@@ -2,12 +2,13 @@
   "plan": "2026-03-26-canvas-layers.md",
   "feature": "Canvas Layers",
   "created": "2026-03-26",
+  "lastUpdated": "2026-03-26T00:00:00Z",
   "tasks": [
     {
       "id": 7,
       "planTask": 1,
       "subject": "Task 1: Layer model — create lib/models/layer.dart",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "create": ["lib/models/layer.dart"]
       },
@@ -18,7 +19,7 @@
       "id": 8,
       "planTask": 2,
       "subject": "Task 2: CrossStitchPattern — replace stitches with layers",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": ["lib/models/pattern.dart"]
       },
@@ -29,7 +30,7 @@
       "id": 9,
       "planTask": 3,
       "subject": "Task 3: file_service.dart — serialize layers",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": ["lib/services/file_service.dart"]
       },
@@ -40,7 +41,7 @@
       "id": 10,
       "planTask": 4,
       "subject": "Task 4: EditorState — add layer fields, remove pasteOpacity",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": ["lib/providers/editor_provider.dart"]
       },
@@ -51,7 +52,7 @@
       "id": 11,
       "planTask": 5,
       "subject": "Task 5: EditorNotifier — layer management methods + scoped drawing",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": ["lib/providers/editor_provider.dart"]
       },
@@ -62,7 +63,7 @@
       "id": 12,
       "planTask": 6,
       "subject": "Task 6: LayersPanel widget",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "create": ["lib/widgets/layers_panel.dart"]
       },
@@ -73,7 +74,7 @@
       "id": 13,
       "planTask": 7,
       "subject": "Task 7: Add LayersPanel to EditorScreen and WorkspaceScreen",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": ["lib/screens/editor_screen.dart", "lib/screens/workspace_screen.dart"]
       },
@@ -84,7 +85,7 @@
       "id": 14,
       "planTask": 8,
       "subject": "Task 8: Rendering — update CanvasStaticPainter for layers",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": ["lib/widgets/canvas_painter.dart", "lib/widgets/pattern_canvas.dart"]
       },
@@ -95,7 +96,7 @@
       "id": 15,
       "planTask": 9,
       "subject": "Task 9: Composite thread computation + palette toggle",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": ["lib/providers/editor_provider.dart", "lib/widgets/editor_toolbar.dart"]
       },
@@ -106,7 +107,7 @@
       "id": 16,
       "planTask": 10,
       "subject": "Task 10: Stitch mode shows composite threads; final cleanup",
-      "status": "pending",
+      "status": "completed",
       "files": {
         "modify": [
           "lib/screens/editor_screen.dart",
