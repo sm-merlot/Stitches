@@ -390,6 +390,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   final ui.Image? referenceImage;
   final double referenceOpacity;
   final bool referenceVisible;
+  /// Pre-computed composite threads keyed by `'$x,$y'`. When a cell has
+  /// overlapping layers (blend map), its symbol is drawn from here so the
+  /// symbol matches the composite/blended colour rather than a source layer.
+  final Map<String, Thread>? compositeCache;
 
   late final Map<String, Thread> _threadMap = {
     for (final t in pattern.threads) t.dmcCode: t,
@@ -408,6 +412,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
+    this.compositeCache,
   });
 
   @override
@@ -552,8 +557,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
           // Skip symbol if a higher visible layer has a FullStitch at this cell
           if (stitch is FullStitch && occluded.contains('${stitch.x},${stitch.y}')) continue;
-          final thread = _threadMap[stitch.threadId];
+
+          // For blended cells (multiple overlapping layers), use the composite
+          // thread's symbol so the symbol matches the displayed colour.
+          Thread? compositeThread;
+          if (compositeCache != null && stitch is FullStitch) {
+            compositeThread = compositeCache!['${stitch.x},${stitch.y}'];
+          }
+          final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || thread.symbol.isEmpty) continue;
+
           final c = _resolveStitchColor(stitch.threadId, thread.color,
               isCrossStitch: true);
           if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
@@ -932,7 +945,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.stitchFocusThreadId != stitchFocusThreadId ||
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||
-      old.referenceVisible != referenceVisible;
+      old.referenceVisible != referenceVisible ||
+      old.compositeCache != compositeCache;
 }
 
 // ─── Overlay layer ────────────────────────────────────────────────────────────

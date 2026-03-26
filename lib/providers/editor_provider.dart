@@ -549,13 +549,14 @@ class EditorNotifier extends Notifier<EditorState> {
     final dmc = SpriteImporter.matchPixel(r, g, b, 255);
     if (dmc == null) return;
 
-    // Ensure the composite thread is in the palette, then select it.
+    // Ensure the composite thread is in the palette (with a symbol), then select it.
     var pattern = s.pattern;
     if (!threadMap.containsKey(dmc.code)) {
-      pattern = pattern.copyWith(threads: [
-        ...pattern.threads,
+      final newThread = _resolveThreadSymbol(
         Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name),
-      ]);
+        pattern.threads,
+      );
+      pattern = pattern.copyWith(threads: [...pattern.threads, newThread]);
     }
     select(dmc.code, pattern);
   }
@@ -1692,8 +1693,30 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   void refreshCompositeCache() {
-    final cache = computeCompositeThreads(state.pattern);
-    state = state.copyWith(compositeThreadCache: cache);
+    final raw = computeCompositeThreads(state.pattern);
+    // Ensure every thread in the cache has a symbol so the palette and symbol
+    // renderer can display it correctly.
+    final patternMap = <String, Thread>{
+      for (final t in state.pattern.threads) t.dmcCode: t,
+    };
+    // Symbols already used by the pattern palette (must not duplicate).
+    final used = state.pattern.threads.map((t) => t.symbol).toSet();
+    final resolved = raw.map((cell, thread) {
+      // If the DMC code exists in the pattern palette, inherit its symbol.
+      final existing = patternMap[thread.dmcCode];
+      if (existing != null && existing.symbol.isNotEmpty) {
+        return MapEntry(cell, existing);
+      }
+      // Otherwise assign a fresh symbol not yet used by any palette or cache entry.
+      if (thread.symbol.isNotEmpty && !used.contains(thread.symbol)) {
+        used.add(thread.symbol);
+        return MapEntry(cell, thread);
+      }
+      final sym = _nextSymbol(used);
+      if (sym.isNotEmpty) used.add(sym);
+      return MapEntry(cell, thread.copyWith(symbol: sym));
+    });
+    state = state.copyWith(compositeThreadCache: resolved);
   }
 
   /// Applies [update] to the layer with [id] in [pattern] and returns the new pattern.
