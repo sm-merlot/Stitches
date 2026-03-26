@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
+import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
@@ -18,7 +19,6 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import '../services/format_service.dart';
-import '../services/pdf_service.dart';
 import 'export_dialog.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
@@ -1238,8 +1238,23 @@ class _StitchPalettePanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
     final useDmc = ref.watch(settingsProvider).useDmc;
-    final threads = state.pattern.threads;
     final theme = Theme.of(context);
+
+    // In stitch mode, always show composite threads.
+    final List<Thread> threads;
+    if (state.stitchMode && state.compositeThreadCache != null && state.compositeThreadCache!.isNotEmpty) {
+      final unique = <String, Thread>{};
+      for (final t in state.compositeThreadCache!.values) {
+        unique[t.dmcCode] = t;
+      }
+      // Also include source threads not in composite map (e.g. non-FullStitch only threads)
+      for (final t in state.pattern.threads) {
+        unique.putIfAbsent(t.dmcCode, () => t);
+      }
+      threads = unique.values.toList();
+    } else {
+      threads = state.pattern.threads;
+    }
 
     return Drawer(
       child: SafeArea(
