@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
+import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
 import 'format_service.dart';
@@ -125,7 +126,8 @@ class FileService {
 
     if (pattern.editorSelectedThreadId != null ||
         pattern.editorTool != null ||
-        pattern.editorStitchMode) {
+        pattern.editorStitchMode ||
+        pattern.editorActiveLayerId != null) {
       buf.writeln('editor:');
       if (pattern.editorSelectedThreadId != null) {
         buf.writeln(
@@ -136,6 +138,9 @@ class FileService {
       }
       if (pattern.editorStitchMode) {
         buf.writeln('  stitchMode: true');
+      }
+      if (pattern.editorActiveLayerId != null) {
+        buf.writeln('  activeLayer: ${_yamlStr(pattern.editorActiveLayerId!)}');
       }
     }
 
@@ -154,9 +159,9 @@ class FileService {
       buf.writeln('    symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
     }
 
-    buf.writeln('stitches:');
-    for (final s in pattern.stitches) {
-      _writeStitch(buf, s, indent: '  ');
+    buf.writeln('layers:');
+    for (final layer in pattern.layers) {
+      _writeLayer(buf, layer);
     }
 
     if (pattern.snippets.isNotEmpty) {
@@ -186,6 +191,17 @@ class FileService {
         buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
       case 'back':
         buf.writeln('$indent- {type: $type, x1: ${m['x1']}, y1: ${m['y1']}, x2: ${m['x2']}, y2: ${m['y2']}, thread: $thread}');
+    }
+  }
+
+  static void _writeLayer(StringBuffer buf, Layer layer) {
+    buf.writeln('  - id: ${_yamlStr(layer.id)}');
+    buf.writeln('    name: ${_yamlStr(layer.name)}');
+    buf.writeln('    visible: ${layer.visible}');
+    buf.writeln('    opacity: ${layer.opacity.toStringAsFixed(3)}');
+    buf.writeln('    stitches:');
+    for (final s in layer.stitches) {
+      _writeStitch(buf, s, indent: '      ');
     }
   }
 
