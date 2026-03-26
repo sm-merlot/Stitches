@@ -26,6 +26,7 @@ import '../services/pdf_scanner.dart';
 import 'pattern_scan_symbol_screen.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/file_sidebar.dart';
+import '../widgets/layers_panel.dart';
 import '../widgets/pattern_canvas.dart';
 import '../widgets/pdf_page_picker.dart';
 import '../widgets/image_viewer_panel.dart';
@@ -386,7 +387,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             _InfoRow('Name', p.name),
             _InfoRow('Size', '${p.width} × ${p.height} stitches'),
             _InfoRow('Threads', '${p.threads.length}'),
-            _InfoRow('Stitches', '${p.stitches.length}'),
+            _InfoRow('Stitches',
+                '${p.layers.fold(0, (sum, l) => sum + l.stitches.length)}'),
             if (state.filePath != null)
               _InfoRow(
                 'File',
@@ -1152,6 +1154,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                                       context, wsState.workspace),
                                 ),
                 ),
+                const LayersPanel(),
               ],
             ),
             // Blocking loading overlay (Drive download in progress)
