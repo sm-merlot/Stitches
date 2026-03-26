@@ -267,31 +267,6 @@ class EditorToolbar extends ConsumerWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Opacity slider
-                          Tooltip(
-                            message: 'Paste opacity',
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.opacity, size: 16),
-                                SizedBox(
-                                  width: 80,
-                                  child: Slider(
-                                    value: state.pasteOpacity,
-                                    min: 0.05,
-                                    max: 1.0,
-                                    divisions: 19,
-                                    onChanged: (v) => notifier.setPasteOpacity(v),
-                                  ),
-                                ),
-                                Text(
-                                  '${(state.pasteOpacity * 100).round()}%',
-                                  style: theme.textTheme.labelSmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 4),
                           if (showSaveAsSnippetButton && !state.clipboardFromSnippet)
                             Tooltip(
                               message: 'Save as snippet',
@@ -380,6 +355,34 @@ class EditorToolbar extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Layer / Canvas toggle chip — show when file is open and not in stitch mode
+                if (state.isFileOpen && !state.stitchMode) ...[
+                  const SizedBox(width: 4),
+                  // Info icon when any visible layer has opacity < 1.0
+                  if (state.pattern.layers.any((l) => l.visible && l.opacity < 0.99))
+                    Tooltip(
+                      message: 'Opacity active — Canvas view shows resulting stitch colours.',
+                      child: Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  const SizedBox(width: 2),
+                  ChoiceChip(
+                    label: Text(
+                      state.showCompositeThreads ? 'Canvas' : 'Layer',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    selected: state.showCompositeThreads,
+                    onSelected: (v) {
+                      notifier.setShowCompositeThreads(v);
+                      if (v) notifier.refreshCompositeCache();
+                    },
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                ],
                 _QuickSwatches(state: state),
                 _ColorSwatch(state: state),
                 vDivider,
@@ -498,7 +501,19 @@ class _PaletteDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
     final useDmc = ref.watch(settingsProvider).useDmc;
-    final threads = state.pattern.threads;
+    final displayThreads = state.showCompositeThreads
+        ? (() {
+            final cache = state.compositeThreadCache;
+            if (cache == null) return state.pattern.threads;
+            final seen = <String>{};
+            final result = <Thread>[];
+            for (final t in cache.values) {
+              if (seen.add(t.dmcCode)) result.add(t);
+            }
+            return result;
+          })()
+        : state.pattern.threads;
+    final threads = displayThreads;
     final theme = Theme.of(context);
     final isDesktop = defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows ||

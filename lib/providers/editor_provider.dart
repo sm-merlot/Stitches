@@ -11,6 +11,7 @@ import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../services/file_service.dart';
 import '../services/reference_image_service.dart';
+import '../services/sprite_importer.dart';
 
 enum DrawingTool {
   fullStitch,    // Full X stitch             [1]
@@ -460,7 +461,9 @@ class EditorNotifier extends Notifier<EditorState> {
       drawingMode: entering ? DrawingMode.pan : DrawingMode.draw,
       selectionRect: null,
       backstitchStartPoint: null,
+      showCompositeThreads: entering, // stitch mode always shows composite
     );
+    if (entering) refreshCompositeCache();
     _autoSaveStitchMode();
   }
 
@@ -1566,6 +1569,11 @@ class EditorNotifier extends Notifier<EditorState> {
     state = state.copyWith(showCompositeThreads: value);
   }
 
+  void refreshCompositeCache() {
+    final cache = computeCompositeThreads(state.pattern);
+    state = state.copyWith(compositeThreadCache: cache);
+  }
+
   /// Applies [update] to the layer with [id] in [pattern] and returns the new pattern.
   CrossStitchPattern _updateLayer(
       CrossStitchPattern pattern, String id, Layer Function(Layer) update) {
@@ -1576,3 +1584,64 @@ class EditorNotifier extends Notifier<EditorState> {
 
 final editorProvider =
     NotifierProvider<EditorNotifier, EditorState>(EditorNotifier.new);
+
+/// Computes composite threads for each cell that has stitches in multiple
+/// visible layers. Single-layer cells use their source thread directly.
+/// Returns a map from 'x,y' cell key to the composite [Thread].
+Map<String, Thread> computeCompositeThreads(CrossStitchPattern pattern) {
+  // Collect all visible FullStitch entries per cell, in layer order (bottom-to-top).
+  final cellLayers = <String, List<({Layer layer, FullStitch stitch})>>{};
+  for (final layer in pattern.layers) {
+    if (!layer.visible) continue;
+    for (final stitch in layer.stitches) {
+      if (stitch is! FullStitch) continue;
+      final key = '${stitch.x},${stitch.y}';
+      (cellLayers[key] ??= []).add((layer: layer, stitch: stitch));
+    }
+  }
+
+  final threadMap = <String, Thread>{
+    for (final t in pattern.threads) t.dmcCode: t,
+  };
+
+  final result = <String, Thread>{};
+
+  for (final entry in cellLayers.entries) {
+    final hits = entry.value;
+    if (hits.isEmpty) continue;
+
+    if (hits.length == 1) {
+      // Single layer: use source thread directly, ignore opacity for display
+      final t = threadMap[hits.first.stitch.threadId];
+      if (t != null) result[entry.key] = t;
+      continue;
+    }
+
+    // Multiple layers: blend bottom-to-top using each layer's opacity.
+    var blended = threadMap[hits.first.stitch.threadId]?.color;
+    if (blended == null) continue;
+
+    for (int i = 1; i < hits.length; i++) {
+      final hit = hits[i];
+      final layerColor = threadMap[hit.stitch.threadId]?.color;
+      if (layerColor == null) continue;
+      blended = Color.lerp(blended!, layerColor, hit.layer.opacity)!;
+    }
+
+    // Snap blended colour to nearest DMC via CIE Lab.
+    if (blended == null) continue;
+    final r = (blended.r * 255).round();
+    final g = (blended.g * 255).round();
+    final b = (blended.b * 255).round();
+    final dmc = SpriteImporter.matchPixel(r, g, b, 255);
+    if (dmc != null) {
+      result[entry.key] = Thread(
+        dmcCode: dmc.code,
+        color: dmc.color,
+        name: dmc.name,
+      );
+    }
+  }
+
+  return result;
+}
