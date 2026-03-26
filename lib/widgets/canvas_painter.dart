@@ -460,17 +460,31 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Below kNoGrid: grid lines add no information and just darken the view.
     const kNoGrid          = 1.5;
 
+    // ── Pre-compute blend map for overlapping FullStitches ──────────────────
+    // Only cells where multiple visible layers have a FullStitch are included.
+    // Lone stitches are NOT in the map — they render at full source color.
+    final blendMap = _buildBlendMap();
+
+    // ── Pre-compute occlusion sets for symbol rendering (Bug 2) ─────────────
+    // For each layer index i, the set of cell keys covered by FullStitches in
+    // any HIGHER visible layer (j > i). Symbols at those cells are skipped.
+    final upperFullStitchCells = <int, Set<String>>{};
+    for (int i = 0; i < pattern.layers.length; i++) {
+      final covered = <String>{};
+      for (int j = i + 1; j < pattern.layers.length; j++) {
+        if (!pattern.layers[j].visible) continue;
+        for (final s in pattern.layers[j].stitches) {
+          if (s is FullStitch) covered.add('${s.x},${s.y}');
+        }
+      }
+      upperFullStitchCells[i] = covered;
+    }
+
     // ── Stitches — iterate layers bottom to top ──────────────────────────────
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
-      final needsOpacity = layer.opacity < 1.0;
-      if (needsOpacity) {
-        canvas.saveLayer(
-            Offset.zero & size,
-            Paint()..color = Color.fromRGBO(255, 255, 255, layer.opacity));
-      }
       if (blockMode || effectivePx < kBlockThreshold) {
-        _drawLayerStitchesAsBlocks(canvas, layer, minCX, minCY, maxCX, maxCY);
+        _drawLayerStitchesAsBlocks(canvas, layer, blendMap, minCX, minCY, maxCX, maxCY);
       } else {
         for (final stitch in layer.stitches) {
           if (stitch is BackStitch) continue;
@@ -482,7 +496,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (c == null) continue;
           switch (stitch) {
             case FullStitch(:final x, :final y):
-              _drawFullStitch(canvas, x, y, c);
+              final blended = blendMap['$x,$y'];
+              _drawFullStitch(canvas, x, y, blended ?? c);
             case HalfStitch(:final x, :final y, :final isForward):
               _drawHalfStitch(canvas, x, y, isForward, c);
             case QuarterStitch(:final x, :final y, :final quadrant):
@@ -496,7 +511,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           }
         }
       }
-      if (needsOpacity) canvas.restore();
     }
 
     // ── Grid (batched paths, culled; skipped when cells are sub-pixel) ───────
@@ -526,12 +540,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Shown when zoomed in enough (>= 8 px/cell) AND:
     //   • blockMode off  → always show (both edit and stitch mode)
     //   • blockMode on   → only in stitch mode (edit mode keeps a clean block view)
+    // Symbols from lower layers are skipped when a higher layer has a FullStitch
+    // at the same cell (prevents lower-layer symbols bleeding through).
     if (effectivePx >= 8 && (!blockMode || stitchMode)) {
-      for (final layer in pattern.layers) {
+      for (int layerIdx = 0; layerIdx < pattern.layers.length; layerIdx++) {
+        final layer = pattern.layers[layerIdx];
         if (!layer.visible) continue;
+        final occluded = upperFullStitchCells[layerIdx]!;
         for (final stitch in layer.stitches) {
           if (stitch is BackStitch) continue;
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
+          // Skip symbol if a higher visible layer has a FullStitch at this cell
+          if (stitch is FullStitch && occluded.contains('${stitch.x},${stitch.y}')) continue;
           final thread = _threadMap[stitch.threadId];
           if (thread == null || thread.symbol.isEmpty) continue;
           final c = _resolveStitchColor(stitch.threadId, thread.color,
@@ -601,12 +621,47 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     canvas.drawPath(majorPath, majorPaint);
   }
 
+  // ── Blend map for overlapping FullStitches across layers ──────────────────
+  // For cells where multiple visible layers have a FullStitch, blends their
+  // colours bottom-to-top using each layer's opacity value.
+  // Lone-stitch cells are NOT included — callers fall back to source color.
+
+  Map<String, Color> _buildBlendMap() {
+    // Collect (color, layerOpacity) per cell, in layer order (bottom = index 0)
+    final cellStack = <String, List<({Color color, double opacity})>>{};
+    for (final layer in pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is! FullStitch) continue;
+        final thread = _threadMap[stitch.threadId];
+        if (thread == null) continue;
+        final key = '${stitch.x},${stitch.y}';
+        (cellStack[key] ??= [])
+            .add((color: thread.color, opacity: layer.opacity));
+      }
+    }
+
+    final result = <String, Color>{};
+    for (final entry in cellStack.entries) {
+      final stack = entry.value;
+      if (stack.length < 2) continue; // lone stitches excluded
+      var blended = stack.first.color;
+      for (int i = 1; i < stack.length; i++) {
+        blended = Color.lerp(blended, stack[i].color, stack[i].opacity)!;
+      }
+      result[entry.key] = blended;
+    }
+    return result;
+  }
+
   // ── Block-mode stitch rendering ────────────────────────────────────────────
   // Renders each occupied cell as a solid colour rect — used when zoomed out
   // far enough that stitch shapes are sub-pixel and too small to be meaningful.
   // Cells with multiple stitch layers use the topmost stitch's colour.
 
-  void _drawLayerStitchesAsBlocks(Canvas canvas, Layer layer, int minX, int minY, int maxX, int maxY) {
+  void _drawLayerStitchesAsBlocks(Canvas canvas, Layer layer,
+      Map<String, Color> blendMap,
+      int minX, int minY, int maxX, int maxY) {
     final halfCell    = cellSize * 0.5;
     final quarterCell = cellSize * 0.5; // same value; named for clarity below
 
@@ -621,43 +676,49 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
       if (c == null) continue;
 
-      final Rect? rect = switch (stitch) {
-        FullStitch(:final x, :final y) =>
-          Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize),
+      // For FullStitch, use the blended color if available (overlapping layers).
+      // For all other stitch types, use the source thread color.
+      Color effectiveColor = c;
+      Rect? rect;
+      switch (stitch) {
+        case FullStitch(:final x, :final y):
+          effectiveColor = blendMap['$x,$y'] ?? c;
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
 
         // HalfStitch (diagonal): isForward=true → `/` → right half of cell.
-        HalfStitch(:final x, :final y, isForward: true) =>
-          Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize),
-        HalfStitch(:final x, :final y, isForward: false) =>
-          Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize),
+        case HalfStitch(:final x, :final y, isForward: true):
+          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
+        case HalfStitch(:final x, :final y, isForward: false):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
 
         // HalfCrossStitch: occupies one explicit half of the cell.
-        HalfCrossStitch(:final x, :final y, half: HalfOrientation.left) =>
-          Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize),
-        HalfCrossStitch(:final x, :final y, half: HalfOrientation.right) =>
-          Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize),
-        HalfCrossStitch(:final x, :final y, half: HalfOrientation.top) =>
-          Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell),
-        HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom) =>
-          Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell),
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.left):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.right):
+          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.top):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell);
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell);
 
         // QuarterStitch / QuarterCrossStitch: one quarter of the cell.
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
-          Rect.fromLTWH(x * cellSize, y * cellSize, quarterCell, quarterCell),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
-          Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize, quarterCell, quarterCell),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
-          Rect.fromLTWH(x * cellSize, y * cellSize + quarterCell, quarterCell, quarterCell),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
-          Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize + quarterCell, quarterCell, quarterCell),
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, quarterCell, quarterCell);
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
+          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize, quarterCell, quarterCell);
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize + quarterCell, quarterCell, quarterCell);
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
+          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize + quarterCell, quarterCell, quarterCell);
 
-        _ => null,
-      };
-      if (rect != null) rects.add((rect, c));
+        default:
+          rect = null;
+      }
+      if (rect != null) rects.add((rect, effectiveColor));
     }
 
     // Batch rects by colour to minimise Paint object churn.

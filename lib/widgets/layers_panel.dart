@@ -54,6 +54,7 @@ class LayersPanel extends ConsumerWidget {
             // layers[last] = top, layers[0] = bottom.
             Expanded(
               child: ReorderableListView.builder(
+                buildDefaultDragHandles: false,
                 onReorder: (oldIndex, newIndex) {
                   // ReorderableListView gives visual indices (reversed from layer order).
                   final visualCount = layers.length;
@@ -94,6 +95,20 @@ class LayersPanel extends ConsumerWidget {
                     onDelete: layers.length > 1
                         ? () => notifier.deleteLayer(layer.id)
                         : null,
+                    dragHandle: ReorderableDragStartListener(
+                      index: visualIndex,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.grab,
+                        child: Icon(
+                          Icons.drag_handle,
+                          size: 16,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
                   );
                 },
               ),
@@ -121,6 +136,7 @@ class _LayerRow extends StatefulWidget {
   final VoidCallback onDuplicate;
   final VoidCallback? onMergeDown;
   final VoidCallback? onDelete;
+  final Widget? dragHandle;
 
   const _LayerRow({
     required super.key,
@@ -137,6 +153,7 @@ class _LayerRow extends StatefulWidget {
     required this.onDuplicate,
     this.onMergeDown,
     this.onDelete,
+    this.dragHandle,
   });
 
   @override
@@ -200,6 +217,9 @@ class _LayerRowState extends State<_LayerRow> {
             // ── Name row ──────────────────────────────────────────────────
             Row(
               children: [
+                // Drag handle — leftmost, separated from ⋮ menu on the right
+                if (widget.dragHandle != null) widget.dragHandle!,
+                if (widget.dragHandle != null) const SizedBox(width: 2),
                 // Eye toggle
                 GestureDetector(
                   onTap: widget.onToggleVisible,
