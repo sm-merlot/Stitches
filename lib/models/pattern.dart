@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
+import 'layer.dart';
 import 'snippet.dart';
 import 'stitch.dart';
 import 'thread.dart';
@@ -8,7 +10,7 @@ class CrossStitchPattern {
   final int width;
   final int height;
   final List<Thread> threads;
-  final List<Stitch> stitches;
+  final List<Layer> layers;
   final Color aidaColor;
 
   /// Last-saved editor state — which thread was active.
@@ -19,6 +21,9 @@ class CrossStitchPattern {
 
   /// Last-saved editor state — whether stitch mode was active.
   final bool editorStitchMode;
+
+  /// Last-saved editor state — which layer was active.
+  final String? editorActiveLayerId;
 
   /// Path to a reference image overlay (persisted with the file).
   final String? referenceImagePath;
@@ -34,21 +39,28 @@ class CrossStitchPattern {
     required this.width,
     required this.height,
     required this.threads,
-    required this.stitches,
+    required this.layers,
     this.aidaColor = Colors.white,
     this.editorSelectedThreadId,
     this.editorTool,
     this.editorStitchMode = false,
+    this.editorActiveLayerId,
     this.referenceImagePath,
     this.referenceOpacity = 0.5,
     this.snippets = const [],
   });
+
+  /// Flat union of all stitches across all layers. Used for backward-compat
+  /// call sites that haven't been migrated to layer-aware access yet.
+  List<Stitch> get stitches =>
+      layers.expand((l) => l.stitches).toList();
 
   factory CrossStitchPattern.empty({
     String name = 'New Pattern',
     int width = 30,
     int height = 30,
   }) {
+    final defaultLayer = Layer.create(name: 'Layer 1');
     return CrossStitchPattern(
       name: name,
       width: width,
@@ -56,8 +68,9 @@ class CrossStitchPattern {
       threads: const [
         Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black'),
       ],
-      stitches: const [],
+      layers: [defaultLayer],
       editorSelectedThreadId: '310',
+      editorActiveLayerId: defaultLayer.id,
     );
   }
 
@@ -66,11 +79,12 @@ class CrossStitchPattern {
     int? width,
     int? height,
     List<Thread>? threads,
-    List<Stitch>? stitches,
+    List<Layer>? layers,
     Color? aidaColor,
     Object? editorSelectedThreadId = _sentinel,
     Object? editorTool = _sentinel,
     bool? editorStitchMode,
+    Object? editorActiveLayerId = _sentinel,
     Object? referenceImagePath = _sentinel,
     double? referenceOpacity,
     List<Snippet>? snippets,
@@ -80,7 +94,7 @@ class CrossStitchPattern {
       width: width ?? this.width,
       height: height ?? this.height,
       threads: threads ?? this.threads,
-      stitches: stitches ?? this.stitches,
+      layers: layers ?? this.layers,
       aidaColor: aidaColor ?? this.aidaColor,
       editorSelectedThreadId: editorSelectedThreadId == _sentinel
           ? this.editorSelectedThreadId
@@ -89,6 +103,9 @@ class CrossStitchPattern {
           ? this.editorTool
           : editorTool as String?,
       editorStitchMode: editorStitchMode ?? this.editorStitchMode,
+      editorActiveLayerId: editorActiveLayerId == _sentinel
+          ? this.editorActiveLayerId
+          : editorActiveLayerId as String?,
       referenceImagePath: referenceImagePath == _sentinel
           ? this.referenceImagePath
           : referenceImagePath as String?,
@@ -117,6 +134,36 @@ class CrossStitchPattern {
   factory CrossStitchPattern.fromYaml(Map<String, dynamic> yaml) {
     final editor = yaml['editor'] as Map?;
     final aidaHex = yaml['aidaColor'] as String?;
+
+    // ── Layer migration ──────────────────────────────────────────────────────
+    // New format: 'layers:' key present.
+    // Old format: 'stitches:' key only → wrap in a single Layer named "Layer 1".
+    final layersYaml = yaml['layers'] as List?;
+    final stitchesYaml = yaml['stitches'] as List?;
+
+    final List<Layer> layers;
+    if (layersYaml != null) {
+      layers = layersYaml
+          .map((l) => Layer.fromYaml(Map<String, dynamic>.from(l as Map)))
+          .toList();
+    } else {
+      // Migration: old flat stitches → single layer
+      final stitches = stitchesYaml
+              ?.map((s) =>
+                  Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
+              .toList() ??
+          [];
+      layers = [
+        Layer(
+          id: const Uuid().v4(),
+          name: 'Layer 1',
+          visible: true,
+          opacity: 1.0,
+          stitches: stitches,
+        ),
+      ];
+    }
+
     return CrossStitchPattern(
       name: yaml['name'] as String,
       width: yaml['width'] as int,
@@ -125,18 +172,19 @@ class CrossStitchPattern {
       editorSelectedThreadId: editor?['selectedThread'] as String?,
       editorTool: editor?['tool'] as String?,
       editorStitchMode: editor?['stitchMode'] as bool? ?? false,
+      editorActiveLayerId: editor?['activeLayer'] as String?,
       referenceImagePath: yaml['overlay']?['imagePath'] as String?,
-      referenceOpacity: (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,
+      referenceOpacity:
+          (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,
       threads: (yaml['threads'] as List?)
-              ?.map((t) => Thread.fromYaml(Map<String, dynamic>.from(t as Map)))
+              ?.map((t) =>
+                  Thread.fromYaml(Map<String, dynamic>.from(t as Map)))
               .toList() ??
           [],
-      stitches: (yaml['stitches'] as List?)
-              ?.map((s) => Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
-              .toList() ??
-          [],
+      layers: layers,
       snippets: (yaml['snippets'] as List?)
-              ?.map((s) => Snippet.fromYaml(Map<String, dynamic>.from(s as Map)))
+              ?.map((s) =>
+                  Snippet.fromYaml(Map<String, dynamic>.from(s as Map)))
               .toList() ??
           [],
     );
