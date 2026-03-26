@@ -3,13 +3,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/symbols.dart';
+import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../services/file_service.dart';
 import '../services/reference_image_service.dart';
-import '../services/sprite_importer.dart';
 
 enum DrawingTool {
   fullStitch,    // Full X stitch             [1]
@@ -58,9 +58,16 @@ class EditorState {
   final List<Thread>? clipboardThreads;
   /// True when the clipboard was loaded from a snippet (not a canvas selection).
   final bool clipboardFromSnippet;
-  /// Opacity applied when stamping paste contents (0.0–1.0). At < 1.0 each
-  /// stitch colour is blended with the background via CIE Lab nearest-DMC lookup.
-  final double pasteOpacity;
+
+  // ── Layers ────────────────────────────────────────────────────────────────
+  /// The layer that drawing operations target.
+  final String activeLayerId;
+  /// When true, the toolbar palette shows composite (blended) threads for all
+  /// visible layers. When false, shows only the active layer's threads.
+  final bool showCompositeThreads;
+  /// Lazily computed composite thread map: cell key '${x},${y}' → nearest DMC
+  /// Thread after blending all visible layers. Null means cache is stale.
+  final Map<String, Thread>? compositeThreadCache;
 
   // ── Stitch mode ───────────────────────────────────────────────────────────
   /// Whether stitch mode is active (canvas readonly, simplified toolbar).
@@ -114,7 +121,9 @@ class EditorState {
     this.clipboard,
     this.clipboardThreads,
     this.clipboardFromSnippet = false,
-    this.pasteOpacity = 1.0,
+    this.activeLayerId = '',
+    this.showCompositeThreads = false,
+    this.compositeThreadCache,
     this.stitchMode = false,
     this.blockMode = false,
     this.stitchViewMode = StitchViewMode.normal,
@@ -131,22 +140,37 @@ class EditorState {
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
 
+  /// The layer currently targeted by drawing operations.
+  /// Falls back to first layer if activeLayerId is not found.
+  Layer get activeLayer {
+    return pattern.layers.firstWhere(
+      (l) => l.id == activeLayerId,
+      orElse: () => pattern.layers.first,
+    );
+  }
+
+  /// All layers that have visibility enabled.
+  Iterable<Layer> get visibleLayers => pattern.layers.where((l) => l.visible);
+
   /// Pattern with current editor state embedded, ready to be written to disk.
   CrossStitchPattern get patternForSave => pattern.copyWith(
         editorSelectedThreadId: selectedThreadId,
         editorTool: currentTool.name,
         editorStitchMode: stitchMode,
+        editorActiveLayerId: activeLayerId.isEmpty ? null : activeLayerId,
       );
 
   Thread? get selectedThread => selectedThreadId != null
       ? pattern.threadByCode(selectedThreadId!)
       : null;
 
-  /// Stitches that fall inside the current selectionRect.
+  /// Stitches in the current selectionRect, scoped to the active layer.
   List<Stitch> get selectedStitches {
     final rect = selectionRect;
     if (rect == null) return [];
-    return pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+    return activeLayer.stitches
+        .where((s) => EditorState.isStitchInRect(s, rect))
+        .toList();
   }
 
   /// Returns the (x, y) cell for cell-based stitches; null for BackStitch.
@@ -208,7 +232,9 @@ class EditorState {
     Object? clipboard = _sentinel,
     Object? clipboardThreads = _sentinel,
     bool? clipboardFromSnippet,
-    double? pasteOpacity,
+    String? activeLayerId,
+    bool? showCompositeThreads,
+    Object? compositeThreadCache = _sentinel,
     bool? stitchMode,
     bool? blockMode,
     StitchViewMode? stitchViewMode,
@@ -239,7 +265,11 @@ class EditorState {
       clipboard: clipboard == _sentinel ? this.clipboard : clipboard as List<Stitch>?,
       clipboardThreads: clipboardThreads == _sentinel ? this.clipboardThreads : clipboardThreads as List<Thread>?,
       clipboardFromSnippet: clipboardFromSnippet ?? this.clipboardFromSnippet,
-      pasteOpacity: pasteOpacity ?? this.pasteOpacity,
+      activeLayerId: activeLayerId ?? this.activeLayerId,
+      showCompositeThreads: showCompositeThreads ?? this.showCompositeThreads,
+      compositeThreadCache: compositeThreadCache == _sentinel
+          ? this.compositeThreadCache
+          : compositeThreadCache as Map<String, Thread>?,
       stitchMode: stitchMode ?? this.stitchMode,
       blockMode: blockMode ?? this.blockMode,
       stitchViewMode: stitchViewMode ?? this.stitchViewMode,
@@ -321,6 +351,8 @@ class EditorNotifier extends Notifier<EditorState> {
       driveFileId: driveFileId,
       driveParentFolderId: driveParentFolderId,
       isFileOpen: true,
+      activeLayerId: withSymbols.editorActiveLayerId ??
+          (withSymbols.layers.isNotEmpty ? withSymbols.layers.first.id : ''),
     );
 
     // Decode reference image asynchronously after state is set.
@@ -352,6 +384,7 @@ class EditorNotifier extends Notifier<EditorState> {
       selectedThreadId: threads.first.dmcCode,
       recentThreadIds: [threads.first.dmcCode],
       isFileOpen: true,
+      activeLayerId: seeded.layers.isNotEmpty ? seeded.layers.first.id : '',
     );
   }
 
@@ -502,7 +535,7 @@ class EditorNotifier extends Notifier<EditorState> {
     final rect = state.selectionRect;
     if (rect == null) return;
     final inSel =
-        state.pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+        state.activeLayer.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
     if (inSel.isEmpty) return;
     final clips = inSel
         .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
@@ -544,21 +577,13 @@ class EditorNotifier extends Notifier<EditorState> {
     );
   }
 
-  /// Sets the opacity used when stamping pasted stitches (0.0–1.0).
-  void setPasteOpacity(double v) {
-    state = state.copyWith(pasteOpacity: v.clamp(0.0, 1.0));
-  }
-
   /// Stamps the clipboard contents at offset [dx],[dy] from origin (0,0).
   /// Any clipboard threads not yet in the pattern are added automatically.
-  /// When [pasteOpacity] < 1.0 each stitch colour is blended with the background
-  /// colour via CIE Lab nearest-DMC lookup before being placed.
   void commitPaste(int dx, int dy) {
     final clips = state.clipboard;
     if (clips == null || clips.isEmpty) return;
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
-    final opacity = state.pasteOpacity;
 
     // Add any clipboard threads not already in the pattern, resolving symbol conflicts
     var threads = [...state.pattern.threads];
@@ -568,22 +593,14 @@ class EditorNotifier extends Notifier<EditorState> {
       }
     }
 
-    var stitches = [...state.pattern.stitches];
+    var stitches = [...state.activeLayer.stitches];
     for (final s in clips) {
       final placed = EditorState.offsetStitch(s, dx, dy);
       if (!_isInBounds(placed, maxX, maxY)) continue;
-
-      if (opacity >= 1.0) {
-        stitches = _stitchesWithAdded(stitches, placed);
-      } else {
-        final result = _blendedStitch(placed, stitches, state.pattern.aidaColor, opacity, threads);
-        if (!threads.any((t) => t.dmcCode == result.thread.dmcCode)) {
-          threads.add(_resolveThreadSymbol(result.thread, threads));
-        }
-        stitches = _stitchesWithAdded(stitches, result.stitch);
-      }
+      stitches = _stitchesWithAdded(stitches, placed);
     }
-    final newPattern = state.pattern.copyWith(stitches: stitches, threads: threads);
+    final newPattern = _patternWithActiveLayerStitches(
+        state.pattern.copyWith(threads: threads), stitches);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -592,57 +609,18 @@ class EditorNotifier extends Notifier<EditorState> {
     );
   }
 
-  /// Blends [s]'s thread colour with the background at its cell position and
-  /// returns a new stitch + thread snapped to the nearest DMC colour.
-  ({Stitch stitch, Thread thread}) _blendedStitch(
-    Stitch s,
-    List<Stitch> existing,
-    Color bgColor,
-    double opacity,
-    List<Thread> threads,
-  ) {
-    // Determine the background colour: existing stitch at cell, or aida.
-    Color base = bgColor;
-    final coords = EditorState.cellCoords(s);
-    if (coords != null) {
-      final at = existing.where((e) {
-        final c = EditorState.cellCoords(e);
-        return c != null && c.$1 == coords.$1 && c.$2 == coords.$2;
-      }).firstOrNull;
-      if (at != null) {
-        final t = threads.where((t) => t.dmcCode == at.threadId).firstOrNull;
-        if (t != null) base = t.color;
-      }
-    }
-
-    final src = threads.where((t) => t.dmcCode == s.threadId).firstOrNull;
-    final fg = src?.color ?? bgColor;
-
-    // Linear sRGB lerp then snap to nearest DMC via CIE Lab.
-    final br = (base.r * 255).round(), fgr = (fg.r * 255).round();
-    final bg = (base.g * 255).round(), fgg = (fg.g * 255).round();
-    final bb = (base.b * 255).round(), fgb = (fg.b * 255).round();
-    final r = (br + (fgr - br) * opacity).round().clamp(0, 255);
-    final g = (bg + (fgg - bg) * opacity).round().clamp(0, 255);
-    final b = (bb + (fgb - bb) * opacity).round().clamp(0, 255);
-    final dmc = SpriteImporter.matchPixel(r, g, b, 255);
-    if (dmc == null) return (stitch: s, thread: src ?? Thread(dmcCode: s.threadId, color: bgColor, name: ''));
-
-    final thread = Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
-    return (stitch: _withThreadId(s, dmc.code), thread: thread);
-  }
-
   /// Moves the selected stitches by [dx],[dy] cells. Updates selectionRect too.
   void moveSelection(int dx, int dy) {
     final rect = state.selectionRect;
     if (rect == null) return;
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
+    final activeStitches = state.activeLayer.stitches;
     final inSel =
-        state.pattern.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+        activeStitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
     if (inSel.isEmpty) return;
     var remaining =
-        state.pattern.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
+        activeStitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
     for (final s in inSel) {
       final moved = EditorState.offsetStitch(s, dx, dy);
       if (_isInBounds(moved, maxX, maxY)) {
@@ -655,7 +633,7 @@ class EditorNotifier extends Notifier<EditorState> {
       rect.width,
       rect.height,
     );
-    final newPattern = state.pattern.copyWith(stitches: remaining);
+    final newPattern = _patternWithActiveLayerStitches(state.pattern, remaining);
     state = state.copyWith(
       pattern: newPattern,
       selectionRect: newRect,
@@ -668,10 +646,11 @@ class EditorNotifier extends Notifier<EditorState> {
   void deleteSelection() {
     final rect = state.selectionRect;
     if (rect == null) return;
-    if (!state.pattern.stitches.any((s) => EditorState.isStitchInRect(s, rect))) return;
+    final activeStitches = state.activeLayer.stitches;
+    if (!activeStitches.any((s) => EditorState.isStitchInRect(s, rect))) return;
     final remaining =
-        state.pattern.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
-    final newPattern = state.pattern.copyWith(stitches: remaining);
+        activeStitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
+    final newPattern = _patternWithActiveLayerStitches(state.pattern, remaining);
     state = state.copyWith(
       pattern: newPattern,
       selectionRect: null,
@@ -737,11 +716,6 @@ class EditorNotifier extends Notifier<EditorState> {
       symbol: oldThread.symbol,
     );
 
-    // Remap stitches.
-    final stitches = state.pattern.stitches
-        .map((s) => s.threadId == oldDmcCode ? _withThreadId(s, newDmcCode) : s)
-        .toList();
-
     // Replace or merge threads.
     var threads = state.pattern.threads.toList();
     final oldIdx = threads.indexWhere((t) => t.dmcCode == oldDmcCode);
@@ -752,8 +726,16 @@ class EditorNotifier extends Notifier<EditorState> {
       threads[oldIdx] = newThread;
     }
 
+    // Remap stitches across all layers.
+    final remappedPattern = _patternWithAllLayersTransformed(
+      state.pattern.copyWith(threads: threads),
+      (stitches) => stitches
+          .map((s) => s.threadId == oldDmcCode ? _withThreadId(s, newDmcCode) : s)
+          .toList(),
+    );
+
     state = state.copyWith(
-      pattern: state.pattern.copyWith(threads: threads, stitches: stitches),
+      pattern: remappedPattern,
       selectedThreadId: state.selectedThreadId == oldDmcCode ? newDmcCode : state.selectedThreadId,
       undoStack: _buildUndoStack(),
       isDirty: true,
@@ -824,15 +806,12 @@ class EditorNotifier extends Notifier<EditorState> {
           bs.x2 >= 0 && bs.x2 <= newWidth && bs.y2 >= 0 && bs.y2 <= newHeight;
     }
 
-    final newStitches = old.stitches
-        .map((s) => EditorState.offsetStitch(s, dx, dy))
-        .where(inBounds)
-        .toList();
-
-    final newPattern = old.copyWith(
-      width: newWidth,
-      height: newHeight,
-      stitches: newStitches,
+    final newPattern = _patternWithAllLayersTransformed(
+      old.copyWith(width: newWidth, height: newHeight),
+      (stitches) => stitches
+          .map((s) => EditorState.offsetStitch(s, dx, dy))
+          .where(inBounds)
+          .toList(),
     );
 
     state = state.copyWith(
@@ -846,10 +825,10 @@ class EditorNotifier extends Notifier<EditorState> {
   void removeThread(String dmcCode) {
     final newThreads =
         state.pattern.threads.where((t) => t.dmcCode != dmcCode).toList();
-    final newStitches =
-        state.pattern.stitches.where((s) => s.threadId != dmcCode).toList();
-    final newPattern =
-        state.pattern.copyWith(threads: newThreads, stitches: newStitches);
+    final newPattern = _patternWithAllLayersTransformed(
+      state.pattern.copyWith(threads: newThreads),
+      (stitches) => stitches.where((s) => s.threadId != dmcCode).toList(),
+    );
     final newSelectedId = state.selectedThreadId == dmcCode
         ? (newThreads.isNotEmpty ? newThreads.first.dmcCode : null)
         : state.selectedThreadId;
@@ -862,12 +841,12 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void addStitch(Stitch stitch) {
     // Skip if identical stitch (same position AND same thread) already exists
-    final alreadyExists = state.pattern.stitches
+    final alreadyExists = state.activeLayer.stitches
         .any((s) => s == stitch && s.threadId == stitch.threadId);
     if (alreadyExists) return;
 
-    final newStitches = _stitchesWithAdded(state.pattern.stitches, stitch);
-    final newPattern = state.pattern.copyWith(stitches: newStitches);
+    final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
+    final newPattern = _patternWithActiveLayerStitches(state.pattern, newStitches);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -880,11 +859,11 @@ class EditorNotifier extends Notifier<EditorState> {
   /// with at least one endpoint inside the cell boundaries.
   void removeStitchesAt(int x, int y) {
     bool hit(Stitch s) => _stitchAtCell(s, x, y) || _backstitchInCell(s, x, y);
-    if (!state.pattern.stitches.any(hit)) return;
+    if (!state.activeLayer.stitches.any(hit)) return;
 
     final newStitches =
-        state.pattern.stitches.where((s) => !hit(s)).toList();
-    final newPattern = state.pattern.copyWith(stitches: newStitches);
+        state.activeLayer.stitches.where((s) => !hit(s)).toList();
+    final newPattern = _patternWithActiveLayerStitches(state.pattern, newStitches);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -905,9 +884,11 @@ class EditorNotifier extends Notifier<EditorState> {
     final p = state.pattern;
     if (startX < 0 || startX >= p.width || startY < 0 || startY >= p.height) return;
 
+    final layerStitches = state.activeLayer.stitches;
+
     // Determine the "seed" colour (null = empty cell).
     String? seedThreadId;
-    for (final s in p.stitches) {
+    for (final s in layerStitches) {
       if (s is FullStitch && s.x == startX && s.y == startY) {
         seedThreadId = s.threadId;
         break;
@@ -926,7 +907,7 @@ class EditorNotifier extends Notifier<EditorState> {
     // Build a fast lookup set of occupied cells (FullStitch only).
     // key = x * 100000 + y
     final Map<int, String> occupied = {};
-    for (final s in p.stitches) {
+    for (final s in layerStitches) {
       if (s is FullStitch) occupied[s.x * 100000 + s.y] = s.threadId;
     }
 
@@ -962,7 +943,7 @@ class EditorNotifier extends Notifier<EditorState> {
 
     if (toChange.isEmpty) return;
 
-    List<Stitch> newStitches = [...p.stitches];
+    List<Stitch> newStitches = [...layerStitches];
     if (erase) {
       final removeKeys = toChange.map((c) => key(c.$1, c.$2)).toSet();
       newStitches = newStitches.where((s) {
@@ -981,7 +962,7 @@ class EditorNotifier extends Notifier<EditorState> {
       }
     }
 
-    final newPattern = p.copyWith(stitches: newStitches);
+    final newPattern = _patternWithActiveLayerStitches(p, newStitches);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -992,11 +973,11 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void removeBackstitchAt(double x1, double y1, double x2, double y2) {
     final target = BackStitch(x1: x1, y1: y1, x2: x2, y2: y2, threadId: '');
-    if (!state.pattern.stitches.any((s) => s == target)) return;
+    if (!state.activeLayer.stitches.any((s) => s == target)) return;
 
     final newStitches =
-        state.pattern.stitches.where((s) => s != target).toList();
-    final newPattern = state.pattern.copyWith(stitches: newStitches);
+        state.activeLayer.stitches.where((s) => s != target).toList();
+    final newPattern = _patternWithActiveLayerStitches(state.pattern, newStitches);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -1060,6 +1041,28 @@ class EditorNotifier extends Notifier<EditorState> {
     // Remove any conflicting stitch at the same position/type, then add
     final filtered = existing.where((s) => s != newStitch).toList();
     return [...filtered, newStitch];
+  }
+
+  /// Returns a new [CrossStitchPattern] with [newStitches] applied to the active layer.
+  CrossStitchPattern _patternWithActiveLayerStitches(
+      CrossStitchPattern pattern, List<Stitch> newStitches) {
+    final activeId = state.activeLayerId;
+    final newLayers = pattern.layers.map((l) {
+      if (l.id == activeId || (activeId.isEmpty && l == pattern.layers.first)) {
+        return l.copyWith(stitches: newStitches);
+      }
+      return l;
+    }).toList();
+    return pattern.copyWith(layers: newLayers);
+  }
+
+  /// Returns a new [CrossStitchPattern] with [transform] applied to each layer's stitches.
+  CrossStitchPattern _patternWithAllLayersTransformed(
+      CrossStitchPattern pattern, List<Stitch> Function(List<Stitch>) transform) {
+    final newLayers = pattern.layers
+        .map((l) => l.copyWith(stitches: transform(l.stitches)))
+        .toList();
+    return pattern.copyWith(layers: newLayers);
   }
 
   bool _stitchAtCell(Stitch s, int cellX, int cellY) {
@@ -1356,7 +1359,7 @@ class EditorNotifier extends Notifier<EditorState> {
     } else {
       final rect = state.selectionRect;
       if (rect == null) return;
-      final inSel = state.pattern.stitches
+      final inSel = state.activeLayer.stitches
           .where((s) => EditorState.isStitchInRect(s, rect))
           .toList();
       if (inSel.isEmpty) return;
