@@ -210,19 +210,26 @@ When a layer has opacity < 1.0 and the user is in **Layer** view, a subtle indic
 
 Layers panel is hidden entirely in stitch mode. Stitch mode **always shows composite threads** — the thread list, stitch count, and progress tracking all use the composite result. The user never has to toggle; stitch mode simply presents the correct "what to buy and stitch" view automatically.
 
-#### Composite computation
+#### Composite computation — overlap-only model
+
+Layer opacity governs **layer-to-layer blending only**. The aida background colour is never factored into composite thread calculation. This matches the physical reality of cross-stitch: thread is opaque on fabric; opacity is purely a design concept for controlling how layers interact with each other.
 
 ```dart
 // For each cell (x, y) in the canvas:
-// 1. Start with aida background colour
-// 2. For each visible layer, bottom to top:
-//    - Find stitch at (x, y) in that layer (if any)
-//    - Blend: result = Color.lerp(result, stitchColour, layer.opacity)
-// 3. Match blended colour → nearest DMC via SpriteImporter._rgbToLab / CIE Lab distance
-// 4. Build Map<(x,y), DmcCode> → group into composite thread list
+// 1. Collect stitches from all visible layers at this cell, bottom to top
+// 2. If zero stitches → cell is aida (no thread required)
+// 3. If one stitch → use that layer's thread directly, regardless of layer opacity
+// 4. If multiple stitches → blend bottom to top using each layer's opacity:
+//      result = bottomThread.colour
+//      for each layer above (bottom to top):
+//        result = Color.lerp(result, layer.stitchColour, layer.opacity)
+//      → match blended colour → nearest DMC via CIE Lab distance
+// 5. Build Map<(x,y), DmcCode> → group into composite thread list
 ```
 
-Computation is O(width × height × layerCount) — fast for typical cross-stitch canvas sizes. Cached as `_compositeThreadCache` on `EditorState`; invalidated whenever any layer's stitches, visibility, or opacity changes.
+Note: the canvas always renders each cell as its nearest DMC snap — not a raw blended colour — so a lone stitch always displays as its own DMC colour regardless of the layer's opacity setting.
+
+Computation is O(width × height × layerCount). Cached as `_compositeThreadCache` on `EditorState`; invalidated whenever any layer's stitches, visibility, or opacity changes.
 
 ---
 
@@ -433,6 +440,16 @@ This lookup is O(n) on palette size; cached as a `Map<String, Thread>` per rende
 - **"Done" → "Close"** on dismiss buttons throughout the app (logged as improvement #12). Applies to `SpriteSheetScreen` (confirmed) and any other screen using `Text('Done')` as a dismiss action.
 - Both features are independent — either can be shipped without the other.
 - Layer count and palette count are not capped (no artificial limits enforced).
+
+### Paste opacity removal
+
+The existing **paste opacity** feature (`EditorState.pasteOpacity`, the opacity slider shown in the toolbar during paste mode) is **removed** as part of the layers feature. Layers make it redundant — the correct workflow is now: paste onto a new layer, then set that layer's opacity.
+
+Files to update:
+- `EditorState` — remove `pasteOpacity` field
+- `EditorNotifier.pasteClipboard` — remove `opacity` parameter and blending logic
+- `lib/widgets/editor_toolbar.dart` — remove paste opacity slider
+- `lib/widgets/canvas_painter.dart` — remove ghost opacity blending
 
 ---
 
