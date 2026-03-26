@@ -34,7 +34,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / flip / rotate / edit / delete
 - **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar; block mode toggle in the AppBar inherits the main canvas state
 - **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
-- **Sprite sheet importer** — open any sprite sheet image, select a tile or crop a region, pixel colours matched to nearest DMC thread via CIE Lab colour space; output saved directly as a snippet
+- **Sprite sheet importer** — open any sprite sheet image and crop a region; pixel colours matched to nearest DMC thread via CIE Lab colour space; palette simplification slider merges rare colours; output saved directly as a snippet
 
 ### Files & workspace
 - **File format** — patterns saved as `.stitchx` files (YAML internally)
@@ -91,6 +91,8 @@ Requires Flutter 3.41.4+.
 ## Roadmap
 
 - **Proton Drive sync**
+- **Canvas layers** — named layers on the main canvas with per-layer visibility toggle and opacity slider; layers panel on the right sidebar; stitches scoped to the active layer; composite thread view in stitch mode shows the actual DMC colours needed after blending; paste opacity slider removed (use a layer instead)
+- **Snippet multi-palette** — multiple named colour palettes per snippet, switchable via dots in the snippet panel or the palette manager in the snippet editor; sprite importer extended with a palette-strip selection tool to import multiple palettes directly from a sprite sheet
 
 ### Improvements & polish
 
@@ -114,4 +116,6 @@ Requires Flutter 3.41.4+.
 
 10. ~~**Snippets from snippets**~~ ✓
 
-11. **Cross-stitch file format import/export** — import and export as many third-party cross-stitch formats as possible. Candidates: Pattern Maker (`.xsd`), PC Stitch (`.pat`), KG Chart (`.chart`), Cross Stitch Professional (`.xsp`), MyPhotoStitch (`.mps`), Ursa Software (`.URF`), Stitch Art Easy (`.sae`), and the open XML-based formats WinStitch/MacStitch (`.oxs`) and Ink/Stitch (`.svg` with stitch metadata). Priority: OXS (documented open format) first, then PAT. — while editing a snippet, a `library_add_outlined` button appears in the toolbar (same slot as the snippets button on the main canvas) when sibling snippets exist. Tapping it opens a picker sheet showing all other snippets as thumbnails; tap one to enter paste mode with it as the clipboard on the snippet canvas.
+11. ~~**OXS import/export**~~ ✓ — import and export WinStitch/MacStitch `.oxs` format (open XML-based cross-stitch format). Further format support planned: Pattern Maker (`.xsd`), PC Stitch (`.pat`), and others.
+
+12. **Rename "Done" → "Close"** on dismiss buttons throughout the app (sprite importer and any other screen using "Done" as a close action).
