@@ -922,10 +922,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                     ? state.clipboardThreads
                     : null,
                 ghostOpacity: state.drawingMode == DrawingMode.paste
-                    ? state.pasteOpacity
+                    ? 0.55
                     : 1.0,
                 stylusHoverCell: _stylusHoverCell,
                 stylusHoverColor: state.selectedThread?.color,
+                activeLayerName: state.activeLayer.name,
+                stitchMode: state.stitchMode,
               ),
               size: Size.infinite,
             ),

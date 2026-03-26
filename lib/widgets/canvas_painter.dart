@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -459,34 +460,43 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Below kNoGrid: grid lines add no information and just darken the view.
     const kNoGrid          = 1.5;
 
-    // ── Stitches (culled) ────────────────────────────────────────────────────
-    // blockMode (user toggle) always renders solid rects regardless of zoom.
-    // Auto block kicks in below kBlockThreshold when blockMode is off.
-    if (blockMode || effectivePx < kBlockThreshold) {
-      _drawStitchesAsBlocks(canvas, minCX, minCY, maxCX, maxCY);
-    } else {
-      for (final stitch in pattern.stitches) {
-        if (stitch is BackStitch) continue;
-        if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
-        final thread = _threadMap[stitch.threadId];
-        if (thread == null) continue;
-        final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
-        if (c == null) continue;
-        switch (stitch) {
-          case FullStitch(:final x, :final y):
-            _drawFullStitch(canvas, x, y, c);
-          case HalfStitch(:final x, :final y, :final isForward):
-            _drawHalfStitch(canvas, x, y, isForward, c);
-          case QuarterStitch(:final x, :final y, :final quadrant):
-            _drawQuarterStitch(canvas, x, y, quadrant, c);
-          case HalfCrossStitch(:final x, :final y, :final half):
-            _drawHalfCrossStitch(canvas, x, y, half, c);
-          case QuarterCrossStitch(:final x, :final y, :final quadrant):
-            _drawQuarterCrossStitch(canvas, x, y, quadrant, c);
-          default:
-            break;
+    // ── Stitches — iterate layers bottom to top ──────────────────────────────
+    for (final layer in pattern.layers) {
+      if (!layer.visible) continue;
+      final needsOpacity = layer.opacity < 1.0;
+      if (needsOpacity) {
+        canvas.saveLayer(
+            Offset.zero & size,
+            Paint()..color = Color.fromRGBO(255, 255, 255, layer.opacity));
+      }
+      if (blockMode || effectivePx < kBlockThreshold) {
+        _drawLayerStitchesAsBlocks(canvas, layer, minCX, minCY, maxCX, maxCY);
+      } else {
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) continue;
+          if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
+          final thread = _threadMap[stitch.threadId];
+          if (thread == null) continue;
+          final c = _resolveStitchColor(stitch.threadId, thread.color,
+              isCrossStitch: true);
+          if (c == null) continue;
+          switch (stitch) {
+            case FullStitch(:final x, :final y):
+              _drawFullStitch(canvas, x, y, c);
+            case HalfStitch(:final x, :final y, :final isForward):
+              _drawHalfStitch(canvas, x, y, isForward, c);
+            case QuarterStitch(:final x, :final y, :final quadrant):
+              _drawQuarterStitch(canvas, x, y, quadrant, c);
+            case HalfCrossStitch(:final x, :final y, :final half):
+              _drawHalfCrossStitch(canvas, x, y, half, c);
+            case QuarterCrossStitch(:final x, :final y, :final quadrant):
+              _drawQuarterCrossStitch(canvas, x, y, quadrant, c);
+            default:
+              break;
+          }
         }
       }
+      if (needsOpacity) canvas.restore();
     }
 
     // ── Grid (batched paths, culled; skipped when cells are sub-pixel) ───────
@@ -494,30 +504,40 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       _drawGrid(canvas, minCX, minCY, maxCX, maxCY);
     }
 
-    // ── Backstitches (drawn on top of grid; invisible below threshold) ───────
+    // ── Backstitches (all visible layers) ────────────────────────────────────
     if (effectivePx >= kNoBackstitch) {
-      for (final stitch in pattern.stitches) {
-        if (stitch is! BackStitch) continue;
-        if (!_backstichInRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
-        final thread = _threadMap[stitch.threadId];
-        if (thread == null) continue;
-        final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: false);
-        if (c != null) _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
+      for (final layer in pattern.layers) {
+        if (!layer.visible) continue;
+        for (final stitch in layer.stitches) {
+          if (stitch is! BackStitch) continue;
+          if (!_backstichInRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
+          final thread = _threadMap[stitch.threadId];
+          if (thread == null) continue;
+          final c = _resolveStitchColor(stitch.threadId, thread.color,
+              isCrossStitch: false);
+          if (c != null) {
+            _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
+          }
+        }
       }
     }
 
-    // ── Stitch symbols ───────────────────────────────────────────────────────
+    // ── Stitch symbols (all visible layers) ──────────────────────────────────
     // Shown when zoomed in enough (>= 8 px/cell) AND:
     //   • blockMode off  → always show (both edit and stitch mode)
     //   • blockMode on   → only in stitch mode (edit mode keeps a clean block view)
     if (effectivePx >= 8 && (!blockMode || stitchMode)) {
-      for (final stitch in pattern.stitches) {
-        if (stitch is BackStitch) continue;
-        if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
-        final thread = _threadMap[stitch.threadId];
-        if (thread == null || thread.symbol.isEmpty) continue;
-        final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
-        if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
+      for (final layer in pattern.layers) {
+        if (!layer.visible) continue;
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) continue;
+          if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
+          final thread = _threadMap[stitch.threadId];
+          if (thread == null || thread.symbol.isEmpty) continue;
+          final c = _resolveStitchColor(stitch.threadId, thread.color,
+              isCrossStitch: true);
+          if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
+        }
       }
     }
 
@@ -586,14 +606,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // far enough that stitch shapes are sub-pixel and too small to be meaningful.
   // Cells with multiple stitch layers use the topmost stitch's colour.
 
-  void _drawStitchesAsBlocks(Canvas canvas, int minX, int minY, int maxX, int maxY) {
+  void _drawLayerStitchesAsBlocks(Canvas canvas, Layer layer, int minX, int minY, int maxX, int maxY) {
     final halfCell    = cellSize * 0.5;
     final quarterCell = cellSize * 0.5; // same value; named for clarity below
 
     // Collect (rect, color) for each visible stitch.
     // Full stitches → full cell; halves → half cell; quarters → quarter cell.
     final List<(Rect, Color)> rects = [];
-    for (final stitch in pattern.stitches) {
+    for (final stitch in layer.stitches) {
       if (stitch is BackStitch) continue;
       if (!_inCellRange(stitch, minX, minY, maxX, maxY)) continue;
       final thread = _threadMap[stitch.threadId];
@@ -876,6 +896,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
   final List<Thread> patternThreads;
   final (int, int)? stylusHoverCell;
   final Color? stylusHoverColor;
+  final String? activeLayerName;
+  final bool stitchMode;
 
   CanvasOverlayPainter({
     required this.cellSize,
@@ -895,6 +917,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     this.ghostOpacity = 1.0,
     this.stylusHoverCell,
     this.stylusHoverColor,
+    this.activeLayerName,
+    this.stitchMode = false,
   });
 
   @override
@@ -949,6 +973,41 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       if (isDrawCursor) _drawPencilCursor(canvas, cursorScreenPos!);
       if (isColorPickerCursor) _drawEyedropperCursor(canvas, cursorScreenPos!);
     }
+
+    // ── Active layer chip ───────────────────────────────────────────────────
+    if (!stitchMode && activeLayerName != null) {
+      _drawActiveLayerChip(canvas, size, activeLayerName!);
+    }
+  }
+
+  void _drawActiveLayerChip(Canvas canvas, Size size, String layerName) {
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+    const textStyle = TextStyle(
+      fontSize: 11,
+      color: Colors.white,
+      fontWeight: FontWeight.w500,
+    );
+    final label = 'Drawing on: $layerName';
+    final tp = TextPainter(
+      text: TextSpan(text: label, style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    const left = 8.0;
+    const bottom = 8.0;
+    final chipRect = Rect.fromLTWH(
+      left,
+      size.height - bottom - tp.height - padding.vertical,
+      tp.width + padding.horizontal,
+      tp.height + padding.vertical,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chipRect, const Radius.circular(4)),
+      Paint()..color = const Color(0xCC1A1A2E),
+    );
+    tp.paint(canvas,
+        Offset(chipRect.left + padding.left, chipRect.top + padding.top));
   }
 
   @override
@@ -969,5 +1028,7 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       old.ghostOpacity != ghostOpacity ||
       old.patternThreads != patternThreads ||
       old.stylusHoverCell != stylusHoverCell ||
-      old.stylusHoverColor != stylusHoverColor;
+      old.stylusHoverColor != stylusHoverColor ||
+      old.activeLayerName != activeLayerName ||
+      old.stitchMode != stitchMode;
 }
