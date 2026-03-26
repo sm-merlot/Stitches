@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
 import '../providers/editor_provider.dart';
@@ -84,7 +86,15 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             width: s.width,
             height: s.height,
             threads: s.threads,
-            stitches: s.stitches,
+            layers: [
+              Layer(
+                id: const Uuid().v4(),
+                name: 'Layer 1',
+                visible: true,
+                opacity: 1.0,
+                stitches: s.stitches,
+              ),
+            ],
           ),
           filePath: null,
         );
