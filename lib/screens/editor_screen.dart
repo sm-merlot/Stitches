@@ -9,6 +9,7 @@ import '../services/file_service.dart';
 import '../services/pdf_service.dart';
 import 'export_dialog.dart';
 import '../widgets/editor_toolbar.dart';
+import '../widgets/layers_panel.dart';
 import '../widgets/pattern_canvas.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
@@ -380,15 +381,23 @@ class EditorScreen extends ConsumerWidget {
         body: Focus(
           autofocus: true,
           onKeyEvent: handleKeys,
-          child: Column(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!state.isNativeFormat)
-                _ImportBanner(
-                  filePath: state.filePath!,
-                  onSaveAs: () => _saveAs(context, ref),
+              Expanded(
+                child: Column(
+                  children: [
+                    if (!state.isNativeFormat)
+                      _ImportBanner(
+                        filePath: state.filePath!,
+                        onSaveAs: () => _saveAs(context, ref),
+                      ),
+                    const Expanded(child: PatternCanvas()),
+                    const EditorToolbar(),
+                  ],
                 ),
-              const Expanded(child: PatternCanvas()),
-              const EditorToolbar(),
+              ),
+              const LayersPanel(),
             ],
           ),
         ),
@@ -450,7 +459,8 @@ class EditorScreen extends ConsumerWidget {
             _InfoRow('Name', p.name),
             _InfoRow('Size', '${p.width} × ${p.height} stitches'),
             _InfoRow('Threads', '${p.threads.length}'),
-            _InfoRow('Stitches', '${p.stitches.length}'),
+            _InfoRow('Stitches',
+                '${p.layers.fold(0, (sum, l) => sum + l.stitches.length)}'),
             if (state.filePath != null)
               _InfoRow(
                 'File',
