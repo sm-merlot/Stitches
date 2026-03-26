@@ -390,11 +390,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   final ui.Image? referenceImage;
   final double referenceOpacity;
   final bool referenceVisible;
-  /// Pre-computed composite threads keyed by `'$x,$y'`. When a cell has
-  /// overlapping layers (blend map), its symbol is drawn from here so the
-  /// symbol matches the composite/blended colour rather than a source layer.
-  final Map<String, Thread>? compositeCache;
-
   late final Map<String, Thread> _threadMap = {
     for (final t in pattern.threads) t.dmcCode: t,
   };
@@ -412,8 +407,25 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
-    this.compositeCache,
   });
+
+  /// Returns the palette thread whose colour is closest to [target] by
+  /// squared RGB distance. Fast: only searches the pattern's own threads.
+  Thread? _nearestThread(Color target) {
+    Thread? best;
+    double bestDist = double.infinity;
+    for (final t in _threadMap.values) {
+      final dr = t.color.r - target.r;
+      final dg = t.color.g - target.g;
+      final db = t.color.b - target.b;
+      final dist = dr * dr + dg * dg + db * db;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = t;
+      }
+    }
+    return best;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -558,11 +570,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           // Skip symbol if a higher visible layer has a FullStitch at this cell
           if (stitch is FullStitch && occluded.contains('${stitch.x},${stitch.y}')) continue;
 
-          // For blended cells (multiple overlapping layers), use the composite
-          // thread's symbol so the symbol matches the displayed colour.
+          // For blended cells, use the nearest palette thread symbol to the
+          // blended colour so the symbol always matches what the user sees.
           Thread? compositeThread;
-          if (compositeCache != null && stitch is FullStitch) {
-            compositeThread = compositeCache!['${stitch.x},${stitch.y}'];
+          if (stitch is FullStitch) {
+            final blended = blendMap['${stitch.x},${stitch.y}'];
+            if (blended != null) compositeThread = _nearestThread(blended);
           }
           final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || thread.symbol.isEmpty) continue;
@@ -945,8 +958,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.stitchFocusThreadId != stitchFocusThreadId ||
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||
-      old.referenceVisible != referenceVisible ||
-      old.compositeCache != compositeCache;
+      old.referenceVisible != referenceVisible;
 }
 
 // ─── Overlay layer ────────────────────────────────────────────────────────────

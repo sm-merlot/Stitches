@@ -124,7 +124,7 @@ class EditorState {
     this.clipboardThreads,
     this.clipboardFromSnippet = false,
     this.activeLayerId = '',
-    this.showCompositeThreads = false,
+    this.showCompositeThreads = true,
     this.compositeThreadCache,
     this.stitchMode = false,
     this.blockMode = false,
@@ -439,14 +439,11 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   /// Picks the thread colour at [x],[y] and selects it, switching back to draw
-  /// mode. Respects the current Canvas/Layer toggle:
-  ///
-  /// - **Layer mode** (`!showCompositeThreads`): picks from the active layer's
-  ///   stitches only.
-  /// - **Canvas mode** (`showCompositeThreads`): computes the visual/blended
-  ///   colour across all visible layers (same logic as [_buildBlendMap] in the
-  ///   painter) and snaps to the nearest DMC thread, adding it to the palette
-  ///   if it isn't already there.
+  /// Picks the visually displayed (composite/blended) colour at [x],[y] and
+  /// selects it, switching back to draw mode. Always picks what the user sees:
+  /// for cells with overlapping layers the blended result is snapped to the
+  /// nearest DMC thread (added to the palette if not already there); for
+  /// non-overlapping cells the source thread is selected directly.
   void pickColorAtCell(int x, int y) {
     final s = state;
     final threadMap = <String, Thread>{
@@ -485,19 +482,7 @@ class EditorNotifier extends Notifier<EditorState> {
       );
     }
 
-    if (!s.showCompositeThreads) {
-      // ── Layer mode: active layer only ──────────────────────────────────────
-      for (final stitch in s.activeLayer.stitches.reversed) {
-        final tid = stitchThreadId(stitch);
-        if (tid != null) {
-          select(tid);
-          return;
-        }
-      }
-      return;
-    }
-
-    // ── Canvas mode: compute composite colour ────────────────────────────────
+    // ── Always compute the composite/visible colour ──────────────────────────
     // Collect visible FullStitch entries at this cell, bottom-to-top.
     final hits = <({Color color, double opacity, String threadId})>[];
     for (final layer in s.pattern.layers) {
