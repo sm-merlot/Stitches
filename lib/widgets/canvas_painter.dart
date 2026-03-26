@@ -6,6 +6,7 @@ import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor_provider.dart' show StitchViewMode;
+import '../services/sprite_importer.dart';
 
 // ─── Shared drawing primitives ────────────────────────────────────────────────
 // Both CanvasStaticPainter and CanvasOverlayPainter mix this in.
@@ -652,14 +653,24 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // colours bottom-to-top using each layer's opacity value.
   // Lone-stitch cells are NOT included — callers fall back to source color.
 
+  // ── Static cache for the blend map ──────────────────────────────────────────
+  // The blend map is keyed by pattern object identity so it is only recomputed
+  // when the pattern actually changes (stitches, opacity, visibility) — NOT on
+  // every pan/zoom frame, which would make CIE Lab matching too expensive.
+  static CrossStitchPattern? _blendMapPattern;
+  static Map<String, Color> _blendMapCache = {};
+
   Map<String, Color> _buildBlendMap() {
-    // Collect (color, layerOpacity) per cell, in layer order (bottom = index 0)
+    if (identical(_blendMapPattern, pattern)) return _blendMapCache;
+    _blendMapPattern = pattern;
+
+    final threadMap = _threadMap;
     final cellStack = <String, List<({Color color, double opacity})>>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is! FullStitch) continue;
-        final thread = _threadMap[stitch.threadId];
+        final thread = threadMap[stitch.threadId];
         if (thread == null) continue;
         final key = '${stitch.x},${stitch.y}';
         (cellStack[key] ??= [])
@@ -675,8 +686,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       for (int i = 1; i < stack.length; i++) {
         blended = Color.lerp(blended, stack[i].color, stack[i].opacity)!;
       }
-      result[entry.key] = blended;
+      // Snap to nearest DMC thread so the displayed colour is always a real
+      // thread colour — opacity produces discrete jumps, not a smooth gradient.
+      final r = (blended.r * 255).round();
+      final g = (blended.g * 255).round();
+      final b = (blended.b * 255).round();
+      final dmc = SpriteImporter.matchPixel(r, g, b, 255);
+      result[entry.key] = dmc?.color ?? blended;
     }
+
+    _blendMapCache = result;
     return result;
   }
 
