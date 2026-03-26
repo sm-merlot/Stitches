@@ -1221,6 +1221,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ),
               )
             : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
         endDrawer: (editorState.isFileOpen && openPdf == null) ? const _StitchPalettePanel() : null,
         endDrawerEnableOpenDragGesture: false,
       ),

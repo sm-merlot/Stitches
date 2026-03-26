@@ -421,6 +421,7 @@ class EditorScreen extends ConsumerWidget {
                 ),
               )
             : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
         endDrawer: const _StitchPalettePanel(),
         endDrawerEnableOpenDragGesture: false,
       ),

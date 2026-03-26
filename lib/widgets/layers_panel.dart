@@ -3,13 +3,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/layer.dart';
 import '../providers/editor_provider.dart';
 
-/// Fixed-width (170dp) right-side panel that lists the pattern's layers.
+/// Resizable right-side panel that lists the pattern's layers.
 /// Visible only in design mode; returns [SizedBox.shrink] in stitch mode.
-class LayersPanel extends ConsumerWidget {
+class LayersPanel extends ConsumerStatefulWidget {
   const LayersPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LayersPanel> createState() => _LayersPanelState();
+}
+
+class _LayersPanelState extends ConsumerState<LayersPanel> {
+  double _width = 170;
+  static const double _minWidth = 140;
+  static const double _maxWidth = 350;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
     if (state.stitchMode || !state.isFileOpen) return const SizedBox.shrink();
 
@@ -17,105 +26,128 @@ class LayersPanel extends ConsumerWidget {
     final theme = Theme.of(context);
     final layers = state.pattern.layers;
 
-    return SizedBox(
-      width: 170,
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border(
-            left: BorderSide(color: theme.dividerColor, width: 1),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Drag-to-resize handle on the left edge of the panel
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeColumn,
+          child: GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              setState(() {
+                // Dragging left increases panel width (panel is on right side)
+                _width = (_width - details.delta.dx).clamp(_minWidth, _maxWidth);
+              });
+            },
+            child: Container(
+              width: 5,
+              color: Colors.transparent,
+              child: VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: theme.dividerColor,
+              ),
+            ),
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Header ──────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 4, 4),
-              child: Row(
-                children: [
-                  Text('Layers',
-                      style: theme.textTheme.labelMedium
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 18),
-                    tooltip: 'New layer',
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: notifier.addLayer,
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // ── Layer list ──────────────────────────────────────────────────
-            // Displayed top-to-bottom: visually topmost layer first.
-            // layers[last] = top, layers[0] = bottom.
-            Expanded(
-              child: ReorderableListView.builder(
-                buildDefaultDragHandles: false,
-                onReorder: (oldIndex, newIndex) {
-                  // ReorderableListView gives visual indices (reversed from layer order).
-                  final visualCount = layers.length;
-                  // Visual index 0 = layers.last (topmost layer)
-                  final fromLayerIdx = visualCount - 1 - oldIndex;
-                  int toLayerIdx = visualCount - 1 - newIndex;
-                  if (newIndex > oldIndex) toLayerIdx += 1;
-                  // Move using delta
-                  final delta = toLayerIdx - fromLayerIdx;
-                  if (delta != 0) {
-                    notifier.moveLayer(layers[fromLayerIdx].id, delta);
-                  }
-                },
-                itemCount: layers.length,
-                itemBuilder: (context, visualIndex) {
-                  // Visual index 0 = topmost layer (layers.last)
-                  final layerIndex = layers.length - 1 - visualIndex;
-                  final layer = layers[layerIndex];
-                  final isActive = layer.id == state.activeLayerId;
-                  final isBottom = layerIndex == 0;
-                  return _LayerRow(
-                    key: ValueKey(layer.id),
-                    layer: layer,
-                    isActive: isActive,
-                    isBottom: isBottom,
-                    isOnly: layers.length == 1,
-                    onTap: () => notifier.setActiveLayer(layer.id),
-                    onToggleVisible: () => notifier.toggleLayerVisible(layer.id),
-                    onOpacityChanged: (v) => notifier.setLayerOpacity(layer.id, v),
-                    onRename: (name) => notifier.renameLayer(layer.id, name),
-                    onMoveUp: layerIndex < layers.length - 1
-                        ? () => notifier.moveLayer(layer.id, 1)
-                        : null,
-                    onMoveDown:
-                        layerIndex > 0 ? () => notifier.moveLayer(layer.id, -1) : null,
-                    onDuplicate: () => notifier.duplicateLayer(layer.id),
-                    onMergeDown: !isBottom ? () => notifier.mergeLayers(layer.id) : null,
-                    onDelete: layers.length > 1
-                        ? () => notifier.deleteLayer(layer.id)
-                        : null,
-                    dragHandle: ReorderableDragStartListener(
-                      index: visualIndex,
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.grab,
-                        child: Icon(
-                          Icons.drag_handle,
-                          size: 16,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.4),
-                        ),
+        SizedBox(
+          width: _width,
+          child: Container(
+            color: theme.colorScheme.surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Header ────────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 4, 4),
+                  child: Row(
+                    children: [
+                      Text('Layers',
+                          style: theme.textTheme.labelMedium
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.add, size: 18),
+                        tooltip: 'New layer',
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: notifier.addLayer,
                       ),
-                    ),
-                  );
-                },
-              ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                // ── Layer list ────────────────────────────────────────────────
+                // Displayed top-to-bottom: visually topmost layer first.
+                // layers[last] = top, layers[0] = bottom.
+                Expanded(
+                  child: ReorderableListView.builder(
+                    buildDefaultDragHandles: false,
+                    onReorder: (oldIndex, newIndex) {
+                      // ReorderableListView gives visual indices (reversed from layer order).
+                      final visualCount = layers.length;
+                      // Visual index 0 = layers.last (topmost layer)
+                      final fromLayerIdx = visualCount - 1 - oldIndex;
+                      int toLayerIdx = visualCount - 1 - newIndex;
+                      if (newIndex > oldIndex) toLayerIdx += 1;
+                      final delta = toLayerIdx - fromLayerIdx;
+                      if (delta != 0) {
+                        notifier.moveLayer(layers[fromLayerIdx].id, delta);
+                      }
+                    },
+                    itemCount: layers.length,
+                    itemBuilder: (context, visualIndex) {
+                      // Visual index 0 = topmost layer (layers.last)
+                      final layerIndex = layers.length - 1 - visualIndex;
+                      final layer = layers[layerIndex];
+                      final isActive = layer.id == state.activeLayerId;
+                      final isBottom = layerIndex == 0;
+                      return _LayerRow(
+                        key: ValueKey(layer.id),
+                        layer: layer,
+                        isActive: isActive,
+                        isBottom: isBottom,
+                        isOnly: layers.length == 1,
+                        onTap: () => notifier.setActiveLayer(layer.id),
+                        onToggleVisible: () =>
+                            notifier.toggleLayerVisible(layer.id),
+                        onOpacityChanged: (v) =>
+                            notifier.setLayerOpacity(layer.id, v),
+                        onRename: (name) => notifier.renameLayer(layer.id, name),
+                        onMoveUp: layerIndex < layers.length - 1
+                            ? () => notifier.moveLayer(layer.id, 1)
+                            : null,
+                        onMoveDown: layerIndex > 0
+                            ? () => notifier.moveLayer(layer.id, -1)
+                            : null,
+                        onDuplicate: () => notifier.duplicateLayer(layer.id),
+                        onMergeDown: !isBottom
+                            ? () => notifier.mergeLayers(layer.id)
+                            : null,
+                        onDelete: layers.length > 1
+                            ? () => notifier.deleteLayer(layer.id)
+                            : null,
+                        dragHandle: ReorderableDragStartListener(
+                          index: visualIndex,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.grab,
+                            child: Icon(
+                              Icons.drag_handle,
+                              size: 16,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -187,6 +219,28 @@ class _LayerRowState extends State<_LayerRow> {
     setState(() => _renaming = false);
   }
 
+  PopupMenuItem<_LayerAction> _menuItem(
+    _LayerAction value,
+    IconData icon,
+    String label, {
+    bool enabled = true,
+    Color? color,
+  }) {
+    final effectiveColor = enabled ? color : null;
+    return PopupMenuItem<_LayerAction>(
+      value: value,
+      enabled: enabled,
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: effectiveColor ?? (enabled ? null : Colors.grey)),
+          const SizedBox(width: 10),
+          Text(label,
+              style: TextStyle(fontSize: 13, color: effectiveColor)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -214,7 +268,7 @@ class _LayerRowState extends State<_LayerRow> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Name row ──────────────────────────────────────────────────
+            // ── Name row ────────────────────────────────────────────────────
             Row(
               children: [
                 // Drag handle — leftmost, separated from ⋮ menu on the right
@@ -288,49 +342,38 @@ class _LayerRowState extends State<_LayerRow> {
                     }
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: _LayerAction.rename,
-                      child: Text('Rename', style: TextStyle(fontSize: 13)),
-                    ),
-                    PopupMenuItem(
-                      value: _LayerAction.moveUp,
+                    _menuItem(_LayerAction.rename, Icons.edit_outlined, 'Rename'),
+                    _menuItem(
+                      _LayerAction.moveUp,
+                      Icons.arrow_upward,
+                      'Move Up',
                       enabled: widget.onMoveUp != null,
-                      child: const Text('Move Up', style: TextStyle(fontSize: 13)),
                     ),
-                    PopupMenuItem(
-                      value: _LayerAction.moveDown,
+                    _menuItem(
+                      _LayerAction.moveDown,
+                      Icons.arrow_downward,
+                      'Move Down',
                       enabled: widget.onMoveDown != null,
-                      child: const Text('Move Down',
-                          style: TextStyle(fontSize: 13)),
                     ),
-                    const PopupMenuItem(
-                      value: _LayerAction.duplicate,
-                      child: Text('Duplicate', style: TextStyle(fontSize: 13)),
-                    ),
-                    PopupMenuItem(
-                      value: _LayerAction.mergeDown,
+                    _menuItem(_LayerAction.duplicate, Icons.copy_outlined, 'Duplicate'),
+                    _menuItem(
+                      _LayerAction.mergeDown,
+                      Icons.merge_type,
+                      'Merge Down',
                       enabled: widget.onMergeDown != null,
-                      child: const Text('Merge Down',
-                          style: TextStyle(fontSize: 13)),
                     ),
-                    PopupMenuItem(
-                      value: _LayerAction.delete,
+                    _menuItem(
+                      _LayerAction.delete,
+                      Icons.delete_outline,
+                      'Delete Layer',
                       enabled: widget.onDelete != null,
-                      child: Text(
-                        'Delete Layer',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: widget.onDelete != null
-                              ? Colors.red.shade600
-                              : null,
-                        ),
-                      ),
+                      color: Colors.red.shade600,
                     ),
                   ],
                 ),
               ],
             ),
-            // ── Opacity slider ─────────────────────────────────────────────
+            // ── Opacity slider ───────────────────────────────────────────────
             Row(
               children: [
                 const SizedBox(width: 20),
