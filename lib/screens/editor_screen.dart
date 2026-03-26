@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
+import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/file_service.dart';
-import '../services/pdf_service.dart';
 import 'export_dialog.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/layers_panel.dart';
@@ -510,8 +510,23 @@ class _StitchPalettePanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
     final useDmc = ref.watch(settingsProvider).useDmc;
-    final threads = state.pattern.threads;
     final theme = Theme.of(context);
+
+    // In stitch mode, always show composite threads.
+    final List<Thread> threads;
+    if (state.stitchMode && state.compositeThreadCache != null && state.compositeThreadCache!.isNotEmpty) {
+      final unique = <String, Thread>{};
+      for (final t in state.compositeThreadCache!.values) {
+        unique[t.dmcCode] = t;
+      }
+      // Also include source threads not in composite map (e.g. non-FullStitch only threads)
+      for (final t in state.pattern.threads) {
+        unique.putIfAbsent(t.dmcCode, () => t);
+      }
+      threads = unique.values.toList();
+    } else {
+      threads = state.pattern.threads;
+    }
 
     return Drawer(
       child: SafeArea(
@@ -645,7 +660,7 @@ class _ImportBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Imported \$_ext file — snippets require .stitchx format.',
+                'Imported $_ext file — snippets require .stitchx format.',
                 style: TextStyle(fontSize: 12, color: cs.onTertiaryContainer),
               ),
             ),
