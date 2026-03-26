@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../data/symbols.dart';
 import '../models/layer.dart';
 import '../models/pattern.dart';
@@ -1410,6 +1411,166 @@ class EditorNotifier extends Notifier<EditorState> {
       selectionRect: null,
       clipboardFromSnippet: true,
     );
+  }
+
+  // ─── Layer management ──────────────────────────────────────────────────────
+
+  void addLayer() {
+    final newLayer = Layer.create(name: 'Layer ${state.pattern.layers.length + 1}');
+    // Insert above the active layer
+    final activeIdx =
+        state.pattern.layers.indexWhere((l) => l.id == state.activeLayerId);
+    final insertIdx = activeIdx == -1 ? state.pattern.layers.length : activeIdx + 1;
+    final newLayers = [...state.pattern.layers];
+    newLayers.insert(insertIdx, newLayer);
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layers: newLayers),
+      activeLayerId: newLayer.id,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  void deleteLayer(String id) {
+    if (state.pattern.layers.length <= 1) return; // cannot delete last layer
+    final newLayers = state.pattern.layers.where((l) => l.id != id).toList();
+    // If we deleted the active layer, fall back to topmost visible or topmost
+    String newActiveId = state.activeLayerId;
+    if (newActiveId == id) {
+      final visible = newLayers.where((l) => l.visible);
+      newActiveId = visible.isNotEmpty
+          ? visible.last.id
+          : newLayers.last.id;
+    }
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layers: newLayers),
+      activeLayerId: newActiveId,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  void renameLayer(String id, String name) {
+    final newPattern =
+        _updateLayer(state.pattern, id, (l) => l.copyWith(name: name));
+    state = state.copyWith(
+      pattern: newPattern,
+      isDirty: true,
+    );
+  }
+
+  void toggleLayerVisible(String id) {
+    final newPattern =
+        _updateLayer(state.pattern, id, (l) => l.copyWith(visible: !l.visible));
+    state = state.copyWith(
+      pattern: newPattern,
+      isDirty: true,
+      compositeThreadCache: null,
+    );
+  }
+
+  void setLayerOpacity(String id, double opacity) {
+    final clamped = opacity.clamp(0.0, 1.0);
+    final newPattern =
+        _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
+    state = state.copyWith(
+      pattern: newPattern,
+      isDirty: true,
+      compositeThreadCache: null,
+    );
+  }
+
+  /// [delta] = +1 moves layer up (toward top/front), -1 moves down (toward bottom/back).
+  void moveLayer(String id, int delta) {
+    final layers = [...state.pattern.layers];
+    final idx = layers.indexWhere((l) => l.id == id);
+    if (idx == -1) return;
+    final newIdx = (idx + delta).clamp(0, layers.length - 1);
+    if (newIdx == idx) return;
+    final layer = layers.removeAt(idx);
+    layers.insert(newIdx, layer);
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layers: layers),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  void duplicateLayer(String id) {
+    final src = state.pattern.layers.firstWhere((l) => l.id == id);
+    final duplicate = Layer(
+      id: const Uuid().v4(),
+      name: '${src.name} copy',
+      visible: src.visible,
+      opacity: src.opacity,
+      stitches: List<Stitch>.from(src.stitches),
+    );
+    final srcIdx = state.pattern.layers.indexWhere((l) => l.id == id);
+    final newLayers = [...state.pattern.layers];
+    newLayers.insert(srcIdx + 1, duplicate);
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layers: newLayers),
+      activeLayerId: duplicate.id,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Merges [topId]'s stitches into the layer directly below it.
+  void mergeLayers(String topId) {
+    final layers = state.pattern.layers;
+    final topIdx = layers.indexWhere((l) => l.id == topId);
+    if (topIdx <= 0) return; // nothing below
+    final belowIdx = topIdx - 1;
+    final topLayer = layers[topIdx];
+    final belowLayer = layers[belowIdx];
+
+    var mergedStitches = [...belowLayer.stitches];
+    for (final s in topLayer.stitches) {
+      mergedStitches = _stitchesWithAdded(mergedStitches, s);
+    }
+
+    final newLayers = [...layers];
+    newLayers[belowIdx] = belowLayer.copyWith(stitches: mergedStitches);
+    newLayers.removeAt(topIdx);
+
+    final newActiveId = state.activeLayerId == topId
+        ? newLayers[belowIdx].id
+        : state.activeLayerId;
+
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layers: newLayers),
+      activeLayerId: newActiveId,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  void setActiveLayer(String id) {
+    if (state.pattern.layers.any((l) => l.id == id)) {
+      state = state.copyWith(activeLayerId: id);
+    }
+  }
+
+  void setShowCompositeThreads(bool value) {
+    state = state.copyWith(showCompositeThreads: value);
+  }
+
+  /// Applies [update] to the layer with [id] in [pattern] and returns the new pattern.
+  CrossStitchPattern _updateLayer(
+      CrossStitchPattern pattern, String id, Layer Function(Layer) update) {
+    final newLayers = pattern.layers.map((l) => l.id == id ? update(l) : l).toList();
+    return pattern.copyWith(layers: newLayers);
   }
 }
 
