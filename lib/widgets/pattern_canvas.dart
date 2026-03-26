@@ -186,33 +186,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     _scheduleRebuild();
   }
 
-  /// Returns the threadId of the topmost cell-based stitch at [cellX],[cellY].
-  String? _threadAtCell(int cellX, int cellY) {
-    final stitches = ref.read(editorProvider).pattern.stitches;
-    for (final s in stitches.reversed) {
-      final tid = switch (s) {
-        FullStitch(x: final sx, y: final sy, threadId: final t)
-            when sx == cellX && sy == cellY =>
-          t,
-        HalfStitch(x: final sx, y: final sy, threadId: final t)
-            when sx == cellX && sy == cellY =>
-          t,
-        HalfCrossStitch(x: final sx, y: final sy, threadId: final t)
-            when sx == cellX && sy == cellY =>
-          t,
-        QuarterStitch(x: final sx, y: final sy, threadId: final t)
-            when sx == cellX && sy == cellY =>
-          t,
-        QuarterCrossStitch(x: final sx, y: final sy, threadId: final t)
-            when sx == cellX && sy == cellY =>
-          t,
-        _ => null,
-      };
-      if (tid != null) return tid;
-    }
-    return null;
-  }
-
   void _handleDrawAt(Offset screenPos) {
     final state = ref.read(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
@@ -221,11 +194,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (state.drawingMode == DrawingMode.colorPicker) {
       final (cellX, cellY) = _canvasToCell(canvas);
       if (!_inBounds(cellX, cellY)) return;
-      final threadId = _threadAtCell(cellX, cellY);
-      if (threadId != null) {
-        notifier.setSelectedThread(threadId);
-        notifier.setDrawingMode(DrawingMode.draw);
-      }
+      notifier.pickColorAtCell(cellX, cellY);
       return;
     }
 

@@ -438,6 +438,128 @@ class EditorNotifier extends Notifier<EditorState> {
     state = state.copyWith(selectedThreadId: threadId, recentThreadIds: recents);
   }
 
+  /// Picks the thread colour at [x],[y] and selects it, switching back to draw
+  /// mode. Respects the current Canvas/Layer toggle:
+  ///
+  /// - **Layer mode** (`!showCompositeThreads`): picks from the active layer's
+  ///   stitches only.
+  /// - **Canvas mode** (`showCompositeThreads`): computes the visual/blended
+  ///   colour across all visible layers (same logic as [_buildBlendMap] in the
+  ///   painter) and snaps to the nearest DMC thread, adding it to the palette
+  ///   if it isn't already there.
+  void pickColorAtCell(int x, int y) {
+    final s = state;
+    final threadMap = <String, Thread>{
+      for (final t in s.pattern.threads) t.dmcCode: t,
+    };
+
+    String? stitchThreadId(Stitch stitch) => switch (stitch) {
+          FullStitch(x: final sx, y: final sy, threadId: final t)
+              when sx == x && sy == y =>
+            t,
+          HalfStitch(x: final sx, y: final sy, threadId: final t)
+              when sx == x && sy == y =>
+            t,
+          HalfCrossStitch(x: final sx, y: final sy, threadId: final t)
+              when sx == x && sy == y =>
+            t,
+          QuarterStitch(x: final sx, y: final sy, threadId: final t)
+              when sx == x && sy == y =>
+            t,
+          QuarterCrossStitch(x: final sx, y: final sy, threadId: final t)
+              when sx == x && sy == y =>
+            t,
+          _ => null,
+        };
+
+    void select(String threadId, [CrossStitchPattern? updatedPattern]) {
+      final recents = [
+        threadId,
+        ...s.recentThreadIds.where((id) => id != threadId),
+      ].take(5).toList();
+      state = s.copyWith(
+        pattern: updatedPattern ?? s.pattern,
+        selectedThreadId: threadId,
+        recentThreadIds: recents,
+        drawingMode: DrawingMode.draw,
+      );
+    }
+
+    if (!s.showCompositeThreads) {
+      // ── Layer mode: active layer only ──────────────────────────────────────
+      for (final stitch in s.activeLayer.stitches.reversed) {
+        final tid = stitchThreadId(stitch);
+        if (tid != null) {
+          select(tid);
+          return;
+        }
+      }
+      return;
+    }
+
+    // ── Canvas mode: compute composite colour ────────────────────────────────
+    // Collect visible FullStitch entries at this cell, bottom-to-top.
+    final hits = <({Color color, double opacity, String threadId})>[];
+    for (final layer in s.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is FullStitch && stitch.x == x && stitch.y == y) {
+          final t = threadMap[stitch.threadId];
+          if (t != null) {
+            hits.add((
+              color: t.color,
+              opacity: layer.opacity,
+              threadId: stitch.threadId,
+            ));
+          }
+          break; // at most one FullStitch per layer per cell
+        }
+      }
+    }
+
+    if (hits.isEmpty) {
+      // No full stitches — fall back to topmost visible stitch of any type.
+      for (final layer in s.pattern.layers.reversed) {
+        if (!layer.visible) continue;
+        for (final stitch in layer.stitches.reversed) {
+          final tid = stitchThreadId(stitch);
+          if (tid != null) {
+            select(tid);
+            return;
+          }
+        }
+      }
+      return;
+    }
+
+    if (hits.length == 1) {
+      // Single visible layer at this cell: use source thread directly.
+      select(hits.first.threadId);
+      return;
+    }
+
+    // Multiple layers: blend bottom-to-top using each layer's opacity.
+    var blended = hits.first.color;
+    for (int i = 1; i < hits.length; i++) {
+      blended = Color.lerp(blended, hits[i].color, hits[i].opacity)!;
+    }
+    final r = (blended.r * 255).round();
+    final g = (blended.g * 255).round();
+    final b = (blended.b * 255).round();
+    final dmc = SpriteImporter.matchPixel(r, g, b, 255);
+    if (dmc == null) return;
+
+    // Ensure the composite thread is in the palette, then select it.
+    var pattern = s.pattern;
+    if (!threadMap.containsKey(dmc.code)) {
+      pattern = pattern.copyWith(threads: [
+        ...pattern.threads,
+        Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name),
+      ]);
+    }
+    select(dmc.code, pattern);
+  }
+
   void setAidaColor(Color color) {
     state = state.copyWith(
       pattern: state.pattern.copyWith(aidaColor: color),
