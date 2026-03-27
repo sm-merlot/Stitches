@@ -11,8 +11,10 @@ import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/pdf_viewer_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../services/drive_cache.dart';
 import '../services/file_service.dart';
 import '../services/format_service.dart';
+import '../utils/snackbars.dart';
 import '../providers/image_viewer_provider.dart';
 import '../screens/new_pattern_dialog.dart';
 import '../screens/sprite_sheet_screen.dart';
@@ -53,7 +55,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
         refreshFolder(ref, folder);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not create file: $e');
+        if (context.mounted) showError(context, 'Could not create file: $e');
       }
     } else if (folder is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
@@ -89,7 +91,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         // Upload to Drive in the background.
         unawaited(_uploadNewFileToDrive(folder, pattern, tempPath));
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not create file: $e');
+        if (context.mounted) showError(context, 'Could not create file: $e');
       } finally {
         if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
@@ -201,28 +203,22 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
   Future<String?> _downloadDriveImage(
       BuildContext context, DriveImageFile file) async {
     try {
-      final tempDir = await getTemporaryDirectory();
-      final tempPath = '${tempDir.path}/${file.fileId}_${file.name}';
-      final cached = File(tempPath);
-      if (await cached.exists()) return tempPath;
-
+      final service =
+          await ref.read(googleDriveProvider.notifier).getService();
+      if (!context.mounted) return null;
+      if (service == null) {
+        showError(context, 'Not connected to Google Drive.');
+        return null;
+      }
       ref.read(fileLoadingProvider.notifier).set(true);
       try {
-        final service =
-            await ref.read(googleDriveProvider.notifier).getService();
-        if (!context.mounted) return null;
-        if (service == null) {
-          _showError(context, 'Not connected to Google Drive.');
-          return null;
-        }
-        final bytes = await service.downloadFile(file.fileId);
-        await cached.writeAsBytes(bytes);
-        return tempPath;
+        return await driveGetOrDownload(
+            file.fileId, '${file.fileId}_${file.name}', service);
       } finally {
         if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
     } catch (e) {
-      if (context.mounted) _showError(context, 'Could not open image: $e');
+      if (context.mounted) showError(context, 'Could not open image: $e');
       return null;
     }
   }
@@ -290,7 +286,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             final service = await ref.read(googleDriveProvider.notifier).getService();
             if (!context.mounted) return;
             if (service == null) {
-              _showError(context, 'Not connected to Google Drive.');
+              showError(context, 'Not connected to Google Drive.');
               return;
             }
             final bytes = await service.downloadFile(file.fileId);
@@ -304,7 +300,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           }
         }
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not open PDF: $e');
+        if (context.mounted) showError(context, 'Could not open PDF: $e');
       }
       return;
     }
@@ -318,7 +314,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         ref.read(editorProvider.notifier).loadPattern(pattern,
             filePath: file.path);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not import file: $e');
+        if (context.mounted) showError(context, 'Could not import file: $e');
       } finally {
         if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
@@ -339,7 +335,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                 await ref.read(googleDriveProvider.notifier).getService();
             if (!context.mounted) return;
             if (service == null) {
-              _showError(context, 'Not connected to Google Drive.');
+              showError(context, 'Not connected to Google Drive.');
               return;
             }
             final bytes = await service.downloadFile(file.fileId);
@@ -356,7 +352,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         }
       } catch (e) {
         if (context.mounted) {
-          _showError(context, 'Could not import Drive file: $e');
+          showError(context, 'Could not import Drive file: $e');
         }
       }
       return;
@@ -369,7 +365,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         _switchToEditor();
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not open file: $e');
+        if (context.mounted) showError(context, 'Could not open file: $e');
       }
     } else if (file is DrivePatternFile) {
       try {
@@ -400,7 +396,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             final service = await driveNotifier.getService();
             if (!context.mounted) return;
             if (service == null) {
-              _showError(context, 'Not connected to Google Drive.');
+              showError(context, 'Not connected to Google Drive.');
               return;
             }
             final bytes = await service.downloadFile(file.fileId);
@@ -421,7 +417,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           }
         }
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not open Drive file: $e');
+        if (context.mounted) showError(context, 'Could not open Drive file: $e');
       }
     }
   }
@@ -440,7 +436,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       ref.read(editorProvider.notifier).setDriveFileId(newFileId);
       refreshFolder(ref, folder);
     } else {
-      _showError(context, 'Could not upload file to Drive.');
+      showError(context, 'Could not upload file to Drive.');
     }
   }
 
@@ -521,7 +517,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not rename: $e');
+        if (context.mounted) showError(context, 'Could not rename: $e');
       }
     } else if (file is DrivePatternFile) {
       try {
@@ -529,13 +525,13 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final service = await driveNotifier.getService();
         if (!context.mounted) return;
         if (service == null) {
-          _showError(context, 'Not connected to Google Drive.');
+          showError(context, 'Not connected to Google Drive.');
           return;
         }
         await service.renameItem(file.fileId, '$newName.stitchx');
         refreshFolder(ref, file.parent);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not rename Drive file: $e');
+        if (context.mounted) showError(context, 'Could not rename Drive file: $e');
       }
     }
   }
@@ -571,7 +567,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not delete: $e');
+        if (context.mounted) showError(context, 'Could not delete: $e');
       }
       return;
     }
@@ -582,7 +578,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final service = await ref.read(googleDriveProvider.notifier).getService();
         if (!context.mounted) return;
         if (service == null) {
-          _showError(context, 'Not connected to Google Drive.');
+          showError(context, 'Not connected to Google Drive.');
           return;
         }
         await service.deleteFile(file.fileId);
@@ -592,7 +588,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not delete PDF: $e');
+        if (context.mounted) showError(context, 'Could not delete PDF: $e');
       } finally {
         if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
@@ -609,7 +605,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not delete: $e');
+        if (context.mounted) showError(context, 'Could not delete: $e');
       }
     } else if (file is DrivePatternFile) {
       ref.read(fileLoadingProvider.notifier).set(true);
@@ -618,7 +614,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final service = await driveNotifier.getService();
         if (!context.mounted) return;
         if (service == null) {
-          _showError(context, 'Not connected to Google Drive.');
+          showError(context, 'Not connected to Google Drive.');
           return;
         }
         await service.deleteFile(file.fileId);
@@ -629,7 +625,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (workspace != null) refreshFolder(ref, workspace);
         refreshFolder(ref, file.parent);
       } catch (e) {
-        if (context.mounted) _showError(context, 'Could not delete Drive file: $e');
+        if (context.mounted) showError(context, 'Could not delete Drive file: $e');
       } finally {
         if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
@@ -725,7 +721,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       final parentLoc = LocalFolder(parent);
       refreshFolder(ref, parentLoc);
     } catch (e) {
-      if (context.mounted) _showError(context, 'Could not rename: $e');
+      if (context.mounted) showError(context, 'Could not rename: $e');
     }
   }
 
@@ -751,7 +747,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       }
       refreshFolder(ref, folder);
     } catch (e) {
-      if (context.mounted) _showError(context, 'Could not paste: $e');
+      if (context.mounted) showError(context, 'Could not paste: $e');
     }
   }
 
@@ -768,7 +764,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
     if (!isEmpty) {
       if (context.mounted) {
-        _showError(context, 'Cannot delete a non-empty folder.');
+        showError(context, 'Cannot delete a non-empty folder.');
       }
       return;
     }
@@ -799,16 +795,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           0, folder.path.lastIndexOf(Platform.pathSeparator));
       refreshFolder(ref, LocalFolder(parent));
     } catch (e) {
-      if (context.mounted) _showError(context, 'Could not delete folder: $e');
+      if (context.mounted) showError(context, 'Could not delete folder: $e');
     }
   }
 
-  void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(message), backgroundColor: Colors.red.shade700),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {

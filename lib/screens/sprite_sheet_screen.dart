@@ -10,6 +10,7 @@ import 'package:image/image.dart' as img;
 
 import '../providers/editor/editor_provider.dart';
 import '../services/sprite_importer.dart';
+import '../utils/snackbars.dart';
 import '../widgets/sprite_sheet_painter.dart';
 
 // ── Corner handle types ───────────────────────────────────────────────────────
@@ -126,11 +127,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     final bytes = await File(path).readAsBytes();
     final decoded = img.decodeImage(bytes);
     if (decoded == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not decode image')),
-        );
-      }
+      if (mounted) showError(context, 'Could not decode image');
       return;
     }
     setState(() {
@@ -388,11 +385,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
 
     final decoded = img.decodeImage(bytes);
     if (decoded == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not decode image')),
-        );
-      }
+      if (mounted) showError(context, 'Could not decode image');
       return;
     }
 
@@ -668,12 +661,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       );
 
       if (snippet.stitches.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('No stitches — region may be fully transparent')),
-          );
-        }
+        if (mounted) showError(context, 'No stitches — region may be fully transparent');
         return;
       }
 
@@ -691,11 +679,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         _clearStrips();
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('"$name" added to snippets')),
-        );
-      }
+      if (mounted) showSuccess(context, '"$name" added to snippets');
     } finally {
       if (mounted) setState(() => _importing = false);
     }

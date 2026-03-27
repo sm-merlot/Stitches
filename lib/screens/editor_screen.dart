@@ -7,6 +7,7 @@ import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/file_service.dart';
+import '../utils/snackbars.dart';
 import 'export_dialog.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/layers_panel.dart';
@@ -26,11 +27,7 @@ class EditorScreen extends ConsumerWidget {
       if (state.filePath != null) {
         await FileService.saveFile(state.patternForSave, state.filePath!);
         ref.read(editorProvider.notifier).markSaved();
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved')),
-          );
-        }
+        if (context.mounted) showSuccess(context, 'Saved');
 
         // Auto-upload to Drive if this file is Drive-backed
         final driveFileId = state.driveFileId;
@@ -43,22 +40,14 @@ class EditorScreen extends ConsumerWidget {
             parentFolderId,
           );
           if (newId != null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Synced to Google Drive')),
-            );
+            showSuccess(context, 'Synced to Google Drive');
           }
         }
       } else {
         await _saveAs(context, ref);
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Save failed: $e'),
-              backgroundColor: Colors.red.shade700),
-        );
-      }
+      if (context.mounted) showError(context, 'Save failed: $e');
     }
   }
 
@@ -69,20 +58,10 @@ class EditorScreen extends ConsumerWidget {
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);
         ref.read(editorProvider.notifier).markSaved();
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved')),
-          );
-        }
+        if (context.mounted) showSuccess(context, 'Saved');
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Save failed: $e'),
-              backgroundColor: Colors.red.shade700),
-        );
-      }
+      if (context.mounted) showError(context, 'Save failed: $e');
     }
   }
 
