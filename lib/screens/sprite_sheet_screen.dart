@@ -72,7 +72,15 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   // ── Gesture tracking ────────────────────────────────────────────────────────
   int _pointerCount = 0;
   double _lastScale = 1.0;
+  // Trackpad pinch-to-zoom (macOS PointerPanZoom events)
+  double _trackpadStartZoom = 1.0;
+  Offset _trackpadStartPan = Offset.zero;
   Offset? _lastFocalPoint;
+  // Deferred crop-draw intent: set in _onScaleStart, consumed or cancelled
+  // in _onScaleUpdate once _pointerCount is known (prevents pinch from
+  // accidentally starting a crop draw via the first-finger-down event).
+  Offset? _pendingCropPos;
+  bool _pendingRecrop = false;
 
   // ── Crop selection ──────────────────────────────────────────────────────────
   Offset? _cropStart; // image coordinates (always normalised to topLeft after draw)
@@ -84,7 +92,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   Offset? _stripEnd;
   final List<Rect> _confirmedStrips = [];
   final List<List<Color>> _detectedStripColours = [];
-  bool _showRecropWarning = false;
 
   // ── Corner handle resizing ───────────────────────────────────────────────────
   _CornerHit? _activeCornerHit;
@@ -137,7 +144,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       _stripStart = null;
       _stripEnd = null;
       _clearStrips();
-      _showRecropWarning = false;
       _addedCount = 0;
       _nameCtrl.text = 'Sprite 1';
     });
@@ -171,6 +177,33 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         _activePaletteIndex = _confirmedStrips.length - 1;
       }
     });
+  }
+
+  /// Shows a modal warning that proceeding will clear palette strips.
+  /// Clears strips if the user confirms; does nothing on cancel.
+  Future<void> _confirmRecrop() async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear palette selections?'),
+        content: const Text(
+            'Modifying the crop region will remove all palette strip selections.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Proceed'),
+          ),
+        ],
+      ),
+    );
+    if ((proceed ?? false) && mounted) {
+      setState(_clearStrips);
+    }
   }
 
   // ── Transform helpers ────────────────────────────────────────────────────────
@@ -374,7 +407,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       _stripStart = null;
       _stripEnd = null;
       _clearStrips();
-      _showRecropWarning = false;
       _addedCount = 0;
       _nameCtrl.text = 'Sprite 1';
     });
@@ -389,15 +421,39 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     _applyZoom(factor, event.localPosition);
   }
 
+  void _onPointerPanZoomStart(PointerPanZoomStartEvent event) {
+    _ensureFit();
+    _trackpadStartZoom = _zoom;
+    _trackpadStartPan = _pan;
+  }
+
+  void _onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    final newZoom = (_trackpadStartZoom * event.scale).clamp(0.25, 40.0);
+    setState(() {
+      _pan = event.localPosition -
+          (event.localPosition - _trackpadStartPan) *
+              (newZoom / _trackpadStartZoom) +
+          event.pan;
+      _zoom = newZoom;
+    });
+  }
+
   void _onScaleStart(ScaleStartDetails d) {
     _ensureFit();
     _lastScale = 1.0;
     _lastFocalPoint = d.localFocalPoint;
+    _pendingCropPos = null;
+    _pendingRecrop = false;
 
-    if (_pointerCount == 1) {
+    if (d.pointerCount == 1) {
       // Check for corner handle hit first.
       final cornerHit = _hitTestCorner(d.localFocalPoint);
       if (cornerHit != null) {
+        // Crop corner drags are blocked while palette strips exist.
+        if (cornerHit is _CropCorner && _confirmedStrips.isNotEmpty) {
+          _confirmRecrop();
+          return;
+        }
         setState(() => _activeCornerHit = cornerHit);
         return;
       }
@@ -408,15 +464,12 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           _stripStart = imgPos;
           _stripEnd = imgPos;
         });
+      } else if (_confirmedStrips.isNotEmpty) {
+        // Defer the recrop modal until _onScaleUpdate confirms single-touch.
+        _pendingRecrop = true;
       } else {
-        if (_confirmedStrips.isNotEmpty) {
-          setState(() => _showRecropWarning = true);
-        } else {
-          setState(() {
-            _cropStart = imgPos;
-            _cropEnd = imgPos;
-          });
-        }
+        // Defer crop start until _onScaleUpdate confirms single-touch.
+        _pendingCropPos = imgPos;
       }
     }
   }
@@ -424,8 +477,10 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   void _onScaleUpdate(ScaleUpdateDetails d) {
     final focal = d.localFocalPoint;
 
-    if (_pointerCount >= 2) {
-      // Multi-touch: zoom around focal point + pan.
+    if (d.pointerCount >= 2) {
+      // Multi-touch pinch: cancel any deferred crop/recrop intent and zoom.
+      _pendingCropPos = null;
+      _pendingRecrop = false;
       final scaleDelta = d.scale / _lastScale;
       _lastScale = d.scale;
       final newZoom = (_zoom * scaleDelta).clamp(0.25, 40.0);
@@ -440,7 +495,22 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       _applyCornerDrag(_activeCornerHit!, _toImage(focal));
     } else if (_stripState == _StripDrawState.drawing) {
       setState(() => _stripEnd = _toImage(focal));
-    } else if (!_showRecropWarning) {
+    } else {
+      // Consume deferred intents now that we know this is a single-finger drag.
+      if (_pendingRecrop) {
+        _pendingRecrop = false;
+        _confirmRecrop();
+        return;
+      }
+      if (_pendingCropPos != null) {
+        final start = _pendingCropPos!;
+        _pendingCropPos = null;
+        setState(() {
+          _cropStart = start;
+          _cropEnd = _toImage(focal);
+        });
+        return;
+      }
       setState(() => _cropEnd = _toImage(focal));
     }
 
@@ -488,6 +558,8 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   }
 
   void _onScaleEnd(ScaleEndDetails d) {
+    _pendingCropPos = null;
+    _pendingRecrop = false;
     final cornerHit = _activeCornerHit;
 
     if (cornerHit != null) {
@@ -545,7 +617,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           _stripEnd = null;
         });
       }
-    } else if (_pointerCount == 0 && _hasCrop) {
+    } else if (d.pointerCount == 0 && _hasCrop) {
       // Crop draw ended — normalise and refresh preview.
       final r = Rect.fromPoints(_cropStart!, _cropEnd!);
       setState(() {
@@ -685,7 +757,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   Widget _buildImageLayout() {
     return Column(
       children: [
-        if (_showRecropWarning) _buildRecropWarning(),
         if (_stripState == _StripDrawState.drawing) _buildStripCancelBanner(),
         Expanded(
           child: Row(
@@ -745,6 +816,8 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           if (_pointerCount > 0) _pointerCount--;
         },
         onPointerSignal: _onPointerSignal,
+        onPointerPanZoomStart: _onPointerPanZoomStart,
+        onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
         child: GestureDetector(
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
@@ -1021,25 +1094,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRecropWarning() {
-    return MaterialBanner(
-      content: const Text('Moving the crop will clear your palette selections.'),
-      actions: [
-        TextButton(
-          onPressed: () => setState(() {
-            _showRecropWarning = false;
-            _clearStrips();
-          }),
-          child: const Text('Proceed'),
-        ),
-        IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => setState(() => _showRecropWarning = false),
-        ),
-      ],
     );
   }
 
