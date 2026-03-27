@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';

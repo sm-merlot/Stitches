@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/snippet.dart';
 import '../models/thread.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import '../screens/snippet_editor_screen.dart';
 import 'snippet_thumbnail.dart';
 

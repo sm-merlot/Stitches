@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/layer.dart';
 import '../models/layer_item.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 
 /// Resizable right-side panel that lists the pattern's layers.
 /// Visible only in design mode; returns [SizedBox.shrink] in stitch mode.

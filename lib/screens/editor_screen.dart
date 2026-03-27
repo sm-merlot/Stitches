@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../models/thread.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/file_service.dart';

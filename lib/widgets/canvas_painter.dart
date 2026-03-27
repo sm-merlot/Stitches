@@ -5,7 +5,7 @@ import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
-import '../providers/editor_provider.dart' show StitchViewMode;
+import '../providers/editor/editor_provider.dart' show StitchViewMode;
 import '../services/sprite_importer.dart';
 
 // ─── Shared drawing primitives ────────────────────────────────────────────────

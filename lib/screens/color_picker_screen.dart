@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 
 /// Opens the colour picker as a modal dialog on desktop, full-screen push on mobile.
