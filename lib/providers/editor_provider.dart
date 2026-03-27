@@ -1595,8 +1595,11 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void addLayer() {
     final newLayer = Layer.create(name: 'Layer ${state.pattern.layers.length + 1}');
-    final newItems = _insertLayerAbove(
-        state.pattern.layerItems, newLayer, state.activeLayerId);
+    // Always insert at the very top of the panel (highest index = topmost).
+    final newItems = [
+      ...state.pattern.layerItems,
+      LayerLeaf(layer: newLayer),
+    ];
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newLayer.id,
@@ -1742,14 +1745,132 @@ class EditorNotifier extends Notifier<EditorState> {
 
   // ─── Group operations ──────────────────────────────────────────────────────
 
-  /// Creates a new [LayerGroup] with one new layer inside; inserts at top of
-  /// [layerItems]; the new layer becomes active.
+  /// Creates a new empty [LayerGroup]; inserts at top of [layerItems].
   void addGroup() {
     final group = LayerGroup.create();
     final newItems = [group, ...state.pattern.layerItems];
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      activeLayerId: group.layers.first.id,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Adds a new layer directly into [groupId] at the top (regardless of
+  /// [activeLayerId]). The new layer becomes active.
+  void addLayerToGroup(String groupId) {
+    final newLayer =
+        Layer.create(name: 'Layer ${state.pattern.layers.length + 1}');
+    final newItems = state.pattern.layerItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        // Append = highest index = top of group in panel.
+        return item.copyWith(layers: [...item.layers, newLayer]);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      activeLayerId: newLayer.id,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Moves [layerId] (from anywhere) to top-level, inserted below the
+  /// top-level item identified by [prevTopLevelId] (group ID or leaf layer ID).
+  /// If [prevTopLevelId] is null, inserts at the top of the panel.
+  void moveLayerToTopLevelBelow(String layerId, String? prevTopLevelId) {
+    Layer? movedLayer;
+    final newItems = <LayerItem>[];
+
+    for (final item in state.pattern.layerItems) {
+      if (item is LayerLeaf && item.layer.id == layerId) {
+        movedLayer = item.layer;
+        // Removed from top-level.
+      } else if (item is LayerGroup) {
+        final lIdx = item.layers.indexWhere((l) => l.id == layerId);
+        if (lIdx >= 0) {
+          movedLayer = item.layers[lIdx];
+          newItems.add(item.copyWith(
+              layers: List<Layer>.from(item.layers)..removeAt(lIdx)));
+        } else {
+          newItems.add(item);
+        }
+      } else {
+        newItems.add(item);
+      }
+    }
+    if (movedLayer == null) return;
+
+    if (prevTopLevelId == null) {
+      // Insert at top of panel (highest index).
+      newItems.add(LayerLeaf(layer: movedLayer));
+    } else {
+      final prevIdx = newItems.indexWhere((item) =>
+          (item is LayerLeaf && item.layer.id == prevTopLevelId) ||
+          (item is LayerGroup && item.id == prevTopLevelId));
+      // Insert at prevIdx: places new item below prevItem in the panel.
+      newItems.insert(
+          prevIdx >= 0 ? prevIdx : newItems.length,
+          LayerLeaf(layer: movedLayer));
+    }
+
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Moves [layerId] (from anywhere) into [groupId], inserted below
+  /// [belowLayerId] within the group. If [belowLayerId] is null, inserts at
+  /// the top of the group.
+  void moveLayerIntoGroupBelow(
+      String layerId, String groupId, String? belowLayerId) {
+    Layer? movedLayer;
+    final newItems = <LayerItem>[];
+
+    for (final item in state.pattern.layerItems) {
+      if (item is LayerLeaf && item.layer.id == layerId) {
+        movedLayer = item.layer;
+        // Removed from top-level.
+      } else if (item is LayerGroup) {
+        final lIdx = item.layers.indexWhere((l) => l.id == layerId);
+        if (lIdx >= 0) {
+          movedLayer = item.layers[lIdx];
+          newItems.add(item.copyWith(
+              layers: List<Layer>.from(item.layers)..removeAt(lIdx)));
+        } else {
+          newItems.add(item);
+        }
+      } else {
+        newItems.add(item);
+      }
+    }
+    if (movedLayer == null) return;
+
+    final finalItems = newItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        final gl = List<Layer>.from(item.layers);
+        if (belowLayerId == null) {
+          gl.add(movedLayer!); // top of group
+        } else {
+          final belowIdx = gl.indexWhere((l) => l.id == belowLayerId);
+          gl.insert(belowIdx >= 0 ? belowIdx : gl.length, movedLayer!);
+        }
+        return item.copyWith(layers: gl);
+      }
+      return item;
+    }).toList();
+
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: finalItems),
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],

@@ -42,13 +42,12 @@ class LayerGroup extends LayerItem {
   });
 
   factory LayerGroup.create({String? name}) {
-    final newLayer = Layer.create(name: 'Layer 1');
     return LayerGroup(
       id: const Uuid().v4(),
       name: name ?? 'Group',
       collapsed: false,
       groupVisible: true,
-      layers: [newLayer],
+      layers: const [],
     );
   }
 
