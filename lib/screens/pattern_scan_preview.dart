@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/dmc_colors.dart';
 import '../models/layer.dart';
+import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -63,13 +64,15 @@ class PatternScanPreviewScreen extends StatelessWidget {
       width: result.width,
       height: result.height,
       threads: threads,
-      layers: [
-        Layer(
-          id: const Uuid().v4(),
-          name: 'Layer 1',
-          visible: true,
-          opacity: 1.0,
-          stitches: stitches,
+      layerItems: [
+        LayerLeaf(
+          layer: Layer(
+            id: const Uuid().v4(),
+            name: 'Layer 1',
+            visible: true,
+            opacity: 1.0,
+            stitches: stitches,
+          ),
         ),
       ],
     );

@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
 import '../models/layer.dart';
+import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
 import '../models/snippet_palette.dart';
@@ -1191,22 +1192,18 @@ class EditorNotifier extends Notifier<EditorState> {
   CrossStitchPattern _patternWithActiveLayerStitches(
       CrossStitchPattern pattern, List<Stitch> newStitches) {
     final activeId = state.activeLayerId;
-    final newLayers = pattern.layers.map((l) {
+    return pattern.mapLayers((l) {
       if (l.id == activeId || (activeId.isEmpty && l == pattern.layers.first)) {
         return l.copyWith(stitches: newStitches);
       }
       return l;
-    }).toList();
-    return pattern.copyWith(layers: newLayers);
+    });
   }
 
   /// Returns a new [CrossStitchPattern] with [transform] applied to each layer's stitches.
   CrossStitchPattern _patternWithAllLayersTransformed(
       CrossStitchPattern pattern, List<Stitch> Function(List<Stitch>) transform) {
-    final newLayers = pattern.layers
-        .map((l) => l.copyWith(stitches: transform(l.stitches)))
-        .toList();
-    return pattern.copyWith(layers: newLayers);
+    return pattern.mapLayers((l) => l.copyWith(stitches: transform(l.stitches)));
   }
 
   bool _stitchAtCell(Stitch s, int cellX, int cellY) {
@@ -1598,14 +1595,10 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void addLayer() {
     final newLayer = Layer.create(name: 'Layer ${state.pattern.layers.length + 1}');
-    // Insert above the active layer
-    final activeIdx =
-        state.pattern.layers.indexWhere((l) => l.id == state.activeLayerId);
-    final insertIdx = activeIdx == -1 ? state.pattern.layers.length : activeIdx + 1;
-    final newLayers = [...state.pattern.layers];
-    newLayers.insert(insertIdx, newLayer);
+    final newItems = _insertLayerAbove(
+        state.pattern.layerItems, newLayer, state.activeLayerId);
     state = state.copyWith(
-      pattern: state.pattern.copyWith(layers: newLayers),
+      pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newLayer.id,
       undoStack: _buildUndoStack(),
       isDirty: true,
@@ -1616,17 +1609,20 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void deleteLayer(String id) {
     if (state.pattern.layers.length <= 1) return; // cannot delete last layer
-    final newLayers = state.pattern.layers.where((l) => l.id != id).toList();
-    // If we deleted the active layer, fall back to topmost visible or topmost
+    final newItems = _removeLayer(state.pattern.layerItems, id);
+    // Compute the flat layer list from newItems to pick a new active layer.
+    final remaining = newItems.expand((item) => switch (item) {
+          LayerLeaf(:final layer) => [layer],
+          LayerGroup(:final layers) => layers,
+        }).toList();
     String newActiveId = state.activeLayerId;
     if (newActiveId == id) {
-      final visible = newLayers.where((l) => l.visible);
-      newActiveId = visible.isNotEmpty
-          ? visible.last.id
-          : newLayers.last.id;
+      final visible = remaining.where((l) => l.visible);
+      newActiveId =
+          visible.isNotEmpty ? visible.last.id : remaining.last.id;
     }
     state = state.copyWith(
-      pattern: state.pattern.copyWith(layers: newLayers),
+      pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newActiveId,
       undoStack: _buildUndoStack(),
       isDirty: true,
@@ -1672,15 +1668,10 @@ class EditorNotifier extends Notifier<EditorState> {
 
   /// [delta] = +1 moves layer up (toward top/front), -1 moves down (toward bottom/back).
   void moveLayer(String id, int delta) {
-    final layers = [...state.pattern.layers];
-    final idx = layers.indexWhere((l) => l.id == id);
-    if (idx == -1) return;
-    final newIdx = (idx + delta).clamp(0, layers.length - 1);
-    if (newIdx == idx) return;
-    final layer = layers.removeAt(idx);
-    layers.insert(newIdx, layer);
+    final newItems = _moveLayerDelta(state.pattern.layerItems, id, delta);
+    if (newItems == null) return;
     state = state.copyWith(
-      pattern: state.pattern.copyWith(layers: layers),
+      pattern: state.pattern.copyWith(layerItems: newItems),
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
@@ -1698,11 +1689,9 @@ class EditorNotifier extends Notifier<EditorState> {
       opacity: src.opacity,
       stitches: List<Stitch>.from(src.stitches),
     );
-    final srcIdx = state.pattern.layers.indexWhere((l) => l.id == id);
-    final newLayers = [...state.pattern.layers];
-    newLayers.insert(srcIdx + 1, duplicate);
+    final newItems = _insertLayerAbove(state.pattern.layerItems, duplicate, id);
     state = state.copyWith(
-      pattern: state.pattern.copyWith(layers: newLayers),
+      pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: duplicate.id,
       undoStack: _buildUndoStack(),
       isDirty: true,
@@ -1725,16 +1714,18 @@ class EditorNotifier extends Notifier<EditorState> {
       mergedStitches = _stitchesWithAdded(mergedStitches, s);
     }
 
-    final newLayers = [...layers];
-    newLayers[belowIdx] = belowLayer.copyWith(stitches: mergedStitches);
-    newLayers.removeAt(topIdx);
+    final mergedLayer = belowLayer.copyWith(stitches: mergedStitches);
+    // Replace belowLayer with mergedLayer, then remove topLayer from layerItems.
+    var newItems = state.pattern.mapLayers(
+        (l) => l.id == belowLayer.id ? mergedLayer : l).layerItems;
+    newItems = _removeLayer(newItems, topId);
 
     final newActiveId = state.activeLayerId == topId
-        ? newLayers[belowIdx].id
+        ? mergedLayer.id
         : state.activeLayerId;
 
     state = state.copyWith(
-      pattern: state.pattern.copyWith(layers: newLayers),
+      pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newActiveId,
       undoStack: _buildUndoStack(),
       isDirty: true,
@@ -1747,6 +1738,185 @@ class EditorNotifier extends Notifier<EditorState> {
     if (state.pattern.layers.any((l) => l.id == id)) {
       state = state.copyWith(activeLayerId: id);
     }
+  }
+
+  // ─── Group operations ──────────────────────────────────────────────────────
+
+  /// Creates a new [LayerGroup] with one new layer inside; inserts at top of
+  /// [layerItems]; the new layer becomes active.
+  void addGroup() {
+    final group = LayerGroup.create();
+    final newItems = [group, ...state.pattern.layerItems];
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      activeLayerId: group.layers.first.id,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Removes the group and all its layers. Adjusts [activeLayerId] if needed.
+  void deleteGroup(String groupId) {
+    final newItems =
+        state.pattern.layerItems
+            .where((i) => i is! LayerGroup || i.id != groupId)
+            .toList();
+    String newActiveId = state.activeLayerId;
+    final remainingLayers = newItems.expand((item) => switch (item) {
+          LayerLeaf(:final layer) => [layer],
+          LayerGroup(:final layers) => layers,
+        }).toList();
+    if (remainingLayers.isEmpty) return; // safety
+    if (!remainingLayers.any((l) => l.id == newActiveId)) {
+      newActiveId = remainingLayers.last.id;
+    }
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      activeLayerId: newActiveId,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  void renameGroup(String groupId, String name) {
+    final newItems = state.pattern.layerItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        return item.copyWith(name: name);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      isDirty: true,
+    );
+  }
+
+  void toggleGroupVisible(String groupId) {
+    final newItems = state.pattern.layerItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        return item.copyWith(groupVisible: !item.groupVisible);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      isDirty: true,
+      compositeThreadCache: null,
+    );
+  }
+
+  void toggleGroupCollapsed(String groupId) {
+    final newItems = state.pattern.layerItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        return item.copyWith(collapsed: !item.collapsed);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+    );
+  }
+
+  /// Dissolves the group; inserts its layers as [LayerLeaf] items in place.
+  void ungroupGroup(String groupId) {
+    final newItems = <LayerItem>[];
+    for (final item in state.pattern.layerItems) {
+      if (item is LayerGroup && item.id == groupId) {
+        newItems.addAll(item.layers.map((l) => LayerLeaf(layer: l)));
+      } else {
+        newItems.add(item);
+      }
+    }
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Removes [layerId] from its current position and appends it to [groupId].
+  void moveLayerToGroup(String layerId, String groupId) {
+    // Find the layer first.
+    final layer = state.pattern.layers.firstWhere((l) => l.id == layerId);
+    // Remove from current position.
+    var newItems = _removeLayer(state.pattern.layerItems, layerId);
+    // Append to the target group.
+    newItems = newItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        return item.copyWith(layers: [...item.layers, layer]);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Removes [layerId] from [groupId] and inserts it as a [LayerLeaf]
+  /// immediately below the group in the top-level list.
+  void moveLayerOutOfGroup(String layerId, String groupId) {
+    final layer = state.pattern.layers.firstWhere((l) => l.id == layerId);
+    final newItems = <LayerItem>[];
+    for (final item in state.pattern.layerItems) {
+      if (item is LayerGroup && item.id == groupId) {
+        final remaining = item.layers.where((l) => l.id != layerId).toList();
+        newItems.add(item.copyWith(layers: remaining));
+        newItems.add(LayerLeaf(layer: layer));
+      } else {
+        newItems.add(item);
+      }
+    }
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Reorders a top-level item (group or ungrouped layer) in [layerItems].
+  void reorderTopLevel(int oldIndex, int newIndex) {
+    final items = [...state.pattern.layerItems];
+    final moved = items.removeAt(oldIndex);
+    items.insert(newIndex, moved);
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: items),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
+  }
+
+  /// Reorders a layer within a group.
+  void reorderWithinGroup(String groupId, int oldIndex, int newIndex) {
+    final newItems = state.pattern.layerItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        final layers = [...item.layers];
+        final moved = layers.removeAt(oldIndex);
+        layers.insert(newIndex, moved);
+        return item.copyWith(layers: layers);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+      compositeThreadCache: null,
+    );
   }
 
   void setShowCompositeThreads(bool value) {
@@ -1855,8 +2025,101 @@ class EditorNotifier extends Notifier<EditorState> {
   /// Applies [update] to the layer with [id] in [pattern] and returns the new pattern.
   CrossStitchPattern _updateLayer(
       CrossStitchPattern pattern, String id, Layer Function(Layer) update) {
-    final newLayers = pattern.layers.map((l) => l.id == id ? update(l) : l).toList();
-    return pattern.copyWith(layers: newLayers);
+    return pattern.mapLayers((l) => l.id == id ? update(l) : l);
+  }
+
+  // ─── LayerItem structural helpers ─────────────────────────────────────────
+
+  /// Inserts [newLayer] as a [LayerLeaf] immediately above the layer with
+  /// [aboveId]. If [aboveId] is inside a group, the new layer is inserted
+  /// inside that group. If [aboveId] is not found, inserts at the top.
+  List<LayerItem> _insertLayerAbove(
+      List<LayerItem> items, Layer newLayer, String aboveId) {
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
+      if (item is LayerLeaf && item.layer.id == aboveId) {
+        final result = [...items];
+        result.insert(i + 1, LayerLeaf(layer: newLayer));
+        return result;
+      }
+      if (item is LayerGroup) {
+        final newGroupLayers =
+            _insertInGroupLayers(item.layers, newLayer, aboveId);
+        if (newGroupLayers != null) {
+          final result = [...items];
+          result[i] = item.copyWith(layers: newGroupLayers);
+          return result;
+        }
+      }
+    }
+    // Not found: insert at top.
+    return [LayerLeaf(layer: newLayer), ...items];
+  }
+
+  /// Returns a new group-layers list with [newLayer] inserted above [aboveId],
+  /// or null if [aboveId] is not in this group.
+  List<Layer>? _insertInGroupLayers(
+      List<Layer> layers, Layer newLayer, String aboveId) {
+    for (int i = 0; i < layers.length; i++) {
+      if (layers[i].id == aboveId) {
+        final result = [...layers];
+        result.insert(i + 1, newLayer);
+        return result;
+      }
+    }
+    return null;
+  }
+
+  /// Removes the [LayerLeaf] with [layerId] from [items], recursively searching
+  /// inside groups. Returns the updated list.
+  List<LayerItem> _removeLayer(List<LayerItem> items, String layerId) {
+    final result = <LayerItem>[];
+    for (final item in items) {
+      if (item is LayerLeaf && item.layer.id == layerId) continue;
+      if (item is LayerGroup) {
+        final newLayers =
+            item.layers.where((l) => l.id != layerId).toList();
+        result.add(item.copyWith(layers: newLayers));
+      } else {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
+  /// Moves the layer with [layerId] by [delta] positions in its container
+  /// (group or top-level list). Returns null if layer not found or no move needed.
+  List<LayerItem>? _moveLayerDelta(
+      List<LayerItem> items, String layerId, int delta) {
+    // Try top-level leaf move first.
+    final topIdx = items.indexWhere(
+        (i) => i is LayerLeaf && i.layer.id == layerId);
+    if (topIdx != -1) {
+      final newIdx = (topIdx + delta).clamp(0, items.length - 1);
+      if (newIdx == topIdx) return null;
+      final result = [...items];
+      final moved = result.removeAt(topIdx);
+      result.insert(newIdx, moved);
+      return result;
+    }
+    // Try inside groups.
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
+      if (item is LayerGroup) {
+        final idx = item.layers.indexWhere((l) => l.id == layerId);
+        if (idx != -1) {
+          final newIdx = (idx + delta).clamp(0, item.layers.length - 1);
+          if (newIdx == idx) return null;
+          final newLayers = [...item.layers];
+          final moved = newLayers.removeAt(idx);
+          newLayers.insert(newIdx, moved);
+          final result = [...items];
+          result[i] = item.copyWith(layers: newLayers);
+          return result;
+        }
+      }
+    }
+    return null;
   }
 
   // ─── Snippet palette management ───────────────────────────────────────────

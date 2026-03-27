@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/layer.dart';
+import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
 import 'format_service.dart';
@@ -159,9 +160,14 @@ class FileService {
       buf.writeln('    symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
     }
 
-    buf.writeln('layers:');
-    for (final layer in pattern.layers) {
-      _writeLayer(buf, layer);
+    buf.writeln('layerItems:');
+    for (final item in pattern.layerItems) {
+      switch (item) {
+        case LayerLeaf(:final layer):
+          _writeLayer(buf, layer);
+        case LayerGroup():
+          _writeGroup(buf, item);
+      }
     }
 
     if (pattern.snippets.isNotEmpty) {
@@ -201,14 +207,28 @@ class FileService {
     }
   }
 
-  static void _writeLayer(StringBuffer buf, Layer layer) {
-    buf.writeln('  - id: ${_yamlStr(layer.id)}');
-    buf.writeln('    name: ${_yamlStr(layer.name)}');
-    buf.writeln('    visible: ${layer.visible}');
-    buf.writeln('    opacity: ${layer.opacity.toStringAsFixed(3)}');
-    buf.writeln('    stitches:');
+  static void _writeLayer(StringBuffer buf, Layer layer,
+      {String listIndent = '  ', String bodyIndent = '    '}) {
+    buf.writeln('$listIndent- type: layer');
+    buf.writeln('$bodyIndent  id: ${_yamlStr(layer.id)}');
+    buf.writeln('$bodyIndent  name: ${_yamlStr(layer.name)}');
+    buf.writeln('$bodyIndent  visible: ${layer.visible}');
+    buf.writeln('$bodyIndent  opacity: ${layer.opacity.toStringAsFixed(3)}');
+    buf.writeln('$bodyIndent  stitches:');
     for (final s in layer.stitches) {
-      _writeStitch(buf, s, indent: '      ');
+      _writeStitch(buf, s, indent: '$bodyIndent    ');
+    }
+  }
+
+  static void _writeGroup(StringBuffer buf, LayerGroup group) {
+    buf.writeln('  - type: group');
+    buf.writeln('    id: ${_yamlStr(group.id)}');
+    buf.writeln('    name: ${_yamlStr(group.name)}');
+    buf.writeln('    collapsed: ${group.collapsed}');
+    buf.writeln('    groupVisible: ${group.groupVisible}');
+    buf.writeln('    layers:');
+    for (final layer in group.layers) {
+      _writeLayer(buf, layer, listIndent: '      ', bodyIndent: '        ');
     }
   }
 
