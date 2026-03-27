@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../data/dmc_colors.dart';
 import '../models/layer.dart';
+import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
 import '../models/snippet_palette.dart';
@@ -89,13 +90,15 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             width: s.width,
             height: s.height,
             threads: s.threads,
-            layers: [
-              Layer(
-                id: const Uuid().v4(),
-                name: 'Layer 1',
-                visible: true,
-                opacity: 1.0,
-                stitches: s.stitches,
+            layerItems: [
+              LayerLeaf(
+                layer: Layer(
+                  id: const Uuid().v4(),
+                  name: 'Layer 1',
+                  visible: true,
+                  opacity: 1.0,
+                  stitches: s.stitches,
+                ),
               ),
             ],
           ),

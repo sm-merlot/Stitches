@@ -1,0 +1,33 @@
+{
+  "planPath": "docs/superpowers/plans/2026-03-27-layer-groups.md",
+  "tasks": [
+    {
+      "id": 3,
+      "subject": "Task 1: LayerItem model",
+      "status": "pending",
+      "description": "**Goal:** Create `lib/models/layer_item.dart` with the sealed class hierarchy.\n\n**Files:**\n- Create: `lib/models/layer_item.dart`\n\n**Acceptance Criteria:**\n- [ ] `LayerItem` sealed class with `LayerLeaf` and `LayerGroup` subtypes\n- [ ] Both have `copyWith`; `LayerGroup` has a `create` factory\n- [ ] `flutter analyze` passes\n\n**Verify:** `flutter analyze lib/models/layer_item.dart` → no issues\n\n```json:metadata\n{\"files\": [\"lib/models/layer_item.dart\"], \"verifyCommand\": \"flutter analyze lib/models/layer_item.dart\", \"acceptanceCriteria\": [\"LayerItem sealed class\", \"LayerLeaf and LayerGroup with copyWith\", \"LayerGroup.create factory\", \"flutter analyze passes\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 2: CrossStitchPattern + serialization",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Replace stored `layers` field with `layerItems`, add flattening `layers` getter and `mapLayers` helper, update YAML read/write, fix format_service.\n\n**Files:**\n- Modify: `lib/models/pattern.dart`\n- Modify: `lib/services/file_service.dart`\n- Modify: `lib/services/format_service.dart`\n\n**Verify:** Open existing `.stitchx` — layers appear, drawing works\n\n```json:metadata\n{\"files\": [\"lib/models/pattern.dart\", \"lib/services/file_service.dart\", \"lib/services/format_service.dart\"], \"verifyCommand\": \"flutter analyze\", \"acceptanceCriteria\": [\"layerItems replaces layers field\", \"layers getter flattens with groupVisible\", \"mapLayers helper\", \"migration from layers: key\", \"layerItems: written to file\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 3: EditorProvider layer + group operations",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Update all layer operations to work through `layerItems`, add all group operations.\n\n**Files:**\n- Modify: `lib/providers/editor_provider.dart`\n\n**Verify:** Hot-restart — add/delete/move/merge layers all work as before\n\n```json:metadata\n{\"files\": [\"lib/providers/editor_provider.dart\"], \"verifyCommand\": \"flutter analyze\", \"acceptanceCriteria\": [\"all layer ops work with layerItems\", \"addLayer inserts in group when active layer is grouped\", \"all 10 group ops implemented\", \"no copyWith(layers:) remaining\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 4: Layers panel UI",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Rewrite LayersPanel to render groups with collapse/expand, indented layer rows, and a New Group button.\n\n**Files:**\n- Modify: `lib/widgets/layers_panel.dart`\n\n**Verify:** Run app — create group, collapse, toggle visibility, ungroup, delete with confirmation\n\n```json:metadata\n{\"files\": [\"lib/widgets/layers_panel.dart\"], \"verifyCommand\": \"flutter analyze\", \"acceptanceCriteria\": [\"group header row with chevron/eye/name/menu\", \"collapse hides layers\", \"12px indent for grouped layers\", \"new group button works\", \"delete group confirmation\", \"move out of group\", \"save/reload persists groups\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-03-27T00:00:00Z"
+}
