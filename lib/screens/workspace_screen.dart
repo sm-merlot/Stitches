@@ -19,6 +19,7 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import '../services/format_service.dart';
+import '../utils/snackbars.dart';
 import 'export_dialog.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
@@ -174,11 +175,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               _patternWithEditorState(state), state.filePath!);
         }
         ref.read(editorProvider.notifier).markSaved();
-        if (!quiet && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved')),
-          );
-        }
+        if (!quiet && context.mounted) showSuccess(context, 'Saved');
 
         // Auto-upload to Drive only for native .stitchx files.
         if (state.isNativeFormat) {
@@ -197,13 +194,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         await _saveAs(context);
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Save failed: $e'),
-              backgroundColor: Colors.red.shade700),
-        );
-      }
+      if (context.mounted) showError(context, 'Save failed: $e');
     }
   }
 
@@ -215,20 +206,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);
         ref.read(editorProvider.notifier).markSaved();
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved')),
-          );
-        }
+        if (context.mounted) showSuccess(context, 'Saved');
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Save failed: $e'),
-              backgroundColor: Colors.red.shade700),
-        );
-      }
+      if (context.mounted) showError(context, 'Save failed: $e');
     }
   }
 
@@ -277,12 +258,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
         refreshFolder(ref, workspace);
       } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not create file: $e'),
-                backgroundColor: Colors.red.shade700),
-          );
-        }
+        if (context.mounted) showError(context, 'Could not create file: $e');
       }
     } else if (workspace is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
@@ -316,12 +292,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
         unawaited(_uploadNewFileToDrive(workspace, pattern, tempPath));
       } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not create file: $e'),
-                backgroundColor: Colors.red.shade700),
-          );
-        }
+        if (context.mounted) showError(context, 'Could not create file: $e');
       } finally {
         if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
@@ -342,12 +313,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       ref.read(editorProvider.notifier).setDriveFileId(newFileId);
       refreshFolder(ref, folder);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not upload file to Drive.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showError(context, 'Could not upload file to Drive.');
     }
   }
 
@@ -625,14 +591,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           );
         }
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${reviewedResults.length} grids added as snippets — '
-                'open the Snippets panel to place them on the canvas.',
-              ),
-              duration: const Duration(seconds: 5),
-            ),
+          showSuccess(
+            context,
+            '${reviewedResults.length} grids added as snippets — '
+            'open the Snippets panel to place them on the canvas.',
+            duration: const Duration(seconds: 5),
           );
         }
       }
@@ -751,25 +714,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ? ' Try again in ~${retryMatch.group(1)!.split('.').first}s.'
           : '';
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Rate limit reached.$retryStr'),
-        backgroundColor: Colors.orange.shade700,
-        duration: const Duration(seconds: 6),
-      ));
+      showWarning(context, 'Rate limit reached.$retryStr',
+          duration: const Duration(seconds: 6));
     } else if (msg.contains('API key') || msg.contains('api_key') ||
         msg.contains('API_KEY_INVALID')) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text(
-            'Invalid API key. Check your Gemini key in Settings.'),
-        backgroundColor: Colors.red.shade700,
-        duration: const Duration(seconds: 6),
-      ));
+      showError(context, 'Invalid API key. Check your Gemini key in Settings.',
+          duration: const Duration(seconds: 6));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Scan failed: $msg'),
-        backgroundColor: Colors.red.shade700,
-        duration: const Duration(seconds: 6),
-      ));
+      showError(context, 'Scan failed: $msg',
+          duration: const Duration(seconds: 6));
     }
   }
 

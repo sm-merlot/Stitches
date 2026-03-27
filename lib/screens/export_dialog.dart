@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../models/pattern.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
+import '../utils/snackbars.dart';
 
 /// Shows a format-picker dialog then exports the pattern.
 /// Returns true if the export succeeded.
@@ -39,23 +40,12 @@ Future<bool> showExportDialog(
     await FormatService.exportFile(pattern, finalPath, format);
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'Exported as ${finalPath.split(Platform.pathSeparator).last}'),
-        ),
-      );
+      showSuccess(context,
+          'Exported as ${finalPath.split(Platform.pathSeparator).last}');
     }
     return true;
   } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Export failed: $e'),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
-    }
+    if (context.mounted) showError(context, 'Export failed: $e');
     return false;
   }
 }

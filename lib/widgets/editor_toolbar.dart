@@ -14,8 +14,8 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
-import 'package:path_provider/path_provider.dart';
 import '../screens/color_picker_screen.dart';
+import '../services/drive_cache.dart';
 import '../screens/stitch_demo_screen.dart';
 import 'color_select_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -1646,19 +1646,14 @@ class _SpriteImageSourceDialogState
     if (file is DriveImageFile) {
       setState(() => _downloading = true);
       try {
-        final tempDir = await getTemporaryDirectory();
-        final tempPath = '${tempDir.path}/${file.fileId}_${file.name}';
-        final cached = File(tempPath);
-        if (!await cached.exists()) {
-          final service =
-              await ref.read(googleDriveProvider.notifier).getService();
-          if (service == null) {
-            if (mounted) setState(() => _downloading = false);
-            return;
-          }
-          final bytes = await service.downloadFile(file.fileId);
-          await cached.writeAsBytes(bytes);
+        final service =
+            await ref.read(googleDriveProvider.notifier).getService();
+        if (service == null) {
+          if (mounted) setState(() => _downloading = false);
+          return;
         }
+        final tempPath = await driveGetOrDownload(
+            file.fileId, '${file.fileId}_${file.name}', service);
         if (mounted) Navigator.of(context).pop(tempPath);
       } catch (_) {
         if (mounted) setState(() => _downloading = false);

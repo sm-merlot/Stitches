@@ -11,6 +11,7 @@ import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../utils/snackbars.dart';
 import 'drive_file_picker_dialog.dart';
 import 'drive_folder_picker_dialog.dart';
 import 'editor_screen.dart';
@@ -54,7 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not open file: $e');
+      showError(context, 'Could not open file: $e');
     }
   }
 
@@ -69,7 +70,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not open folder: $e');
+      showError(context, 'Could not open folder: $e');
     }
   }
 
@@ -118,7 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               await ref.read(googleDriveProvider.notifier).getService();
           if (!mounted) return;
           if (service == null) {
-            _showError('Not connected to Google Drive.');
+            showError(context, 'Not connected to Google Drive.');
             return;
           }
           final bytes = await service.downloadFile(selection.fileId);
@@ -144,7 +145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not open Drive file: $e');
+      showError(context, 'Could not open Drive file: $e');
     }
   }
 
@@ -230,7 +231,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 await ref.read(googleDriveProvider.notifier).getService();
             if (!mounted) return;
             if (service == null) {
-              _showError('Not connected to Google Drive.');
+              showError(context, 'Not connected to Google Drive.');
               return;
             }
             final bytes = await service.downloadFile(item.id);
@@ -263,7 +264,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not open file: $e');
+      showError(context, 'Could not open file: $e');
     }
   }
 
@@ -279,7 +280,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not open folder: $e');
+      showError(context, 'Could not open folder: $e');
     }
   }
 
@@ -288,15 +289,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await ref.read(googleDriveProvider.notifier).connect();
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not connect to Google Drive: $e');
+      showError(context, 'Could not connect to Google Drive: $e');
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
-    );
-  }
 
   // ─── Build ─────────────────────────────────────────────────────────────────
 

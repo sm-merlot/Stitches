@@ -9,6 +9,7 @@ import '../models/stitch_plan.dart';
 import '../services/gif_renderer.dart';
 import '../services/stitch_planner.dart';
 import '../services/stitch_renderer.dart' show computeGridBounds, stitchTypeArgb;
+import '../utils/snackbars.dart';
 import '../widgets/stitch_demo_painter.dart';
 
 /// Plays back the step-by-step stitching demonstration and lets the user
@@ -193,20 +194,9 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
       final finalPath = path.endsWith('.gif') ? path : '$path.gif';
       await File(finalPath).writeAsBytes(gifBytes);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('GIF saved')),
-        );
-      }
+      if (mounted) showSuccess(context, 'GIF saved');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Export failed: $e'),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
-      }
+      if (mounted) showError(context, 'Export failed: $e');
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
