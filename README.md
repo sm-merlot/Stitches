@@ -10,7 +10,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 
 ### Pattern editing
 - **Pattern canvas** — draw full stitches, half stitches (forward `/` and backward `\`), quarter stitches, and backstitches on a scalable grid
-- **Canvas layers** — named layers with per-layer visibility toggle and opacity slider; layers panel in the right sidebar; stitches scoped to the active layer; reorder layers by drag; layers collapse into a single composite view for printing or export
+- **Canvas layers** — named layers with per-layer visibility toggle and opacity slider; layers panel in the right sidebar; stitches scoped to the active layer; drag to reorder; organise layers into collapsible named groups; layers collapse into a single composite view for printing or export
 - **DMC / Anchor color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers; toggle between DMC and Anchor codes in Settings; threads enter the palette automatically on first stitch and are pruned when the last stitch is erased
 - **Symbols** — every palette thread and composite thread gets a unique symbol from a pool of ~180 UTF-8 characters; symbols are stable across save/reload and opacity changes; tap any symbol to reassign it via the symbol picker
 - **Undo / redo** — full history stack (up to 200 steps); double-tap to undo on touch devices
@@ -96,10 +96,6 @@ Requires Flutter 3.41.4+.
 ### Sprite importer
 - In workspace mode, open image from folder tree OR local file system picker
 - Initial "open image" screen should be a smaller modal, not a full-screen page
-
-### Canvas
-- Add visible grid lines to the pattern canvas
-- Layer groups — organise layers into collapsible named groups
 
 ### Snippet editor
 - Palette editing inside the snippet editor (rename, reorder, manage colours per palette)
