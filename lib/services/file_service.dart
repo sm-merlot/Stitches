@@ -210,13 +210,13 @@ class FileService {
   static void _writeLayer(StringBuffer buf, Layer layer,
       {String listIndent = '  ', String bodyIndent = '    '}) {
     buf.writeln('$listIndent- type: layer');
-    buf.writeln('$bodyIndent  id: ${_yamlStr(layer.id)}');
-    buf.writeln('$bodyIndent  name: ${_yamlStr(layer.name)}');
-    buf.writeln('$bodyIndent  visible: ${layer.visible}');
-    buf.writeln('$bodyIndent  opacity: ${layer.opacity.toStringAsFixed(3)}');
-    buf.writeln('$bodyIndent  stitches:');
+    buf.writeln('${bodyIndent}id: ${_yamlStr(layer.id)}');
+    buf.writeln('${bodyIndent}name: ${_yamlStr(layer.name)}');
+    buf.writeln('${bodyIndent}visible: ${layer.visible}');
+    buf.writeln('${bodyIndent}opacity: ${layer.opacity.toStringAsFixed(3)}');
+    buf.writeln('${bodyIndent}stitches:');
     for (final s in layer.stitches) {
-      _writeStitch(buf, s, indent: '$bodyIndent    ');
+      _writeStitch(buf, s, indent: '$bodyIndent  ');
     }
   }
 
@@ -226,9 +226,13 @@ class FileService {
     buf.writeln('    name: ${_yamlStr(group.name)}');
     buf.writeln('    collapsed: ${group.collapsed}');
     buf.writeln('    groupVisible: ${group.groupVisible}');
-    buf.writeln('    layers:');
-    for (final layer in group.layers) {
-      _writeLayer(buf, layer, listIndent: '      ', bodyIndent: '        ');
+    if (group.layers.isEmpty) {
+      buf.writeln('    layers: []');
+    } else {
+      buf.writeln('    layers:');
+      for (final layer in group.layers) {
+        _writeLayer(buf, layer, listIndent: '      ', bodyIndent: '        ');
+      }
     }
   }
 
