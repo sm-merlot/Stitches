@@ -340,7 +340,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(_addedCount > 0),
-            child: const Text('Done'),
+            child: const Text('Close'),
           ),
           const SizedBox(width: 8),
         ],
