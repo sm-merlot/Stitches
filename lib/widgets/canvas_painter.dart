@@ -391,6 +391,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   final ui.Image? referenceImage;
   final double referenceOpacity;
   final bool referenceVisible;
+  /// Composite thread cache keyed by 'x,y' cell key. When present, the symbol
+  /// and colour for blended cells are taken from this map (stable assignments)
+  /// rather than from nearest-thread heuristics.
+  final Map<String, Thread>? compositeThreadCache;
   late final Map<String, Thread> _threadMap = {
     for (final t in pattern.threads) t.dmcCode: t,
   };
@@ -408,6 +412,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
+    this.compositeThreadCache,
   });
 
   /// Returns the palette thread whose colour is closest to [target] by
@@ -571,12 +576,17 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           // Skip symbol if a higher visible layer has a FullStitch at this cell
           if (stitch is FullStitch && occluded.contains('${stitch.x},${stitch.y}')) continue;
 
-          // For blended cells, use the nearest palette thread symbol to the
-          // blended colour so the symbol always matches what the user sees.
+          // For blended cells, use the composite cache (stable symbol
+          // assignments) when available; fall back to nearest-thread lookup
+          // only if the cache hasn't been built yet.
           Thread? compositeThread;
           if (stitch is FullStitch) {
-            final blended = blendMap['${stitch.x},${stitch.y}'];
-            if (blended != null) compositeThread = _nearestThread(blended);
+            final cellKey = '${stitch.x},${stitch.y}';
+            compositeThread = compositeThreadCache?[cellKey];
+            if (compositeThread == null) {
+              final blended = blendMap[cellKey];
+              if (blended != null) compositeThread = _nearestThread(blended);
+            }
           }
           final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || thread.symbol.isEmpty) continue;
@@ -977,7 +987,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.stitchFocusThreadId != stitchFocusThreadId ||
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||
-      old.referenceVisible != referenceVisible;
+      old.referenceVisible != referenceVisible ||
+      old.compositeThreadCache != compositeThreadCache;
 }
 
 // ─── Overlay layer ────────────────────────────────────────────────────────────

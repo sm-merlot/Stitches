@@ -863,6 +863,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   referenceImage: state.referenceImage,
                   referenceOpacity: state.referenceOpacity,
                   referenceVisible: state.referenceVisible,
+                  compositeThreadCache: state.compositeThreadCache,
                 ),
                 isComplex: true,
                 size: Size.infinite,
