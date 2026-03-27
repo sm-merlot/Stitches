@@ -963,24 +963,34 @@ class EditorNotifier extends Notifier<EditorState> {
     // Auto-register thread if not already in the palette
     var pattern = state.pattern;
     final threadId = stitch.threadId;
+    Thread? addedThread;
     if (!pattern.threads.any((t) => t.dmcCode == threadId)) {
       final dmc = dmcColorByCode(threadId);
       if (dmc != null) {
         final usedSymbols = _allUsedSymbols(pattern);
-        final newThread = Thread(
+        addedThread = Thread(
           dmcCode: dmc.code,
           color: dmc.color,
           name: dmc.name,
           symbol: _nextSymbol(usedSymbols),
         );
-        pattern = pattern.copyWith(threads: [...pattern.threads, newThread]);
+        pattern = pattern.copyWith(threads: [...pattern.threads, addedThread]);
       }
+    }
+
+    // Propagate new thread to all snippet palettes so every palette stays in sync.
+    var snippetPalettes = state.snippetPalettes;
+    if (addedThread != null && snippetPalettes.isNotEmpty) {
+      snippetPalettes = snippetPalettes
+          .map((p) => p.copyWith(threads: [...p.threads, addedThread!]))
+          .toList();
     }
 
     final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
     final newPattern = _patternWithActiveLayerStitches(pattern, newStitches);
     state = state.copyWith(
       pattern: newPattern,
+      snippetPalettes: snippetPalettes,
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],

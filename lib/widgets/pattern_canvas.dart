@@ -59,6 +59,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Whether Shift is currently held — enables edge snapping in paste mode.
   bool _shiftHeld = false;
 
+  // ── Palette override cache ──────────────────────────────────────────────────
+  // Rebuilt only when snippetPalettes identity or active index actually changes,
+  // so the same Map instance is reused across builds and shouldRepaint works.
+  List<Object> _lastPalettes = const [];
+  int _lastPaletteIdx = -1;
+  Map<String, Color>? _paletteOverride;
+
   // Guard to fire flood fill only once per tap (not repeatedly on drag).
   bool _fillFired = false;
 
@@ -129,6 +136,32 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   double get _cellSize => _baseCellSize;
+
+  /// Returns a stable [Map] instance for the active snippet palette override,
+  /// rebuilding it only when [state.snippetPalettes] identity or the active
+  /// index changes. This lets [CanvasStaticPainter.shouldRepaint] use a simple
+  /// identity comparison instead of deep equality.
+  Map<String, Color>? _getOrBuildPaletteOverride(EditorState state) {
+    final palettes = state.snippetPalettes;
+    final idx = state.snippetActivePaletteIndex;
+    if (identical(_lastPalettes, palettes) && _lastPaletteIdx == idx) {
+      return _paletteOverride;
+    }
+    _lastPalettes = palettes;
+    _lastPaletteIdx = idx;
+    if (palettes.length <= 1 || idx == 0 || idx >= palettes.length) {
+      return _paletteOverride = null;
+    }
+    final primary = palettes[0];
+    final active = palettes[idx];
+    final map = <String, Color>{};
+    for (var i = 0; i < primary.threads.length; i++) {
+      if (i < active.threads.length) {
+        map[primary.threads[i].dmcCode] = active.threads[i].color;
+      }
+    }
+    return _paletteOverride = map.isEmpty ? null : map;
+  }
 
   Offset _screenToCanvas(Offset screen) {
     return (screen - _panOffset) / _scale;
@@ -864,6 +897,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   referenceOpacity: state.referenceOpacity,
                   referenceVisible: state.referenceVisible,
                   compositeThreadCache: state.compositeThreadCache,
+                  paletteOverride: _getOrBuildPaletteOverride(state),
                 ),
                 isComplex: true,
                 size: Size.infinite,

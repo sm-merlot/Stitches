@@ -405,11 +405,17 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             const SizedBox(width: 8),
           ],
           IconButton(
-            tooltip: 'Block mode',
+            tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
             isSelected: state.blockMode,
             icon: const Icon(Icons.grid_view_outlined),
             selectedIcon: const Icon(Icons.grid_view),
             onPressed: () => notifier.toggleBlockMode(),
+            style: state.blockMode
+                ? IconButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    foregroundColor: theme.colorScheme.onPrimaryContainer,
+                  )
+                : null,
           ),
           IconButton(
             tooltip: 'Manage palettes',

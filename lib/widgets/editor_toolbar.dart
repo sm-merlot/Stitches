@@ -294,8 +294,9 @@ class EditorToolbar extends ConsumerWidget {
                     ),
                     vDivider,
                   ],
-                  // Sprite sheet button
-                  if (showSpriteSheetButton)
+                  // Sprite sheet button — hidden on phones (shortestSide < 600)
+                  if (showSpriteSheetButton &&
+                      MediaQuery.of(context).size.shortestSide >= 600)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                       child: Tooltip(
