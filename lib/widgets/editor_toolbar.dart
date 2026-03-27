@@ -592,7 +592,9 @@ class _PaletteDialog extends ConsumerWidget {
                     return ListTile(
                       dense: true,
                       leading: GestureDetector(
-                        onTap: () => _showSymbolPicker(context, ref, t),
+                        onTap: () => state.showCompositeThreads
+                            ? _showCompositeSymbolPicker(context, ref, t)
+                            : _showSymbolPicker(context, ref, t),
                         child: _ThreadSwatch(thread: t, size: 24),
                       ),
                       title: Text('$displayCode – ${t.name}'),
@@ -634,7 +636,9 @@ class _PaletteDialog extends ConsumerWidget {
                           Tooltip(
                             message: 'Change symbol',
                             child: GestureDetector(
-                              onTap: () => _showSymbolPicker(context, ref, t),
+                              onTap: () => state.showCompositeThreads
+                                  ? _showCompositeSymbolPicker(context, ref, t)
+                                  : _showSymbolPicker(context, ref, t),
                               child: Container(
                                 width: 28,
                                 height: 28,
@@ -670,14 +674,6 @@ class _PaletteDialog extends ConsumerWidget {
                   },
                 ),
               ),
-            const Divider(height: 1),
-            // Add colour — opens picker on top without closing this dialog
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.add, size: 20),
-              title: const Text('Add colour…'),
-              onTap: () => showColorPicker(context),
-            ),
           ],
         ),
       ),
@@ -692,8 +688,41 @@ class _PaletteDialog extends ConsumerWidget {
         child: _SymbolPickerDialog(
           thread: t,
           onSelect: (s) {
+            final state = ref.read(editorProvider);
+            final takenByOther = state.pattern.threads
+                    .any((other) => other.dmcCode != t.dmcCode && other.symbol == s) ||
+                state.pattern.compositeSymbols.entries.any((e) => e.value == s);
+            if (takenByOther) {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("'$s' is already used by another thread")),
+              );
+              return;
+            }
             ref.read(editorProvider.notifier).changeThreadSymbol(t.dmcCode, s);
             Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showCompositeSymbolPicker(BuildContext context, WidgetRef ref, Thread t) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => UncontrolledProviderScope(
+        container: ProviderScope.containerOf(context),
+        child: _SymbolPickerDialog(
+          thread: t,
+          onSelect: (s) {
+            final applied =
+                ref.read(editorProvider.notifier).changeCompositeSymbol(t.dmcCode, s);
+            Navigator.of(context).pop();
+            if (!applied) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("'$s' is already used by another thread")),
+              );
+            }
           },
         ),
       ),

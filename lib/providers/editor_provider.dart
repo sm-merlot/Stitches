@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
 import '../models/layer.dart';
 import '../models/pattern.dart';
@@ -162,9 +163,15 @@ class EditorState {
         editorActiveLayerId: activeLayerId.isEmpty ? null : activeLayerId,
       );
 
-  Thread? get selectedThread => selectedThreadId != null
-      ? pattern.threadByCode(selectedThreadId!)
-      : null;
+  Thread? get selectedThread {
+    if (selectedThreadId == null) return null;
+    final inPalette = pattern.threadByCode(selectedThreadId!);
+    if (inPalette != null) return inPalette;
+    // Not yet in palette (selected but no stitch placed yet) — look up in DMC db.
+    final dmc = dmcColorByCode(selectedThreadId!);
+    if (dmc == null) return null;
+    return Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
+  }
 
   /// Stitches in the current selectionRect, scoped to the active layer.
   List<Stitch> get selectedStitches {
@@ -534,16 +541,8 @@ class EditorNotifier extends Notifier<EditorState> {
     final dmc = SpriteImporter.matchPixel(r, g, b, 255);
     if (dmc == null) return;
 
-    // Ensure the composite thread is in the palette (with a symbol), then select it.
-    var pattern = s.pattern;
-    if (!threadMap.containsKey(dmc.code)) {
-      final newThread = _resolveThreadSymbol(
-        Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name),
-        pattern.threads,
-      );
-      pattern = pattern.copyWith(threads: [...pattern.threads, newThread]);
-    }
-    select(dmc.code, pattern);
+    // Select the nearest DMC thread — it will be auto-registered when first stitch is placed.
+    select(dmc.code);
   }
 
   void setAidaColor(Color color) {
@@ -762,7 +761,8 @@ class EditorNotifier extends Notifier<EditorState> {
     if (!activeStitches.any((s) => EditorState.isStitchInRect(s, rect))) return;
     final remaining =
         activeStitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
-    final newPattern = _patternWithActiveLayerStitches(state.pattern, remaining);
+    final newPattern = _pruneUnusedThreads(
+        _patternWithActiveLayerStitches(state.pattern, remaining));
     state = state.copyWith(
       pattern: newPattern,
       selectionRect: null,
@@ -783,22 +783,6 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void setBackstitchStart(Offset? point) {
     state = state.copyWith(backstitchStartPoint: point);
-  }
-
-  void addThread(Thread thread) {
-    final t = _resolveThreadSymbol(thread, state.pattern.threads);
-    final newThreads = [...state.pattern.threads, t];
-    final newPattern = state.pattern.copyWith(threads: newThreads);
-    final recents = [
-      t.dmcCode,
-      ...state.recentThreadIds.where((id) => id != t.dmcCode),
-    ].take(5).toList();
-    state = state.copyWith(
-      pattern: newPattern,
-      selectedThreadId: t.dmcCode,
-      recentThreadIds: recents,
-      isDirty: true,
-    );
   }
 
   void changeThreadSymbol(String dmcCode, String symbol) {
@@ -918,13 +902,13 @@ class EditorNotifier extends Notifier<EditorState> {
           bs.x2 >= 0 && bs.x2 <= newWidth && bs.y2 >= 0 && bs.y2 <= newHeight;
     }
 
-    final newPattern = _patternWithAllLayersTransformed(
+    final newPattern = _pruneUnusedThreads(_patternWithAllLayersTransformed(
       old.copyWith(width: newWidth, height: newHeight),
       (stitches) => stitches
           .map((s) => EditorState.offsetStitch(s, dx, dy))
           .where(inBounds)
           .toList(),
-    );
+    ));
 
     state = state.copyWith(
       pattern: newPattern,
@@ -957,8 +941,25 @@ class EditorNotifier extends Notifier<EditorState> {
         .any((s) => s == stitch && s.threadId == stitch.threadId);
     if (alreadyExists) return;
 
+    // Auto-register thread if not already in the palette
+    var pattern = state.pattern;
+    final threadId = stitch.threadId;
+    if (!pattern.threads.any((t) => t.dmcCode == threadId)) {
+      final dmc = dmcColorByCode(threadId);
+      if (dmc != null) {
+        final usedSymbols = _allUsedSymbols(pattern);
+        final newThread = Thread(
+          dmcCode: dmc.code,
+          color: dmc.color,
+          name: dmc.name,
+          symbol: _nextSymbol(usedSymbols),
+        );
+        pattern = pattern.copyWith(threads: [...pattern.threads, newThread]);
+      }
+    }
+
     final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
-    final newPattern = _patternWithActiveLayerStitches(state.pattern, newStitches);
+    final newPattern = _patternWithActiveLayerStitches(pattern, newStitches);
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -975,7 +976,8 @@ class EditorNotifier extends Notifier<EditorState> {
 
     final newStitches =
         state.activeLayer.stitches.where((s) => !hit(s)).toList();
-    final newPattern = _patternWithActiveLayerStitches(state.pattern, newStitches);
+    final newPattern = _pruneUnusedThreads(
+        _patternWithActiveLayerStitches(state.pattern, newStitches));
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -1089,7 +1091,8 @@ class EditorNotifier extends Notifier<EditorState> {
 
     final newStitches =
         state.activeLayer.stitches.where((s) => s != target).toList();
-    final newPattern = _patternWithActiveLayerStitches(state.pattern, newStitches);
+    final newPattern = _pruneUnusedThreads(
+        _patternWithActiveLayerStitches(state.pattern, newStitches));
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
@@ -1191,6 +1194,30 @@ class EditorNotifier extends Notifier<EditorState> {
     return inside(s.x1, s.y1) || inside(s.x2, s.y2);
   }
 
+  // ─── Thread pruning ───────────────────────────────────────────────────────
+
+  /// Removes any threads from [pattern.threads] that are no longer referenced
+  /// by any stitch across all layers.
+  CrossStitchPattern _pruneUnusedThreads(CrossStitchPattern pattern) {
+    final used = <String>{};
+    for (final layer in pattern.layers) {
+      for (final stitch in layer.stitches) {
+        final id = switch (stitch) {
+          FullStitch(:final threadId) => threadId,
+          HalfStitch(:final threadId) => threadId,
+          HalfCrossStitch(:final threadId) => threadId,
+          QuarterStitch(:final threadId) => threadId,
+          QuarterCrossStitch(:final threadId) => threadId,
+          BackStitch(:final threadId) => threadId,
+        };
+        used.add(id);
+      }
+    }
+    final pruned = pattern.threads.where((t) => used.contains(t.dmcCode)).toList();
+    if (pruned.length == pattern.threads.length) return pattern;
+    return pattern.copyWith(threads: pruned);
+  }
+
   // ─── Symbol assignment ────────────────────────────────────────────────────
 
   /// Returns the first symbol from [kPatternSymbols] not already in [used], or '' if exhausted.
@@ -1202,13 +1229,27 @@ class EditorNotifier extends Notifier<EditorState> {
   }
 
   /// Returns [thread] with a symbol assigned if its current symbol is empty or
-  /// already used by a thread in [existingThreads].
+  /// already used by a thread in [existingThreads] or in compositeSymbols.
   Thread _resolveThreadSymbol(Thread thread, List<Thread> existingThreads) {
-    final usedSymbols = existingThreads.map((t) => t.symbol).toSet();
+    final usedSymbols = {
+      ...existingThreads.map((t) => t.symbol).where((s) => s.isNotEmpty),
+      ...state.pattern.compositeSymbols.values.where((s) => s.isNotEmpty),
+    };
     if (thread.symbol.isEmpty || usedSymbols.contains(thread.symbol)) {
       return thread.copyWith(symbol: _nextSymbol(usedSymbols));
     }
     return thread;
+  }
+
+  /// All symbols currently reserved in the pattern (both palette threads
+  /// and the composite symbol registry). Used to guarantee uniqueness
+  /// when auto-assigning a symbol to a new thread.
+  Set<String> _allUsedSymbols([CrossStitchPattern? pattern]) {
+    final p = pattern ?? state.pattern;
+    return {
+      for (final t in p.threads) if (t.symbol.isNotEmpty) t.symbol,
+      ...p.compositeSymbols.values.where((s) => s.isNotEmpty),
+    };
   }
 
   /// Ensures every thread in [threads] has a symbol, assigning from [kPatternSymbols]
@@ -1679,29 +1720,71 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void refreshCompositeCache() {
     final raw = computeCompositeThreads(state.pattern);
-    // Ensure every thread in the cache has a symbol so the palette and symbol
-    // renderer can display it correctly.
+
     final patternMap = <String, Thread>{
       for (final t in state.pattern.threads) t.dmcCode: t,
     };
-    // Symbols already used by the pattern palette (must not duplicate).
-    final used = state.pattern.threads.map((t) => t.symbol).toSet();
+
+    // Seed used symbols from both palette threads and the existing composite registry.
+    // This guarantees no new assignment can collide with either source.
+    final used = _allUsedSymbols();
+
+    // Build updated composite registry containing only currently-active composites.
+    final newRegistry = <String, String>{};
+
     final resolved = raw.map((cell, thread) {
-      // If the DMC code exists in the pattern palette, inherit its symbol.
+      // 1. DMC code is a pattern thread — inherit its symbol.
       final existing = patternMap[thread.dmcCode];
       if (existing != null && existing.symbol.isNotEmpty) {
+        newRegistry[thread.dmcCode] = existing.symbol;
         return MapEntry(cell, existing);
       }
-      // Otherwise assign a fresh symbol not yet used by any palette or cache entry.
-      if (thread.symbol.isNotEmpty && !used.contains(thread.symbol)) {
-        used.add(thread.symbol);
-        return MapEntry(cell, thread);
+
+      // 2. DMC code has a stored composite symbol — reuse it (stable across reloads).
+      final stored = state.pattern.compositeSymbols[thread.dmcCode];
+      if (stored != null && stored.isNotEmpty && !used.contains(stored)) {
+        used.add(stored);
+        newRegistry[thread.dmcCode] = stored;
+        return MapEntry(cell, thread.copyWith(symbol: stored));
       }
+      // stored symbol exists but collides with a pattern thread symbol — fall through to reassign.
+
+      // 3. Assign a fresh symbol.
       final sym = _nextSymbol(used);
       if (sym.isNotEmpty) used.add(sym);
+      if (sym.isNotEmpty) newRegistry[thread.dmcCode] = sym;
       return MapEntry(cell, thread.copyWith(symbol: sym));
     });
-    state = state.copyWith(compositeThreadCache: resolved);
+
+    // Write updated registry back to pattern so it persists on next save.
+    state = state.copyWith(
+      compositeThreadCache: resolved,
+      pattern: state.pattern.copyWith(compositeSymbols: newRegistry),
+      isDirty: true,
+    );
+  }
+
+  /// Manually overrides the symbol for a composite (blended) thread.
+  /// Rejects the symbol if it is already used by any pattern thread or
+  /// other composite entry, then immediately rebuilds the composite cache.
+  ///
+  /// Returns true if applied, false if rejected (symbol already taken).
+  bool changeCompositeSymbol(String dmcCode, String symbol) {
+    final usedByOthers = {
+      for (final t in state.pattern.threads)
+        if (t.symbol.isNotEmpty) t.symbol,
+      for (final entry in state.pattern.compositeSymbols.entries)
+        if (entry.key != dmcCode && entry.value.isNotEmpty) entry.value,
+    };
+    if (usedByOthers.contains(symbol)) return false;
+
+    final newRegistry = Map<String, String>.from(state.pattern.compositeSymbols)
+      ..[dmcCode] = symbol;
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(compositeSymbols: newRegistry),
+    );
+    refreshCompositeCache();
+    return true;
   }
 
   /// Applies [update] to the layer with [id] in [pattern] and returns the new pattern.

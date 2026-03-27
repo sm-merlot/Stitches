@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
-import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../providers/settings_provider.dart';
 
@@ -73,9 +72,9 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
   void _selectColor(DmcColor dmcColor) {
     final notifier = ref.read(editorProvider.notifier);
 
-    final replacingId = widget.replacingThreadId;
-    if (replacingId != null) {
-      // Replace mode — swap all stitches from the old thread to this one.
+    // Replace mode — remap all stitches to the new colour.
+    if (widget.replacingThreadId != null) {
+      final replacingId = widget.replacingThreadId!;
       notifier.replaceThread(
         replacingId,
         dmcColor.code,
@@ -86,22 +85,8 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
       return;
     }
 
-    // Normal mode — add / select thread.
-    final editorState = ref.read(editorProvider);
-    final existing = editorState.pattern.threads
-        .where((t) => t.dmcCode == dmcColor.code)
-        .firstOrNull;
-
-    if (existing != null) {
-      notifier.setSelectedThread(existing.dmcCode);
-    } else {
-      notifier.addThread(Thread(
-        dmcCode: dmcColor.code,
-        color: dmcColor.color,
-        name: dmcColor.name,
-      ));
-    }
-
+    // Select mode — set as active colour; palette entry created on first stitch.
+    notifier.setSelectedThread(dmcColor.code);
     Navigator.of(context).pop();
   }
 
@@ -117,7 +102,7 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
       appBar: AppBar(
         title: Text(widget.replacingThreadId != null
             ? 'Replace Colour'
-            : settings.useDmc ? 'DMC Colours' : 'Anchor Colours'),
+            : 'Select Colour'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(

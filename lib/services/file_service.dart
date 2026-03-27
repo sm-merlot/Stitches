@@ -171,6 +171,13 @@ class FileService {
       }
     }
 
+    if (pattern.compositeSymbols.isNotEmpty) {
+      buf.writeln('compositeSymbols:');
+      for (final entry in pattern.compositeSymbols.entries) {
+        buf.writeln('  ${_yamlStr(entry.key)}: ${_yamlStr(entry.value)}');
+      }
+    }
+
     return buf.toString();
   }
 
