@@ -1726,39 +1726,69 @@ class EditorNotifier extends Notifier<EditorState> {
 
   void refreshCompositeCache() {
     final raw = computeCompositeThreads(state.pattern);
+    final activeCodes = raw.values.map((t) => t.dmcCode).toSet();
 
     final patternMap = <String, Thread>{
       for (final t in state.pattern.threads) t.dmcCode: t,
     };
+    final patternSymbols = {
+      for (final t in state.pattern.threads)
+        if (t.symbol.isNotEmpty) t.symbol,
+    };
 
-    // Seed used symbols from both palette threads and the existing composite registry.
-    // This guarantees no new assignment can collide with either source.
-    final used = _allUsedSymbols();
+    final oldRegistry = state.pattern.compositeSymbols;
 
-    // Build updated composite registry containing only currently-active composites.
-    final newRegistry = <String, String>{};
+    // Freed symbols: stored in old registry for codes that are no longer active
+    // composites and not pattern threads. These can be recycled to new codes.
+    final freedSymbols = <String>[
+      for (final entry in oldRegistry.entries)
+        if (!activeCodes.contains(entry.key) &&
+            !patternMap.containsKey(entry.key) &&
+            entry.value.isNotEmpty &&
+            !patternSymbols.contains(entry.value))
+          entry.value,
+    ];
 
+    // used: pattern thread symbols + symbols already committed to active composites.
+    // We do NOT seed from inactive composite registry entries — that's what enables recycling.
+    final used = Set<String>.from(patternSymbols);
+
+    // Phase 1: pre-assign symbols to every active composite code so ordering
+    // within raw.map doesn't affect which code gets which symbol.
+    final preAssigned = <String, String>{};
+    for (final dmcCode in activeCodes) {
+      if (patternMap.containsKey(dmcCode)) continue; // inherits pattern thread symbol
+
+      final stored = oldRegistry[dmcCode];
+      if (stored != null && stored.isNotEmpty && !patternSymbols.contains(stored)) {
+        // Reuse the stored symbol for this code (stable across reloads/opacity tweaks).
+        used.add(stored);
+        preAssigned[dmcCode] = stored;
+      } else {
+        // Stored symbol conflicts with a pattern thread or doesn't exist.
+        // Try recycling a freed symbol first, then fall back to a fresh one.
+        final sym = freedSymbols.isNotEmpty
+            ? freedSymbols.removeAt(0)
+            : _nextSymbol(used);
+        if (sym.isNotEmpty) {
+          used.add(sym);
+          preAssigned[dmcCode] = sym;
+        }
+      }
+    }
+
+    // Build the new registry: start from old (preserves returning inactive codes),
+    // then overlay active assignments.
+    final newRegistry = Map<String, String>.from(oldRegistry)..addAll(preAssigned);
+
+    // Phase 2: resolve each cell using pre-assigned symbols.
     final resolved = raw.map((cell, thread) {
-      // 1. DMC code is a pattern thread — inherit its symbol.
       final existing = patternMap[thread.dmcCode];
       if (existing != null && existing.symbol.isNotEmpty) {
         newRegistry[thread.dmcCode] = existing.symbol;
         return MapEntry(cell, existing);
       }
-
-      // 2. DMC code has a stored composite symbol — reuse it (stable across reloads).
-      final stored = state.pattern.compositeSymbols[thread.dmcCode];
-      if (stored != null && stored.isNotEmpty && !used.contains(stored)) {
-        used.add(stored);
-        newRegistry[thread.dmcCode] = stored;
-        return MapEntry(cell, thread.copyWith(symbol: stored));
-      }
-      // stored symbol exists but collides with a pattern thread symbol — fall through to reassign.
-
-      // 3. Assign a fresh symbol.
-      final sym = _nextSymbol(used);
-      if (sym.isNotEmpty) used.add(sym);
-      if (sym.isNotEmpty) newRegistry[thread.dmcCode] = sym;
+      final sym = preAssigned[thread.dmcCode] ?? '';
       return MapEntry(cell, thread.copyWith(symbol: sym));
     });
 
