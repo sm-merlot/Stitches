@@ -119,6 +119,6 @@ Requires Flutter 3.41.4+.
 
 11. ~~**OXS import/export**~~ ✓ — import and export WinStitch/MacStitch `.oxs` format (open XML-based cross-stitch format). Further format support planned: Pattern Maker (`.xsd`), PC Stitch (`.pat`), and others.
 
-12. **Rename "Done" → "Close"** on dismiss buttons throughout the app (sprite importer and any other screen using "Done" as a close action).
+12. ~~**Rename "Done" → "Close"**~~ ✓ — sprite sheet importer AppBar dismiss button renamed to "Close". Pattern scanner "Done" buttons advance wizard steps and are unchanged.
 
 13. ~~**Canvas layers**~~ ✓ — named layers with per-layer visibility and opacity; layers panel in the right sidebar; stitches scoped to the active layer; composite thread view in stitch mode with stable unique symbols; layer-aware colour picker; thread auto-registration (threads enter palette on first stitch, pruned on last erase); symbol pool extended to ~180 UTF-8 characters; freed composite symbols recycled to newly-appearing colours when opacity changes.
