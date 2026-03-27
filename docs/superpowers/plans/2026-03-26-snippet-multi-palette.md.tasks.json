@@ -7,112 +7,184 @@
       "id": 17,
       "planTask": 1,
       "subject": "Task 1: SnippetPalette model",
-      "status": "pending",
+      "status": "completed",
       "files": {
-        "create": ["lib/models/snippet_palette.dart"]
+        "create": [
+          "lib/models/snippet_palette.dart"
+        ]
       },
       "blockedBy": [],
-      "blocks": [18]
+      "blocks": [
+        18
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 18,
       "planTask": 2,
-      "subject": "Task 2: Snippet model — add palettes, migration",
-      "status": "pending",
+      "subject": "Task 2: Snippet model \u2014 add palettes, migration",
+      "status": "completed",
       "files": {
-        "modify": ["lib/models/snippet.dart"]
+        "modify": [
+          "lib/models/snippet.dart"
+        ]
       },
-      "blockedBy": [17],
-      "blocks": [19]
+      "blockedBy": [
+        17
+      ],
+      "blocks": [
+        19
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 19,
       "planTask": 3,
-      "subject": "Task 3: file_service.dart — serialize snippet palettes",
-      "status": "pending",
+      "subject": "Task 3: file_service.dart \u2014 serialize snippet palettes",
+      "status": "completed",
       "files": {
-        "modify": ["lib/services/file_service.dart"]
+        "modify": [
+          "lib/services/file_service.dart"
+        ]
       },
-      "blockedBy": [18],
-      "blocks": [20]
+      "blockedBy": [
+        18
+      ],
+      "blocks": [
+        20
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 20,
       "planTask": 4,
-      "subject": "Task 4: EditorNotifier — snippet palette management methods",
-      "status": "pending",
+      "subject": "Task 4: EditorNotifier \u2014 snippet palette management methods",
+      "status": "completed",
       "files": {
-        "modify": ["lib/providers/editor_provider.dart"]
+        "modify": [
+          "lib/providers/editor_provider.dart"
+        ]
       },
-      "blockedBy": [19],
-      "blocks": [21]
+      "blockedBy": [
+        19
+      ],
+      "blocks": [
+        21
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 21,
       "planTask": 5,
       "subject": "Task 5: resolveThread helper + SnippetThumbnail update",
-      "status": "pending",
+      "status": "completed",
       "files": {
-        "create": ["lib/models/snippet_palette_resolver.dart"],
-        "modify": ["lib/widgets/snippet_thumbnail.dart"]
+        "create": [
+          "lib/models/snippet_palette_resolver.dart"
+        ],
+        "modify": [
+          "lib/widgets/snippet_thumbnail.dart"
+        ]
       },
-      "blockedBy": [20],
-      "blocks": [22]
+      "blockedBy": [
+        20
+      ],
+      "blocks": [
+        22
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 22,
       "planTask": 6,
-      "subject": "Task 6: Snippets panel — palette dot switcher",
-      "status": "pending",
+      "subject": "Task 6: Snippets panel \u2014 palette dot switcher",
+      "status": "completed",
       "files": {
-        "modify": ["lib/widgets/snippets_panel.dart"]
+        "modify": [
+          "lib/widgets/snippets_panel.dart"
+        ]
       },
-      "blockedBy": [21],
-      "blocks": [23]
+      "blockedBy": [
+        21
+      ],
+      "blocks": [
+        23
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 23,
       "planTask": 7,
-      "subject": "Task 7: Snippet editor — palette manager sheet",
-      "status": "pending",
+      "subject": "Task 7: Snippet editor \u2014 palette manager sheet",
+      "status": "completed",
       "files": {
-        "modify": ["lib/screens/snippet_editor_screen.dart", "lib/providers/editor_provider.dart"]
+        "modify": [
+          "lib/screens/snippet_editor_screen.dart",
+          "lib/providers/editor_provider.dart"
+        ]
       },
-      "blockedBy": [22],
-      "blocks": [24]
+      "blockedBy": [
+        22
+      ],
+      "blocks": [
+        24
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 24,
       "planTask": 8,
-      "subject": "Task 8: Sprite importer redesign — crop-only + palette strip UI",
-      "status": "pending",
+      "subject": "Task 8: Sprite importer redesign \u2014 crop-only + palette strip UI",
+      "status": "completed",
       "files": {
-        "modify": ["lib/screens/sprite_sheet_screen.dart"]
+        "modify": [
+          "lib/screens/sprite_sheet_screen.dart"
+        ]
       },
-      "blockedBy": [23],
-      "blocks": [25]
+      "blockedBy": [
+        23
+      ],
+      "blocks": [
+        25
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 25,
       "planTask": 9,
-      "subject": "Task 9: SpriteImporter — palette strip detection",
-      "status": "pending",
+      "subject": "Task 9: SpriteImporter \u2014 palette strip detection",
+      "status": "completed",
       "files": {
-        "modify": ["lib/services/sprite_importer.dart", "lib/screens/sprite_sheet_screen.dart"]
+        "modify": [
+          "lib/services/sprite_importer.dart",
+          "lib/screens/sprite_sheet_screen.dart"
+        ]
       },
-      "blockedBy": [24],
-      "blocks": [26]
+      "blockedBy": [
+        24
+      ],
+      "blocks": [
+        26
+      ],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     },
     {
       "id": 26,
       "planTask": 10,
-      "subject": "Task 10: SpriteSheetPainter — crop-only + strip overlays",
-      "status": "pending",
+      "subject": "Task 10: SpriteSheetPainter \u2014 crop-only + strip overlays",
+      "status": "completed",
       "files": {
-        "modify": ["lib/widgets/sprite_sheet_painter.dart", "lib/screens/sprite_sheet_screen.dart"]
+        "modify": [
+          "lib/widgets/sprite_sheet_painter.dart",
+          "lib/screens/sprite_sheet_screen.dart"
+        ]
       },
-      "blockedBy": [25],
-      "blocks": []
+      "blockedBy": [
+        25
+      ],
+      "blocks": [],
+      "lastUpdated": "2026-03-27T00:00:00Z"
     }
-  ]
+  ],
+  "lastUpdated": "2026-03-27T00:00:00Z"
 }
