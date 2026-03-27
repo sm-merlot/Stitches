@@ -1,9 +1,13 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:uuid/uuid.dart';
 
 import '../data/dmc_colors.dart';
+import '../models/snippet.dart';
+import '../models/snippet_palette.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 
@@ -197,5 +201,318 @@ class SpriteImporter {
     }
 
     return (threads: threads, stitches: stitches);
+  }
+
+  // ── Palette preview rendering ────────────────────────────────────────────────
+
+  /// Re-renders a crop [region] of [image] matching each pixel against
+  /// [matchPalette] (Palette 1 colours) by CIE Lab Euclidean distance.
+  ///
+  /// Pixels whose nearest match exceeds [dropThreshold] Lab units are dropped
+  /// (left transparent) — this removes background colours not in the palette.
+  ///
+  /// If [outputPalette] is provided (Palette N, N > 1), the matched index is
+  /// used to look up the replacement colour positionally:
+  ///   matchPalette[i] → outputPalette[i]
+  /// This implements slot-based palette swapping for subsequent palettes.
+  ///
+  /// Transparent pixels (alpha < 128) remain transparent.
+  /// Returns null if [matchPalette] is empty or the region is empty/out-of-bounds.
+  static Uint8List? renderCropWithPalette(
+    img.Image image,
+    Rect region,
+    List<Color> matchPalette, {
+    List<Color>? outputPalette,
+    double dropThreshold = 30.0,
+  }) {
+    if (matchPalette.isEmpty) return null;
+    final x0 = region.left.round().clamp(0, image.width);
+    final y0 = region.top.round().clamp(0, image.height);
+    final x1 = region.right.round().clamp(x0, image.width);
+    final y1 = region.bottom.round().clamp(y0, image.height);
+    final w = x1 - x0;
+    final h = y1 - y0;
+    if (w <= 0 || h <= 0) return null;
+
+    // Pre-compute Lab values for the match palette.
+    final paletteLab = matchPalette.map((c) {
+      final r = (c.r * 255).round();
+      final g = (c.g * 255).round();
+      final b = (c.b * 255).round();
+      final (l, a, bb) = _rgbToLab(r, g, b);
+      return (color: c, l: l, a: a, b: bb);
+    }).toList();
+
+    // Squared threshold — avoids sqrt per pixel.
+    final dropSq = dropThreshold * dropThreshold;
+
+    final hasAlpha = image.numChannels >= 4;
+    final out = img.Image(width: w, height: h);
+
+    for (var py = y0; py < y1; py++) {
+      for (var px = x0; px < x1; px++) {
+        final pixel = image.getPixel(px, py);
+        final alpha = hasAlpha ? pixel.a.toInt() : 255;
+        if (alpha < 128) continue; // leave transparent
+
+        final (pl, pa, pb) =
+            _rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
+
+        double best = double.infinity;
+        int bestIdx = 0;
+        for (int i = 0; i < paletteLab.length; i++) {
+          final entry = paletteLab[i];
+          final dl = pl - entry.l;
+          final da = pa - entry.a;
+          final db = pb - entry.b;
+          final dist = dl * dl + da * da + db * db;
+          if (dist < best) {
+            best = dist;
+            bestIdx = i;
+          }
+        }
+
+        // Drop pixel if it doesn't closely match any palette colour (= background).
+        if (best > dropSq) continue;
+
+        // Use outputPalette positionally if provided, else matched colour.
+        final Color outColor;
+        if (outputPalette != null && bestIdx < outputPalette.length) {
+          outColor = outputPalette[bestIdx];
+        } else {
+          outColor = matchPalette[bestIdx];
+        }
+
+        out.setPixelRgba(
+          px - x0,
+          py - y0,
+          (outColor.r * 255).round(),
+          (outColor.g * 255).round(),
+          (outColor.b * 255).round(),
+          255,
+        );
+      }
+    }
+
+    return Uint8List.fromList(img.encodePng(out));
+  }
+
+  // ── Palette strip detection ──────────────────────────────────────────────────
+
+  /// Detects colour blocks in a palette strip region.
+  /// Returns list of dominant colours (one per slot), ordered left-to-right or
+  /// top-to-bottom depending on [horizontal].
+  static List<Color> detectPaletteStrip(
+      img.Image image, Rect region, bool horizontal) {
+    final x0 = region.left.round().clamp(0, image.width - 1);
+    final y0 = region.top.round().clamp(0, image.height - 1);
+    final x1 = region.right.round().clamp(0, image.width);
+    final y1 = region.bottom.round().clamp(0, image.height);
+    if (x1 <= x0 || y1 <= y0) return [];
+
+    final colours = <Color>[];
+    Color? lastColour;
+    int consecutiveCount = 0;
+    const minBlockWidth = 3;
+
+    void processPixel(int x, int y) {
+      final pixel = image.getPixel(x, y);
+      final c = Color.fromARGB(
+          pixel.a.toInt(), pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
+      final quantized = _quantizeColor(c);
+      if (lastColour == null || _colorDistance(quantized, lastColour!) > 20) {
+        if (consecutiveCount >= minBlockWidth && lastColour != null) {
+          colours.add(lastColour!);
+        }
+        lastColour = quantized;
+        consecutiveCount = 1;
+      } else {
+        consecutiveCount++;
+      }
+    }
+
+    if (horizontal) {
+      final midY = ((y0 + y1) / 2).round().clamp(y0, y1 - 1);
+      for (int x = x0; x < x1; x++) { processPixel(x, midY); }
+    } else {
+      final midX = ((x0 + x1) / 2).round().clamp(x0, x1 - 1);
+      for (int y = y0; y < y1; y++) { processPixel(midX, y); }
+    }
+    if (consecutiveCount >= minBlockWidth && lastColour != null) {
+      colours.add(lastColour!);
+    }
+    return colours;
+  }
+
+  static Color _quantizeColor(Color c) {
+    int q(double v) => ((v * 255 / 16).round() * 16).clamp(0, 255);
+    return Color.fromARGB(255, q(c.r), q(c.g), q(c.b));
+  }
+
+  static double _colorDistance(Color a, Color b) {
+    final dr = (a.r - b.r) * 255;
+    final dg = (a.g - b.g) * 255;
+    final db = (a.b - b.b) * 255;
+    return sqrt(dr * dr + dg * dg + db * db);
+  }
+
+  /// Imports a crop region and builds palettes from detected palette strips.
+  ///
+  /// When [paletteStrips] is empty: auto-detects all DMC colours (existing
+  /// behaviour — one palette, no restrictions).
+  ///
+  /// When [paletteStrips] is non-empty:
+  ///   - Strip 0 becomes Palette 1 (the primary/base palette).
+  ///   - The crop is matched against Palette 1 colours only; background pixels
+  ///     (Lab distance > 30) are dropped.
+  ///   - Strips 1, 2, … become Palette 2, 3, … via positional slot mapping:
+  ///     strip[N][i] replaces strip[0][i] when Palette N+1 is active.
+  ///
+  /// The auto-detected palette is NOT included when strips are provided.
+  static Future<Snippet> importRegionWithPalettes({
+    required img.Image image,
+    required Rect region,
+    required String name,
+    int mergeThreshold = 0,
+    List<List<Color>> paletteStrips = const [],
+  }) async {
+    final x = region.left.round();
+    final y = region.top.round();
+    final w = region.width.round();
+    final h = region.height.round();
+
+    if (paletteStrips.isEmpty) {
+      // ── No strips: auto-detect all DMC colours ──────────────────────────
+      final imported =
+          importRegion(image, x, y, w, h, mergeThreshold: mergeThreshold);
+      return Snippet(
+        id: const Uuid().v4(),
+        name: name,
+        width: w.clamp(1, image.width),
+        height: h.clamp(1, image.height),
+        stitches: imported.stitches,
+        palettes: [
+          SnippetPalette.create(name: 'Palette 1', threads: imported.threads),
+        ],
+      );
+    }
+
+    // ── Strips provided: strip 0 is the primary palette ─────────────────────
+    final primaryThreads = _dmcMatchStrip(paletteStrips[0]);
+    if (primaryThreads.isEmpty) {
+      // Strip 0 produced no threads — fall back to auto detection.
+      final imported =
+          importRegion(image, x, y, w, h, mergeThreshold: mergeThreshold);
+      return Snippet(
+        id: const Uuid().v4(),
+        name: name,
+        width: w.clamp(1, image.width),
+        height: h.clamp(1, image.height),
+        stitches: imported.stitches,
+        palettes: [
+          SnippetPalette.create(name: 'Palette 1', threads: imported.threads),
+        ],
+      );
+    }
+
+    // Import crop pixels restricted to primary-palette threads only.
+    final stitches =
+        _importRegionRestricted(image, x, y, w, h, primaryThreads);
+
+    final palettes = <SnippetPalette>[
+      SnippetPalette.create(name: 'Palette 1', threads: primaryThreads),
+    ];
+
+    // Build subsequent palettes using positional slot mapping.
+    final slotCount = primaryThreads.length;
+    for (int i = 1; i < paletteStrips.length; i++) {
+      final stripThreads = _dmcMatchStrip(paletteStrips[i]);
+      // Pad or truncate to match primary slot count.
+      final threads = List<Thread>.generate(slotCount, (j) =>
+        j < stripThreads.length ? stripThreads[j] : primaryThreads[j]);
+      palettes.add(SnippetPalette.create(
+          name: 'Palette ${i + 1}', threads: threads));
+    }
+
+    return Snippet(
+      id: const Uuid().v4(),
+      name: name,
+      width: w.clamp(1, image.width),
+      height: h.clamp(1, image.height),
+      stitches: stitches,
+      palettes: palettes,
+    );
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /// DMC-matches each raw [Color] in [stripColours] in order.
+  /// Preserves position so that index N here maps to slot N.
+  static List<Thread> _dmcMatchStrip(List<Color> stripColours) {
+    return stripColours.map((c) {
+      final dmc = matchPixel(
+          (c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round(), 255);
+      if (dmc == null) return null;
+      return Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
+    }).whereType<Thread>().toList();
+  }
+
+  /// Imports crop pixels matching only against [allowedThreads].
+  /// Pixels whose nearest match exceeds 30 Lab units are dropped (background).
+  static List<Stitch> _importRegionRestricted(
+    img.Image image,
+    int x,
+    int y,
+    int w,
+    int h,
+    List<Thread> allowedThreads,
+  ) {
+    final x0 = x.clamp(0, image.width);
+    final y0 = y.clamp(0, image.height);
+    final x1 = (x + w).clamp(x0, image.width);
+    final y1 = (y + h).clamp(y0, image.height);
+
+    final threadLab = allowedThreads.map((t) {
+      final r = (t.color.r * 255).round();
+      final g = (t.color.g * 255).round();
+      final b = (t.color.b * 255).round();
+      final (l, a, bb) = _rgbToLab(r, g, b);
+      return (thread: t, l: l, a: a, b: bb);
+    }).toList();
+
+    const dropSq = 30.0 * 30.0;
+    final hasAlpha = image.numChannels >= 4;
+    final stitches = <Stitch>[];
+
+    for (var py = y0; py < y1; py++) {
+      for (var px = x0; px < x1; px++) {
+        final pixel = image.getPixel(px, py);
+        final alpha = hasAlpha ? pixel.a.toInt() : 255;
+        if (alpha < 128) continue;
+
+        final (pl, pa, pb) =
+            _rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
+
+        double best = double.infinity;
+        Thread? bestThread;
+        for (final entry in threadLab) {
+          final dl = pl - entry.l;
+          final da = pa - entry.a;
+          final db = pb - entry.b;
+          final dist = dl * dl + da * da + db * db;
+          if (dist < best) {
+            best = dist;
+            bestThread = entry.thread;
+          }
+        }
+
+        if (best > dropSq || bestThread == null) continue;
+
+        stitches.add(FullStitch(
+            x: px - x0, y: py - y0, threadId: bestThread.dmcCode));
+      }
+    }
+
+    return stitches;
   }
 }
