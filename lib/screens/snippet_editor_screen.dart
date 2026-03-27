@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../data/dmc_colors.dart';
 import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
+import '../models/snippet_palette.dart';
+import '../models/thread.dart';
 import '../providers/editor_provider.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
@@ -104,6 +107,19 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       }
       if (widget.initialBlockMode) {
         ref.read(editorProvider.notifier).toggleBlockMode();
+      }
+      // Initialise local palette state for this snippet editor session.
+      final editorNotifier = ref.read(editorProvider.notifier);
+      if (s != null) {
+        editorNotifier.state = editorNotifier.state.copyWith(
+          snippetPalettes: s.palettes,
+          snippetActivePaletteIndex: s.activePaletteIndex,
+        );
+      } else {
+        editorNotifier.state = editorNotifier.state.copyWith(
+          snippetPalettes: [SnippetPalette.create(name: 'Palette 1')],
+          snippetActivePaletteIndex: 0,
+        );
       }
     });
   }
@@ -309,12 +325,25 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     final usedThreads =
         pattern.threads.where((t) => usedIds.contains(t.dmcCode)).toList();
 
+    final localPalettes = editorState.snippetPalettes;
+    final activePaletteIdx = editorState.snippetActivePaletteIndex;
+
+    // Build the final palette list: update primary palette threads with
+    // currently used threads, keep additional palettes as-is.
+    final savedPalettes = localPalettes.isNotEmpty
+        ? [
+            localPalettes[0].copyWith(threads: usedThreads),
+            ...localPalettes.skip(1),
+          ]
+        : [SnippetPalette.create(name: 'Palette 1', threads: usedThreads)];
+
     final result = widget.snippet != null
         ? widget.snippet!.copyWith(
             name: name,
             width: pattern.width,
             height: pattern.height,
-            threads: usedThreads,
+            palettes: savedPalettes,
+            activePaletteIndex: activePaletteIdx.clamp(0, savedPalettes.length - 1),
             stitches: pattern.stitches,
           )
         : Snippet.create(
@@ -326,6 +355,23 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
           );
 
     Navigator.of(context).pop(result);
+  }
+
+  void _openPaletteManager(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => UncontrolledProviderScope(
+        container: ProviderScope.containerOf(context),
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, ctrl) => _PaletteManagerSheet(scrollController: ctrl),
+        ),
+      ),
+    );
   }
 
   @override
@@ -359,11 +405,22 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             const SizedBox(width: 8),
           ],
           IconButton(
-            tooltip: 'Block mode',
+            tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
             isSelected: state.blockMode,
             icon: const Icon(Icons.grid_view_outlined),
             selectedIcon: const Icon(Icons.grid_view),
             onPressed: () => notifier.toggleBlockMode(),
+            style: state.blockMode
+                ? IconButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    foregroundColor: theme.colorScheme.onPrimaryContainer,
+                  )
+                : null,
+          ),
+          IconButton(
+            tooltip: 'Manage palettes',
+            icon: const Icon(Icons.palette_outlined),
+            onPressed: () => _openPaletteManager(context),
           ),
           TextButton(
             onPressed: () => _save(context),
@@ -520,6 +577,401 @@ class _SizePicker extends StatelessWidget {
         if (v == null) return;
         onChanged(v == customValue ? null : v);
       },
+    );
+  }
+}
+
+// ─── Palette manager sheet ─────────────────────────────────────────────────
+
+class _PaletteManagerSheet extends ConsumerStatefulWidget {
+  final ScrollController scrollController;
+  const _PaletteManagerSheet({required this.scrollController});
+
+  @override
+  ConsumerState<_PaletteManagerSheet> createState() => _PaletteManagerSheetState();
+}
+
+class _PaletteManagerSheetState extends ConsumerState<_PaletteManagerSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final editorState = ref.watch(editorProvider);
+    final palettes = editorState.snippetPalettes;
+    final activeIdx = editorState.snippetActivePaletteIndex;
+    final notifier = ref.read(editorProvider.notifier);
+
+    return Column(
+      children: [
+        // Handle
+        const SizedBox(height: 8),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey[400],
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Palettes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ReorderableListView.builder(
+            scrollController: widget.scrollController,
+            itemCount: palettes.length,
+            onReorder: (oldIndex, newIndex) =>
+                notifier.reorderSnippetPaletteLocal(oldIndex, newIndex),
+            itemBuilder: (context, index) {
+              final palette = palettes[index];
+              return _PaletteRow(
+                key: ValueKey(palette.id),
+                palette: palette,
+                isActive: index == activeIdx,
+                canDelete: palettes.length > 1,
+                onActivate: () => notifier.setSnippetActivePaletteLocal(index),
+                onRename: (name) => notifier.renameSnippetPaletteLocal(palette.id, name),
+                onDelete: () => notifier.deleteSnippetPaletteLocal(palette.id),
+              );
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        ListTile(
+          leading: const Icon(Icons.add),
+          title: const Text('Add new palette…'),
+          onTap: () async {
+            final state = ref.read(editorProvider);
+            if (state.snippetPalettes.isEmpty) return;
+            final primary = state.snippetPalettes[0];
+            final result = await showDialog<SnippetPalette>(
+              context: context,
+              builder: (dialogContext) => UncontrolledProviderScope(
+                container: ProviderScope.containerOf(context),
+                child: _AddPaletteDialog(primaryPalette: primary),
+              ),
+            );
+            if (result != null) {
+              notifier.addSnippetPaletteLocal(result);
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+// ─── Palette row ───────────────────────────────────────────────────────────
+
+class _PaletteRow extends StatefulWidget {
+  final SnippetPalette palette;
+  final bool isActive;
+  final bool canDelete;
+  final VoidCallback onActivate;
+  final ValueChanged<String> onRename;
+  final VoidCallback onDelete;
+
+  const _PaletteRow({
+    super.key,
+    required this.palette,
+    required this.isActive,
+    required this.canDelete,
+    required this.onActivate,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  @override
+  State<_PaletteRow> createState() => _PaletteRowState();
+}
+
+class _PaletteRowState extends State<_PaletteRow> {
+  bool _editing = false;
+  late TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.palette.name);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(
+        widget.isActive ? Icons.circle : Icons.circle_outlined,
+        size: 16,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      title: _editing
+          ? TextField(
+              controller: _ctrl,
+              autofocus: true,
+              onSubmitted: (v) {
+                if (v.trim().isNotEmpty) widget.onRename(v.trim());
+                setState(() => _editing = false);
+              },
+              onEditingComplete: () => setState(() => _editing = false),
+            )
+          : GestureDetector(
+              onTap: widget.onActivate,
+              onDoubleTap: () => setState(() => _editing = true),
+              child: Text(widget.palette.name),
+            ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Colour swatches (first 5 threads)
+          for (final t in widget.palette.threads.take(5))
+            Padding(
+              padding: const EdgeInsets.only(right: 2),
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: t.color, shape: BoxShape.circle),
+              ),
+            ),
+          if (widget.canDelete)
+            IconButton(
+              icon: const Icon(Icons.close, size: 16),
+              onPressed: widget.onDelete,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Add palette dialog ────────────────────────────────────────────────────
+
+class _AddPaletteDialog extends StatefulWidget {
+  final SnippetPalette primaryPalette;
+  const _AddPaletteDialog({required this.primaryPalette});
+
+  @override
+  State<_AddPaletteDialog> createState() => _AddPaletteDialogState();
+}
+
+class _AddPaletteDialogState extends State<_AddPaletteDialog> {
+  final _nameCtrl = TextEditingController();
+  late final List<Thread?> _picked;
+
+  @override
+  void initState() {
+    super.initState();
+    _picked = List.filled(widget.primaryPalette.threads.length, null);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  int get _doneCount => _picked.where((t) => t != null).length;
+
+  bool get _canAdd =>
+      _nameCtrl.text.trim().isNotEmpty &&
+      _doneCount == widget.primaryPalette.threads.length;
+
+  Future<void> _pickColour(int slotIndex) async {
+    final base = widget.primaryPalette.threads[slotIndex];
+    final result = await showDialog<Thread>(
+      context: context,
+      builder: (_) => _DmcPickerDialog(initialThread: base),
+    );
+    if (result != null) {
+      setState(() => _picked[slotIndex] = result);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.primaryPalette.threads.length;
+
+    return AlertDialog(
+      title: const Text('Add palette'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(labelText: 'Name'),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$_doneCount / $total done',
+              style: TextStyle(
+                color: _doneCount == total
+                    ? Colors.green[700]
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: total,
+                itemBuilder: (context, i) {
+                  final base = widget.primaryPalette.threads[i];
+                  final picked = _picked[i];
+                  return ListTile(
+                    dense: true,
+                    leading: Container(
+                      width: 16,
+                      height: 16,
+                      color: base.color,
+                    ),
+                    title: Text(
+                      'DMC ${base.dmcCode} — ${base.name}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    trailing: TextButton(
+                      onPressed: () => _pickColour(i),
+                      child: picked != null
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(width: 14, height: 14, color: picked.color),
+                                const SizedBox(width: 4),
+                                Text('DMC ${picked.dmcCode}', style: const TextStyle(fontSize: 12)),
+                              ],
+                            )
+                          : const Text('Pick colour…'),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _canAdd
+              ? () {
+                  final threads = List<Thread>.generate(
+                    widget.primaryPalette.threads.length,
+                    (i) => _picked[i]!,
+                  );
+                  Navigator.of(context).pop(
+                    SnippetPalette.create(
+                      name: _nameCtrl.text.trim(),
+                      threads: threads,
+                    ),
+                  );
+                }
+              : null,
+          child: const Text('Add palette'),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Simple DMC colour picker dialog ──────────────────────────────────────
+
+class _DmcPickerDialog extends StatefulWidget {
+  final Thread initialThread;
+  const _DmcPickerDialog({required this.initialThread});
+
+  @override
+  State<_DmcPickerDialog> createState() => _DmcPickerDialogState();
+}
+
+class _DmcPickerDialogState extends State<_DmcPickerDialog> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<DmcColor> get _filtered {
+    final q = _query.toLowerCase();
+    if (q.isEmpty) return dmcColors;
+    return dmcColors.where((c) {
+      return c.code.toLowerCase().contains(q) || c.name.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+
+    return AlertDialog(
+      title: const Text('Pick DMC colour'),
+      content: SizedBox(
+        width: 320,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Search by code or name…',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                itemCount: filtered.length,
+                itemBuilder: (context, i) {
+                  final c = filtered[i];
+                  return ListTile(
+                    dense: true,
+                    leading: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: c.color,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.black12),
+                      ),
+                    ),
+                    title: Text('DMC ${c.code}', style: const TextStyle(fontSize: 13)),
+                    subtitle: Text(c.name, style: const TextStyle(fontSize: 11)),
+                    onTap: () => Navigator.of(context).pop(
+                      Thread(dmcCode: c.code, color: c.color, name: c.name),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

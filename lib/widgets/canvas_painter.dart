@@ -395,6 +395,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   /// and colour for blended cells are taken from this map (stable assignments)
   /// rather than from nearest-thread heuristics.
   final Map<String, Thread>? compositeThreadCache;
+  /// Optional palette override for snippet editor: maps dmcCode → display Color.
+  /// When set, stitch colours are replaced with the active palette's colours
+  /// using positional slot mapping (palette[N][i] replaces palette[0][i]).
+  final Map<String, Color>? paletteOverride;
   late final Map<String, Thread> _threadMap = {
     for (final t in pattern.threads) t.dmcCode: t,
   };
@@ -413,7 +417,13 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
     this.compositeThreadCache,
+    this.paletteOverride,
   });
+
+  /// Returns [original] with the active palette's colour substituted if an
+  /// override exists for [threadId].
+  Color _applyPaletteOverride(String threadId, Color original) =>
+      paletteOverride?[threadId] ?? original;
 
   /// Returns the palette thread whose colour is closest to [target] by
   /// squared RGB distance. Fast: only searches the pattern's own threads.
@@ -514,7 +524,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
           final thread = _threadMap[stitch.threadId];
           if (thread == null) continue;
-          final c = _resolveStitchColor(stitch.threadId, thread.color,
+          final c = _resolveStitchColor(stitch.threadId,
+              _applyPaletteOverride(stitch.threadId, thread.color),
               isCrossStitch: true);
           if (c == null) continue;
           switch (stitch) {
@@ -550,7 +561,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (!_backstichInRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
           final thread = _threadMap[stitch.threadId];
           if (thread == null) continue;
-          final c = _resolveStitchColor(stitch.threadId, thread.color,
+          final c = _resolveStitchColor(stitch.threadId,
+              _applyPaletteOverride(stitch.threadId, thread.color),
               isCrossStitch: false);
           if (c != null) {
             _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
@@ -591,7 +603,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || thread.symbol.isEmpty) continue;
 
-          final c = _resolveStitchColor(stitch.threadId, thread.color,
+          final c = _resolveStitchColor(stitch.threadId,
+              _applyPaletteOverride(stitch.threadId, thread.color),
               isCrossStitch: true);
           if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
         }
@@ -728,7 +741,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       if (!_inCellRange(stitch, minX, minY, maxX, maxY)) continue;
       final thread = _threadMap[stitch.threadId];
       if (thread == null) continue;
-      final c = _resolveStitchColor(stitch.threadId, thread.color, isCrossStitch: true);
+      final c = _resolveStitchColor(stitch.threadId,
+          _applyPaletteOverride(stitch.threadId, thread.color),
+          isCrossStitch: true);
       if (c == null) continue;
 
       // For FullStitch, use the blended color if available (overlapping layers).
@@ -988,7 +1003,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||
       old.referenceVisible != referenceVisible ||
-      old.compositeThreadCache != compositeThreadCache;
+      old.compositeThreadCache != compositeThreadCache ||
+      old.paletteOverride != paletteOverride;
 }
 
 // ─── Overlay layer ────────────────────────────────────────────────────────────

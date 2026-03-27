@@ -8,6 +8,7 @@ import '../data/symbols.dart';
 import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
+import '../models/snippet_palette.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../services/file_service.dart';
@@ -101,6 +102,12 @@ class EditorState {
   /// open and after the open file is deleted.
   final bool isFileOpen;
 
+  // ── Snippet editor local palette state ────────────────────────────────────
+  /// Palettes being edited in the snippet editor. Session-only, not persisted.
+  final List<SnippetPalette> snippetPalettes;
+  /// Index of the active palette in [snippetPalettes]. Session-only.
+  final int snippetActivePaletteIndex;
+
   /// True when the current file is in the native .stitchx format (or unsaved).
   /// False when an imported foreign-format file (.oxs etc.) is open.
   bool get isNativeFormat {
@@ -137,6 +144,8 @@ class EditorState {
     this.driveFileId,
     this.driveParentFolderId,
     this.isFileOpen = false,
+    this.snippetPalettes = const [],
+    this.snippetActivePaletteIndex = 0,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -254,6 +263,8 @@ class EditorState {
     Object? driveFileId = _sentinel,
     Object? driveParentFolderId = _sentinel,
     bool? isFileOpen,
+    List<SnippetPalette>? snippetPalettes,
+    int? snippetActivePaletteIndex,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -297,6 +308,8 @@ class EditorState {
           ? this.driveParentFolderId
           : driveParentFolderId as String?,
       isFileOpen: isFileOpen ?? this.isFileOpen,
+      snippetPalettes: snippetPalettes ?? this.snippetPalettes,
+      snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
     );
   }
 
@@ -874,7 +887,13 @@ class EditorNotifier extends Notifier<EditorState> {
 
     final updated = state.pattern.snippets
         .map((s) => s.id == snippetId
-            ? s.copyWith(threads: threads, stitches: stitches)
+            ? s.copyWith(
+                palettes: [
+                  s.palettes[0].copyWith(threads: threads),
+                  ...s.palettes.skip(1),
+                ],
+                stitches: stitches,
+              )
             : s)
         .toList();
 
@@ -944,24 +963,34 @@ class EditorNotifier extends Notifier<EditorState> {
     // Auto-register thread if not already in the palette
     var pattern = state.pattern;
     final threadId = stitch.threadId;
+    Thread? addedThread;
     if (!pattern.threads.any((t) => t.dmcCode == threadId)) {
       final dmc = dmcColorByCode(threadId);
       if (dmc != null) {
         final usedSymbols = _allUsedSymbols(pattern);
-        final newThread = Thread(
+        addedThread = Thread(
           dmcCode: dmc.code,
           color: dmc.color,
           name: dmc.name,
           symbol: _nextSymbol(usedSymbols),
         );
-        pattern = pattern.copyWith(threads: [...pattern.threads, newThread]);
+        pattern = pattern.copyWith(threads: [...pattern.threads, addedThread]);
       }
+    }
+
+    // Propagate new thread to all snippet palettes so every palette stays in sync.
+    var snippetPalettes = state.snippetPalettes;
+    if (addedThread != null && snippetPalettes.isNotEmpty) {
+      snippetPalettes = snippetPalettes
+          .map((p) => p.copyWith(threads: [...p.threads, addedThread!]))
+          .toList();
     }
 
     final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
     final newPattern = _patternWithActiveLayerStitches(pattern, newStitches);
     state = state.copyWith(
       pattern: newPattern,
+      snippetPalettes: snippetPalettes,
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
@@ -1828,6 +1857,130 @@ class EditorNotifier extends Notifier<EditorState> {
       CrossStitchPattern pattern, String id, Layer Function(Layer) update) {
     final newLayers = pattern.layers.map((l) => l.id == id ? update(l) : l).toList();
     return pattern.copyWith(layers: newLayers);
+  }
+
+  // ─── Snippet palette management ───────────────────────────────────────────
+
+  void setSnippetActivePalette(String snippetId, int index) {
+    final snippets = state.pattern.snippets.map((s) {
+      if (s.id != snippetId) return s;
+      final clamped = index.clamp(0, s.palettes.length - 1);
+      return s.copyWith(activePaletteIndex: clamped);
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: snippets),
+      isDirty: true,
+    );
+  }
+
+  void addSnippetPalette(String snippetId, SnippetPalette palette) {
+    final snippets = state.pattern.snippets.map((s) {
+      if (s.id != snippetId) return s;
+      final newPalettes = [...s.palettes, palette];
+      return s.copyWith(
+        palettes: newPalettes,
+        activePaletteIndex: newPalettes.length - 1,
+      );
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: snippets),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  void deleteSnippetPalette(String snippetId, String paletteId) {
+    final snippets = state.pattern.snippets.map((s) {
+      if (s.id != snippetId) return s;
+      if (s.palettes.length <= 1) return s;
+      final newPalettes = s.palettes.where((p) => p.id != paletteId).toList();
+      final newActiveIdx = s.activePaletteIndex.clamp(0, newPalettes.length - 1);
+      return s.copyWith(palettes: newPalettes, activePaletteIndex: newActiveIdx);
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: snippets),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  void renameSnippetPalette(String snippetId, String paletteId, String name) {
+    final snippets = state.pattern.snippets.map((s) {
+      if (s.id != snippetId) return s;
+      final newPalettes = s.palettes.map((p) {
+        if (p.id != paletteId) return p;
+        return p.copyWith(name: name);
+      }).toList();
+      return s.copyWith(palettes: newPalettes);
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: snippets),
+      isDirty: true,
+    );
+  }
+
+  void reorderSnippetPalette(String snippetId, int oldIndex, int newIndex) {
+    final snippets = state.pattern.snippets.map((s) {
+      if (s.id != snippetId) return s;
+      final palettes = [...s.palettes];
+      if (oldIndex < 0 || oldIndex >= palettes.length) return s;
+      final palette = palettes.removeAt(oldIndex);
+      final insertIdx = newIndex > oldIndex ? newIndex - 1 : newIndex;
+      palettes.insert(insertIdx.clamp(0, palettes.length), palette);
+      int newActive = s.activePaletteIndex;
+      if (s.activePaletteIndex == oldIndex) {
+        newActive = insertIdx.clamp(0, palettes.length - 1);
+      }
+      return s.copyWith(palettes: palettes, activePaletteIndex: newActive);
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(snippets: snippets),
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  // ─── Snippet editor local palette state ──────────────────────────────────
+
+  void setSnippetActivePaletteLocal(int index) {
+    state = state.copyWith(snippetActivePaletteIndex: index);
+  }
+
+  void addSnippetPaletteLocal(SnippetPalette palette) {
+    final newPalettes = [...state.snippetPalettes, palette];
+    state = state.copyWith(
+      snippetPalettes: newPalettes,
+      snippetActivePaletteIndex: newPalettes.length - 1,
+    );
+  }
+
+  void deleteSnippetPaletteLocal(String paletteId) {
+    if (state.snippetPalettes.length <= 1) return;
+    final newPalettes = state.snippetPalettes.where((p) => p.id != paletteId).toList();
+    final newActive = state.snippetActivePaletteIndex.clamp(0, newPalettes.length - 1);
+    state = state.copyWith(snippetPalettes: newPalettes, snippetActivePaletteIndex: newActive);
+  }
+
+  void renameSnippetPaletteLocal(String paletteId, String name) {
+    final newPalettes = state.snippetPalettes.map((p) =>
+      p.id == paletteId ? p.copyWith(name: name) : p).toList();
+    state = state.copyWith(snippetPalettes: newPalettes);
+  }
+
+  void reorderSnippetPaletteLocal(int oldIndex, int newIndex) {
+    final palettes = [...state.snippetPalettes];
+    if (oldIndex < 0 || oldIndex >= palettes.length) return;
+    final palette = palettes.removeAt(oldIndex);
+    final insertIdx = (newIndex > oldIndex ? newIndex - 1 : newIndex).clamp(0, palettes.length);
+    palettes.insert(insertIdx, palette);
+    int newActive = state.snippetActivePaletteIndex;
+    if (state.snippetActivePaletteIndex == oldIndex) {
+      newActive = insertIdx.clamp(0, palettes.length - 1);
+    }
+    state = state.copyWith(snippetPalettes: palettes, snippetActivePaletteIndex: newActive);
   }
 }
 
