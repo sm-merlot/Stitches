@@ -80,6 +80,9 @@ class SnippetsPanel extends ConsumerWidget {
                             _loadSnippet(context, ref, snippets[i]),
                         onMenuTap: () =>
                             _showOptions(context, ref, snippets[i]),
+                        onSwitchPalette: (idx) => ref
+                            .read(editorProvider.notifier)
+                            .setSnippetActivePalette(snippets[i].id, idx),
                       ),
                     ),
             ),
@@ -137,6 +140,14 @@ class SnippetsPanel extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: const Text('Edit'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _openEditor(context, ref, snippet);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: const Text('Manage palettes…'),
               onTap: () {
                 Navigator.of(ctx).pop();
                 _openEditor(context, ref, snippet);
@@ -267,12 +278,14 @@ class _SnippetCard extends StatelessWidget {
   final Color aidaColor;
   final VoidCallback onTap;
   final VoidCallback onMenuTap;
+  final ValueChanged<int> onSwitchPalette;
 
   const _SnippetCard({
     required this.snippet,
     required this.aidaColor,
     required this.onTap,
     required this.onMenuTap,
+    required this.onSwitchPalette,
   });
 
   @override
@@ -334,6 +347,13 @@ class _SnippetCard extends StatelessWidget {
           if (snippet.threads.isNotEmpty) ...[
             const SizedBox(height: 3),
             _SnippetPaletteDots(threads: snippet.threads),
+          ],
+          if (snippet.palettes.length > 1) ...[
+            const SizedBox(height: 4),
+            _PaletteDots(
+              snippet: snippet,
+              onSwitch: onSwitchPalette,
+            ),
           ],
         ],
       ),
@@ -532,6 +552,60 @@ class _TransformButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Multi-palette dot switcher ───────────────────────────────────────────────
+
+class _PaletteDots extends StatelessWidget {
+  final Snippet snippet;
+  final ValueChanged<int> onSwitch;
+  const _PaletteDots({required this.snippet, required this.onSwitch});
+
+  @override
+  Widget build(BuildContext context) {
+    final count = snippet.palettes.length;
+    final active = snippet.activePaletteIndex.clamp(0, count - 1);
+
+    if (count > 6) {
+      return Text(
+        '${active + 1}/$count',
+        style: TextStyle(
+          fontSize: 10,
+          color: Theme.of(context)
+              .colorScheme
+              .onSurface
+              .withOpacity(0.6),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (i) {
+        final isActive = i == active;
+        return GestureDetector(
+          onTap: () => onSwitch(i),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isActive
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.transparent,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 1,
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 }

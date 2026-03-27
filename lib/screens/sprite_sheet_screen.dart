@@ -13,14 +13,17 @@ import '../providers/editor_provider.dart';
 import '../services/sprite_importer.dart';
 import '../widgets/sprite_sheet_painter.dart';
 
-const _tileSizes = [8, 16, 32, 64];
+// ── Strip draw state ──────────────────────────────────────────────────────────
+
+enum _StripDrawState { idle, drawing }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 /// Full-screen sprite sheet importer.
 ///
-/// The user opens an image, selects tiles or crops regions, and adds them to
-/// the current pattern's snippet library via "Add to Snippets".
+/// The user opens an image, crops the sprite region, optionally draws palette
+/// strip regions, and adds the result to the current pattern's snippet library
+/// via "Add to Snippets".
 ///
 /// Pops with `true` if at least one snippet was added (so the caller can
 /// open the snippets panel automatically), or `false` otherwise.
@@ -54,19 +57,24 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   double _lastScale = 1.0;
   Offset? _lastFocalPoint;
 
-  // ── Selection ───────────────────────────────────────────────────────────────
-  SpriteMode _mode = SpriteMode.tile;
-  int _tileSize = 16;
-  int? _selTileX;
-  int? _selTileY;
+  // ── Crop selection ──────────────────────────────────────────────────────────
   Offset? _cropStart; // image coordinates
   Offset? _cropEnd;   // image coordinates
+
+  // ── Palette strip drawing ───────────────────────────────────────────────────
+  _StripDrawState _stripState = _StripDrawState.idle;
+  Offset? _stripStart;
+  Offset? _stripEnd;
+  final List<Rect> _confirmedStrips = [];
+  bool _showRecropWarning = false;
 
   // ── Other ───────────────────────────────────────────────────────────────────
   int _mergeThreshold = 0;
   late final TextEditingController _nameCtrl;
   int _addedCount = 0;
   bool _importing = false;
+
+  bool get _hasCrop => _cropStart != null && _cropEnd != null;
 
   @override
   void initState() {
@@ -93,10 +101,13 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       _imageBytes = bytes;
       _image = decoded;
       _autoFit = true;
-      _selTileX = null;
-      _selTileY = null;
       _cropStart = null;
       _cropEnd = null;
+      _stripState = _StripDrawState.idle;
+      _stripStart = null;
+      _stripEnd = null;
+      _confirmedStrips.clear();
+      _showRecropWarning = false;
       _addedCount = 0;
       _nameCtrl.text = 'Sprite 1';
     });
@@ -177,10 +188,13 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       _imageBytes = bytes;
       _image = decoded;
       _autoFit = true;
-      _selTileX = null;
-      _selTileY = null;
       _cropStart = null;
       _cropEnd = null;
+      _stripState = _StripDrawState.idle;
+      _stripStart = null;
+      _stripEnd = null;
+      _confirmedStrips.clear();
+      _showRecropWarning = false;
       _addedCount = 0;
       _nameCtrl.text = 'Sprite 1';
     });
@@ -200,12 +214,25 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     _lastScale = 1.0;
     _lastFocalPoint = d.localFocalPoint;
 
-    if (_pointerCount == 1 && _mode == SpriteMode.crop) {
+    if (_pointerCount == 1) {
       final imgPos = _toImage(d.localFocalPoint);
-      setState(() {
-        _cropStart = imgPos;
-        _cropEnd = imgPos;
-      });
+      if (_stripState == _StripDrawState.drawing) {
+        // Drawing a palette strip.
+        setState(() {
+          _stripStart = imgPos;
+          _stripEnd = imgPos;
+        });
+      } else {
+        // Drawing the crop region; warn if strips already exist.
+        if (_confirmedStrips.isNotEmpty) {
+          setState(() => _showRecropWarning = true);
+        } else {
+          setState(() {
+            _cropStart = imgPos;
+            _cropEnd = imgPos;
+          });
+        }
+      }
     }
   }
 
@@ -223,8 +250,11 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         _pan = focal + (_pan - focal) * sf + panDelta;
         _zoom = newZoom;
       });
-    } else if (_mode == SpriteMode.crop) {
-      // Single-finger crop drag.
+    } else if (_stripState == _StripDrawState.drawing) {
+      // Single-finger strip drag.
+      setState(() => _stripEnd = _toImage(focal));
+    } else if (!_showRecropWarning) {
+      // Single-finger crop drag (only if not blocked by recrop warning).
       setState(() => _cropEnd = _toImage(focal));
     }
 
@@ -232,43 +262,37 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   }
 
   void _onScaleEnd(ScaleEndDetails d) {
+    if (_stripState == _StripDrawState.drawing &&
+        _stripStart != null &&
+        _stripEnd != null) {
+      final r = Rect.fromPoints(_stripStart!, _stripEnd!);
+      if (r.width >= 1 && r.height >= 1) {
+        setState(() {
+          _confirmedStrips.add(r);
+          _stripState = _StripDrawState.idle;
+          _stripStart = null;
+          _stripEnd = null;
+        });
+      } else {
+        setState(() {
+          _stripState = _StripDrawState.idle;
+          _stripStart = null;
+          _stripEnd = null;
+        });
+      }
+    }
     _lastScale = 1.0;
     _lastFocalPoint = null;
-  }
-
-  void _onTapDown(TapDownDetails d) {
-    if (_mode != SpriteMode.tile) return;
-    _ensureFit();
-    final img = _toImage(d.localPosition);
-    if (_image == null ||
-        img.dx < 0 || img.dy < 0 ||
-        img.dx >= _image!.width || img.dy >= _image!.height) {
-      return;
-    }
-    setState(() {
-      _selTileX = (img.dx / _tileSize).floor();
-      _selTileY = (img.dy / _tileSize).floor();
-    });
   }
 
   // ── Import ───────────────────────────────────────────────────────────────────
 
   Rect? get _selectedRegion {
     if (_image == null) return null;
-    if (_mode == SpriteMode.tile) {
-      if (_selTileX == null || _selTileY == null) return null;
-      return Rect.fromLTWH(
-        (_selTileX! * _tileSize).toDouble(),
-        (_selTileY! * _tileSize).toDouble(),
-        _tileSize.toDouble(),
-        _tileSize.toDouble(),
-      );
-    } else {
-      if (_cropStart == null || _cropEnd == null) return null;
-      final r = Rect.fromPoints(_cropStart!, _cropEnd!);
-      if (r.width < 1 || r.height < 1) return null;
-      return r;
-    }
+    if (_cropStart == null || _cropEnd == null) return null;
+    final r = Rect.fromPoints(_cropStart!, _cropEnd!);
+    if (r.width < 1 || r.height < 1) return null;
+    return r;
   }
 
   Future<void> _addToSnippets() async {
@@ -277,16 +301,28 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
 
     setState(() => _importing = true);
     try {
-      final imported = SpriteImporter.importRegion(
-        _image!,
-        region.left.round(),
-        region.top.round(),
-        region.width.round(),
-        region.height.round(),
+      // Build palette strip colour lists from confirmed strips.
+      final List<List<Color>> paletteStripColours = [];
+      for (final stripRect in _confirmedStrips) {
+        final horizontal = stripRect.width >= stripRect.height;
+        final colours =
+            SpriteImporter.detectPaletteStrip(_image!, stripRect, horizontal);
+        if (colours.isNotEmpty) paletteStripColours.add(colours);
+      }
+
+      final name = _nameCtrl.text.trim().isEmpty
+          ? 'Sprite'
+          : _nameCtrl.text.trim();
+
+      final snippet = await SpriteImporter.importRegionWithPalettes(
+        image: _image!,
+        region: region,
+        name: name,
         mergeThreshold: _mergeThreshold,
+        paletteStrips: paletteStripColours,
       );
 
-      if (imported.stitches.isEmpty) {
+      if (snippet.stitches.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -296,24 +332,17 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         return;
       }
 
-      final name = _nameCtrl.text.trim();
-      final snippet = Snippet.create(
-        name: name,
-        width: region.width.round().clamp(1, _image!.width),
-        height: region.height.round().clamp(1, _image!.height),
-        threads: imported.threads,
-        stitches: imported.stitches,
-      );
-
       ref.read(editorProvider.notifier).addSnippet(snippet);
 
       setState(() {
         _addedCount++;
         _nameCtrl.text = 'Sprite ${_addedCount + 1}';
-        _selTileX = null;
-        _selTileY = null;
         _cropStart = null;
         _cropEnd = null;
+        _confirmedStrips.clear();
+        _stripState = _StripDrawState.idle;
+        _stripStart = null;
+        _stripEnd = null;
       });
 
       if (mounted) {
@@ -338,6 +367,14 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       appBar: AppBar(
         title: const Text('Sprite Sheet'),
         actions: [
+          if (hasImage)
+            TextButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.folder_open_outlined, size: 16),
+              label: const Text('Change image'),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            ),
+          const SizedBox(width: 8),
           TextButton(
             onPressed: () => Navigator.of(context).pop(_addedCount > 0),
             child: const Text('Close'),
@@ -345,38 +382,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: hasImage ? _buildImageArea() : _buildEmptyState(),
-          ),
-          if (hasImage)
-            _ControlPanel(
-              mode: _mode,
-              tileSize: _tileSize,
-              mergeThreshold: _mergeThreshold,
-              nameController: _nameCtrl,
-              hasSelection: _selectedRegion != null,
-              importing: _importing,
-              onModeChanged: (m) => setState(() {
-                _mode = m;
-                _selTileX = null;
-                _selTileY = null;
-                _cropStart = null;
-                _cropEnd = null;
-              }),
-              onTileSizeChanged: (s) => setState(() {
-                _tileSize = s;
-                _selTileX = null;
-                _selTileY = null;
-              }),
-              onMergeThresholdChanged: (v) =>
-                  setState(() => _mergeThreshold = v),
-              onAdd: _addToSnippets,
-              onChangeImage: _pickImage,
-            ),
-        ],
-      ),
+      body: hasImage ? _buildImageLayout() : _buildEmptyState(),
     );
   }
 
@@ -404,7 +410,25 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     );
   }
 
-  Widget _buildImageArea() {
+  Widget _buildImageLayout() {
+    return Column(
+      children: [
+        if (_showRecropWarning) _buildRecropWarning(),
+        if (_stripState == _StripDrawState.drawing) _buildStripCancelBanner(),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: _buildCanvas()),
+              _buildControlsPanel(),
+            ],
+          ),
+        ),
+        if (_hasCrop || _confirmedStrips.isNotEmpty) _buildPreviewPanel(),
+      ],
+    );
+  }
+
+  Widget _buildCanvas() {
     return LayoutBuilder(builder: (context, constraints) {
       final size = constraints.biggest;
       _containerSize = size;
@@ -436,7 +460,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         },
         onPointerSignal: _onPointerSignal,
         child: GestureDetector(
-          onTapDown: _onTapDown,
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
           onScaleEnd: _onScaleEnd,
@@ -462,18 +485,23 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                         : FilterQuality.medium,
                   ),
                 ),
-                // Overlay: grid / selection.
+                // Overlay: crop + strip rects.
                 CustomPaint(
                   size: size,
                   painter: SpriteSheetPainter(
                     imageSize: Size(imgW, imgH),
                     zoom: zoom,
                     pan: pan,
-                    mode: _mode,
-                    tileSize: _tileSize,
-                    selTileX: _selTileX,
-                    selTileY: _selTileY,
-                    cropRect: cropRect,
+                    cropRect: (_cropStart != null && _cropEnd != null)
+                        ? Rect.fromPoints(_cropStart!, _cropEnd!)
+                        : null,
+                    paletteStrips: _confirmedStrips,
+                    stripDraftRect: (_stripState != _StripDrawState.idle &&
+                            _stripStart != null &&
+                            _stripEnd != null)
+                        ? Rect.fromPoints(_stripStart!, _stripEnd!)
+                        : null,
+                    isDrawingStrip: _stripState == _StripDrawState.drawing,
                   ),
                 ),
               ],
@@ -482,6 +510,223 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         ),
       );
     });
+  }
+
+  Widget _buildControlsPanel() {
+    final theme = Theme.of(context);
+    final hasStrips = _confirmedStrips.isNotEmpty;
+
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: theme.dividerColor)),
+        color: theme.colorScheme.surface,
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Palette section ──────────────────────────────────────────────
+          Text('Palette', style: theme.textTheme.labelMedium),
+          const SizedBox(height: 6),
+          if (!hasStrips)
+            Text(
+              'Auto (detected from crop)',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < _confirmedStrips.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.palette_outlined, size: 14),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text('Palette ${i + 1}',
+                              style: theme.textTheme.bodySmall),
+                        ),
+                        // Only allow removal if it's not the only strip
+                        // blocking others, or always allow individual removal.
+                        if (_confirmedStrips.length > 1 || i > 0)
+                          InkWell(
+                            onTap: () => setState(
+                                () => _confirmedStrips.removeAt(i)),
+                            child: const Padding(
+                              padding: EdgeInsets.all(2),
+                              child: Icon(Icons.close, size: 14),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+
+          const SizedBox(height: 8),
+
+          // ── "Add palette strip" button ────────────────────────────────────
+          OutlinedButton.icon(
+            onPressed: _hasCrop
+                ? () => setState(() => _stripState = _StripDrawState.drawing)
+                : null,
+            icon: const Icon(Icons.add, size: 16),
+            label: Text(hasStrips
+                ? 'Draw another palette strip'
+                : 'Add palette strip'),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+
+          const Divider(height: 20),
+
+          // ── Simplify palette slider ────────────────────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: Text('Simplify palette:',
+                    style: theme.textTheme.bodySmall),
+              ),
+              Tooltip(
+                message:
+                    'Merges rare DMC colours into their nearest match.\n'
+                    'Any colour used in fewer than N pixels is replaced\n'
+                    'by the closest colour that meets the threshold.\n'
+                    'Reduces thread count for more stitchable results.',
+                child: Icon(Icons.info_outline,
+                    size: 14, color: theme.disabledColor),
+              ),
+            ],
+          ),
+          Slider(
+            value: _mergeThreshold.toDouble(),
+            min: 0,
+            max: 20,
+            divisions: 20,
+            onChanged: (v) => setState(() => _mergeThreshold = v.round()),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              _mergeThreshold == 0 ? 'Off' : '< $_mergeThreshold px',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+
+          const Divider(height: 20),
+
+          // ── Snippet name ──────────────────────────────────────────────────
+          TextField(
+            controller: _nameCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Snippet name',
+              isDense: true,
+              border: OutlineInputBorder(),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── Add to Snippets ────────────────────────────────────────────────
+          FilledButton.icon(
+            onPressed: (_hasCrop && !_importing) ? _addToSnippets : null,
+            icon: _importing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.bookmark_add_outlined, size: 18),
+            label: const Text('Add to Snippets'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecropWarning() {
+    return MaterialBanner(
+      content: const Text(
+          'Moving the crop will clear your palette selections.'),
+      actions: [
+        TextButton(
+          onPressed: () => setState(() {
+            _showRecropWarning = false;
+            _confirmedStrips.clear();
+            // Crop drag can now proceed freely.
+          }),
+          child: const Text('Proceed'),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => setState(() => _showRecropWarning = false),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStripCancelBanner() {
+    return Container(
+      color: Colors.amber.shade100,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.palette_outlined, size: 16),
+          const SizedBox(width: 8),
+          const Expanded(
+              child: Text('Draw a region around the palette strip')),
+          TextButton.icon(
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('Cancel palette selection'),
+            onPressed: () => setState(() {
+              _stripState = _StripDrawState.idle;
+              _stripStart = null;
+              _stripEnd = null;
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewPanel() {
+    // MVP: tab bar with Default + one tab per confirmed strip.
+    final tabs = <Widget>[const Tab(text: 'Default')];
+    for (int i = 0; i < _confirmedStrips.length; i++) {
+      tabs.add(Tab(text: 'Palette ${i + 1}'));
+    }
+    return Container(
+      height: 120,
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+      ),
+      child: DefaultTabController(
+        length: tabs.length,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: tabs,
+              isScrollable: true,
+              labelStyle: const TextStyle(fontSize: 12),
+            ),
+            const Expanded(
+              child: Center(
+                child: Text('Preview',
+                    style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -507,169 +752,4 @@ class _CheckerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CheckerPainter _) => false;
-}
-
-// ── Controls panel ─────────────────────────────────────────────────────────────
-
-class _ControlPanel extends StatelessWidget {
-  final SpriteMode mode;
-  final int tileSize;
-  final int mergeThreshold;
-  final TextEditingController nameController;
-  final bool hasSelection;
-  final bool importing;
-  final ValueChanged<SpriteMode> onModeChanged;
-  final ValueChanged<int> onTileSizeChanged;
-  final ValueChanged<int> onMergeThresholdChanged;
-  final VoidCallback onAdd;
-  final VoidCallback onChangeImage;
-
-  const _ControlPanel({
-    required this.mode,
-    required this.tileSize,
-    required this.mergeThreshold,
-    required this.nameController,
-    required this.hasSelection,
-    required this.importing,
-    required this.onModeChanged,
-    required this.onTileSizeChanged,
-    required this.onMergeThresholdChanged,
-    required this.onAdd,
-    required this.onChangeImage,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: theme.dividerColor)),
-        color: theme.colorScheme.surface,
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Row 1: mode + tile size + change image.
-          Row(
-            children: [
-              SegmentedButton<SpriteMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: SpriteMode.tile,
-                    label: Text('Tile'),
-                    icon: Icon(Icons.grid_view_outlined, size: 16),
-                  ),
-                  ButtonSegment(
-                    value: SpriteMode.crop,
-                    label: Text('Crop'),
-                    icon: Icon(Icons.crop, size: 16),
-                  ),
-                ],
-                selected: {mode},
-                onSelectionChanged: (s) => onModeChanged(s.first),
-                style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact),
-              ),
-              const SizedBox(width: 12),
-              if (mode == SpriteMode.tile) ...[
-                Text('Size:', style: theme.textTheme.bodySmall),
-                const SizedBox(width: 6),
-                DropdownButton<int>(
-                  value: tileSize,
-                  isDense: true,
-                  underline: const SizedBox.shrink(),
-                  items: _tileSizes
-                      .map((s) => DropdownMenuItem(
-                          value: s, child: Text('${s}px')))
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) onTileSizeChanged(v);
-                  },
-                ),
-                const SizedBox(width: 12),
-              ],
-              const Spacer(),
-              TextButton.icon(
-                onPressed: onChangeImage,
-                icon: const Icon(Icons.folder_open_outlined, size: 16),
-                label: const Text('Change image'),
-                style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Row 2: palette merge slider.
-          Row(
-            children: [
-              Text('Simplify palette:', style: theme.textTheme.bodySmall),
-              const SizedBox(width: 4),
-              Tooltip(
-                message: 'Merges rare DMC colours into their nearest match.\n'
-                    'Any colour used in fewer than N pixels is replaced\n'
-                    'by the closest colour that meets the threshold.\n'
-                    'Reduces thread count for more stitchable results.',
-                child: Icon(Icons.info_outline,
-                    size: 14, color: theme.disabledColor),
-              ),
-              Expanded(
-                child: Slider(
-                  value: mergeThreshold.toDouble(),
-                  min: 0,
-                  max: 20,
-                  divisions: 20,
-                  onChanged: (v) => onMergeThresholdChanged(v.round()),
-                ),
-              ),
-              SizedBox(
-                width: 60,
-                child: Text(
-                  mergeThreshold == 0 ? 'Off' : '< $mergeThreshold px',
-                  style: theme.textTheme.bodySmall,
-                  textAlign: TextAlign.right,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Row 3: name + add button.
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Snippet name',
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: (hasSelection && !importing) ? onAdd : null,
-                icon: importing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child:
-                            CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.bookmark_add_outlined, size: 18),
-                label: const Text('Add to Snippets'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }

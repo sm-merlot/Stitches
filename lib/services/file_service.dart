@@ -217,13 +217,19 @@ class FileService {
     buf.writeln('    name: ${_yamlStr(snippet.name)}');
     buf.writeln('    width: ${snippet.width}');
     buf.writeln('    height: ${snippet.height}');
-    buf.writeln('    threads:');
-    for (final t in snippet.threads) {
-      final m = t.toYaml();
-      buf.writeln('      - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
-      buf.writeln('        color: ${_yamlStr(m['color'] as String)}');
-      buf.writeln('        name: ${_yamlStr(m['name'] as String)}');
-      buf.writeln('        symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
+    buf.writeln('    activePalette: ${snippet.activePaletteIndex}');
+    buf.writeln('    palettes:');
+    for (final palette in snippet.palettes) {
+      buf.writeln('      - id: ${_yamlStr(palette.id)}');
+      buf.writeln('        name: ${_yamlStr(palette.name)}');
+      buf.writeln('        threads:');
+      for (final t in palette.threads) {
+        final m = t.toYaml();
+        buf.writeln("          - dmcCode: ${_yamlStr(m['dmcCode'] as String)}");
+        buf.writeln("            color: ${_yamlStr(m['color'] as String)}");
+        buf.writeln("            name: ${_yamlStr(m['name'] as String)}");
+        buf.writeln("            symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}");
+      }
     }
     buf.writeln('    stitches:');
     for (final s in snippet.stitches) {

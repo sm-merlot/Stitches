@@ -2,8 +2,11 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:uuid/uuid.dart';
 
 import '../data/dmc_colors.dart';
+import '../models/snippet.dart';
+import '../models/snippet_palette.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 
@@ -197,5 +200,127 @@ class SpriteImporter {
     }
 
     return (threads: threads, stitches: stitches);
+  }
+
+  // ── Palette strip detection ──────────────────────────────────────────────────
+
+  /// Detects colour blocks in a palette strip region.
+  /// Returns list of dominant colours (one per slot), ordered left-to-right or
+  /// top-to-bottom depending on [horizontal].
+  static List<Color> detectPaletteStrip(
+      img.Image image, Rect region, bool horizontal) {
+    final x0 = region.left.round().clamp(0, image.width - 1);
+    final y0 = region.top.round().clamp(0, image.height - 1);
+    final x1 = region.right.round().clamp(0, image.width);
+    final y1 = region.bottom.round().clamp(0, image.height);
+    if (x1 <= x0 || y1 <= y0) return [];
+
+    final colours = <Color>[];
+    Color? lastColour;
+    int consecutiveCount = 0;
+    const minBlockWidth = 3;
+
+    void processPixel(int x, int y) {
+      final pixel = image.getPixel(x, y);
+      final c = Color.fromARGB(
+          pixel.a.toInt(), pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
+      final quantized = _quantizeColor(c);
+      if (lastColour == null || _colorDistance(quantized, lastColour!) > 20) {
+        if (consecutiveCount >= minBlockWidth && lastColour != null) {
+          colours.add(lastColour!);
+        }
+        lastColour = quantized;
+        consecutiveCount = 1;
+      } else {
+        consecutiveCount++;
+      }
+    }
+
+    if (horizontal) {
+      final midY = ((y0 + y1) / 2).round().clamp(y0, y1 - 1);
+      for (int x = x0; x < x1; x++) processPixel(x, midY);
+    } else {
+      final midX = ((x0 + x1) / 2).round().clamp(x0, x1 - 1);
+      for (int y = y0; y < y1; y++) processPixel(midX, y);
+    }
+    if (consecutiveCount >= minBlockWidth && lastColour != null) {
+      colours.add(lastColour!);
+    }
+    return colours;
+  }
+
+  static Color _quantizeColor(Color c) {
+    int q(double v) => ((v * 255 / 16).round() * 16).clamp(0, 255);
+    return Color.fromARGB(255, q(c.r), q(c.g), q(c.b));
+  }
+
+  static double _colorDistance(Color a, Color b) {
+    final dr = (a.r - b.r) * 255;
+    final dg = (a.g - b.g) * 255;
+    final db = (a.b - b.b) * 255;
+    return sqrt(dr * dr + dg * dg + db * db);
+  }
+
+  /// Like [importRegion] but also builds extra palettes from detected strip
+  /// colours. Returns a fully constructed [Snippet].
+  static Future<Snippet> importRegionWithPalettes({
+    required img.Image image,
+    required Rect region,
+    required String name,
+    required int mergeThreshold,
+    List<List<Color>> paletteStrips = const [],
+  }) async {
+    final x = region.left.round();
+    final y = region.top.round();
+    final w = region.width.round();
+    final h = region.height.round();
+
+    final imported = importRegion(
+      image,
+      x,
+      y,
+      w,
+      h,
+      mergeThreshold: mergeThreshold,
+    );
+
+    final primaryPalette =
+        SnippetPalette.create(name: 'Palette 1', threads: imported.threads);
+    final slotCount = primaryPalette.threads.length;
+    final palettes = <SnippetPalette>[primaryPalette];
+
+    for (int i = 0; i < paletteStrips.length; i++) {
+      final stripColours = paletteStrips[i];
+      List<Thread> threads;
+      if (stripColours.length == slotCount) {
+        threads = stripColours.map((c) {
+          final r = (c.r * 255).round();
+          final g = (c.g * 255).round();
+          final b = (c.b * 255).round();
+          final dmc = matchPixel(r, g, b, 255);
+          if (dmc != null) {
+            return Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
+          }
+          final idx = stripColours.indexOf(c) % slotCount;
+          return primaryPalette.threads[idx];
+        }).toList();
+      } else {
+        threads = List<Thread>.from(primaryPalette.threads);
+      }
+      palettes.add(SnippetPalette(
+        id: const Uuid().v4(),
+        name: 'Palette ${i + 2}',
+        threads: threads,
+      ));
+    }
+
+    return Snippet(
+      id: const Uuid().v4(),
+      name: name,
+      width: w.clamp(1, image.width),
+      height: h.clamp(1, image.height),
+      stitches: imported.stitches,
+      palettes: palettes,
+    );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/snippet.dart';
+import '../models/snippet_palette_resolver.dart';
 import '../models/stitch.dart';
-import '../models/thread.dart';
 
 /// Renders a [Snippet] as a small preview image.
 class SnippetThumbnail extends StatelessWidget {
@@ -50,23 +50,17 @@ class _SnippetThumbnailPainter extends CustomPainter {
 
     if (snippet.width == 0 || snippet.height == 0) return;
 
-    final threadMap = {for (final t in snippet.threads) t.dmcCode: t};
-
     final cellW = size.width / snippet.width;
     final cellH = size.height / snippet.height;
 
     final paint = Paint()..style = PaintingStyle.fill;
 
     for (final stitch in snippet.stitches) {
-      final thread = _threadForStitch(stitch, threadMap);
-      if (thread == null) continue;
+      final thread = resolveThread(snippet, stitch.threadId);
       paint.color = thread.color;
       _drawStitch(canvas, stitch, cellW, cellH, paint);
     }
   }
-
-  Thread? _threadForStitch(Stitch stitch, Map<String, Thread> threadMap) =>
-      threadMap[stitch.threadId];
 
   void _drawStitch(
     Canvas canvas,

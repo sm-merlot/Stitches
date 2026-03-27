@@ -1,153 +1,141 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
-enum SpriteMode { tile, crop }
-
-/// Paints the tile grid overlay (tile mode) or rubber-band crop selection
-/// (crop mode) on top of the sprite sheet image.
-///
-/// The transform from image-space to screen-space is:
-///   screen = image * zoom + pan
-///
-/// All selection coordinates ([cropRect]) are in image-space pixels.
 class SpriteSheetPainter extends CustomPainter {
   final Size imageSize;
   final double zoom;
   final Offset pan;
-  final SpriteMode mode;
-  final int tileSize;
-
-  /// Selected tile column / row (tile mode).
-  final int? selTileX;
-  final int? selTileY;
-
-  /// Selected crop region in image coordinates (crop mode).
   final Rect? cropRect;
+  final List<Rect> paletteStrips;
+  final Rect? stripDraftRect;
+  final bool isDrawingStrip;
 
   const SpriteSheetPainter({
     required this.imageSize,
     required this.zoom,
     required this.pan,
-    required this.mode,
-    required this.tileSize,
-    this.selTileX,
-    this.selTileY,
     this.cropRect,
+    this.paletteStrips = const [],
+    this.stripDraftRect,
+    this.isDrawingStrip = false,
   });
 
-  // ── Coordinate helpers ───────────────────────────────────────────────────────
-
-  Offset _toScreen(Offset imgPos) =>
-      Offset(imgPos.dx * zoom + pan.dx, imgPos.dy * zoom + pan.dy);
-
-  Rect _rectToScreen(Rect r) =>
-      Rect.fromPoints(_toScreen(r.topLeft), _toScreen(r.bottomRight));
-
-  // ── Paint ────────────────────────────────────────────────────────────────────
+  /// Converts image-space rect to canvas-space rect.
+  Rect _toCanvas(Rect r) => Rect.fromLTRB(
+        r.left * zoom + pan.dx,
+        r.top * zoom + pan.dy,
+        r.right * zoom + pan.dx,
+        r.bottom * zoom + pan.dy,
+      );
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (mode == SpriteMode.tile) {
-      _paintTileGrid(canvas, size);
-    } else {
-      _paintCropOverlay(canvas, size);
+    if (cropRect != null) {
+      _paintCropOverlay(canvas, size, _toCanvas(cropRect!));
+    }
+    _paintPaletteStrips(canvas, size);
+    if (stripDraftRect != null) {
+      _paintDraftStrip(canvas, _toCanvas(stripDraftRect!));
     }
   }
 
-  void _paintTileGrid(Canvas canvas, Size size) {
-    // Only draw grid lines when zoom is high enough to be useful.
-    if (zoom * tileSize < 4) return;
+  void _paintCropOverlay(Canvas canvas, Size size, Rect canvasCrop) {
+    final alpha = isDrawingStrip ? 0.65 : 0.45;
+    final maskPaint = Paint()..color = Colors.black.withOpacity(alpha);
 
-    final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.45)
-      ..strokeWidth = max(0.5, zoom * 0.02)
-      ..style = PaintingStyle.stroke;
+    // Draw dark mask around crop
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, canvasCrop.top), maskPaint);
+    canvas.drawRect(Rect.fromLTWH(0, canvasCrop.bottom, size.width, size.height - canvasCrop.bottom), maskPaint);
+    canvas.drawRect(Rect.fromLTWH(0, canvasCrop.top, canvasCrop.left, canvasCrop.height), maskPaint);
+    canvas.drawRect(Rect.fromLTWH(canvasCrop.right, canvasCrop.top, size.width - canvasCrop.right, canvasCrop.height), maskPaint);
 
-    final cols = (imageSize.width / tileSize).ceil();
-    final rows = (imageSize.height / tileSize).ceil();
-
-    for (var col = 0; col <= cols; col++) {
-      final imgX = (col * tileSize).toDouble();
-      canvas.drawLine(
-        _toScreen(Offset(imgX, 0)),
-        _toScreen(Offset(imgX, imageSize.height)),
-        gridPaint,
-      );
-    }
-
-    for (var row = 0; row <= rows; row++) {
-      final imgY = (row * tileSize).toDouble();
-      canvas.drawLine(
-        _toScreen(Offset(0, imgY)),
-        _toScreen(Offset(imageSize.width, imgY)),
-        gridPaint,
-      );
-    }
-
-    // Highlight selected tile.
-    if (selTileX != null && selTileY != null) {
-      final tileRect = _rectToScreen(Rect.fromLTWH(
-        (selTileX! * tileSize).toDouble(),
-        (selTileY! * tileSize).toDouble(),
-        tileSize.toDouble(),
-        tileSize.toDouble(),
-      ));
-      canvas.drawRect(
-        tileRect,
-        Paint()
-          ..color = Colors.amber.withValues(alpha: 0.35)
-          ..style = PaintingStyle.fill,
-      );
-      canvas.drawRect(
-        tileRect,
-        Paint()
-          ..color = Colors.amber
-          ..strokeWidth = 2
-          ..style = PaintingStyle.stroke,
-      );
-    }
-  }
-
-  void _paintCropOverlay(Canvas canvas, Size size) {
-    if (cropRect == null || cropRect!.isEmpty) return;
-
-    final dispRect = _rectToScreen(cropRect!);
-
-    // Dark mask outside selection.
-    canvas.drawPath(
-      Path.combine(
-        PathOperation.difference,
-        Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-        Path()..addRect(dispRect),
-      ),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.45)
-        ..style = PaintingStyle.fill,
-    );
-
-    // Selection border.
-    canvas.drawRect(
-      dispRect,
-      Paint()
-        ..color = Colors.white
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke,
-    );
-
-    // Corner handles.
-    const handleSize = 6.0;
-    final handlePaint = Paint()
+    // Crop border
+    final borderPaint = Paint()
       ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    for (final corner in [
-      dispRect.topLeft,
-      dispRect.topRight,
-      dispRect.bottomLeft,
-      dispRect.bottomRight,
-    ]) {
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawRect(canvasCrop, borderPaint);
+
+    _drawCornerHandles(canvas, canvasCrop, Colors.white);
+  }
+
+  void _paintPaletteStrips(Canvas canvas, Size size) {
+    final stripColors = [
+      Colors.blue.shade400,
+      Colors.green.shade400,
+      Colors.orange.shade400,
+      Colors.purple.shade400,
+      Colors.red.shade400,
+      Colors.teal.shade400,
+    ];
+
+    for (int i = 0; i < paletteStrips.length; i++) {
+      final canvasStrip = _toCanvas(paletteStrips[i]);
+      final color = stripColors[i % stripColors.length];
+
+      // Fill
+      canvas.drawRect(canvasStrip, Paint()..color = color.withOpacity(0.15));
+
+      // Border
       canvas.drawRect(
-        Rect.fromCenter(center: corner, width: handleSize, height: handleSize),
+        canvasStrip,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+
+      // Label
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'P${i + 1}',
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, canvasStrip.topLeft + const Offset(4, 2));
+
+      _drawCornerHandles(canvas, canvasStrip, color);
+    }
+  }
+
+  void _paintDraftStrip(Canvas canvas, Rect canvasStrip) {
+    canvas.drawRect(canvasStrip, Paint()..color = Colors.amber.withOpacity(0.15));
+    _drawDashedRect(canvas, canvasStrip, Colors.amber.shade700);
+  }
+
+  void _drawDashedRect(Canvas canvas, Rect rect, Color color) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    const dashLen = 6.0;
+    const gapLen = 4.0;
+
+    void drawDashedLine(Offset a, Offset b) {
+      final dir = (b - a);
+      final total = dir.distance;
+      final unit = dir / total;
+      double d = 0;
+      while (d < total) {
+        final start = a + unit * d;
+        final end = a + unit * (d + dashLen).clamp(0, total);
+        canvas.drawLine(start, end, paint);
+        d += dashLen + gapLen;
+      }
+    }
+
+    drawDashedLine(rect.topLeft, rect.topRight);
+    drawDashedLine(rect.topRight, rect.bottomRight);
+    drawDashedLine(rect.bottomRight, rect.bottomLeft);
+    drawDashedLine(rect.bottomLeft, rect.topLeft);
+  }
+
+  void _drawCornerHandles(Canvas canvas, Rect rect, Color color) {
+    const hs = 6.0;
+    final handlePaint = Paint()..color = color;
+    for (final corner in [rect.topLeft, rect.topRight, rect.bottomLeft, rect.bottomRight]) {
+      canvas.drawRect(
+        Rect.fromCenter(center: corner, width: hs, height: hs),
         handlePaint,
       );
     }
@@ -155,12 +143,11 @@ class SpriteSheetPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(SpriteSheetPainter old) =>
-      old.mode != mode ||
+      old.imageSize != imageSize ||
       old.zoom != zoom ||
       old.pan != pan ||
-      old.tileSize != tileSize ||
-      old.selTileX != selTileX ||
-      old.selTileY != selTileY ||
       old.cropRect != cropRect ||
-      old.imageSize != imageSize;
+      old.paletteStrips != paletteStrips ||
+      old.stripDraftRect != stripDraftRect ||
+      old.isDrawingStrip != isDrawingStrip;
 }
