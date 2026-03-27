@@ -1623,6 +1623,7 @@ class EditorNotifier extends Notifier<EditorState> {
       isDirty: true,
       compositeThreadCache: null,
     );
+    if (state.showCompositeThreads) refreshCompositeCache();
   }
 
   void setLayerOpacity(String id, double opacity) {
@@ -1634,6 +1635,10 @@ class EditorNotifier extends Notifier<EditorState> {
       isDirty: true,
       compositeThreadCache: null,
     );
+    // Rebuild composite cache so palette symbols and colours stay in sync
+    // with the new opacity. Only do this when the composite palette is visible
+    // to avoid the CIE Lab matching cost during background layer edits.
+    if (state.showCompositeThreads) refreshCompositeCache();
   }
 
   /// [delta] = +1 moves layer up (toward top/front), -1 moves down (toward bottom/back).
@@ -1652,6 +1657,7 @@ class EditorNotifier extends Notifier<EditorState> {
       redoStack: [],
       compositeThreadCache: null,
     );
+    if (state.showCompositeThreads) refreshCompositeCache();
   }
 
   void duplicateLayer(String id) {
