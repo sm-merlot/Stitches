@@ -10,7 +10,9 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 
 ### Pattern editing
 - **Pattern canvas** — draw full stitches, half stitches (forward `/` and backward `\`), quarter stitches, and backstitches on a scalable grid
-- **DMC / Anchor color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers; toggle between DMC and Anchor codes in Settings
+- **Canvas layers** — named layers with per-layer visibility toggle and opacity slider; layers panel in the right sidebar; stitches scoped to the active layer; reorder layers by drag; layers collapse into a single composite view for printing or export
+- **DMC / Anchor color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers; toggle between DMC and Anchor codes in Settings; threads enter the palette automatically on first stitch and are pruned when the last stitch is erased
+- **Symbols** — every palette thread and composite thread gets a unique symbol from a pool of ~180 UTF-8 characters; symbols are stable across save/reload and opacity changes; tap any symbol to reassign it via the symbol picker
 - **Undo / redo** — full history stack (up to 200 steps); double-tap to undo on touch devices
 - **Zoom & pan** — pinch-to-zoom, scroll-wheel zoom, drag to pan, middle-click drag to pan; zoom range 0.1×–20×
 - **Resize canvas** — adjust pattern dimensions after creation
@@ -24,7 +26,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - Backstitch (tap two grid intersections)
 - Navigate (pan without drawing)
 - Erase
-- Color picker (sample a stitch's thread)
+- Color picker — samples a stitch's thread colour; layer-aware (picks the topmost visible stitch at the tapped cell)
 - Selection (rubber-band, copy, paste, delete regions); paste opacity slider blends colours with the canvas via CIE Lab nearest-DMC lookup
 - **Fill colour** — 8-connected flood fill; fills all connected cells of the same colour (or empty) with the selected thread `[8]`
 - **Fill erase** — 8-connected flood fill erase; removes all connected full stitches of the same colour `[9]`
@@ -73,7 +75,7 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Multi-platform** — macOS, iOS, Android
 - **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode
 - **Touch** — rubber-band selection, copy/paste, and pan all work with finger on iPad
-- **Stitch mode** — simplified read-only view for stitching from a finished pattern; accessible via a floating action button; keep-screen-on option
+- **Stitch mode** — simplified read-only view for stitching from a finished pattern; accessible via a floating action button; keep-screen-on option; composite thread palette shows the actual blended DMC colours produced by layer opacity settings, each with a unique symbol
 - **Keyboard shortcuts** — full shortcut set on desktop and in snippet editor (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
 - **Image viewer** — view `.png`, `.jpg`, `.gif`, `.webp`, and other image files inline in the canvas area; click any image in the sidebar to open it, click another to switch instantly
@@ -91,7 +93,6 @@ Requires Flutter 3.41.4+.
 ## Roadmap
 
 - **Proton Drive sync**
-- **Canvas layers** — named layers on the main canvas with per-layer visibility toggle and opacity slider; layers panel on the right sidebar; stitches scoped to the active layer; composite thread view in stitch mode shows the actual DMC colours needed after blending; paste opacity slider removed (use a layer instead)
 - **Snippet multi-palette** — multiple named colour palettes per snippet, switchable via dots in the snippet panel or the palette manager in the snippet editor; sprite importer extended with a palette-strip selection tool to import multiple palettes directly from a sprite sheet
 
 ### Improvements & polish
@@ -119,3 +120,5 @@ Requires Flutter 3.41.4+.
 11. ~~**OXS import/export**~~ ✓ — import and export WinStitch/MacStitch `.oxs` format (open XML-based cross-stitch format). Further format support planned: Pattern Maker (`.xsd`), PC Stitch (`.pat`), and others.
 
 12. **Rename "Done" → "Close"** on dismiss buttons throughout the app (sprite importer and any other screen using "Done" as a close action).
+
+13. ~~**Canvas layers**~~ ✓ — named layers with per-layer visibility and opacity; layers panel in the right sidebar; stitches scoped to the active layer; composite thread view in stitch mode with stable unique symbols; layer-aware colour picker; thread auto-registration (threads enter palette on first stitch, pruned on last erase); symbol pool extended to ~180 UTF-8 characters; freed composite symbols recycled to newly-appearing colours when opacity changes.
