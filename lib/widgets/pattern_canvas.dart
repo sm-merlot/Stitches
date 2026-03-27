@@ -7,7 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stitch.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import 'canvas_painter.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {

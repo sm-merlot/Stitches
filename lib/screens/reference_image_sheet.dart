@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 
 class ReferenceImageSheet extends ConsumerWidget {
   const ReferenceImageSheet({super.key});

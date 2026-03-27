@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import '../services/sprite_importer.dart';
 import '../widgets/sprite_sheet_painter.dart';
 

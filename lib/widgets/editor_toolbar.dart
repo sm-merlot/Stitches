@@ -9,7 +9,7 @@ import '../data/symbols.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../models/storage_location.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/folder_contents_provider.dart';

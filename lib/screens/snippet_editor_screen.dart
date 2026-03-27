@@ -9,7 +9,7 @@ import '../models/pattern.dart';
 import '../models/snippet.dart';
 import '../models/snippet_palette.dart';
 import '../models/thread.dart';
-import '../providers/editor_provider.dart';
+import '../providers/editor/editor_provider.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
 import '../widgets/snippet_thumbnail.dart';
