@@ -34,6 +34,10 @@ class CrossStitchPattern {
   /// Saved snippets belonging to this pattern.
   final List<Snippet> snippets;
 
+  /// Stable symbol assignments for composite (blended) thread colours.
+  /// Maps dmcCode → symbol. Persisted so symbols survive save/reload.
+  final Map<String, String> compositeSymbols;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -48,6 +52,7 @@ class CrossStitchPattern {
     this.referenceImagePath,
     this.referenceOpacity = 0.5,
     this.snippets = const [],
+    this.compositeSymbols = const {},
   });
 
   /// Flat union of all stitches across all layers. Used for backward-compat
@@ -88,6 +93,7 @@ class CrossStitchPattern {
     Object? referenceImagePath = _sentinel,
     double? referenceOpacity,
     List<Snippet>? snippets,
+    Object? compositeSymbols = _sentinel,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -111,6 +117,9 @@ class CrossStitchPattern {
           : referenceImagePath as String?,
       referenceOpacity: referenceOpacity ?? this.referenceOpacity,
       snippets: snippets ?? this.snippets,
+      compositeSymbols: compositeSymbols == _sentinel
+          ? this.compositeSymbols
+          : compositeSymbols as Map<String, String>,
     );
   }
 
@@ -187,6 +196,11 @@ class CrossStitchPattern {
                   Snippet.fromYaml(Map<String, dynamic>.from(s as Map)))
               .toList() ??
           [],
+      compositeSymbols: () {
+        final raw = yaml['compositeSymbols'];
+        if (raw == null) return const <String, String>{};
+        return Map<String, String>.from(raw as Map);
+      }(),
     );
   }
 }

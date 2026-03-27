@@ -4,43 +4,43 @@
     {
       "id": 7,
       "subject": "Task 1: Extend symbol pool",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Add ~117 new UTF-8 symbols to `kPatternSymbols`, bringing the pool from 63 to ~180.\n\n**Files:**\n- Modify: `lib/data/symbols.dart`\n\n**Acceptance Criteria:**\n- [ ] `kPatternSymbols` contains all existing symbols plus the new additions\n- [ ] No duplicate symbols in the list\n- [ ] `flutter test` passes\n\n**Verify:** `cd /Users/scottmerchant/dev/stitchx && export PATH=\"/opt/homebrew/bin:$PATH\" && flutter test`\n\n```json:metadata\n{\"files\": [\"lib/data/symbols.dart\"], \"verifyCommand\": \"cd /Users/scottmerchant/dev/stitchx && export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter test\", \"acceptanceCriteria\": [\"kPatternSymbols extended to ~180 symbols\", \"No duplicates\", \"flutter test passes\"]}\n```"
     },
     {
       "id": 8,
       "subject": "Task 2: Add compositeSymbols to pattern model and serialisation",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** `CrossStitchPattern` gains a `compositeSymbols: Map<String, String>` field persisted to/from YAML.\n\n**Files:**\n- Modify: `lib/models/pattern.dart`\n- Modify: `lib/services/file_service.dart`\n\n```json:metadata\n{\"files\": [\"lib/models/pattern.dart\", \"lib/services/file_service.dart\"], \"verifyCommand\": \"cd /Users/scottmerchant/dev/stitchx && export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter test\", \"acceptanceCriteria\": [\"compositeSymbols field with default {}\", \"copyWith sentinel pattern\", \"fromYaml/toYaml round-trip\"]}\n```"
     },
     {
       "id": 9,
       "subject": "Task 3: Thread auto-register on addStitch, auto-prune on erase",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [8],
       "description": "**Goal:** Threads enter palette on first stitch, pruned on last erase. `addThread()` removed.\n\n**Files:**\n- Modify: `lib/providers/editor_provider.dart`\n\n```json:metadata\n{\"files\": [\"lib/providers/editor_provider.dart\"], \"verifyCommand\": \"cd /Users/scottmerchant/dev/stitchx && export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter test\", \"acceptanceCriteria\": [\"addThread removed\", \"addStitch auto-registers thread\", \"_pruneUnusedThreads called on all erase ops\", \"selectedThread falls back to DMC db\"]}\n```"
     },
     {
       "id": 10,
       "subject": "Task 4: Composite symbol registry in refreshCompositeCache + changeCompositeSymbol",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [8, 9],
       "description": "**Goal:** refreshCompositeCache reads/writes pattern.compositeSymbols for stable symbols.\n\n**Files:**\n- Modify: `lib/providers/editor_provider.dart`\n\n```json:metadata\n{\"files\": [\"lib/providers/editor_provider.dart\"], \"verifyCommand\": \"cd /Users/scottmerchant/dev/stitchx && export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter test\", \"acceptanceCriteria\": [\"composite symbols stable across refreshes\", \"changeCompositeSymbol validates uniqueness\"]}\n```"
     },
     {
       "id": 11,
       "subject": "Task 5: Colour picker collapses to selector; palette removes Add colour row",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [9],
       "description": "**Goal:** Picker calls setSelectedThread only; palette Add colour row removed.\n\n**Files:**\n- Modify: `lib/screens/color_picker_screen.dart`\n- Modify: `lib/widgets/editor_toolbar.dart`\n\n```json:metadata\n{\"files\": [\"lib/screens/color_picker_screen.dart\", \"lib/widgets/editor_toolbar.dart\"], \"verifyCommand\": \"cd /Users/scottmerchant/dev/stitchx && export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter test\", \"acceptanceCriteria\": [\"picker calls setSelectedThread only\", \"no Add colour row\", \"title updated\"]}\n```"
     },
     {
       "id": 12,
       "subject": "Task 6: Symbol picker uniqueness validation for pattern and composite threads",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [10, 11],
       "description": "**Goal:** Symbol picker rejects taken symbols. Composite threads get tappable symbol in canvas mode.\n\n**Files:**\n- Modify: `lib/widgets/editor_toolbar.dart`\n\n```json:metadata\n{\"files\": [\"lib/widgets/editor_toolbar.dart\"], \"verifyCommand\": \"cd /Users/scottmerchant/dev/stitchx && export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter test\", \"acceptanceCriteria\": [\"taken symbol rejected with SnackBar\", \"composite symbol tap works\", \"uniqueness enforced\"]}\n```"
     }
   ],
-  "lastUpdated": "2026-03-27T00:00:00Z"
+  "lastUpdated": "2026-03-27T04:00:00Z"
 }
