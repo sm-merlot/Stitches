@@ -34,9 +34,10 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 ### Snippets
 - **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
 - **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / flip / rotate / edit / delete
-- **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar; block mode toggle in the AppBar inherits the main canvas state
+- **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar; block mode toggle in the AppBar with visual active state
+- **Multi-palette snippets** — each snippet can hold multiple named colour palettes; switch between palettes via the palette manager in the snippet editor or the palette dots in the snippet panel; palettes use positional slot mapping so swapping applies consistently across the whole design; new colours drawn on the canvas propagate to all palettes automatically
 - **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
-- **Sprite sheet importer** — open any sprite sheet image and crop a region; pixel colours matched to nearest DMC thread via CIE Lab colour space; palette simplification slider merges rare colours; output saved directly as a snippet
+- **Sprite sheet importer** — open any sprite sheet image and crop a region; pixel colours matched to nearest DMC thread via CIE Lab colour space; define multiple colour palettes by selecting colour-strip regions on the image; background pixels outside the palette are dropped automatically; output saved directly as a snippet; available on tablet and desktop
 
 ### Files & workspace
 - **File format** — patterns saved as `.stitchx` files (YAML internally)
@@ -93,7 +94,6 @@ Requires Flutter 3.41.4+.
 ## Roadmap
 
 - **Proton Drive sync**
-- **Snippet multi-palette** — multiple named colour palettes per snippet, switchable via dots in the snippet panel or the palette manager in the snippet editor; sprite importer extended with a palette-strip selection tool to import multiple palettes directly from a sprite sheet
 
 ### Improvements & polish
 
@@ -122,3 +122,5 @@ Requires Flutter 3.41.4+.
 12. ~~**Rename "Done" → "Close"**~~ ✓ — sprite sheet importer AppBar dismiss button renamed to "Close". Pattern scanner "Done" buttons advance wizard steps and are unchanged.
 
 13. ~~**Canvas layers**~~ ✓ — named layers with per-layer visibility and opacity; layers panel in the right sidebar; stitches scoped to the active layer; composite thread view in stitch mode with stable unique symbols; layer-aware colour picker; thread auto-registration (threads enter palette on first stitch, pruned on last erase); symbol pool extended to ~180 UTF-8 characters; freed composite symbols recycled to newly-appearing colours when opacity changes.
+
+14. ~~**Snippet multi-palette**~~ ✓ — each snippet stores multiple named colour palettes; `palettes[0]` defines canonical slot order; alternate palettes replace slots positionally. Palette manager in the snippet editor (add, rename, reorder, delete); palette dots in the snippet panel for one-tap switching. Sprite importer gains crop-only mode with colour-strip selection: define palette 1 by cropping a colour strip, additional strips add palettes 2–N via positional mapping; background pixels outside palette colours are dropped during import. New threads drawn in the editor propagate to all palettes automatically. Canvas painter applies the active palette override without defeating `RepaintBoundary` caching.
