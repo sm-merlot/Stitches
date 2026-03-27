@@ -66,7 +66,11 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   Offset? _stripStart;
   Offset? _stripEnd;
   final List<Rect> _confirmedStrips = [];
+  final List<List<Color>> _detectedStripColours = [];
   bool _showRecropWarning = false;
+
+  // ── Preview ──────────────────────────────────────────────────────────────────
+  Uint8List? _cropPreviewBytes;
 
   // ── Other ───────────────────────────────────────────────────────────────────
   int _mergeThreshold = 0;
@@ -103,10 +107,12 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       _autoFit = true;
       _cropStart = null;
       _cropEnd = null;
+      _cropPreviewBytes = null;
       _stripState = _StripDrawState.idle;
       _stripStart = null;
       _stripEnd = null;
       _confirmedStrips.clear();
+      _detectedStripColours.clear();
       _showRecropWarning = false;
       _addedCount = 0;
       _nameCtrl.text = 'Sprite 1';
@@ -155,6 +161,29 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   /// Convert screen coordinates → image pixel coordinates.
   Offset _toImage(Offset screen) => (screen - _pan) / _zoom;
 
+  /// Regenerates [_cropPreviewBytes] from the current crop region.
+  void _refreshCropPreview() {
+    if (!_hasCrop || _image == null) {
+      _cropPreviewBytes = null;
+      return;
+    }
+    final crop = Rect.fromPoints(_cropStart!, _cropEnd!).intersect(
+      Rect.fromLTWH(0, 0, _image!.width.toDouble(), _image!.height.toDouble()),
+    );
+    if (crop.isEmpty) {
+      _cropPreviewBytes = null;
+      return;
+    }
+    final cropped = img.copyCrop(
+      _image!,
+      x: crop.left.round(),
+      y: crop.top.round(),
+      width: crop.width.round().clamp(1, _image!.width),
+      height: crop.height.round().clamp(1, _image!.height),
+    );
+    _cropPreviewBytes = Uint8List.fromList(img.encodePng(cropped));
+  }
+
   // ── Image loading ────────────────────────────────────────────────────────────
 
   Future<void> _pickImage() async {
@@ -190,10 +219,12 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       _autoFit = true;
       _cropStart = null;
       _cropEnd = null;
+      _cropPreviewBytes = null;
       _stripState = _StripDrawState.idle;
       _stripStart = null;
       _stripEnd = null;
       _confirmedStrips.clear();
+      _detectedStripColours.clear();
       _showRecropWarning = false;
       _addedCount = 0;
       _nameCtrl.text = 'Sprite 1';
@@ -267,8 +298,12 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         _stripEnd != null) {
       final r = Rect.fromPoints(_stripStart!, _stripEnd!);
       if (r.width >= 1 && r.height >= 1) {
+        final horizontal = r.width >= r.height;
+        final detected =
+            _image != null ? SpriteImporter.detectPaletteStrip(_image!, r, horizontal) : <Color>[];
         setState(() {
           _confirmedStrips.add(r);
+          _detectedStripColours.add(detected);
           _stripState = _StripDrawState.idle;
           _stripStart = null;
           _stripEnd = null;
@@ -280,6 +315,9 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           _stripEnd = null;
         });
       }
+    } else if (_pointerCount == 0 && _hasCrop) {
+      // Crop drag just ended — refresh the preview.
+      setState(() => _refreshCropPreview());
     }
     _lastScale = 1.0;
     _lastFocalPoint = null;
@@ -339,7 +377,9 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         _nameCtrl.text = 'Sprite ${_addedCount + 1}';
         _cropStart = null;
         _cropEnd = null;
+        _cropPreviewBytes = null;
         _confirmedStrips.clear();
+        _detectedStripColours.clear();
         _stripState = _StripDrawState.idle;
         _stripStart = null;
         _stripEnd = null;
@@ -554,8 +594,12 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                         // blocking others, or always allow individual removal.
                         if (_confirmedStrips.length > 1 || i > 0)
                           InkWell(
-                            onTap: () => setState(
-                                () => _confirmedStrips.removeAt(i)),
+                            onTap: () => setState(() {
+                              _confirmedStrips.removeAt(i);
+                              if (i < _detectedStripColours.length) {
+                                _detectedStripColours.removeAt(i);
+                              }
+                            }),
                             child: const Padding(
                               padding: EdgeInsets.all(2),
                               child: Icon(Icons.close, size: 14),
@@ -661,6 +705,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           onPressed: () => setState(() {
             _showRecropWarning = false;
             _confirmedStrips.clear();
+            _detectedStripColours.clear();
             // Crop drag can now proceed freely.
           }),
           child: const Text('Proceed'),
@@ -698,18 +743,22 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   }
 
   Widget _buildPreviewPanel() {
-    // MVP: tab bar with Default + one tab per confirmed strip.
-    final tabs = <Widget>[const Tab(text: 'Default')];
-    for (int i = 0; i < _confirmedStrips.length; i++) {
-      tabs.add(Tab(text: 'Palette ${i + 1}'));
-    }
+    if (!_hasCrop && _confirmedStrips.isEmpty) return const SizedBox.shrink();
+
+    final tabCount = 1 + _confirmedStrips.length;
+    final tabs = <Widget>[
+      const Tab(text: 'Default'),
+      for (int i = 0; i < _confirmedStrips.length; i++)
+        Tab(text: 'Palette ${i + 1}'),
+    ];
+
     return Container(
-      height: 120,
+      height: 140,
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: Colors.grey.shade300)),
       ),
       child: DefaultTabController(
-        length: tabs.length,
+        length: tabCount,
         child: Column(
           children: [
             TabBar(
@@ -717,14 +766,77 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
               isScrollable: true,
               labelStyle: const TextStyle(fontSize: 12),
             ),
-            const Expanded(
-              child: Center(
-                child: Text('Preview',
-                    style: TextStyle(color: Colors.grey)),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildDefaultPreviewTab(),
+                  for (int i = 0; i < _confirmedStrips.length; i++)
+                    _buildPaletteStripTab(i),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultPreviewTab() {
+    if (_cropPreviewBytes == null) {
+      return const Center(
+        child: Text('Draw a crop region to preview',
+            style: TextStyle(color: Colors.grey, fontSize: 12)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Center(
+        child: Image.memory(
+          _cropPreviewBytes!,
+          filterQuality: FilterQuality.none,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaletteStripTab(int index) {
+    final colours = index < _detectedStripColours.length
+        ? _detectedStripColours[index]
+        : <Color>[];
+
+    if (colours.isEmpty) {
+      return const Center(
+        child: Text('No colours detected in strip',
+            style: TextStyle(color: Colors.grey, fontSize: 12)),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${colours.length} colour${colours.length == 1 ? '' : 's'} detected:',
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final c in colours)
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: c,
+                    border: Border.all(color: Colors.black12),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
