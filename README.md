@@ -91,36 +91,53 @@ flutter run -d macos
 
 Requires Flutter 3.41.4+.
 
-## Roadmap
+## Backlog
 
-- **Proton Drive sync**
+### Sprite importer
+- In workspace mode, open image from folder tree OR local file system picker
+- Initial "open image" screen should be a smaller modal, not a full-screen page
 
-### Improvements & polish
+### Canvas
+- Add visible grid lines to the pattern canvas
+- Layer groups — organise layers into collapsible named groups
 
-1. ~~**Canvas performance**~~ ✓ — `CanvasPainter` split into a static layer (stitches + grid, RepaintBoundary-cached) and a lightweight overlay layer (cursor, ghost stitches, selection rect), plus viewport culling, grid-line path batching, zoom-adaptive rendering, and frame coalescing. Fixes choppiness on large patterns (256×220+).
+### Snippet editor
+- Palette editing inside the snippet editor (rename, reorder, manage colours per palette)
+- Palette list in the right sidebar (where the layers panel lives in the main editor)
+- Hide canvas/layer mode buttons and "drawing on layer X" label — not relevant in the snippet editor
+- Warn on close if there are unsaved changes (dirty state)
+- Flip and rotate buttons in the editor toolbar
 
-2. ~~**Resize snippets**~~ ✓ — "Resize…" in the snippet ⋮ menu. Three modes: *Clip* (trim stitches outside new bounds), *Scale* (proportionally remap all stitch positions), and *Expand* (change declared size, keep all stitches). Supports undo.
+### Snippet panel
+- "Manage palettes" in the snippet ⋮ menu currently opens the snippet editor — clarify intent or provide a dedicated inline palette manager
 
-3. ~~**Paste opacity / colour blend**~~ ✓ — opacity slider (5–100%) appears in the toolbar during paste mode. Ghost stitches render at the chosen opacity. On stamp at < 100%, each stitch's colour is linearly blended with the background (existing stitch or aida) then snapped to the nearest DMC colour via CIE Lab distance matching.
+### Main editor
+- Active thread palette in the right sidebar, below the layers/palette list; always visible including in stitch mode
+- Select tool: flip and rotate options for the selection region, with keyboard shortcuts; same options in paste mode
+- Remove pan mode — middle-click or two-finger drag handles panning; no dedicated pan tool needed
+- Layer mode colour list should only show colours of the currently selected layer, not all layers combined
+- Stitch numbers and usage counts are incorrect for composite threads in the canvas-mode palette
+- Remove the opacity-layers info icon / tooltip
 
-4. ~~**Block view**~~ ✓ — toggle in the ⋮ overflow menu renders all stitches as solid coloured rectangles. Half stitches draw as half-cell rects, quarter stitches as quarter-cell rects. In stitch mode, symbols remain visible when zoomed in. In design mode, the view stays clean with no symbols.
+### Stitch mode
+- Remove drawing tools — stitch mode is always in select/read-only mode; middle-click or two-finger drag pans
+- Prevent accidental moves — click-and-drag on a selection should not move stitches in stitch mode
+- Palette shows incorrect colours — should reflect only composite canvas colours (excluding threads present only in hidden/merged layers)
+- Palette list becomes the focus-mode selector
+- Stitch visibility/greying controls and demo button move to the palette side panel
 
-5. ~~**Images in folder view**~~ ✓ — `.png`, `.jpg`, `.gif`, `.bmp`, `.webp` files appear in the workspace folder tree with an image icon. Tap to view inline in the canvas area (pinch/scroll to zoom). Right-click → "Import as Sprite Sheet" when a pattern is open; for Google Drive images the file is downloaded to a local cache first. Sidebar PDF and image visibility can be toggled independently via header icon buttons. Sidebar width is now draggable and persisted.
+### Mobile / tablet
+- Review all UI elements for touch-friendliness — check button sizes, tap targets, and layout on small screens
 
-6. ~~**Snippet colour palette**~~ ✓ — each snippet card in the panel shows a row of 8 px colour dots (up to 12; "+N" if more) derived from its thread list. Purely informational — no interaction required.
+### Snippets
+- Snippet palettes: colours should not be auto-pruned when a snippet has multiple palettes (pruning breaks alternate palette slots)
 
-7. ~~**Colour replacement**~~ ✓ — long-press any thread row in the palette dialog to get a "Replace colour…" action. Opens the colour picker in replace mode; selecting a new DMC colour remaps every stitch of the old colour to the new one, merging palette entries if the target colour is already in use. Preserves the thread's symbol. Pushes an undo step. Works identically in the snippet editor (via its isolated `editorProvider`).
+### Files & sync
+- `.stitchx` file compression at rest
+- Proton Drive support
+- Extend supported import/export file types (Pattern Maker `.xsd`, PC Stitch `.pat`, others)
 
-8. ~~**Thread count in palette**~~ ✓ — palette header shows "N colours · M stitches". Each thread row shows its stitch count. Threads added to the palette but not used are flagged "unused".
-
-9. ~~**Edge snapping for paste**~~ ✓ — hold **Shift** while positioning a paste/snippet ghost to snap its edges to: (a) the canvas boundary (left, right, top, bottom, centre); (b) the nearest same-colour stitch in each axis — if any clipboard thread colour exists on the canvas, the ghost snaps so its edge butts flush against the closest same-colour stitch in the drag direction. X and Y axes snap independently so corner placement always works correctly. Separate from Ctrl (multi-stamp).
-
-10. ~~**Snippets from snippets**~~ ✓
-
-11. ~~**OXS import/export**~~ ✓ — import and export WinStitch/MacStitch `.oxs` format (open XML-based cross-stitch format). Further format support planned: Pattern Maker (`.xsd`), PC Stitch (`.pat`), and others.
-
-12. ~~**Rename "Done" → "Close"**~~ ✓ — sprite sheet importer AppBar dismiss button renamed to "Close". Pattern scanner "Done" buttons advance wizard steps and are unchanged.
-
-13. ~~**Canvas layers**~~ ✓ — named layers with per-layer visibility and opacity; layers panel in the right sidebar; stitches scoped to the active layer; composite thread view in stitch mode with stable unique symbols; layer-aware colour picker; thread auto-registration (threads enter palette on first stitch, pruned on last erase); symbol pool extended to ~180 UTF-8 characters; freed composite symbols recycled to newly-appearing colours when opacity changes.
-
-14. ~~**Snippet multi-palette**~~ ✓ — each snippet stores multiple named colour palettes; `palettes[0]` defines canonical slot order; alternate palettes replace slots positionally. Palette manager in the snippet editor (add, rename, reorder, delete); palette dots in the snippet panel for one-tap switching. Sprite importer gains crop-only mode with colour-strip selection: define palette 1 by cropping a colour strip, additional strips add palettes 2–N via positional mapping; background pixels outside palette colours are dropped during import. New threads drawn in the editor propagate to all palettes automatically. Canvas painter applies the active palette override without defeating `RepaintBoundary` caching.
+### Engineering
+- Better test coverage
+- Code cleanup and refactoring
+- GitHub Actions: automated build, version management, and release publishing
