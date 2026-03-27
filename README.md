@@ -93,10 +93,6 @@ Requires Flutter 3.41.4+.
 
 ## Backlog
 
-### Sprite importer
-- In workspace mode, open image from folder tree OR local file system picker
-- Initial "open image" screen should be a smaller modal, not a full-screen page
-
 ### Snippet editor
 - Palette editing inside the snippet editor (rename, reorder, manage colours per palette)
 - Palette list in the right sidebar (where the layers panel lives in the main editor)
