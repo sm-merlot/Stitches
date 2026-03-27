@@ -490,8 +490,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     const kBlockThreshold  = 6.0;
     // Below kNoBackstitch: backstitch lines are invisible at this zoom.
     const kNoBackstitch    = 3.0;
+    // Below kMajorOnly: hide minor (per-cell) grid lines, show major (×10) only.
+    const kMajorOnly       = 8.0;
     // Below kNoGrid: grid lines add no information and just darken the view.
-    const kNoGrid          = 1.5;
+    // 3.5 = the point where labels would thin to every-20 — hide everything instead.
+    const kNoGrid          = 3.5;
 
     // ── Pre-compute blend map for overlapping FullStitches ──────────────────
     // Only cells where multiple visible layers have a FullStitch are included.
@@ -549,7 +552,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
     // ── Grid (batched paths, culled; skipped when cells are sub-pixel) ───────
     if (effectivePx >= kNoGrid) {
-      _drawGrid(canvas, minCX, minCY, maxCX, maxCY);
+      _drawGrid(canvas, minCX, minCY, maxCX, maxCY,
+          majorOnly: effectivePx < kMajorOnly);
     }
 
     // ── Backstitches (all visible layers) ────────────────────────────────────
@@ -629,16 +633,23 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   // ── Grid with path batching + culling ──────────────────────────────────────
 
-  void _drawGrid(Canvas canvas, int minX, int minY, int maxX, int maxY) {
-    final base = aidaColor.computeLuminance() > 0.4 ? Colors.black : Colors.white;
+  void _drawGrid(Canvas canvas, int minX, int minY, int maxX, int maxY,
+      {bool majorOnly = false}) {
+    // Use solid opaque grays so lines are visible on both light and dark backgrounds.
+    final isDark = aidaColor.computeLuminance() <= 0.4;
+    final minorColor = isDark ? const Color(0xFF666666) : const Color(0xFFCCCCCC);
+    final majorColor = isDark ? const Color(0xFF888888) : const Color(0xFF999999);
+    // Scale-invariant stroke widths: always ~1px / ~1.5px on screen.
     final minorPaint = Paint()
-      ..color = base.withValues(alpha: 0.18)
-      ..strokeWidth = 0.5;
+      ..style = PaintingStyle.stroke
+      ..color = minorColor
+      ..strokeWidth = 1.0 / scale;
     final majorPaint = Paint()
-      ..color = base.withValues(alpha: 0.38)
-      ..strokeWidth = 1.0;
+      ..style = PaintingStyle.stroke
+      ..color = majorColor
+      ..strokeWidth = 1.5 / scale;
 
-    final minorPath = Path();
+    final minorPath = majorOnly ? null : Path();
     final majorPath = Path();
 
     final top    = minY * cellSize;
@@ -652,8 +663,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         majorPath.moveTo(px, top);
         majorPath.lineTo(px, bottom);
       } else {
-        minorPath.moveTo(px, top);
-        minorPath.lineTo(px, bottom);
+        minorPath?.moveTo(px, top);
+        minorPath?.lineTo(px, bottom);
       }
     }
     for (int y = minY; y <= maxY; y++) {
@@ -662,12 +673,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         majorPath.moveTo(left, py);
         majorPath.lineTo(right, py);
       } else {
-        minorPath.moveTo(left, py);
-        minorPath.lineTo(right, py);
+        minorPath?.moveTo(left, py);
+        minorPath?.lineTo(right, py);
       }
     }
 
-    canvas.drawPath(minorPath, minorPaint);
+    if (minorPath != null) canvas.drawPath(minorPath, minorPaint);
     canvas.drawPath(majorPath, majorPaint);
   }
 
@@ -831,7 +842,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   int _labelStep(double effectiveCellPx) {
     const minSpacing = 35.0;
-    for (final s in [5, 10, 20, 50, 100]) {
+    // When only the major (×10) grid is visible, snap labels to multiples of 10
+    // so they land on grid lines rather than between them.
+    final candidates =
+        effectiveCellPx >= 8.0 ? [5, 10, 20, 50, 100] : [10, 20, 50, 100];
+    for (final s in candidates) {
       if (s * effectiveCellPx >= minSpacing) return s;
     }
     return 100;
@@ -839,6 +854,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   void _drawGridLabels(Canvas canvas, Size size) {
     final effectiveCellPx = cellSize * scale;
+    // No labels when grid is hidden entirely.
+    if (effectiveCellPx < 3.5) return;
     final step = _labelStep(effectiveCellPx);
     const fontSize = 10.0;
     const textColor = Color(0xFF666666);
