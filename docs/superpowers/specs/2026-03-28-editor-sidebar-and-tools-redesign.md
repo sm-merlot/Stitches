@@ -119,8 +119,15 @@ Simpler — palette management, not view control.
 
 **Header row (always visible at top of panel):**
 ```
-[ 〇 Backstitch off ]  [ 〇 Grey ]  │  [ ▶ Demo ]
+┌─ Stitch Focus: ──────────┐
+│  [ ✕ Cross ]  [ ╱ Back ] │  [ ▶ Demo ]
+└──────────────────────────┘
 ```
+
+- **Cross**: focus on cross stitches — hides backstitches, normal stitches shown in colour (icon: filled ✕)
+- **Back**: focus on backstitches — greys normal stitches, backstitches shown in colour (icon: diagonal stroke)
+- The two buttons are grouped in a bordered container labelled "Stitch Focus:" making their shared purpose clear
+- Demo sits outside the border — it is a different class of action (launches a screen) not a view filter
 
 Toggles behave like a radio group that can be fully off — at most one active at a time:
 - Tapping an inactive toggle enables it and disables the other
@@ -131,10 +138,10 @@ Toggles behave like a radio group that can be fully off — at most one active a
 | State | Normal stitches | Backstitches |
 |---|---|---|
 | None | Colour | Colour |
-| Backstitch off | Colour | Hidden |
-| Grey | Grey | Colour |
+| Cross | Colour | Hidden |
+| Back | Grey | Colour |
 
-The intent: *Backstitch off* lets you focus on normal stitches; *Grey* lets you focus on backstitches.
+The intent: *Cross* lets you focus on normal stitches; *Back* lets you focus on backstitches.
 
 **Colour focus** (tap a thread row to toggle):
 - Tap to focus a colour; tap again to unfocus; only one colour focused at a time
