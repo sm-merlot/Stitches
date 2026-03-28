@@ -213,7 +213,7 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           // Fill erase — in the same radio group as size
                           _ToolbarButton(
-                            tooltip: 'Fill erase (flood erase connected cells)',
+                            tooltip: 'Flood Erase (erase connected cells)',
                             selected: state.fillEraseActive,
                             activeColor: const Color(0xFFFF6D00),
                             onTap: () => notifier.toggleFillErase(),
