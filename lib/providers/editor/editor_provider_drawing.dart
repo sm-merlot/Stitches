@@ -525,6 +525,54 @@ mixin DrawingMixin on Notifier<EditorState> {
   void toggleReferenceVisible() {
     state = state.copyWith(referenceVisible: !state.referenceVisible);
   }
+
+  // ─── Whole-canvas flip/rotate (snippet editor C3) ─────────────────────────
+
+  void flipCanvasH() {
+    final w = state.pattern.width;
+    final newPattern = _patternWithAllLayersTransformed(
+      state.pattern,
+      (stitches) => stitches
+          .map((s) => SelectionMixin._flipStitchH(s, 0, 0, w))
+          .toList(),
+    );
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+    );
+  }
+
+  void flipCanvasV() {
+    final h = state.pattern.height;
+    final newPattern = _patternWithAllLayersTransformed(
+      state.pattern,
+      (stitches) => stitches
+          .map((s) => SelectionMixin._flipStitchV(s, 0, 0, h))
+          .toList(),
+    );
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+    );
+  }
+
+  void rotateCanvasCW() {
+    final w = state.pattern.width;
+    final h = state.pattern.height;
+    final newPattern = _patternWithAllLayersTransformed(
+      state.pattern,
+      (stitches) => stitches
+          .map((s) => SelectionMixin._rotateStitchCW(s, 0, 0, w, h))
+          .toList(),
+    ).copyWith(width: h, height: w); // swap canvas dimensions
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+    );
+  }
 }
 
 // ─── _withThreadId ────────────────────────────────────────────────────────────

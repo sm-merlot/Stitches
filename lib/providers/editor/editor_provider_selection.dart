@@ -183,4 +183,220 @@ mixin SelectionMixin on Notifier<EditorState> {
       state = state.copyWith(selectionRect: null);
     }
   }
+
+  // ─── Selection transform helpers ──────────────────────────────────────────
+
+  /// Returns a stitch horizontally flipped within a bounding box at (l,t) with width w.
+  static Stitch _flipStitchH(Stitch s, int l, int t, int w) => switch (s) {
+    FullStitch(:final x, :final y, :final threadId) =>
+      FullStitch(x: (l + w - 1) - (x - l), y: y, threadId: threadId),
+    HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+      HalfStitch(x: (l + w - 1) - (x - l), y: y, isForward: !isForward, threadId: threadId),
+    QuarterStitch(:final x, :final y, :final quadrant, :final threadId) =>
+      QuarterStitch(x: (l + w - 1) - (x - l), y: y, threadId: threadId,
+        quadrant: switch (quadrant) {
+          QuadrantPosition.topLeft => QuadrantPosition.topRight,
+          QuadrantPosition.topRight => QuadrantPosition.topLeft,
+          QuadrantPosition.bottomLeft => QuadrantPosition.bottomRight,
+          QuadrantPosition.bottomRight => QuadrantPosition.bottomLeft,
+        }),
+    HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+      HalfCrossStitch(x: (l + w - 1) - (x - l), y: y, threadId: threadId,
+        half: switch (half) {
+          HalfOrientation.left => HalfOrientation.right,
+          HalfOrientation.right => HalfOrientation.left,
+          HalfOrientation.top => HalfOrientation.top,
+          HalfOrientation.bottom => HalfOrientation.bottom,
+        }),
+    QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
+      QuarterCrossStitch(x: (l + w - 1) - (x - l), y: y, threadId: threadId,
+        quadrant: switch (quadrant) {
+          QuadrantPosition.topLeft => QuadrantPosition.topRight,
+          QuadrantPosition.topRight => QuadrantPosition.topLeft,
+          QuadrantPosition.bottomLeft => QuadrantPosition.bottomRight,
+          QuadrantPosition.bottomRight => QuadrantPosition.bottomLeft,
+        }),
+    BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
+      BackStitch(
+        x1: (l + w) - (x1 - l), y1: y1,
+        x2: (l + w) - (x2 - l), y2: y2,
+        threadId: threadId),
+    _ => s,
+  };
+
+  /// Returns a stitch vertically flipped within a bounding box at (l,t) with height h.
+  static Stitch _flipStitchV(Stitch s, int l, int t, int h) => switch (s) {
+    FullStitch(:final x, :final y, :final threadId) =>
+      FullStitch(x: x, y: (t + h - 1) - (y - t), threadId: threadId),
+    HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+      HalfStitch(x: x, y: (t + h - 1) - (y - t), isForward: !isForward, threadId: threadId),
+    QuarterStitch(:final x, :final y, :final quadrant, :final threadId) =>
+      QuarterStitch(x: x, y: (t + h - 1) - (y - t), threadId: threadId,
+        quadrant: switch (quadrant) {
+          QuadrantPosition.topLeft => QuadrantPosition.bottomLeft,
+          QuadrantPosition.topRight => QuadrantPosition.bottomRight,
+          QuadrantPosition.bottomLeft => QuadrantPosition.topLeft,
+          QuadrantPosition.bottomRight => QuadrantPosition.topRight,
+        }),
+    HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+      HalfCrossStitch(x: x, y: (t + h - 1) - (y - t), threadId: threadId,
+        half: switch (half) {
+          HalfOrientation.left => HalfOrientation.left,
+          HalfOrientation.right => HalfOrientation.right,
+          HalfOrientation.top => HalfOrientation.bottom,
+          HalfOrientation.bottom => HalfOrientation.top,
+        }),
+    QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
+      QuarterCrossStitch(x: x, y: (t + h - 1) - (y - t), threadId: threadId,
+        quadrant: switch (quadrant) {
+          QuadrantPosition.topLeft => QuadrantPosition.bottomLeft,
+          QuadrantPosition.topRight => QuadrantPosition.bottomRight,
+          QuadrantPosition.bottomLeft => QuadrantPosition.topLeft,
+          QuadrantPosition.bottomRight => QuadrantPosition.topRight,
+        }),
+    BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
+      BackStitch(
+        x1: x1, y1: (t + h) - (y1 - t),
+        x2: x2, y2: (t + h) - (y2 - t),
+        threadId: threadId),
+    _ => s,
+  };
+
+  /// Returns a stitch rotated 90° CW within a bounding box at (l,t) with size w×h.
+  static Stitch _rotateStitchCW(Stitch s, int l, int t, int w, int h) {
+    int rx(int x, int y) => l + (h - 1 - (y - t));
+    int ry(int x, int y) => t + (x - l);
+    double rbsX(double x, double y) => l + (h - (y - t));
+    double rbsY(double x, double y) => t + (x - l);
+
+    return switch (s) {
+      FullStitch(:final x, :final y, :final threadId) =>
+        FullStitch(x: rx(x, y), y: ry(x, y), threadId: threadId),
+      HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+        HalfStitch(x: rx(x, y), y: ry(x, y), isForward: !isForward, threadId: threadId),
+      QuarterStitch(:final x, :final y, :final quadrant, :final threadId) =>
+        QuarterStitch(x: rx(x, y), y: ry(x, y), threadId: threadId,
+          quadrant: switch (quadrant) {
+            QuadrantPosition.topLeft => QuadrantPosition.topRight,
+            QuadrantPosition.topRight => QuadrantPosition.bottomRight,
+            QuadrantPosition.bottomRight => QuadrantPosition.bottomLeft,
+            QuadrantPosition.bottomLeft => QuadrantPosition.topLeft,
+          }),
+      HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+        HalfCrossStitch(x: rx(x, y), y: ry(x, y), threadId: threadId,
+          half: switch (half) {
+            HalfOrientation.top => HalfOrientation.right,
+            HalfOrientation.right => HalfOrientation.bottom,
+            HalfOrientation.bottom => HalfOrientation.left,
+            HalfOrientation.left => HalfOrientation.top,
+          }),
+      QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
+        QuarterCrossStitch(x: rx(x, y), y: ry(x, y), threadId: threadId,
+          quadrant: switch (quadrant) {
+            QuadrantPosition.topLeft => QuadrantPosition.topRight,
+            QuadrantPosition.topRight => QuadrantPosition.bottomRight,
+            QuadrantPosition.bottomRight => QuadrantPosition.bottomLeft,
+            QuadrantPosition.bottomLeft => QuadrantPosition.topLeft,
+          }),
+      BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
+        BackStitch(
+          x1: rbsX(x1, y1), y1: rbsY(x1, y1),
+          x2: rbsX(x2, y2), y2: rbsY(x2, y2),
+          threadId: threadId),
+      _ => s,
+    };
+  }
+
+  // ─── Selection flip/rotate ─────────────────────────────────────────────────
+
+  void flipSelectionH() {
+    final rect = state.selectionRect;
+    if (rect == null) return;
+    final l = rect.left.floor();
+    final t = rect.top.floor();
+    final w = rect.width.round();
+    final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    final newStitches = state.activeLayer.stitches
+        .map((s) => inSel(s) ? _flipStitchH(s, l, t, w) : s)
+        .toList();
+    state = state.copyWith(
+      pattern: _patternWithActiveLayerStitches(state.pattern, newStitches),
+      undoStack: _buildUndoStack(),
+    );
+  }
+
+  void flipSelectionV() {
+    final rect = state.selectionRect;
+    if (rect == null) return;
+    final l = rect.left.floor();
+    final t = rect.top.floor();
+    final h = rect.height.round();
+    final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    final newStitches = state.activeLayer.stitches
+        .map((s) => inSel(s) ? _flipStitchV(s, l, t, h) : s)
+        .toList();
+    state = state.copyWith(
+      pattern: _patternWithActiveLayerStitches(state.pattern, newStitches),
+      undoStack: _buildUndoStack(),
+    );
+  }
+
+  void rotateSelectionCW() {
+    final rect = state.selectionRect;
+    if (rect == null) return;
+    final l = rect.left.floor();
+    final t = rect.top.floor();
+    final w = rect.width.round();
+    final h = rect.height.round();
+    final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    final newStitches = state.activeLayer.stitches
+        .map((s) => inSel(s) ? _rotateStitchCW(s, l, t, w, h) : s)
+        .toList();
+    // After CW rotation the selection occupies same top-left but w↔h swap
+    final newRect = Rect.fromLTWH(rect.left, rect.top, rect.height, rect.width);
+    state = state.copyWith(
+      pattern: _patternWithActiveLayerStitches(state.pattern, newStitches),
+      selectionRect: newRect,
+      undoStack: _buildUndoStack(),
+    );
+  }
+
+  // ─── Clipboard flip/rotate ─────────────────────────────────────────────────
+
+  void flipClipboardH() {
+    final clips = state.clipboard;
+    if (clips == null || clips.isEmpty) return;
+    final w = clips.fold(0, (m, s) {
+      final c = EditorState.cellCoords(s);
+      return c != null ? (c.$1 + 1 > m ? c.$1 + 1 : m) : m;
+    });
+    final flipped = clips.map((s) => _flipStitchH(s, 0, 0, w)).toList();
+    state = state.copyWith(clipboard: flipped);
+  }
+
+  void flipClipboardV() {
+    final clips = state.clipboard;
+    if (clips == null || clips.isEmpty) return;
+    final h = clips.fold(0, (m, s) {
+      final c = EditorState.cellCoords(s);
+      return c != null ? (c.$2 + 1 > m ? c.$2 + 1 : m) : m;
+    });
+    final flipped = clips.map((s) => _flipStitchV(s, 0, 0, h)).toList();
+    state = state.copyWith(clipboard: flipped);
+  }
+
+  void rotateClipboardCW() {
+    final clips = state.clipboard;
+    if (clips == null || clips.isEmpty) return;
+    int w = 0, h = 0;
+    for (final s in clips) {
+      final c = EditorState.cellCoords(s);
+      if (c != null) {
+        if (c.$1 + 1 > w) w = c.$1 + 1;
+        if (c.$2 + 1 > h) h = c.$2 + 1;
+      }
+    }
+    final rotated = clips.map((s) => _rotateStitchCW(s, 0, 0, w, h)).toList();
+    state = state.copyWith(clipboard: rotated);
+  }
 }
