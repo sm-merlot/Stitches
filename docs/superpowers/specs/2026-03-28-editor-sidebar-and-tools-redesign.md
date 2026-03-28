@@ -51,14 +51,50 @@ Identical to the current layers panel — no functional changes. Layer groups, r
 
 ### A2 — Palettes tab (snippet editor only)
 
-Replaces `_PaletteManagerSheet`. Manages the list of palettes a snippet has:
+Replaces `_PaletteManagerSheet`. Manages the list of palettes a snippet has.
+
+#### Palette data model
+
+Palette 1 (index 0) is the **primary palette** — stitches are always stored using its DMC codes internally. All other palettes are display remappings: when palette N is active, each stitch's primary-palette DMC code is resolved to its slot index, then palette N's colour for that slot is used for rendering and drawing. This means drawing on any palette always stores the primary palette's equivalent colour — switching back to palette 1 always renders consistently.
+
+Reordering palettes is not supported — the cosmetic benefit doesn't justify the complexity, and the primary palette's position (index 0) is load-bearing.
+
+#### Palette list UI
 
 - Scrollable list of palettes; tap to activate
 - Active palette: highlighted with primary-colour left border
-- Drag to reorder
 - Double-tap name to rename inline
 - Delete button per row (disabled when only one palette)
 - "Add palette…" button at bottom → opens `_AddPaletteDialog` as before
+
+#### Editing colours in existing palettes
+
+Each palette row is expandable to show its colour slots. Tap any slot to replace its colour via the DMC picker — this updates only that slot in that palette. Other palettes are unaffected.
+
+#### Adding new colours
+
+New colours are added **implicitly** when the user stitches a colour not currently in any palette slot. The new colour is added as a new slot to **all palettes simultaneously**, defaulting to the same colour in every palette. The user then edits individual palettes via the slot editor above to set their alternate colourway for that slot.
+
+There is no manual "add colour" button — the draw-to-add flow is the only path.
+
+#### Duplicate slot conflict
+
+A conflict occurs when a newly added slot's default colour is already used by a different slot in an existing palette. Example:
+
+| Palette | Slot A | Slot B | Slot C | Slot D (new) |
+|---|---|---|---|---|
+| 1 | Blue | Red | Orange | Purple |
+| 2 | Purple | Pink | Green | Purple ← duplicate |
+
+Palette 2 now has Purple in both Slot A and Slot D. Since slot resolution uses the first match, **Slot D is unreachable for drawing while Palette 2 is active** — any Purple stitch will always resolve to Slot A.
+
+Duplicate slots are flagged with an amber warning indicator on the affected row in the Palettes tab. The warning message reads: *"Same colour as Slot A — this slot can't be drawn on Palette 2 until it's given a unique colour."*
+
+The warning is informational, not blocking. The user resolves it by editing Slot D in Palette 2 to a different colour.
+
+#### Model integrity on load
+
+When loading a snippet, validate that all palettes have the same number of slots. If any palette has fewer slots than the primary palette (e.g. from file corruption), pad the short palette by copying the primary palette's colour for the missing slots. Log a warning but do not error.
 
 ---
 
