@@ -123,6 +123,10 @@ Simpler — palette management, not view control.
 
 **Note:** Quick swatches in the toolbar stay — they serve a different purpose (rapid recent-thread switching without looking at the sidebar).
 
+**Absorbed cleanups:**
+- The Canvas/Layer toggle and its info icon/tooltip are removed from the toolbar — replaced by the radio buttons above
+- The "Drawing on layer X" canvas overlay chip is removed — the Layer X radio label serves the same purpose without the FAB overlap problem
+
 #### Stitch mode variant (main editor stitch mode only)
 
 **Header row (always visible at top of panel):**
@@ -258,25 +262,17 @@ Keyboard shortcuts (consistent across all contexts):
 
 ## Chunk D — Small Cleanups
 
-### D1 — Remove opacity-layers info icon/tooltip
-- Remove the info icon and tooltip next to the Canvas/Layer toggle in the toolbar
-- The toggle itself moves to the Colours panel (see A3), so this resolves naturally
-
-### D2 — Prevent accidental stitch moves in stitch mode
+### D1 — Prevent accidental stitch moves in stitch mode
 - Currently, dragging a selection in stitch mode can accidentally move stitches
 - In stitch mode, drag on a selection should pan the canvas, not move stitches
 - Selection in stitch mode is read-only: copy/paste/move operations disabled
 - Only focus-toggling (tap) is active in stitch mode
 
-### D3 — Hide irrelevant chrome in snippet editor
+### D2 — Hide irrelevant chrome in snippet editor
 - Canvas/Layer source toggle: not rendered in snippet editor (snippets have no layers)
 - "Drawing on layer X" canvas overlay chip: not rendered in snippet editor
 
-### D5 — Remove "Drawing on layer X" canvas overlay chip
-
-The chip is removed entirely. Its purpose — telling the user which layer they are drawing on — is now served by the **Layer X radio button** in the Colours tab (see A3), which shows the active layer name and updates on rename. The chip's bottom-left position also conflicted with the Stitch Mode FAB.
-
-### D4 — Unsaved changes warning in snippet editor
+### D3 — Unsaved changes warning in snippet editor
 - Detect dirty state: compare canvas stitch data at session start vs. current
 - On close attempt (back button, X, navigate away): if dirty, show confirmation dialog
   - "Discard changes?" with Cancel / Discard actions
