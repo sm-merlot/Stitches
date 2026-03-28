@@ -221,6 +221,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       return KeyEventResult.ignored;
     }
     final notifier = ref.read(editorProvider.notifier);
+    final state = ref.read(editorProvider);
     final keys = HardwareKeyboard.instance.logicalKeysPressed;
     final meta = keys.contains(LogicalKeyboardKey.metaLeft) ||
         keys.contains(LogicalKeyboardKey.metaRight);
@@ -251,8 +252,48 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         notifier.copySelection();
         return KeyEventResult.handled;
       }
-      if (key == LogicalKeyboardKey.keyV) {
+      if (!shift && key == LogicalKeyboardKey.keyV) {
         notifier.enterPasteMode();
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.keyH) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.flipSelectionH();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.flipClipboardH();
+        } else {
+          notifier.flipCanvasH();
+        }
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.keyV) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.flipSelectionV();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.flipClipboardV();
+        } else {
+          notifier.flipCanvasV();
+        }
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.bracketRight) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.rotateSelectionCW();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.rotateClipboardCW();
+        } else {
+          notifier.rotateCanvasCW();
+        }
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.bracketLeft) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.rotateSelectionCW(); notifier.rotateSelectionCW(); notifier.rotateSelectionCW();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.rotateClipboardCW(); notifier.rotateClipboardCW(); notifier.rotateClipboardCW();
+        } else {
+          notifier.rotateCanvasCW(); notifier.rotateCanvasCW(); notifier.rotateCanvasCW();
+        }
         return KeyEventResult.handled;
       }
     }
@@ -262,7 +303,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         notifier.setDrawingMode(DrawingMode.draw);
       case LogicalKeyboardKey.keyE:
         notifier.setDrawingMode(DrawingMode.erase);
-      case LogicalKeyboardKey.keyP:
       case LogicalKeyboardKey.space:
         notifier.setDrawingMode(DrawingMode.pan);
       case LogicalKeyboardKey.keyS:

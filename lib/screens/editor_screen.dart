@@ -135,10 +135,6 @@ class EditorScreen extends ConsumerWidget {
           notifier.setDrawingMode(DrawingMode.select);
           return KeyEventResult.handled;
         }
-        if (key == LogicalKeyboardKey.keyP || key == LogicalKeyboardKey.space) {
-          notifier.setDrawingMode(DrawingMode.pan);
-          return KeyEventResult.handled;
-        }
         if (key == LogicalKeyboardKey.escape) {
           // Clear selection first; if nothing to clear, exit stitch mode.
           if (state.selectionRect != null) {
@@ -177,8 +173,44 @@ class EditorScreen extends ConsumerWidget {
           notifier.copySelection();
           return KeyEventResult.handled;
         }
-        if (key == LogicalKeyboardKey.keyV) {
+        if (!shift && key == LogicalKeyboardKey.keyV) {
           notifier.enterPasteMode();
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.keyH) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.flipSelectionH();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.flipClipboardH();
+          }
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.keyV) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.flipSelectionV();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.flipClipboardV();
+          }
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.bracketRight) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.rotateSelectionCW();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.rotateClipboardCW();
+          }
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.bracketLeft) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.rotateSelectionCW();
+            notifier.rotateSelectionCW();
+            notifier.rotateSelectionCW();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.rotateClipboardCW();
+            notifier.rotateClipboardCW();
+            notifier.rotateClipboardCW();
+          }
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -190,8 +222,6 @@ class EditorScreen extends ConsumerWidget {
           notifier.setDrawingMode(DrawingMode.draw);
         case LogicalKeyboardKey.keyE:
           notifier.setDrawingMode(DrawingMode.erase);
-        case LogicalKeyboardKey.keyP:
-          notifier.setDrawingMode(DrawingMode.pan);
         case LogicalKeyboardKey.space:
           notifier.setDrawingMode(DrawingMode.pan);
         case LogicalKeyboardKey.digit1:
