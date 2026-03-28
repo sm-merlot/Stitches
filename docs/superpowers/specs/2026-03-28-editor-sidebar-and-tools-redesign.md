@@ -25,11 +25,13 @@ Four discrete chunks of work that address overlapping backlog items across all t
 
 A single collapsible right sidebar replaces all of the above. Its tab structure varies by context:
 
-| Context | Tabs |
-|---|---|
-| Main editor — design | `Layers` \| `Colours` |
-| Main editor — stitch | `Colours` only (no tab bar) |
-| Snippet editor | `Palettes` \| `Colours` |
+| Context | Tabs | Colours panel variant |
+|---|---|---|
+| Main editor — design | `Layers` \| `Colours` | Simple (tap = set active colour) |
+| Main editor — stitch | `Colours` only (no tab bar) | Rich (focus, filters, demo) |
+| Snippet editor | `Palettes` \| `Colours` | Simple (tap = set active colour) |
+
+Snippet editor has no stitch mode — it is always in design/drawing mode.
 
 The sidebar is collapsible (persisted in SharedPreferences) — a chevron button collapses it to a thin strip for more canvas space. Width is drag-to-resize, same as the current layers panel.
 
@@ -113,23 +115,46 @@ Simpler — palette management, not view control.
 
 **Note:** Quick swatches in the toolbar stay — they serve a different purpose (rapid recent-thread switching without looking at the sidebar).
 
-#### Stitch mode / Snippet editor variant (richer)
+#### Stitch mode variant (main editor stitch mode only)
 
 **Header row (always visible at top of panel):**
 ```
-[ 〇 Backstitch ]  [ 〇 Grey ]  │  [ ▶ Demo ]
+[ 〇 Backstitch off ]  [ 〇 Grey ]  │  [ ▶ Demo ]
 ```
-- Backstitch toggle: hides/shows backstitch stitches (replaces stitch mode toolbar "Hide backstitches")
-- Grey stitches toggle: dims non-focused stitches (replaces stitch mode toolbar "Grey stitches")
-- Divider
-- Demo button: launches `StitchDemoScreen` (replaces stitch mode toolbar demo button)
-- "Show all" is implicit: both toggles off = default visible state
 
-**Thread list:**
-- Colour swatch with symbol overlay, DMC/Anchor code, name, stitch count
-- Tap a thread to toggle focus (highlighted border when focused, others dimmed on canvas)
-- Multiple threads can be focused simultaneously
-- Stitch mode: shows composite canvas colours only — threads in hidden layers or merged layers are excluded
+Toggles behave like a radio group that can be fully off — at most one active at a time:
+- Tapping an inactive toggle enables it and disables the other
+- Tapping the active toggle disables it (both off)
+
+**What each toggle does:**
+
+| State | Normal stitches | Backstitches |
+|---|---|---|
+| None | Colour | Colour |
+| Backstitch off | Colour | Hidden |
+| Grey | Grey | Colour |
+
+The intent: *Backstitch off* lets you focus on normal stitches; *Grey* lets you focus on backstitches.
+
+**Colour focus** (tap a thread row to toggle):
+- Tap to focus a colour; tap again to unfocus; only one colour focused at a time
+- Toggles and focus compose:
+
+| State | Normal stitches | Backstitches |
+|---|---|---|
+| Focus only | Focused: colour / Others: grey | Focused: colour / Others: grey |
+| Focus + Backstitch off | Focused: colour / Others: grey | Hidden |
+| Focus + Grey | Grey | Focused: colour / Others: grey |
+
+- Demo button: launches `StitchDemoScreen` (replaces stitch mode toolbar demo button)
+- Thread list shows composite canvas colours only — threads in hidden or merged layers excluded
+
+#### Design mode and snippet editor variant (simpler)
+
+- Thread list: colour swatch + symbol, DMC/Anchor code, name, stitch count
+- Tap a thread to set it as the active drawing colour
+- No filter toggles, no focus mode, no demo button
+- Design mode: shows active layer's threads or composite (controlled by Layer/Canvas toggle, which moves here from the toolbar)
 - Snippet editor: shows threads in the currently active palette
 
 ---
