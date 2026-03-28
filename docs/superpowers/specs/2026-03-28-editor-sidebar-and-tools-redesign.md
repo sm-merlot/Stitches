@@ -265,6 +265,10 @@ Keyboard shortcuts (consistent across all contexts):
 - "Drawing on layer X" canvas overlay chip: hidden in snippet editor (pass `activeLayerName: null` or suppress via existing `stitchMode` flag)
 - Both are already prop-controlled; small conditional changes
 
+### D5 — Reposition "Drawing on layer X" chip
+
+The chip is currently painted at bottom-left of the canvas overlay, where it is obscured by the Stitch Mode FAB (also bottom-left). Resolve the overlap during implementation — options include moving the chip to bottom-right, incorporating it into the toolbar, or removing it entirely if the always-visible sidebar makes it redundant.
+
 ### D4 — Unsaved changes warning in snippet editor
 - Detect dirty state: compare canvas stitch data at session start vs. current
 - On close attempt (back button, X, navigate away): if dirty, show confirmation dialog
