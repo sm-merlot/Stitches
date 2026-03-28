@@ -198,13 +198,15 @@ Select mode is always-on in stitch mode — there is nothing to toggle, so no bu
 
 ## Chunk C — Flip & Rotate
 
-Three distinct contexts; same four operations in each: **Flip Horizontal**, **Flip Vertical**, **Rotate 90° CW**, **Rotate 90° CCW**.
+Three distinct contexts; same three operations in each: **Flip Horizontal**, **Flip Vertical**, **Rotate 90° CW**.
+
+Toolbar buttons: Flip H, Flip V, Rotate CW. No Rotate CCW button — three CW taps achieves the same result.
 
 Keyboard shortcuts (consistent across all contexts):
 - Flip H: `Cmd+Shift+H` (or `Ctrl+Shift+H` on Windows/Linux)
 - Flip V: `Cmd+Shift+V`
 - Rotate CW: `Cmd+Shift+]`
-- Rotate CCW: `Cmd+Shift+[`
+- Rotate CCW: `Cmd+Shift+[` (keyboard only — no toolbar button)
 
 ---
 
