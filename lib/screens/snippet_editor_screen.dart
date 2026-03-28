@@ -12,6 +12,7 @@ import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
+import '../widgets/right_sidebar.dart';
 import '../widgets/snippet_thumbnail.dart';
 
 part 'snippet_editor_screen_dialogs.dart';
@@ -76,6 +77,8 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   int? _selectedPresetIndex = 1; // default 16×16
   int _canvasW = 16;
   int _canvasH = 16;
+  // Dirty-state proxy: stitch fingerprint at load time (D3).
+  int _initialStitchHash = 0;
 
   @override
   void initState() {
@@ -121,6 +124,19 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         editorNotifier.initSnippetPalettesLocal(
             [SnippetPalette.create(name: 'Palette 1')], 0);
       }
+      // Capture initial stitch fingerprint for dirty-state detection (D3).
+      // Run after a microtask so the state has settled.
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            _initialStitchHash = ref
+                .read(editorProvider)
+                .pattern
+                .stitches
+                .fold(0, (h, s) => Object.hash(h, s));
+          });
+        }
+      });
     });
   }
 
@@ -397,23 +413,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     Navigator.of(context).pop(result);
   }
 
-  void _openPaletteManager(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => UncontrolledProviderScope(
-        container: ProviderScope.containerOf(context),
-        child: DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (_, ctrl) => _PaletteManagerSheet(scrollController: ctrl),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -421,8 +420,36 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     final state = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (!_isDirty()) {
+          if (context.mounted) Navigator.of(context).pop();
+          return;
+        }
+        final discard = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Discard changes?'),
+            content: const Text('You have unsaved changes. Discard them?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        );
+        if (discard == true && context.mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
+        appBar: AppBar(
         title: SizedBox(
           width: 200,
           child: TextField(
@@ -457,11 +484,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
                   )
                 : null,
           ),
-          IconButton(
-            tooltip: 'Manage palettes',
-            icon: const Icon(Icons.palette_outlined),
-            onPressed: () => _openPaletteManager(context),
-          ),
           TextButton(
             onPressed: () => _save(context),
             child: const Text('Save'),
@@ -472,20 +494,40 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       body: Focus(
         autofocus: true,
         onKeyEvent: _handleKeys,
-        child: Column(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: PatternCanvas()),
-            EditorToolbar(
-              showSnippetsButton: false,
-              showSaveAsSnippetButton: false,
-              showSpriteSheetButton: false,
-              onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
-                  ? () => _showSnippetPicker(context)
-                  : null,
+            Expanded(
+              child: Column(
+                children: [
+                  const Expanded(child: PatternCanvas()),
+                  EditorToolbar(
+                    showSnippetsButton: false,
+                    showSaveAsSnippetButton: false,
+                    showSpriteSheetButton: false,
+                    showWholeCanvasTransforms: true,
+                    onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
+                        ? () => _showSnippetPicker(context)
+                        : null,
+                  ),
+                ],
+              ),
             ),
+            const RightSidebar(
+                sidebarContext: RightSidebarContext.snippetEditor),
           ],
         ),
       ),
+      ),
     );
+  }
+
+  bool _isDirty() {
+    final current = ref
+        .read(editorProvider)
+        .pattern
+        .stitches
+        .fold(0, (h, s) => Object.hash(h, s));
+    return current != _initialStitchHash;
   }
 }
