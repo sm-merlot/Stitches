@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/dmc_colors.dart';
-import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
@@ -10,7 +8,7 @@ import '../services/file_service.dart';
 import '../utils/snackbars.dart';
 import 'export_dialog.dart';
 import '../widgets/editor_toolbar.dart';
-import '../widgets/layers_panel.dart';
+import '../widgets/right_sidebar.dart';
 import '../widgets/pattern_canvas.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
@@ -406,7 +404,7 @@ class EditorScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const LayersPanel(),
+              const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
             ],
           ),
         ),
@@ -431,8 +429,6 @@ class EditorScreen extends ConsumerWidget {
               )
             : null,
         floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-        endDrawer: const _StitchPalettePanel(),
-        endDrawerEnableOpenDragGesture: false,
       ),
     );
   }
@@ -510,110 +506,6 @@ class _MenuRow extends StatelessWidget {
     );
   }
 }
-
-// ─── Stitch mode palette side panel ─────────────────────────────────────────
-
-class _StitchPalettePanel extends ConsumerWidget {
-  const _StitchPalettePanel();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(editorProvider);
-    final useDmc = ref.watch(settingsProvider).useDmc;
-    final theme = Theme.of(context);
-
-    // In stitch mode, always show composite threads.
-    final List<Thread> threads;
-    if (state.stitchMode && state.compositeThreadCache != null && state.compositeThreadCache!.isNotEmpty) {
-      final unique = <String, Thread>{};
-      for (final t in state.compositeThreadCache!.values) {
-        unique[t.dmcCode] = t;
-      }
-      // Also include source threads not in composite map (e.g. non-FullStitch only threads)
-      for (final t in state.pattern.threads) {
-        unique.putIfAbsent(t.dmcCode, () => t);
-      }
-      threads = unique.values.toList();
-    } else {
-      threads = state.pattern.threads;
-    }
-
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  Text('Threads', style: theme.textTheme.titleMedium),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            if (threads.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('No threads yet.',
-                    style: TextStyle(color: Colors.grey)),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  itemCount: threads.length,
-                  itemBuilder: (_, i) {
-                    final t = threads[i];
-                    final displayCode = useDmc
-                        ? t.dmcCode
-                        : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
-                    final textColor = t.color.computeLuminance() > 0.35
-                        ? Colors.black
-                        : Colors.white;
-                    return ListTile(
-                      dense: true,
-                      leading: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: t.color,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                              color: Colors.grey.shade400, width: 1),
-                        ),
-                        alignment: Alignment.center,
-                        child: t.symbol.isNotEmpty
-                            ? Text(
-                                t.symbol,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: textColor,
-                                  height: 1.0,
-                                ),
-                              )
-                            : null,
-                      ),
-                      title: Text('$displayCode – ${t.name}',
-                          style: const TextStyle(fontSize: 13)),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {

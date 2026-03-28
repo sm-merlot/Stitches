@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
-import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
@@ -27,7 +25,7 @@ import '../services/pdf_scanner.dart';
 import 'pattern_scan_symbol_screen.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/file_sidebar.dart';
-import '../widgets/layers_panel.dart';
+import '../widgets/right_sidebar.dart';
 import '../widgets/pattern_canvas.dart';
 import '../widgets/pdf_page_picker.dart';
 import '../widgets/image_viewer_panel.dart';
@@ -1109,7 +1107,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                                       context, wsState.workspace),
                                 ),
                 ),
-                const LayersPanel(),
+                const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
               ],
             ),
             // Blocking loading overlay (Drive download in progress)
@@ -1177,8 +1175,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               )
             : null,
         floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-        endDrawer: (editorState.isFileOpen && openPdf == null) ? const _StitchPalettePanel() : null,
-        endDrawerEnableOpenDragGesture: false,
       ),
     );
   }
