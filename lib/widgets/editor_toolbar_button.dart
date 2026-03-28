@@ -177,3 +177,25 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
   canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
   canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
 }
+
+// ─── Save as snippet ──────────────────────────────────────────────────────────
+
+void _saveAsSnippet(BuildContext context, WidgetRef ref) {
+  ref.read(editorProvider.notifier).saveSelectionAsSnippet('');
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    SnackBar(
+      content: const Text('Saved as snippet'),
+      duration: const Duration(seconds: 3),
+      action: SnackBarAction(
+        label: 'Open',
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const SnippetsPanel(),
+        ),
+      ),
+    ),
+  );
+  Future.delayed(const Duration(seconds: 3), messenger.hideCurrentSnackBar);
+}

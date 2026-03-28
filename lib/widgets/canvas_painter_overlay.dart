@@ -22,7 +22,6 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
   final List<Thread> patternThreads;
   final (int, int)? stylusHoverCell;
   final Color? stylusHoverColor;
-  final String? activeLayerName;
   final bool stitchMode;
 
   CanvasOverlayPainter({
@@ -43,7 +42,6 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     this.ghostOpacity = 1.0,
     this.stylusHoverCell,
     this.stylusHoverColor,
-    this.activeLayerName,
     this.stitchMode = false,
   });
 
@@ -100,40 +98,6 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       if (isColorPickerCursor) _drawEyedropperCursor(canvas, cursorScreenPos!);
     }
 
-    // ── Active layer chip ───────────────────────────────────────────────────
-    if (!stitchMode && activeLayerName != null) {
-      _drawActiveLayerChip(canvas, size, activeLayerName!);
-    }
-  }
-
-  void _drawActiveLayerChip(Canvas canvas, Size size, String layerName) {
-    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
-    const textStyle = TextStyle(
-      fontSize: 11,
-      color: Colors.white,
-      fontWeight: FontWeight.w500,
-    );
-    final label = 'Drawing on: $layerName';
-    final tp = TextPainter(
-      text: TextSpan(text: label, style: textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    const left = 8.0;
-    const bottom = 8.0;
-    final chipRect = Rect.fromLTWH(
-      left,
-      size.height - bottom - tp.height - padding.vertical,
-      tp.width + padding.horizontal,
-      tp.height + padding.vertical,
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(chipRect, const Radius.circular(4)),
-      Paint()..color = const Color(0xCC1A1A2E),
-    );
-    tp.paint(canvas,
-        Offset(chipRect.left + padding.left, chipRect.top + padding.top));
   }
 
   @override
@@ -155,6 +119,5 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       old.patternThreads != patternThreads ||
       old.stylusHoverCell != stylusHoverCell ||
       old.stylusHoverColor != stylusHoverColor ||
-      old.activeLayerName != activeLayerName ||
       old.stitchMode != stitchMode;
 }

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
-import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../models/storage_location.dart';
 import '../providers/editor/editor_provider.dart';
@@ -16,8 +15,6 @@ import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../screens/color_picker_screen.dart';
 import '../services/drive_cache.dart';
-import '../screens/stitch_demo_screen.dart';
-import 'color_select_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../screens/sprite_sheet_screen.dart';
 import 'snippets_panel.dart';
@@ -25,7 +22,6 @@ import 'snippets_panel.dart';
 part 'editor_toolbar_button.dart';
 part 'editor_toolbar_color_controls.dart';
 part 'editor_toolbar_palette_dialog.dart';
-part 'editor_toolbar_stitch_mode.dart';
 part 'editor_toolbar_sprite_picker.dart';
 
 class EditorToolbar extends ConsumerWidget {
@@ -47,9 +43,9 @@ class EditorToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
 
-    // In stitch mode show the simplified stitch toolbar
+    // Stitch mode: toolbar not rendered (controls moved to sidebar)
     if (state.stitchMode) {
-      return const _StitchModeToolbar();
+      return const SizedBox.shrink();
     }
 
     final notifier = ref.read(editorProvider.notifier);

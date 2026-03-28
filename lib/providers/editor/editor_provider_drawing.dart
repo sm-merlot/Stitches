@@ -458,17 +458,31 @@ mixin DrawingMixin on Notifier<EditorState> {
     final entering = !state.stitchMode;
     state = state.copyWith(
       stitchMode: entering,
-      drawingMode: entering ? DrawingMode.pan : DrawingMode.draw,
+      drawingMode: entering ? DrawingMode.select : DrawingMode.draw,
       selectionRect: null,
       backstitchStartPoint: null,
       showCompositeThreads: entering,
+      stitchCrossMode: false,
+      stitchBackMode: false,
     );
     if (entering) refreshCompositeCache();
     _autoSaveStitchMode();
   }
 
-  void setStitchViewMode(StitchViewMode mode) {
-    state = state.copyWith(stitchViewMode: mode);
+  /// Cross: hides backstitches. Activating clears Back.
+  void setStitchCrossMode(bool active) {
+    state = state.copyWith(
+      stitchCrossMode: active,
+      stitchBackMode: active ? false : state.stitchBackMode,
+    );
+  }
+
+  /// Back: greys normal stitches. Activating clears Cross.
+  void setStitchBackMode(bool active) {
+    state = state.copyWith(
+      stitchBackMode: active,
+      stitchCrossMode: active ? false : state.stitchCrossMode,
+    );
   }
 
   void setStitchFocusThread(String? threadId) {

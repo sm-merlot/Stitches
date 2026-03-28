@@ -42,15 +42,6 @@ enum SnippetResizeMode { clip, scale, expand }
 
 enum SnippetTransform { flipH, flipV, rotateCW }
 
-/// Controls how stitches are rendered in stitch mode.
-enum StitchViewMode {
-  /// Stitches shown at full colour (default).
-  normal,
-  /// Cross stitches are hidden; only backstitches visible.
-  hidden,
-  /// Cross stitches rendered in greyscale.
-  greyed,
-}
 
 // ─── EditorState ──────────────────────────────────────────────────────────────
 
@@ -75,7 +66,8 @@ class EditorState {
   final Map<String, Thread>? compositeThreadCache;
   final bool stitchMode;
   final bool blockMode;
-  final StitchViewMode stitchViewMode;
+  final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
+  final bool stitchBackMode;  // Back: greys normal stitches, backstitches shown in colour
   final String? stitchFocusThreadId;
   final ui.Image? referenceImage;
   final double referenceOpacity;
@@ -113,7 +105,8 @@ class EditorState {
     this.compositeThreadCache,
     this.stitchMode = false,
     this.blockMode = false,
-    this.stitchViewMode = StitchViewMode.normal,
+    this.stitchCrossMode = false,
+    this.stitchBackMode = false,
     this.stitchFocusThreadId,
     this.referenceImage,
     this.referenceOpacity = 0.5,
@@ -216,7 +209,8 @@ class EditorState {
     Object? compositeThreadCache = _sentinel,
     bool? stitchMode,
     bool? blockMode,
-    StitchViewMode? stitchViewMode,
+    bool? stitchCrossMode,
+    bool? stitchBackMode,
     Object? stitchFocusThreadId = _sentinel,
     Object? referenceImage = _sentinel,
     double? referenceOpacity,
@@ -253,7 +247,8 @@ class EditorState {
           : compositeThreadCache as Map<String, Thread>?,
       stitchMode: stitchMode ?? this.stitchMode,
       blockMode: blockMode ?? this.blockMode,
-      stitchViewMode: stitchViewMode ?? this.stitchViewMode,
+      stitchCrossMode: stitchCrossMode ?? this.stitchCrossMode,
+      stitchBackMode: stitchBackMode ?? this.stitchBackMode,
       stitchFocusThreadId: stitchFocusThreadId == _sentinel
           ? this.stitchFocusThreadId
           : stitchFocusThreadId as String?,
