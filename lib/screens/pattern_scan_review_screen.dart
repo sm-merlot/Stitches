@@ -25,12 +25,10 @@ class _Flagged {
 class _ThumbBatchParams {
   final List<Uint8List> pages;
   final List<_ThumbReq> requests;
-  final int thumbSize;
 
   const _ThumbBatchParams({
     required this.pages,
     required this.requests,
-    this.thumbSize = 80,
   });
 }
 
@@ -75,8 +73,8 @@ Map<String, Uint8List> _extractThumbs(_ThumbBatchParams p) {
     var crop = img.copyCrop(page, x: px, y: py, width: pw, height: ph);
     crop = img.copyResize(
       crop,
-      width: p.thumbSize,
-      height: p.thumbSize,
+      width: 80,
+      height: 80,
       interpolation: img.Interpolation.average,
     );
     result[req.key] = Uint8List.fromList(img.encodePng(crop));

@@ -312,7 +312,6 @@ class _LayerRowState extends State<_LayerRow> {
     final theme = Theme.of(context);
     final isActive = widget.isActive;
     final layer = widget.layer;
-    final inGroup = widget.groupId != null;
 
     return GestureDetector(
       onTap: widget.onTap,
