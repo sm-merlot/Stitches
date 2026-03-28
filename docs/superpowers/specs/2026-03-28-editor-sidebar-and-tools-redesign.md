@@ -166,20 +166,16 @@ The intent: *Cross* lets you focus on normal stitches; *Back* lets you focus on 
 
 ---
 
-### A4 — Stitch mode toolbar cleanup
+### A4 — Stitch mode toolbar removal
 
-After the sidebar takes over view controls and pan mode is removed (Chunk B), the stitch mode toolbar simplifies to:
+The stitch mode toolbar is removed entirely. Every item either moves to the sidebar or becomes redundant:
 
-**Kept:**
-- Select mode button [S]
+- Pan mode button → removed (Chunk B; panning via two-finger/middle-click)
+- Focus thread swatches row → Colours panel
+- View mode buttons (Show all / Hide backstitches / Grey stitches) → Colours panel header (Cross/Back toggles)
+- Demo button → Colours panel header
 
-**Removed:**
-- Pan mode button (Chunk B)
-- Focus thread swatches row (→ Colours panel)
-- View mode buttons: Show all / Hide backstitches / Grey stitches (→ Colours panel header)
-- Demo button (→ Colours panel header)
-
-The stitch mode toolbar becomes very minimal — essentially just the Select mode button plus any future additions.
+Select mode is always-on in stitch mode — there is nothing to toggle, so no button is needed. The toolbar widget is not rendered at all in stitch mode.
 
 ---
 
