@@ -9,6 +9,7 @@ import '../utils/snackbars.dart';
 import 'export_dialog.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/right_sidebar.dart';
+import '../widgets/right_sidebar_colours_panel.dart';
 import '../widgets/pattern_canvas.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
@@ -239,7 +240,8 @@ class EditorScreen extends ConsumerWidget {
         case LogicalKeyboardKey.digit8:
           notifier.setTool(DrawingTool.fill);
         case LogicalKeyboardKey.digit9:
-          notifier.setTool(DrawingTool.fillErase);
+          notifier.setDrawingMode(DrawingMode.erase);
+          if (!state.fillEraseActive) notifier.toggleFillErase();
         case LogicalKeyboardKey.keyC:
           notifier.setDrawingMode(DrawingMode.colorPicker);
         case LogicalKeyboardKey.keyS:
@@ -365,23 +367,11 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Keep screen on — only shown in stitch mode
+            // Stitch mode actions — Demo + Screen Lock
             if (state.stitchMode) ...[
+              StitchDemoButton(state: state),
+              _ScreenLockButton(ref: ref),
               const SizedBox(width: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Checkbox(
-                    value: ref.watch(settingsProvider).keepScreenOn,
-                    onChanged: (v) => ref
-                        .read(settingsProvider.notifier)
-                        .setKeepScreenOn(v ?? false),
-                  ),
-                  const Text('Keep screen on',
-                      style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 8),
-                ],
-              ),
             ],
           ],
         ),
@@ -535,6 +525,36 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
+
+// ─── Screen lock toggle button ────────────────────────────────────────────────
+
+class _ScreenLockButton extends ConsumerWidget {
+  final WidgetRef ref;
+  const _ScreenLockButton({required this.ref});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final keepOn = ref.watch(settingsProvider).keepScreenOn;
+    return Tooltip(
+      message: keepOn ? 'Screen lock: off' : 'Screen lock: on',
+      child: IconButton(
+        isSelected: keepOn,
+        icon: const Icon(Icons.screen_lock_portrait_outlined),
+        selectedIcon: const Icon(Icons.screen_lock_portrait),
+        style: keepOn
+            ? IconButton.styleFrom(
+                backgroundColor: theme.colorScheme.primaryContainer,
+                foregroundColor: theme.colorScheme.onPrimaryContainer,
+              )
+            : null,
+        onPressed: () => ref
+            .read(settingsProvider.notifier)
+            .setKeepScreenOn(!keepOn),
+      ),
+    );
+  }
+}
 
 // ─── Import format banner ─────────────────────────────────────────────────────
 

@@ -234,19 +234,26 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     // Erase mode is handled uniformly regardless of the current drawing tool.
     if (state.drawingMode == DrawingMode.erase) {
       final (cellX, cellY) = _canvasToCell(canvas);
-      if (_inBounds(cellX, cellY)) notifier.removeStitchesAt(cellX, cellY);
+      if (state.fillEraseActive) {
+        if (!_inBounds(cellX, cellY)) return;
+        if (_fillFired) return;
+        _fillFired = true;
+        notifier.floodFill(cellX, cellY, erase: true);
+      } else if (state.eraserSize > 1) {
+        notifier.removeStitchesInBox(cellX, cellY, state.eraserSize);
+      } else {
+        if (_inBounds(cellX, cellY)) notifier.removeStitchesAt(cellX, cellY);
+      }
       return;
     }
 
-    if (state.currentTool == DrawingTool.fill ||
-        state.currentTool == DrawingTool.fillErase) {
+    if (state.currentTool == DrawingTool.fill) {
       final (cellX, cellY) = _canvasToCell(canvas);
       if (!_inBounds(cellX, cellY)) return;
       // Flood fill is triggered once per tap, not on drag — guard with a flag.
       if (_fillFired) return;
       _fillFired = true;
-      notifier.floodFill(cellX, cellY,
-          erase: state.currentTool == DrawingTool.fillErase);
+      notifier.floodFill(cellX, cellY, erase: false);
       return;
     }
 
@@ -920,6 +927,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 backstitchStartPoint: state.backstitchStartPoint,
                 backstitchCurrentPoint: _backstitchHoverPoint,
                 isErasing: isErasing,
+                eraserSize: state.eraserSize,
+                fillEraseActive: state.fillEraseActive,
                 isDrawCursor: isDrawCursor,
                 isColorPickerCursor: isColorPickerCursor,
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))

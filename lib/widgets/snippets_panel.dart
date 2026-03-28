@@ -148,14 +148,6 @@ class SnippetsPanel extends ConsumerWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.palette_outlined),
-              title: const Text('Manage palettes…'),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _openEditor(context, ref, snippet);
-              },
-            ),
-            ListTile(
               leading: const Icon(Icons.drive_file_rename_outline),
               title: const Text('Rename'),
               onTap: () {

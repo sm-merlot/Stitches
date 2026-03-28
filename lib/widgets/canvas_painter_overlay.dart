@@ -12,6 +12,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
   final Offset? backstitchStartPoint;
   final Offset? backstitchCurrentPoint;
   final bool isErasing;
+  final int eraserSize;
+  final bool fillEraseActive;
   final bool isDrawCursor;
   final bool isColorPickerCursor;
   final Offset? cursorScreenPos;
@@ -33,6 +35,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     this.backstitchStartPoint,
     this.backstitchCurrentPoint,
     this.isErasing = false,
+    this.eraserSize = 1,
+    this.fillEraseActive = false,
     this.isDrawCursor = false,
     this.isColorPickerCursor = false,
     this.cursorScreenPos,
@@ -78,22 +82,42 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     // Stylus hover preview
     if (stylusHoverCell != null) {
       final (hx, hy) = stylusHoverCell!;
-      final hColor = stylusHoverColor ?? const Color(0xFF9B30D0);
-      final rect = Rect.fromLTWH(hx * cellSize, hy * cellSize, cellSize, cellSize);
-      canvas.drawRect(rect, Paint()..color = hColor.withValues(alpha: 0.25));
-      canvas.drawRect(
-          rect,
-          Paint()
-            ..color = hColor.withValues(alpha: 0.7)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5 / scale);
+      if (isErasing && !fillEraseActive) {
+        // Box eraser preview — show the full footprint that will be erased
+        const eraseColor = Color(0xFFE53935);
+        final half = (eraserSize - 1) ~/ 2;
+        final x0 = hx - half;
+        final y0 = hy - half;
+        final boxRect = Rect.fromLTWH(
+            x0 * cellSize, y0 * cellSize, eraserSize * cellSize, eraserSize * cellSize);
+        canvas.drawRect(boxRect, Paint()..color = eraseColor.withValues(alpha: 0.15));
+        canvas.drawRect(
+            boxRect,
+            Paint()
+              ..color = eraseColor.withValues(alpha: 0.75)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5 / scale);
+      } else {
+        // Draw cursor / fill-erase / non-erase: single cell highlight
+        final hColor = fillEraseActive && isErasing
+            ? const Color(0xFFFF6D00) // orange = flood erase
+            : (stylusHoverColor ?? const Color(0xFF9B30D0));
+        final rect = Rect.fromLTWH(hx * cellSize, hy * cellSize, cellSize, cellSize);
+        canvas.drawRect(rect, Paint()..color = hColor.withValues(alpha: 0.25));
+        canvas.drawRect(
+            rect,
+            Paint()
+              ..color = hColor.withValues(alpha: 0.7)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5 / scale);
+      }
     }
 
     canvas.restore();
 
     // Custom cursors (screen-space, after restore)
     if (cursorScreenPos != null) {
-      if (isErasing) _drawEraserCursor(canvas, cursorScreenPos!);
+      if (isErasing) _drawEraserCursor(canvas, cursorScreenPos!, fillErase: fillEraseActive);
       if (isDrawCursor) _drawPencilCursor(canvas, cursorScreenPos!);
       if (isColorPickerCursor) _drawEyedropperCursor(canvas, cursorScreenPos!);
     }
@@ -109,6 +133,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       old.backstitchStartPoint != backstitchStartPoint ||
       old.backstitchCurrentPoint != backstitchCurrentPoint ||
       old.isErasing != isErasing ||
+      old.eraserSize != eraserSize ||
+      old.fillEraseActive != fillEraseActive ||
       old.isDrawCursor != isDrawCursor ||
       old.isColorPickerCursor != isColorPickerCursor ||
       old.cursorScreenPos != cursorScreenPos ||

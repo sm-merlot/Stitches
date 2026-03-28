@@ -10,7 +10,7 @@ enum RightSidebarContext { mainEditor, snippetEditor }
 
 const _kCollapsedKey = 'sidebar_right_collapsed';
 const _kCollapsedWidth = 32.0;
-const _kDefaultWidth = 200.0;
+const _kDefaultWidth = 240.0;
 const _kMinWidth = 140.0;
 const _kMaxWidth = 350.0;
 

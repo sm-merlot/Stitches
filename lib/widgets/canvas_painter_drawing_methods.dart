@@ -270,7 +270,7 @@ mixin _DrawingMethods {
 
   // ─── Custom cursors (screen-space) ──────────────────────────────────────────
 
-  void _drawEraserCursor(Canvas canvas, Offset pos) {
+  void _drawEraserCursor(Canvas canvas, Offset pos, {bool fillErase = false}) {
     canvas.save();
     canvas.translate(pos.dx, pos.dy);
     canvas.rotate(-math.pi / 4);
@@ -278,7 +278,9 @@ mixin _DrawingMethods {
     const h = 18.0;
     final bodyRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(-w / 2, 0, w, h), const Radius.circular(2));
-    canvas.drawRRect(bodyRect, Paint()..color = const Color(0xFFF4A0B0));
+    // Fill erase: orange body; regular erase: pink body
+    final bodyColor = fillErase ? const Color(0xFFFFB74D) : const Color(0xFFF4A0B0);
+    canvas.drawRRect(bodyRect, Paint()..color = bodyColor);
     canvas.save();
     canvas.clipRRect(bodyRect);
     canvas.drawRect(Rect.fromLTWH(-w / 2, 0, w, h * 0.25),

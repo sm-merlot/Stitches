@@ -342,7 +342,8 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       case LogicalKeyboardKey.digit8:
         notifier.setTool(DrawingTool.fill);
       case LogicalKeyboardKey.digit9:
-        notifier.setTool(DrawingTool.fillErase);
+        notifier.setDrawingMode(DrawingMode.erase);
+        if (!state.fillEraseActive) notifier.toggleFillErase();
       case LogicalKeyboardKey.escape:
         notifier.cancelSelection();
       case LogicalKeyboardKey.delete:
@@ -352,6 +353,22 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
+  }
+
+  Future<void> _showResizeDialog(BuildContext context) async {
+    final pattern = ref.read(editorProvider).pattern;
+    final result = await showDialog<(int, int, SnippetResizeMode)>(
+      context: context,
+      builder: (_) => _ResizeSnippetEditorDialog(
+        currentWidth: pattern.width,
+        currentHeight: pattern.height,
+      ),
+    );
+    if (result != null) {
+      ref
+          .read(editorProvider.notifier)
+          .resizeEditorPatternAsSnippet(result.$1, result.$2, result.$3);
+    }
   }
 
   void _loadSnippetIntoClipboard(Snippet other) {
@@ -428,25 +445,34 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
           if (context.mounted) Navigator.of(context).pop();
           return;
         }
-        final discard = await showDialog<bool>(
+        final result = await showDialog<String>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Discard changes?'),
-            content: const Text('You have unsaved changes. Discard them?'),
+            title: const Text('Unsaved changes'),
+            content: const Text('Save your changes before closing?'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
+                onPressed: () => Navigator.of(ctx).pop('cancel'),
                 child: const Text('Cancel'),
               ),
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
+                onPressed: () => Navigator.of(ctx).pop('discard'),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: const Text('Discard'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop('save'),
+                child: const Text('Save'),
               ),
             ],
           ),
         );
-        if (discard == true && context.mounted) Navigator.of(context).pop();
+        if (!context.mounted) return;
+        if (result == 'save') {
+          _save(context);
+        } else if (result == 'discard') {
+          Navigator.of(context).pop();
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -471,6 +497,12 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             ),
             const SizedBox(width: 8),
           ],
+          if (!isNew)
+            IconButton(
+              tooltip: 'Resize snippet',
+              icon: const Icon(Icons.aspect_ratio),
+              onPressed: () => _showResizeDialog(context),
+            ),
           IconButton(
             tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
             isSelected: state.blockMode,
@@ -506,6 +538,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
                     showSaveAsSnippetButton: false,
                     showSpriteSheetButton: false,
                     showWholeCanvasTransforms: true,
+                    showAidaButton: false,
                     onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
                         ? () => _showSnippetPicker(context)
                         : null,
@@ -523,11 +556,17 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   }
 
   bool _isDirty() {
+    // Stitch changes
     final current = ref
         .read(editorProvider)
         .pattern
         .stitches
         .fold(0, (h, s) => Object.hash(h, s));
-    return current != _initialStitchHash;
+    if (current != _initialStitchHash) return true;
+    // Name changes (existing snippets only — new snippets with only a name
+    // change and no stitches aren't worth warning about)
+    if (widget.snippet != null &&
+        _nameController.text.trim() != widget.snippet!.name) return true;
+    return false;
   }
 }

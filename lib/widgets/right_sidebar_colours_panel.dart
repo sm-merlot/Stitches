@@ -52,6 +52,11 @@ class _DesignColoursPanel extends ConsumerWidget {
         (l) => l.id == state.activeLayerId,
         orElse: () => state.pattern.layers.first);
 
+    // Stitch counts for the current view (canvas or layer).
+    final stitchCounts = state.showCompositeThreads
+        ? _countStitches(state.pattern.stitches)
+        : _countStitches(activeLayer.stitches);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -98,6 +103,7 @@ class _DesignColoursPanel extends ConsumerWidget {
             threads: threads,
             selectedThreadId: state.selectedThreadId,
             useDmc: useDmc,
+            stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
           ),
         ),
@@ -118,6 +124,14 @@ class _DesignColoursPanel extends ConsumerWidget {
   }
 }
 
+Map<String, int> _countStitches(List<Stitch> stitches) {
+  final counts = <String, int>{};
+  for (final s in stitches) {
+    counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 // ─── Stitch mode ──────────────────────────────────────────────────────────────
 
 class _StitchColoursPanel extends ConsumerWidget {
@@ -131,66 +145,59 @@ class _StitchColoursPanel extends ConsumerWidget {
     final theme = Theme.of(context);
 
     final threads = _compositeThreads(state);
+    final stitchCounts = _countStitches(state.pattern.stitches);
+
+    // Only show the stitch focus row when both types of stitch are present.
+    final allStitches = state.pattern.stitches;
+    final hasNonBack = allStitches.any((s) => s is! BackStitch);
+    final hasBack = allStitches.any((s) => s is BackStitch);
+    final showFocus = hasNonBack && hasBack;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ── Stitch Focus header ─────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              // Bordered "Stitch Focus:" group
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: theme.dividerColor),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    children: [
-                      Text('Stitch Focus:',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6))),
-                      const SizedBox(width: 8),
-                      _FocusToggle(
-                        label: 'Cross',
-                        icon: Icons.close,
-                        active: state.stitchCrossMode,
-                        onTap: () =>
-                            notifier.setStitchCrossMode(!state.stitchCrossMode),
-                        theme: theme,
-                      ),
-                      const SizedBox(width: 4),
-                      _FocusToggle(
-                        label: 'Back',
-                        icon: Icons.show_chart,
-                        active: state.stitchBackMode,
-                        onTap: () =>
-                            notifier.setStitchBackMode(!state.stitchBackMode),
-                        theme: theme,
-                      ),
-                    ],
-                  ),
+        if (showFocus) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Stitch Focus:',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.6))),
+                const SizedBox(width: 6),
+                _FocusToggle(
+                  label: 'Cross',
+                  icon: Icons.close,
+                  active: state.stitchCrossMode,
+                  onTap: () =>
+                      notifier.setStitchCrossMode(!state.stitchCrossMode),
+                  theme: theme,
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Demo button (outside border)
-              _DemoButton(state: state),
-            ],
+                const SizedBox(width: 4),
+                _FocusToggle(
+                  label: 'Back',
+                  icon: Icons.show_chart,
+                  active: state.stitchBackMode,
+                  onTap: () =>
+                      notifier.setStitchBackMode(!state.stitchBackMode),
+                  theme: theme,
+                ),
+              ],
+            ),
           ),
-        ),
-        const Divider(height: 1),
+          const Divider(height: 1),
+        ],
         // ── Thread list with focus ────────────────────────────────────────
         Expanded(
           child: _ThreadList(
             threads: threads,
             selectedThreadId: state.stitchFocusThreadId,
             useDmc: useDmc,
+            stitchCounts: stitchCounts,
             onTap: (t) => notifier.setStitchFocusThread(
                 state.stitchFocusThreadId == t.dmcCode ? null : t.dmcCode),
             focusMode: true,
@@ -262,10 +269,10 @@ class _FocusToggle extends StatelessWidget {
   }
 }
 
-/// Demo button — launches [StitchDemoScreen]. Ported from deleted _DemonstrateButton.
-class _DemoButton extends StatelessWidget {
+/// Demo button — launches [StitchDemoScreen]. Used in stitch-mode AppBar.
+class StitchDemoButton extends StatelessWidget {
   final EditorState state;
-  const _DemoButton({required this.state});
+  const StitchDemoButton({super.key, required this.state});
 
   @override
   Widget build(BuildContext context) {
@@ -386,10 +393,13 @@ class _SnippetColoursPanel extends ConsumerWidget {
         ? palettes[activeIdx].threads
         : state.pattern.threads;
 
+    final stitchCounts = _countStitches(state.pattern.stitches);
+
     return _ThreadList(
       threads: threads,
       selectedThreadId: state.selectedThreadId,
       useDmc: useDmc,
+      stitchCounts: stitchCounts,
       onTap: (t) => notifier.setSelectedThread(t.dmcCode),
     );
   }
@@ -401,6 +411,7 @@ class _ThreadList extends StatelessWidget {
   final List<Thread> threads;
   final String? selectedThreadId;
   final bool useDmc;
+  final Map<String, int> stitchCounts;
   final void Function(Thread) onTap;
   final bool focusMode;
 
@@ -408,6 +419,7 @@ class _ThreadList extends StatelessWidget {
     required this.threads,
     required this.selectedThreadId,
     required this.useDmc,
+    required this.stitchCounts,
     required this.onTap,
     this.focusMode = false,
   });
@@ -433,6 +445,7 @@ class _ThreadList extends StatelessWidget {
         final textColor = t.color.computeLuminance() > 0.35
             ? Colors.black
             : Colors.white;
+        final count = stitchCounts[t.dmcCode];
 
         return InkWell(
           onTap: () => onTap(t),
@@ -491,6 +504,32 @@ class _ThreadList extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Stitch count
+                if (count != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.close,
+                        size: 10,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.4),
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '$count',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),

@@ -1,5 +1,34 @@
 part of 'workspace_screen.dart';
 
+// ─── Screen lock toggle button ────────────────────────────────────────────────
+
+class _WorkspaceScreenLockButton extends ConsumerWidget {
+  const _WorkspaceScreenLockButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final keepOn = ref.watch(settingsProvider).keepScreenOn;
+    return Tooltip(
+      message: keepOn ? 'Screen lock: off' : 'Screen lock: on',
+      child: IconButton(
+        isSelected: keepOn,
+        icon: const Icon(Icons.screen_lock_portrait_outlined),
+        selectedIcon: const Icon(Icons.screen_lock_portrait),
+        style: keepOn
+            ? IconButton.styleFrom(
+                backgroundColor: theme.colorScheme.primaryContainer,
+                foregroundColor: theme.colorScheme.onPrimaryContainer,
+              )
+            : null,
+        onPressed: () => ref
+            .read(settingsProvider.notifier)
+            .setKeepScreenOn(!keepOn),
+      ),
+    );
+  }
+}
+
 // ─── Resize divider ───────────────────────────────────────────────────────────
 
 class _ResizeDivider extends StatelessWidget {

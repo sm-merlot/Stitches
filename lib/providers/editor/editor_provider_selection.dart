@@ -7,7 +7,7 @@ part of 'editor_provider.dart';
 mixin SelectionMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
-  List<CrossStitchPattern> _buildUndoStack();
+  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
   CrossStitchPattern _patternWithActiveLayerStitches(
       CrossStitchPattern p, List<Stitch> s);

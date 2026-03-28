@@ -51,8 +51,8 @@ class EditorState {
   final DrawingTool currentTool;
   final DrawingMode drawingMode;
   final String? selectedThreadId;
-  final List<CrossStitchPattern> _undoStack;
-  final List<CrossStitchPattern> _redoStack;
+  final List<(CrossStitchPattern, List<SnippetPalette>)> _undoStack;
+  final List<(CrossStitchPattern, List<SnippetPalette>)> _redoStack;
   final bool isDirty;
   final Offset? backstitchStartPoint;
   /// Most-recently-used thread IDs, most recent first. Max 5. Session-only.
@@ -77,6 +77,10 @@ class EditorState {
   final bool isFileOpen;
   final List<SnippetPalette> snippetPalettes;
   final int snippetActivePaletteIndex;
+  /// Edge length of the eraser square (1 = single cell, 2 = 2×2, etc.).
+  final int eraserSize;
+  /// When true, erase mode uses flood-fill erase instead of the square eraser.
+  final bool fillEraseActive;
 
   /// True when the current file is in the native .stitchx format (or unsaved).
   bool get isNativeFormat {
@@ -91,8 +95,8 @@ class EditorState {
     this.currentTool = DrawingTool.fullStitch,
     this.drawingMode = DrawingMode.draw,
     this.selectedThreadId,
-    List<CrossStitchPattern> undoStack = const [],
-    List<CrossStitchPattern> redoStack = const [],
+    List<(CrossStitchPattern, List<SnippetPalette>)> undoStack = const [],
+    List<(CrossStitchPattern, List<SnippetPalette>)> redoStack = const [],
     this.isDirty = false,
     this.backstitchStartPoint,
     this.recentThreadIds = const [],
@@ -116,6 +120,8 @@ class EditorState {
     this.isFileOpen = false,
     this.snippetPalettes = const [],
     this.snippetActivePaletteIndex = 0,
+    this.eraserSize = 1,
+    this.fillEraseActive = false,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -195,8 +201,8 @@ class EditorState {
     DrawingTool? currentTool,
     DrawingMode? drawingMode,
     Object? selectedThreadId = _sentinel,
-    List<CrossStitchPattern>? undoStack,
-    List<CrossStitchPattern>? redoStack,
+    List<(CrossStitchPattern, List<SnippetPalette>)>? undoStack,
+    List<(CrossStitchPattern, List<SnippetPalette>)>? redoStack,
     bool? isDirty,
     Object? backstitchStartPoint = _sentinel,
     List<String>? recentThreadIds,
@@ -220,6 +226,8 @@ class EditorState {
     bool? isFileOpen,
     List<SnippetPalette>? snippetPalettes,
     int? snippetActivePaletteIndex,
+    int? eraserSize,
+    bool? fillEraseActive,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -266,6 +274,8 @@ class EditorState {
       isFileOpen: isFileOpen ?? this.isFileOpen,
       snippetPalettes: snippetPalettes ?? this.snippetPalettes,
       snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
+      eraserSize: eraserSize ?? this.eraserSize,
+      fillEraseActive: fillEraseActive ?? this.fillEraseActive,
     );
   }
 
@@ -401,10 +411,11 @@ class EditorNotifier extends Notifier<EditorState>
     if (!state.canUndo) return;
     final undoStack = [...state._undoStack];
     final redoStack = [...state._redoStack];
-    final previous = undoStack.removeLast();
-    redoStack.add(state.pattern);
+    final (prevPattern, prevPalettes) = undoStack.removeLast();
+    redoStack.add((state.pattern, state.snippetPalettes));
     state = state.copyWith(
-      pattern: previous,
+      pattern: prevPattern,
+      snippetPalettes: prevPalettes,
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
@@ -415,10 +426,11 @@ class EditorNotifier extends Notifier<EditorState>
     if (!state.canRedo) return;
     final undoStack = [...state._undoStack];
     final redoStack = [...state._redoStack];
-    final next = redoStack.removeLast();
-    undoStack.add(state.pattern);
+    final (nextPattern, nextPalettes) = redoStack.removeLast();
+    undoStack.add((state.pattern, state.snippetPalettes));
     state = state.copyWith(
-      pattern: next,
+      pattern: nextPattern,
+      snippetPalettes: nextPalettes,
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
@@ -428,8 +440,8 @@ class EditorNotifier extends Notifier<EditorState>
   // ─── Shared helpers (satisfy abstract declarations in mixins) ────────────────
 
   @override
-  List<CrossStitchPattern> _buildUndoStack() {
-    var stack = [...state._undoStack, state.pattern];
+  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack() {
+    var stack = [...state._undoStack, (state.pattern, state.snippetPalettes)];
     if (stack.length > _maxUndoDepth) {
       stack = stack.sublist(stack.length - _maxUndoDepth);
     }

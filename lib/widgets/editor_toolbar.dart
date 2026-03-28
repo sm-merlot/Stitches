@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
-import '../data/symbols.dart';
 import '../models/thread.dart';
 import '../models/storage_location.dart';
 import '../providers/editor/editor_provider.dart';
@@ -30,6 +29,7 @@ class EditorToolbar extends ConsumerWidget {
   final bool showSpriteSheetButton;
   /// When true, always-visible flip/rotate section for whole-canvas transforms (snippet editor C3).
   final bool showWholeCanvasTransforms;
+  final bool showAidaButton;
   /// When non-null, replaces the snippets button with a "Paste from snippet"
   /// button (used inside the snippet editor).
   final VoidCallback? onPasteFromSnippet;
@@ -39,6 +39,7 @@ class EditorToolbar extends ConsumerWidget {
     this.showSaveAsSnippetButton = true,
     this.showSpriteSheetButton = true,
     this.showWholeCanvasTransforms = false,
+    this.showAidaButton = true,
     this.onPasteFromSnippet,
   });
 
@@ -187,11 +188,35 @@ class EditorToolbar extends ConsumerWidget {
                             onTap: () => notifier.setTool(DrawingTool.fill),
                             builder: (c) => Icon(Icons.format_color_fill, size: 17, color: c),
                           ),
+                        ],
+                      ),
+                    ),
+                    vDivider,
+                  ],
+
+                  // Erase sub-options (erase mode only)
+                  if (state.drawingMode == DrawingMode.erase) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Size picker — styled like _ToolbarButton, opens a popup menu
+                          Tooltip(
+                            message: 'Eraser size (${state.eraserSize}×${state.eraserSize})',
+                            child: _EraserSizeButton(
+                              eraserSize: state.eraserSize,
+                              selected: !state.fillEraseActive,
+                              onSelected: (sz) => notifier.setEraserSize(sz),
+                            ),
+                          ),
                           const SizedBox(width: 4),
+                          // Fill erase — in the same radio group as size
                           _ToolbarButton(
-                            tooltip: 'Fill erase  [9]',
-                            selected: state.currentTool == DrawingTool.fillErase,
-                            onTap: () => notifier.setTool(DrawingTool.fillErase),
+                            tooltip: 'Fill erase (flood erase connected cells)',
+                            selected: state.fillEraseActive,
+                            activeColor: const Color(0xFFFF6D00),
+                            onTap: () => notifier.toggleFillErase(),
                             builder: (c) => Icon(Icons.format_color_reset, size: 17, color: c),
                           ),
                         ],
@@ -249,8 +274,9 @@ class EditorToolbar extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    // Flip/rotate — shown when a selection with stitches is active
-                    if (state.selectionRect != null && state.selectedStitches.isNotEmpty) ...[
+                    // Flip/rotate — shown when a selection with stitches is active.
+                    // Suppressed in snippet editor where the always-visible section handles this.
+                    if (!showWholeCanvasTransforms && state.selectionRect != null && state.selectedStitches.isNotEmpty) ...[
                       vDivider,
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -325,6 +351,55 @@ class EditorToolbar extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    if (!showWholeCanvasTransforms) ...[
+                      vDivider,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Tooltip(
+                              message: 'Flip horizontal  [Cmd+Shift+H]',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.flip),
+                                onPressed: () => notifier.flipClipboardH(),
+                              ),
+                            ),
+                            Tooltip(
+                              message: 'Flip vertical  [Cmd+Shift+V]',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: Transform.rotate(
+                                  angle: 1.5708,
+                                  child: const Icon(Icons.flip),
+                                ),
+                                onPressed: () => notifier.flipClipboardV(),
+                              ),
+                            ),
+                            Tooltip(
+                              message: 'Rotate 90° CW  [Cmd+Shift+]]',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
+                                onPressed: () => notifier.rotateClipboardCW(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    vDivider,
+                  ],
+                  // Flip/rotate section (snippet editor only) — always
+                  // visible; target depends on current mode:
+                  //   select + selection  → selection
+                  //   paste               → clipboard
+                  //   otherwise           → whole canvas
+                  if (showWholeCanvasTransforms) ...[
                     vDivider,
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -337,7 +412,16 @@ class EditorToolbar extends ConsumerWidget {
                               iconSize: 20,
                               visualDensity: VisualDensity.compact,
                               icon: const Icon(Icons.flip),
-                              onPressed: () => notifier.flipClipboardH(),
+                              onPressed: () {
+                                if (state.drawingMode == DrawingMode.select &&
+                                    state.selectionRect != null) {
+                                  notifier.flipSelectionH();
+                                } else if (state.drawingMode == DrawingMode.paste) {
+                                  notifier.flipClipboardH();
+                                } else {
+                                  notifier.flipCanvasH();
+                                }
+                              },
                             ),
                           ),
                           Tooltip(
@@ -349,7 +433,16 @@ class EditorToolbar extends ConsumerWidget {
                                 angle: 1.5708,
                                 child: const Icon(Icons.flip),
                               ),
-                              onPressed: () => notifier.flipClipboardV(),
+                              onPressed: () {
+                                if (state.drawingMode == DrawingMode.select &&
+                                    state.selectionRect != null) {
+                                  notifier.flipSelectionV();
+                                } else if (state.drawingMode == DrawingMode.paste) {
+                                  notifier.flipClipboardV();
+                                } else {
+                                  notifier.flipCanvasV();
+                                }
+                              },
                             ),
                           ),
                           Tooltip(
@@ -358,58 +451,22 @@ class EditorToolbar extends ConsumerWidget {
                               iconSize: 20,
                               visualDensity: VisualDensity.compact,
                               icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
-                              onPressed: () => notifier.rotateClipboardCW(),
+                              onPressed: () {
+                                if (state.drawingMode == DrawingMode.select &&
+                                    state.selectionRect != null) {
+                                  notifier.rotateSelectionCW();
+                                } else if (state.drawingMode == DrawingMode.paste) {
+                                  notifier.rotateClipboardCW();
+                                } else {
+                                  notifier.rotateCanvasCW();
+                                }
+                              },
                             ),
                           ),
                         ],
                       ),
                     ),
                     vDivider,
-                  ],
-                  // Whole-canvas flip/rotate (snippet editor only)
-                  if (showWholeCanvasTransforms) ...[
-                    vDivider,
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Canvas:', style: TextStyle(fontSize: 11,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.55))),
-                          const SizedBox(width: 6),
-                          Tooltip(
-                            message: 'Flip canvas horizontal  [Cmd+Shift+H]',
-                            child: IconButton(
-                              iconSize: 20,
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.flip),
-                              onPressed: () => notifier.flipCanvasH(),
-                            ),
-                          ),
-                          Tooltip(
-                            message: 'Flip canvas vertical  [Cmd+Shift+V]',
-                            child: IconButton(
-                              iconSize: 20,
-                              visualDensity: VisualDensity.compact,
-                              icon: Transform.rotate(
-                                angle: 1.5708,
-                                child: const Icon(Icons.flip),
-                              ),
-                              onPressed: () => notifier.flipCanvasV(),
-                            ),
-                          ),
-                          Tooltip(
-                            message: 'Rotate canvas 90° CW  [Cmd+Shift+]]',
-                            child: IconButton(
-                              iconSize: 20,
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
-                              onPressed: () => notifier.rotateCanvasCW(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                   // Sprite sheet button — hidden on phones (shortestSide < 600)
                   if (showSpriteSheetButton &&
@@ -476,10 +533,6 @@ class EditorToolbar extends ConsumerWidget {
                 _QuickSwatches(state: state),
                 _ColorSwatch(state: state),
                 vDivider,
-                const SizedBox(width: 4),
-                const _PaletteButton(),
-                const SizedBox(width: 4),
-                vDivider,
                 const SizedBox(width: 2),
                 Tooltip(
                   message: 'Undo  [Cmd+Z]',
@@ -499,10 +552,12 @@ class EditorToolbar extends ConsumerWidget {
                     onPressed: state.canRedo ? () => notifier.redo() : null,
                   ),
                 ),
-                vDivider,
-                const SizedBox(width: 4),
-                const _AidaButton(),
-                const SizedBox(width: 4),
+                if (showAidaButton) ...[
+                  vDivider,
+                  const SizedBox(width: 4),
+                  const _AidaButton(),
+                  const SizedBox(width: 4),
+                ],
               ],
             ),
           ),

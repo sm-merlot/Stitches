@@ -14,30 +14,26 @@ class PalettesPanel extends ConsumerWidget {
     final palettes = state.snippetPalettes;
     final activeIdx = state.snippetActivePaletteIndex;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.zero,
-            itemCount: palettes.length,
-            itemBuilder: (_, i) => _PaletteRow(
-              key: ValueKey(palettes[i].id),
-              palette: palettes[i],
-              index: i,
-              isActive: i == activeIdx,
-              canDelete: palettes.length > 1,
-              primaryPalette: palettes[0],
-            ),
-          ),
-        ),
-        const Divider(height: 1),
-        TextButton.icon(
-          icon: const Icon(Icons.add, size: 16),
-          label: const Text('Add palette…'),
-          onPressed: () => _showAddPalette(context, ref, palettes),
-        ),
-      ],
+    return ListView.builder(
+      padding: EdgeInsets.zero,
+      itemCount: palettes.length + 1,
+      itemBuilder: (_, i) {
+        if (i == palettes.length) {
+          return TextButton.icon(
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add palette…'),
+            onPressed: () => _showAddPalette(context, ref, palettes),
+          );
+        }
+        return _PaletteRow(
+          key: ValueKey(palettes[i].id),
+          palette: palettes[i],
+          index: i,
+          isActive: i == activeIdx,
+          canDelete: palettes.length > 1,
+          primaryPalette: palettes[0],
+        );
+      },
     );
   }
 
@@ -46,7 +42,10 @@ class PalettesPanel extends ConsumerWidget {
     if (existing.isEmpty) return;
     final result = await showDialog<SnippetPalette>(
       context: context,
-      builder: (_) => _AddPaletteDialog(primaryPalette: existing[0]),
+      builder: (_) => _AddPaletteDialog(
+        primaryPalette: existing[0],
+        existingCount: existing.length,
+      ),
     );
     if (result != null && context.mounted) {
       ref.read(editorProvider.notifier).addSnippetPaletteLocal(result);
@@ -274,7 +273,9 @@ class _SlotRow extends ConsumerWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '${primaryThread.dmcCode} → ${thread.dmcCode}',
+                paletteIndex == 0
+                    ? thread.dmcCode
+                    : '${primaryThread.dmcCode} → ${thread.dmcCode}',
                 style: const TextStyle(fontSize: 11),
               ),
             ),
@@ -298,9 +299,13 @@ class _SlotRow extends ConsumerWidget {
       builder: (_) => _DmcPickerDialog(initialThread: thread),
     );
     if (result != null) {
-      ref
-          .read(editorProvider.notifier)
-          .setSnippetPaletteThreadColor(paletteIndex, slotIndex, result);
+      final notifier = ref.read(editorProvider.notifier);
+      if (paletteIndex == 0) {
+        // Primary palette: remap stitches on canvas too.
+        notifier.replaceThread(
+            thread.dmcCode, result.dmcCode, result.color, result.name);
+      }
+      notifier.setSnippetPaletteThreadColor(paletteIndex, slotIndex, result);
     }
   }
 }
@@ -309,7 +314,8 @@ class _SlotRow extends ConsumerWidget {
 
 class _AddPaletteDialog extends StatefulWidget {
   final SnippetPalette primaryPalette;
-  const _AddPaletteDialog({required this.primaryPalette});
+  final int existingCount;
+  const _AddPaletteDialog({required this.primaryPalette, required this.existingCount});
 
   @override
   State<_AddPaletteDialog> createState() => _AddPaletteDialogState();
@@ -322,6 +328,7 @@ class _AddPaletteDialogState extends State<_AddPaletteDialog> {
   @override
   void initState() {
     super.initState();
+    _nameCtrl.text = 'Palette ${widget.existingCount + 1}';
     _picked = List.filled(widget.primaryPalette.threads.length, null);
   }
 
