@@ -187,8 +187,8 @@ Select mode is always-on in stitch mode — there is nothing to toggle, so no bu
 - Panning: middle-click drag, two-finger drag, Space held down (all already work)
 
 ### Stitch mode
-- Remove Pan button from stitch mode toolbar (see A4 above)
-- Stitch mode already defaults to pan behaviour when no tool is active; two-finger and middle-click pan always work
+- Stitch mode defaults to select (always-on, no toolbar button needed)
+- Panning via middle-click drag, two-finger drag, Space held down — identical to design mode
 
 ### Keyboard shortcut
 - Remove `P` as a keyboard shortcut for pan mode (or remap Space-hold behaviour if needed)
