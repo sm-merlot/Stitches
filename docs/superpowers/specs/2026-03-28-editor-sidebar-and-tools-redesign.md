@@ -40,7 +40,7 @@ The sidebar is collapsible (persisted in SharedPreferences) — a chevron button
 - Stitch mode right-side end drawer
 - `_PaletteManagerSheet` bottom sheet in snippet editor
 - Focus thread swatches row in stitch mode toolbar
-- View mode buttons (Show all / Hide backstitches / Grey stitches) in stitch mode toolbar
+- View mode buttons (Cross / Back / Show all) in stitch mode toolbar
 - Demo button in stitch mode toolbar
 
 ---
@@ -162,19 +162,11 @@ The intent: *Cross* lets you focus on normal stitches; *Back* lets you focus on 
 | State | Normal stitches | Backstitches |
 |---|---|---|
 | Focus only | Focused: colour / Others: grey | Focused: colour / Others: grey |
-| Focus + Backstitch off | Focused: colour / Others: grey | Hidden |
-| Focus + Grey | Grey | Focused: colour / Others: grey |
+| Focus + Cross | Focused: colour / Others: grey | Hidden |
+| Focus + Back | Grey | Focused: colour / Others: grey |
 
 - Demo button: launches `StitchDemoScreen` (replaces stitch mode toolbar demo button)
 - Thread list shows composite canvas colours only — threads in hidden or merged layers excluded
-
-#### Design mode and snippet editor variant (simpler)
-
-- Thread list: colour swatch + symbol, DMC/Anchor code, name, stitch count
-- Tap a thread to set it as the active drawing colour
-- No filter toggles, no focus mode, no demo button
-- Design mode: shows active layer's threads or composite (controlled by Layer/Canvas toggle, which moves here from the toolbar)
-- Snippet editor: shows threads in the currently active palette
 
 ---
 
@@ -266,7 +258,7 @@ Keyboard shortcuts (consistent across all contexts):
 - Currently, dragging a selection in stitch mode can accidentally move stitches
 - In stitch mode, drag on a selection should pan the canvas, not move stitches
 - Selection in stitch mode is read-only: copy/paste/move operations disabled
-- Only focus-toggling (tap) is active in stitch mode
+- Tapping a thread row in the sidebar Colours panel is the only active interaction (colour focus toggle); no stitch manipulation on the canvas
 
 ### D2 — Hide irrelevant chrome in snippet editor
 - Canvas/Layer source toggle: not rendered in snippet editor (snippets have no layers)
@@ -288,7 +280,7 @@ Keyboard shortcuts (consistent across all contexts):
 - Undo/Redo buttons in the design mode toolbar
 - Aida colour button in the design mode toolbar
 - All keyboard shortcuts not explicitly changed above
-- Canvas/Layer toggle logic — just moves from toolbar to Colours panel
+- Canvas/Layer source logic — now `( Canvas ) ( Layer X )` radio buttons inside the Colours tab; the underlying filter behaviour is unchanged
 - `DrawingMode` enum values (pan stays, just not toolbar-selectable)
 
 ---
