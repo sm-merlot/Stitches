@@ -172,44 +172,6 @@ class SnippetsPanel extends ConsumerWidget {
               },
             ),
             const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  _TransformButton(
-                    icon: Icons.flip,
-                    label: 'Flip H',
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      ref.read(editorProvider.notifier)
-                          .transformSnippet(snippet.id, SnippetTransform.flipH);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _TransformButton(
-                    icon: Icons.flip,
-                    label: 'Flip V',
-                    iconFlip: true,
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      ref.read(editorProvider.notifier)
-                          .transformSnippet(snippet.id, SnippetTransform.flipV);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _TransformButton(
-                    icon: Icons.rotate_90_degrees_cw_outlined,
-                    label: 'Rotate 90°',
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      ref.read(editorProvider.notifier)
-                          .transformSnippet(snippet.id, SnippetTransform.rotateCW);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
             ListTile(
               leading: Icon(Icons.delete_outline,
                   color: Theme.of(ctx).colorScheme.error),
