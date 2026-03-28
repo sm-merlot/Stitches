@@ -116,15 +116,10 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       // Initialise local palette state for this snippet editor session.
       final editorNotifier = ref.read(editorProvider.notifier);
       if (s != null) {
-        editorNotifier.state = editorNotifier.state.copyWith(
-          snippetPalettes: s.palettes,
-          snippetActivePaletteIndex: s.activePaletteIndex,
-        );
+        editorNotifier.initSnippetPalettesLocal(s.palettes, s.activePaletteIndex);
       } else {
-        editorNotifier.state = editorNotifier.state.copyWith(
-          snippetPalettes: [SnippetPalette.create(name: 'Palette 1')],
-          snippetActivePaletteIndex: 0,
-        );
+        editorNotifier.initSnippetPalettesLocal(
+            [SnippetPalette.create(name: 'Palette 1')], 0);
       }
     });
   }

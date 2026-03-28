@@ -340,6 +340,13 @@ mixin SnippetsMixin on Notifier<EditorState> {
 
   // ─── Snippet editor local palette state ───────────────────────────────────
 
+  void initSnippetPalettesLocal(List<SnippetPalette> palettes, int activeIndex) {
+    state = state.copyWith(
+      snippetPalettes: palettes,
+      snippetActivePaletteIndex: activeIndex,
+    );
+  }
+
   void setSnippetActivePaletteLocal(int index) {
     state = state.copyWith(snippetActivePaletteIndex: index);
   }

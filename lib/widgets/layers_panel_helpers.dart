@@ -143,9 +143,3 @@ String? _prevTopLevelId(_FlatItem? prevFlatItem) {
   return null;
 }
 
-LayerGroup? _groupOf(List<LayerItem> layerItems, String groupId) {
-  for (final item in layerItems) {
-    if (item is LayerGroup && item.id == groupId) return item;
-  }
-  return null;
-}
