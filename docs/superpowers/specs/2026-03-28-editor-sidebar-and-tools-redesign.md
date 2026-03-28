@@ -108,10 +108,18 @@ Two variants depending on context.
 
 Simpler — palette management, not view control.
 
-- Thread list: colour swatch + symbol, DMC/Anchor code, name, stitch count
-- Tap a thread to set it as the active drawing thread
-- Layer/Canvas toggle (currently in toolbar) moves here — controls whether the list shows the active layer's threads only or the blended composite view
-- No filter controls, no demo button
+**Source toggle (radio, below the tab bar):**
+```
+( Canvas )  ( Layer 2 )
+```
+- **Canvas**: shows composite colours across all visible layers (blended view)
+- **Layer X**: shows colours on the active layer only — label uses the actual layer name, updates when the layer is renamed
+- Replaces the Canvas/Layer toggle currently in the toolbar
+- Serves double duty as the active layer indicator — no separate "Drawing on layer X" chip needed
+
+**Thread list:**
+- Colour swatch + symbol, DMC/Anchor code, name, stitch count
+- Tap a thread to set it as the active drawing colour
 
 **Note:** Quick swatches in the toolbar stay — they serve a different purpose (rapid recent-thread switching without looking at the sidebar).
 
@@ -261,13 +269,12 @@ Keyboard shortcuts (consistent across all contexts):
 - Only focus-toggling (tap) is active in stitch mode
 
 ### D3 — Hide irrelevant chrome in snippet editor
-- Canvas/Layer mode toggle: hidden (snippets have no layers; this moves to Colours panel anyway per A3, where it won't be rendered in snippet context)
-- "Drawing on layer X" canvas overlay chip: hidden in snippet editor (pass `activeLayerName: null` or suppress via existing `stitchMode` flag)
-- Both are already prop-controlled; small conditional changes
+- Canvas/Layer source toggle: not rendered in snippet editor (snippets have no layers)
+- "Drawing on layer X" canvas overlay chip: not rendered in snippet editor
 
-### D5 — Reposition "Drawing on layer X" chip
+### D5 — Remove "Drawing on layer X" canvas overlay chip
 
-The chip is currently painted at bottom-left of the canvas overlay, where it is obscured by the Stitch Mode FAB (also bottom-left). Resolve the overlap during implementation — options include moving the chip to bottom-right, incorporating it into the toolbar, or removing it entirely if the always-visible sidebar makes it redundant.
+The chip is removed entirely. Its purpose — telling the user which layer they are drawing on — is now served by the **Layer X radio button** in the Colours tab (see A3), which shows the active layer name and updates on rename. The chip's bottom-left position also conflicted with the Stitch Mode FAB.
 
 ### D4 — Unsaved changes warning in snippet editor
 - Detect dirty state: compare canvas stitch data at session start vs. current
