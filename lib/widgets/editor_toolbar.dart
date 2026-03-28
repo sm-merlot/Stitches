@@ -203,7 +203,7 @@ class EditorToolbar extends ConsumerWidget {
                         children: [
                           // Size picker — styled like _ToolbarButton, opens a popup menu
                           Tooltip(
-                            message: 'Eraser size (${state.eraserSize}×${state.eraserSize})',
+                            message: 'Eraser size (${state.eraserSize})',
                             child: _EraserSizeButton(
                               eraserSize: state.eraserSize,
                               selected: !state.fillEraseActive,

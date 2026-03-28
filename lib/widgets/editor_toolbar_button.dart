@@ -84,7 +84,7 @@ class _EraserSizeButton extends StatelessWidget {
           PopupMenuItem<int>(
             value: sz,
             child: Text(
-              '${sz}×${sz}',
+              '$sz',
               style: TextStyle(
                 fontWeight: sz == eraserSize ? FontWeight.bold : FontWeight.normal,
               ),
@@ -104,7 +104,7 @@ class _EraserSizeButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              '${eraserSize}×${eraserSize}',
+              '$eraserSize',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,

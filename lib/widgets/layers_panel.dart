@@ -30,33 +30,6 @@ class LayersPanelBody extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Header ──────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 4, 4),
-            child: Row(
-              children: [
-                Text('Layers',
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-                  tooltip: 'New group',
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: notifier.addGroup,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add, size: 18),
-                  tooltip: 'New layer',
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: notifier.addLayer,
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
           // ── Layer list ───────────────────────────────────────────────
           // Flat list: groups and their layers are separate items.
           // Display order is top-to-bottom (topmost layer first).
@@ -69,8 +42,38 @@ class LayersPanelBody extends ConsumerWidget {
                 _onFlatReorder(
                     oldVisual, newVisual, currentLayerItems, notifier);
               },
-              itemCount: flatItems.length,
+              itemCount: flatItems.length + 1, // +1 for add-buttons row
               itemBuilder: (context, index) {
+                // Last item: add-buttons row (not draggable).
+                if (index == flatItems.length) {
+                  return Padding(
+                    key: const ValueKey('__add_buttons__'),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.add, size: 15),
+                          label: const Text('Layer', style: TextStyle(fontSize: 12)),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          ),
+                          onPressed: notifier.addLayer,
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.create_new_folder_outlined, size: 15),
+                          label: const Text('Group', style: TextStyle(fontSize: 12)),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          ),
+                          onPressed: notifier.addGroup,
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 final flatItem = flatItems[index];
 
                 Widget dragHandle(bool enabled) => enabled

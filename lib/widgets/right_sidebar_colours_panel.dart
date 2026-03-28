@@ -286,22 +286,24 @@ class StitchDemoButton extends StatelessWidget {
 
     return Tooltip(
       message: 'Demonstrate stitching (beta)',
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          FilledButton.tonalIcon(
-            icon: const Icon(Icons.play_circle_outline, size: 16),
-            label: const Text('Demo', style: TextStyle(fontSize: 12)),
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-              minimumSize: const Size(0, 32),
+      child: Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            FilledButton.icon(
+              icon: const Icon(Icons.play_circle_outline, size: 16),
+              label: const Text('Demo', style: TextStyle(fontSize: 12)),
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                minimumSize: const Size(0, 32),
+              ),
+              onPressed: hasFullStitches ? () => _onDemonstrate(context) : null,
             ),
-            onPressed: hasFullStitches ? () => _onDemonstrate(context) : null,
-          ),
-          Positioned(
-            top: -5,
-            right: -5,
+            Positioned(
+              top: -5,
+              right: -5,
             child: IgnorePointer(
               child: Container(
                 padding:
@@ -320,6 +322,7 @@ class StitchDemoButton extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
