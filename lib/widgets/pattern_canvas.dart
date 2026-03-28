@@ -504,16 +504,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final mode = ref.read(editorProvider).drawingMode;
 
       if (mode == DrawingMode.select) {
+        final editorState = ref.read(editorProvider);
         final cell = _screenToSelCell(event.localPosition);
-        final sel = ref.read(editorProvider).selectionRect;
-        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        final sel = editorState.selectionRect;
+        final inStitchMode = editorState.stitchMode;
+        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           setState(() {
             _isMovingSelection = true;
             _moveDragStartCell = cell;
             _moveDelta = Offset.zero;
           });
         } else {
-          ref.read(editorProvider.notifier).setSelectionRect(null);
+          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
           setState(() {
             _selectionAnchor = cell;
             _isMovingSelection = false;
@@ -542,16 +544,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_activePointers.length == 1) {
       final mode = ref.read(editorProvider).drawingMode;
       if (mode == DrawingMode.select) {
+        final editorState = ref.read(editorProvider);
         final cell = _screenToSelCell(event.localPosition);
-        final sel = ref.read(editorProvider).selectionRect;
-        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        final sel = editorState.selectionRect;
+        final inStitchMode = editorState.stitchMode;
+        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           setState(() {
             _isMovingSelection = true;
             _moveDragStartCell = cell;
             _moveDelta = Offset.zero;
           });
         } else {
-          ref.read(editorProvider.notifier).setSelectionRect(null);
+          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
           setState(() {
             _selectionAnchor = cell;
             _isMovingSelection = false;
