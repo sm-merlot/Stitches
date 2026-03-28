@@ -28,6 +28,8 @@ class EditorToolbar extends ConsumerWidget {
   final bool showSnippetsButton;
   final bool showSaveAsSnippetButton;
   final bool showSpriteSheetButton;
+  /// When true, always-visible flip/rotate section for whole-canvas transforms (snippet editor C3).
+  final bool showWholeCanvasTransforms;
   /// When non-null, replaces the snippets button with a "Paste from snippet"
   /// button (used inside the snippet editor).
   final VoidCallback? onPasteFromSnippet;
@@ -36,6 +38,7 @@ class EditorToolbar extends ConsumerWidget {
     this.showSnippetsButton = true,
     this.showSaveAsSnippetButton = true,
     this.showSpriteSheetButton = true,
+    this.showWholeCanvasTransforms = false,
     this.onPasteFromSnippet,
   });
 
@@ -95,13 +98,6 @@ class EditorToolbar extends ConsumerWidget {
                           activeColor: theme.colorScheme.error,
                           onTap: () => notifier.setDrawingMode(DrawingMode.erase),
                           builder: (c) => Icon(Icons.auto_fix_normal, size: 17, color: c),
-                        ),
-                        const SizedBox(width: 2),
-                        _ToolbarButton(
-                          tooltip: 'Pan  [P or Space]',
-                          selected: state.drawingMode == DrawingMode.pan,
-                          onTap: () => notifier.setDrawingMode(DrawingMode.pan),
-                          builder: (c) => Icon(Icons.pan_tool_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
@@ -253,6 +249,48 @@ class EditorToolbar extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    // Flip/rotate — shown when a selection with stitches is active
+                    if (state.selectionRect != null && state.selectedStitches.isNotEmpty) ...[
+                      vDivider,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Tooltip(
+                              message: 'Flip horizontal  [Cmd+Shift+H]',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.flip),
+                                onPressed: () => notifier.flipSelectionH(),
+                              ),
+                            ),
+                            Tooltip(
+                              message: 'Flip vertical  [Cmd+Shift+V]',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: Transform.rotate(
+                                  angle: 1.5708,
+                                  child: const Icon(Icons.flip),
+                                ),
+                                onPressed: () => notifier.flipSelectionV(),
+                              ),
+                            ),
+                            Tooltip(
+                              message: 'Rotate 90° CW  [Cmd+Shift+]]',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
+                                onPressed: () => notifier.rotateSelectionCW(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     vDivider,
                   ],
                   // Cancel + opacity + save-as-snippet — shown while paste preview is active
@@ -288,6 +326,90 @@ class EditorToolbar extends ConsumerWidget {
                       ),
                     ),
                     vDivider,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Tooltip(
+                            message: 'Flip horizontal  [Cmd+Shift+H]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.flip),
+                              onPressed: () => notifier.flipClipboardH(),
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Flip vertical  [Cmd+Shift+V]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: Transform.rotate(
+                                angle: 1.5708,
+                                child: const Icon(Icons.flip),
+                              ),
+                              onPressed: () => notifier.flipClipboardV(),
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Rotate 90° CW  [Cmd+Shift+]]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
+                              onPressed: () => notifier.rotateClipboardCW(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    vDivider,
+                  ],
+                  // Whole-canvas flip/rotate (snippet editor only)
+                  if (showWholeCanvasTransforms) ...[
+                    vDivider,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Canvas:', style: TextStyle(fontSize: 11,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.55))),
+                          const SizedBox(width: 6),
+                          Tooltip(
+                            message: 'Flip canvas horizontal  [Cmd+Shift+H]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.flip),
+                              onPressed: () => notifier.flipCanvasH(),
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Flip canvas vertical  [Cmd+Shift+V]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: Transform.rotate(
+                                angle: 1.5708,
+                                child: const Icon(Icons.flip),
+                              ),
+                              onPressed: () => notifier.flipCanvasV(),
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Rotate canvas 90° CW  [Cmd+Shift+]]',
+                            child: IconButton(
+                              iconSize: 20,
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
+                              onPressed: () => notifier.rotateCanvasCW(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                   // Sprite sheet button — hidden on phones (shortestSide < 600)
                   if (showSpriteSheetButton &&
@@ -351,34 +473,6 @@ class EditorToolbar extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Layer / Canvas toggle chip — show when file is open and not in stitch mode
-                if (state.isFileOpen && !state.stitchMode) ...[
-                  const SizedBox(width: 4),
-                  // Info icon when any visible layer has opacity < 1.0
-                  if (state.pattern.layers.any((l) => l.visible && l.opacity < 0.99))
-                    Tooltip(
-                      message: 'Opacity active — Canvas view shows resulting stitch colours.',
-                      child: Icon(
-                        Icons.info_outline,
-                        size: 14,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  const SizedBox(width: 2),
-                  ChoiceChip(
-                    label: Text(
-                      state.showCompositeThreads ? 'Canvas' : 'Layer',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    selected: state.showCompositeThreads,
-                    onSelected: (v) {
-                      notifier.setShowCompositeThreads(v);
-                      if (v) notifier.refreshCompositeCache();
-                    },
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                  ),
-                ],
                 _QuickSwatches(state: state),
                 _ColorSwatch(state: state),
                 vDivider,

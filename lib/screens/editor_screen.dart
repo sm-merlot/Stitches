@@ -382,7 +382,7 @@ class EditorScreen extends ConsumerWidget {
         ),
         floatingActionButton: state.isFileOpen
             ? Padding(
-                padding: const EdgeInsets.only(bottom: 58),
+                padding: EdgeInsets.only(bottom: state.stitchMode ? 16 : 58),
                 child: FloatingActionButton.extended(
                   onPressed: () =>
                       ref.read(editorProvider.notifier).toggleStitchMode(),
