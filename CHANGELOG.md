@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- f46b748: Fix builds for all platforms
+
 ## 0.1.0
 
 ### Minor Changes
