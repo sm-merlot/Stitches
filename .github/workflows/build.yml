@@ -27,6 +27,15 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: Disable code signing for CI
+        run: |
+          sed -i '' \
+            -e 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' \
+            -e 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "-";/g' \
+            -e '/DEVELOPMENT_TEAM = S5X6FCGJT8;/d' \
+            macos/Runner.xcodeproj/project.pbxproj
+
       - run: flutter build macos --release --dart-define-from-file=secrets.json
 
       - name: Zip app bundle
@@ -38,36 +47,6 @@ jobs:
         with:
           name: macos-arm64
           path: build/macos/Build/Products/Release/stitchx-macos-arm64.zip
-
-  # ── macOS (Intel) ─────────────────────────────────────────────────────────
-  build-macos-x86_64:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Write Google credentials
-        env:
-          GOOGLE_SECRETS_JSON: ${{ secrets.GOOGLE_SECRETS_JSON }}
-        run: printf '%s' "$GOOGLE_SECRETS_JSON" > secrets.json
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.4'
-          channel: stable
-          cache: true
-
-      - run: flutter pub get
-      - run: flutter build macos --release --dart-define-from-file=secrets.json
-
-      - name: Zip app bundle
-        run: |
-          cd build/macos/Build/Products/Release
-          zip -r stitchx-macos-x86_64.zip stitchx.app
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-x86_64
-          path: build/macos/Build/Products/Release/stitchx-macos-x86_64.zip
 
   # ── Android APK ───────────────────────────────────────────────────────────
   # Note: this builds with the Flutter debug signing key.
@@ -93,6 +72,9 @@ jobs:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
+
+      - name: Write Android local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
       - run: flutter pub get
       - run: flutter build apk --release --dart-define-from-file=secrets.json
@@ -142,7 +124,7 @@ jobs:
 
   # ── GitHub Release ────────────────────────────────────────────────────────
   publish:
-    needs: [build-macos-arm64, build-macos-x86_64, build-android, build-windows]
+    needs: [build-macos-arm64, build-android, build-windows]
     runs-on: ubuntu-latest
 
     steps:
@@ -176,7 +158,6 @@ jobs:
           prerelease: ${{ !startsWith(github.ref_name, 'v1.') }}
           files: |
             artifacts/macos-arm64/stitchx-macos-arm64.zip
-            artifacts/macos-x86_64/stitchx-macos-x86_64.zip
             artifacts/android/stitchx-android.apk
             artifacts/windows/stitchx-windows-x64.zip
         env:
