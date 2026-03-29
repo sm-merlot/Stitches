@@ -43,6 +43,16 @@ enum SnippetResizeMode { clip, scale, expand }
 enum SnippetTransform { flipH, flipV, rotateCW }
 
 
+// ─── Canvas warning messages ──────────────────────────────────────────────────
+
+const kWarnSelectFirst   = 'Select a region first';
+const kWarnNothingToCopy = 'Nothing to copy — are you on the right layer?';
+const kWarnNothingToMove = 'Nothing to move — are you on the right layer?';
+const kWarnNothingToDelete = 'Nothing to delete — are you on the right layer?';
+const kWarnNothingToFlip = 'Nothing to flip — are you on the right layer?';
+const kWarnNothingToRotate = 'Nothing to rotate — are you on the right layer?';
+const kWarnNothingToSave = 'Nothing to save — are you on the right layer?';
+
 // ─── EditorState ──────────────────────────────────────────────────────────────
 
 class EditorState {
@@ -81,6 +91,9 @@ class EditorState {
   final int eraserSize;
   /// When true, erase mode uses flood-fill erase instead of the square eraser.
   final bool fillEraseActive;
+  /// Non-null when the notifier wants PatternCanvas to show a one-shot warning banner.
+  /// PatternCanvas clears this immediately after showing it.
+  final String? pendingCanvasWarning;
 
   /// True when the current file is in the native .stitchx format (or unsaved).
   bool get isNativeFormat {
@@ -122,6 +135,7 @@ class EditorState {
     this.snippetActivePaletteIndex = 0,
     this.eraserSize = 1,
     this.fillEraseActive = false,
+    this.pendingCanvasWarning,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -228,6 +242,7 @@ class EditorState {
     int? snippetActivePaletteIndex,
     int? eraserSize,
     bool? fillEraseActive,
+    Object? pendingCanvasWarning = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -276,6 +291,9 @@ class EditorState {
       snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
       eraserSize: eraserSize ?? this.eraserSize,
       fillEraseActive: fillEraseActive ?? this.fillEraseActive,
+      pendingCanvasWarning: pendingCanvasWarning == _sentinel
+          ? this.pendingCanvasWarning
+          : pendingCanvasWarning as String?,
     );
   }
 
@@ -434,6 +452,16 @@ class EditorNotifier extends Notifier<EditorState>
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
+    );
+  }
+
+  void clearCanvasWarning() {
+    state = state.copyWith(pendingCanvasWarning: null);
+  }
+
+  void warnNoSelection() {
+    state = state.copyWith(
+      pendingCanvasWarning: kWarnSelectFirst,
     );
   }
 

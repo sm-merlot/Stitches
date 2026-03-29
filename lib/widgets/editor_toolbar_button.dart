@@ -247,7 +247,8 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
 // ─── Save as snippet ──────────────────────────────────────────────────────────
 
 void _saveAsSnippet(BuildContext context, WidgetRef ref) {
-  ref.read(editorProvider.notifier).saveSelectionAsSnippet('');
+  final saved = ref.read(editorProvider.notifier).saveSelectionAsSnippet('');
+  if (!saved) return;
   final messenger = ScaffoldMessenger.of(context);
   messenger.showSnackBar(
     SnackBar(

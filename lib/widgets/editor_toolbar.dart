@@ -225,102 +225,123 @@ class EditorToolbar extends ConsumerWidget {
                     vDivider,
                   ],
 
-                  // Copy/delete — shown when a selection is active
+                  // Copy/delete/flip/rotate — shown when in select mode.
+                  // Buttons always tappable; look disabled and show a canvas warning when no selection.
                   if (state.drawingMode == DrawingMode.select) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Tooltip(
-                            message: 'Copy  [Cmd+C]',
-                            child: IconButton(
-                              iconSize: 20,
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.copy_outlined),
-                              onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                  ? () => notifier.copySelection()
-                                  : null,
-                            ),
-                          ),
-                          if (showSaveAsSnippetButton)
+                      child: Builder(builder: (context) {
+                        final hasRect = state.selectionRect != null;
+                        final hasSel = hasRect && state.selectedStitches.isNotEmpty;
+                        final disabledColor = theme.disabledColor;
+                        final noOverlay = WidgetStateProperty.all(Colors.transparent);
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Tooltip(
-                              message: 'Save as snippet',
+                              message: 'Copy  [Cmd+C]',
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.bookmark_add_outlined),
-                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                    ? () => _saveAsSnippet(context, ref)
-                                    : null,
+                                style: hasSel ? null : ButtonStyle(overlayColor: noOverlay),
+                                icon: Icon(Icons.copy_outlined,
+                                    color: hasSel ? null : disabledColor),
+                                onPressed: hasRect
+                                    ? () => notifier.copySelection()
+                                    : () => notifier.warnNoSelection(),
                               ),
                             ),
-                          Tooltip(
-                            message: 'Delete selection  [Del]',
-                            child: IconButton(
-                              iconSize: 20,
-                              visualDensity: VisualDensity.compact,
-                              icon: Icon(
-                                Icons.delete_outline,
-                                color: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                    ? theme.colorScheme.error
-                                    : null,
+                            if (showSaveAsSnippetButton)
+                              Tooltip(
+                                message: 'Save as snippet',
+                                child: IconButton(
+                                  iconSize: 20,
+                                  visualDensity: VisualDensity.compact,
+                                  style: hasSel ? null : ButtonStyle(overlayColor: noOverlay),
+                                  icon: Icon(Icons.bookmark_add_outlined,
+                                      color: hasSel ? null : disabledColor),
+                                  onPressed: hasRect
+                                      ? () => _saveAsSnippet(context, ref)
+                                      : () => notifier.warnNoSelection(),
+                                ),
                               ),
-                              onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                  ? () => notifier.deleteSelection()
-                                  : null,
+                            Tooltip(
+                              message: 'Delete selection  [Del]',
+                              child: IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                style: hasSel ? null : ButtonStyle(overlayColor: noOverlay),
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  color: hasSel ? theme.colorScheme.error : disabledColor,
+                                ),
+                                onPressed: hasRect
+                                    ? () => notifier.deleteSelection()
+                                    : () => notifier.warnNoSelection(),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        );
+                      }),
                     ),
-                    // Flip/rotate — shown in select mode, disabled until a selection with stitches is active.
-                    // Suppressed in snippet editor where the always-visible section handles this.
+                    // Flip/rotate — suppressed in snippet editor where the always-visible section handles this.
                     if (!showWholeCanvasTransforms) ...[
                       vDivider,
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Tooltip(
-                              message: 'Flip horizontal  [Cmd+Shift+H]',
-                              child: IconButton(
-                                iconSize: 20,
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.flip),
-                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                    ? () => notifier.flipSelectionH()
-                                    : null,
-                              ),
-                            ),
-                            Tooltip(
-                              message: 'Flip vertical  [Cmd+Shift+V]',
-                              child: IconButton(
-                                iconSize: 20,
-                                visualDensity: VisualDensity.compact,
-                                icon: Transform.rotate(
-                                  angle: 1.5708,
-                                  child: const Icon(Icons.flip),
+                        child: Builder(builder: (context) {
+                          final hasRect = state.selectionRect != null;
+                          final hasSel = hasRect && state.selectedStitches.isNotEmpty;
+                          final disabledColor = theme.disabledColor;
+                          final noOverlay = WidgetStateProperty.all(Colors.transparent);
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Tooltip(
+                                message: 'Flip horizontal  [Cmd+Shift+H]',
+                                child: IconButton(
+                                  iconSize: 20,
+                                  visualDensity: VisualDensity.compact,
+                                  style: hasSel ? null : ButtonStyle(overlayColor: noOverlay),
+                                  icon: Icon(Icons.flip,
+                                      color: hasSel ? null : disabledColor),
+                                  onPressed: hasRect
+                                      ? () => notifier.flipSelectionH()
+                                      : () => notifier.warnNoSelection(),
                                 ),
-                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                    ? () => notifier.flipSelectionV()
-                                    : null,
                               ),
-                            ),
-                            Tooltip(
-                              message: 'Rotate 90° CW  [Cmd+Shift+]]',
-                              child: IconButton(
-                                iconSize: 20,
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
-                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
-                                    ? () => notifier.rotateSelectionCW()
-                                    : null,
+                              Tooltip(
+                                message: 'Flip vertical  [Cmd+Shift+V]',
+                                child: IconButton(
+                                  iconSize: 20,
+                                  visualDensity: VisualDensity.compact,
+                                  style: hasSel ? null : ButtonStyle(overlayColor: noOverlay),
+                                  icon: Transform.rotate(
+                                    angle: 1.5708,
+                                    child: Icon(Icons.flip,
+                                        color: hasSel ? null : disabledColor),
+                                  ),
+                                  onPressed: hasRect
+                                      ? () => notifier.flipSelectionV()
+                                      : () => notifier.warnNoSelection(),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                              Tooltip(
+                                message: 'Rotate 90° CW  [Cmd+Shift+]]',
+                                child: IconButton(
+                                  iconSize: 20,
+                                  visualDensity: VisualDensity.compact,
+                                  style: hasSel ? null : ButtonStyle(overlayColor: noOverlay),
+                                  icon: Icon(Icons.rotate_90_degrees_cw_outlined,
+                                      color: hasSel ? null : disabledColor),
+                                  onPressed: hasRect
+                                      ? () => notifier.rotateSelectionCW()
+                                      : () => notifier.warnNoSelection(),
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
                       ),
                     ],
                     vDivider,

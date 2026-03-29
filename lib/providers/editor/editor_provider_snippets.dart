@@ -202,7 +202,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
   }
 
   /// Saves the current selection (select mode) or clipboard (paste mode) as a new snippet.
-  void saveSelectionAsSnippet(String name) {
+  bool saveSelectionAsSnippet(String name) {
     final List<Stitch> stitches;
     final List<Thread> threads;
 
@@ -211,11 +211,21 @@ mixin SnippetsMixin on Notifier<EditorState> {
       threads = state.clipboardThreads ?? [];
     } else {
       final rect = state.selectionRect;
-      if (rect == null) return;
+      if (rect == null) {
+        state = state.copyWith(
+          pendingCanvasWarning: kWarnSelectFirst,
+        );
+        return false;
+      }
       final inSel = state.activeLayer.stitches
           .where((s) => EditorState.isStitchInRect(s, rect))
           .toList();
-      if (inSel.isEmpty) return;
+      if (inSel.isEmpty) {
+        state = state.copyWith(
+          pendingCanvasWarning: kWarnNothingToSave,
+        );
+        return false;
+      }
       stitches = inSel
           .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
           .toList();
@@ -225,7 +235,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
           .toList();
     }
 
-    if (stitches.isEmpty) return;
+    if (stitches.isEmpty) return false;
 
     var maxX = 0, maxY = 0;
     for (final s in stitches) {
@@ -247,6 +257,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
     if (state.drawingMode == DrawingMode.paste) {
       cancelSelection();
     }
+    return true;
   }
 
   /// Loads a snippet into the in-memory and system clipboard, then enters paste mode.
