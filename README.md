@@ -35,7 +35,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
 - **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / flip / rotate / edit / delete
 - **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar; block mode toggle in the AppBar with visual active state
-- **Multi-palette snippets** — each snippet can hold multiple named colour palettes; switch between palettes via the palette manager in the snippet editor or the palette dots in the snippet panel; palettes use positional slot mapping so swapping applies consistently across the whole design; new colours drawn on the canvas propagate to all palettes automatically
+- **Multi-palette snippets** — each snippet can hold multiple named colour palettes; switch between palettes via the Palettes tab in the right sidebar or the palette dots in the snippet panel; palettes use positional slot mapping so swapping applies consistently across the whole design; new colours drawn on the canvas propagate to all palettes automatically
 - **Save as snippet** — one-tap save of the current selection or paste clipboard to the snippet library; unnamed by default, rename anytime
 - **Sprite sheet importer** — open any sprite sheet image and crop a region; pixel colours matched to nearest DMC thread via CIE Lab colour space; define multiple colour palettes by selecting colour-strip regions on the image; background pixels outside the palette are dropped automatically; output saved directly as a snippet; available on tablet and desktop
 
@@ -80,7 +80,8 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Keyboard shortcuts** — full shortcut set on desktop and in snippet editor (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
 - **Image viewer** — view `.png`, `.jpg`, `.gif`, `.webp`, and other image files inline in the canvas area; click any image in the sidebar to open it, click another to switch instantly
-- **Resizable sidebar** — drag the sidebar edge to any width between 160–480 px; width is remembered between sessions
+- **Right sidebar** — collapsible panel (collapse state persisted) with tabs: **Layers | Colours** in design mode, **Colours** only in stitch mode, **Palettes | Colours** in the snippet editor; resizable 140–350 px; the Colours tab shows all palette threads with stitch counts and a Canvas / Layer toggle to switch between the full canvas palette and the active-layer-only palette
+- **Resizable file sidebar** — drag the sidebar edge to any width between 160–480 px; width is remembered between sessions
 - **Sidebar type filters** — toggle PDF and image visibility in the folder tree independently; settings are persisted
 
 ## Getting Started
@@ -95,7 +96,6 @@ Requires Flutter 3.41.4+.
 
 ### Snippet editor
 - Palette editing inside the snippet editor (rename, reorder, manage colours per palette)
-- Palette list in the right sidebar (where the layers panel lives in the main editor)
 - Hide canvas/layer mode buttons and "drawing on layer X" label — not relevant in the snippet editor
 - Warn on close if there are unsaved changes (dirty state)
 
@@ -103,9 +103,7 @@ Requires Flutter 3.41.4+.
 - "Manage palettes" in the snippet ⋮ menu currently opens the snippet editor — clarify intent or provide a dedicated inline palette manager
 
 ### Main editor
-- Active thread palette in the right sidebar, below the layers/palette list; always visible including in stitch mode
 - Remove pan mode — middle-click or two-finger drag handles panning; no dedicated pan tool needed
-- Layer mode colour list should only show colours of the currently selected layer, not all layers combined
 - Stitch numbers and usage counts are incorrect for composite threads in the canvas-mode palette
 - Remove the opacity-layers info icon / tooltip
 
