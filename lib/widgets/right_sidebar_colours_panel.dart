@@ -436,11 +436,28 @@ class _ThreadList extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 12)),
       );
     }
+    final sorted = [...threads]..sort((a, b) {
+        if (useDmc) {
+          final ia = int.tryParse(a.dmcCode) ?? 999999;
+          final ib = int.tryParse(b.dmcCode) ?? 999999;
+          return ia != ib
+              ? ia.compareTo(ib)
+              : a.dmcCode.compareTo(b.dmcCode);
+        } else {
+          final anchorA = dmcColorByCode(a.dmcCode)?.anchorCode;
+          final anchorB = dmcColorByCode(b.dmcCode)?.anchorCode;
+          final ia = int.tryParse(anchorA ?? '') ?? 999999;
+          final ib = int.tryParse(anchorB ?? '') ?? 999999;
+          return ia != ib
+              ? ia.compareTo(ib)
+              : (anchorA ?? '').compareTo(anchorB ?? '');
+        }
+      });
     return ListView.builder(
       padding: EdgeInsets.zero,
-      itemCount: threads.length,
+      itemCount: sorted.length,
       itemBuilder: (_, i) {
-        final t = threads[i];
+        final t = sorted[i];
         final isSelected = t.dmcCode == selectedThreadId;
         final code = useDmc
             ? t.dmcCode

@@ -45,13 +45,14 @@ enum SnippetTransform { flipH, flipV, rotateCW }
 
 // ─── Canvas warning messages ──────────────────────────────────────────────────
 
-const kWarnSelectFirst   = 'Select a region first';
-const kWarnNothingToCopy = 'Nothing to copy — are you on the right layer?';
-const kWarnNothingToMove = 'Nothing to move — are you on the right layer?';
-const kWarnNothingToDelete = 'Nothing to delete — are you on the right layer?';
-const kWarnNothingToFlip = 'Nothing to flip — are you on the right layer?';
-const kWarnNothingToRotate = 'Nothing to rotate — are you on the right layer?';
-const kWarnNothingToSave = 'Nothing to save — are you on the right layer?';
+const kLayerHint           = ' — are you on the right layer?';
+const kWarnSelectFirst     = 'Select a region first';
+const kWarnNothingToCopy   = 'Nothing to copy';
+const kWarnNothingToMove   = 'Nothing to move';
+const kWarnNothingToDelete = 'Nothing to delete';
+const kWarnNothingToFlip   = 'Nothing to flip';
+const kWarnNothingToRotate = 'Nothing to rotate';
+const kWarnNothingToSave   = 'Nothing to save';
 
 // ─── EditorState ──────────────────────────────────────────────────────────────
 
@@ -91,6 +92,8 @@ class EditorState {
   final int eraserSize;
   /// When true, erase mode uses flood-fill erase instead of the square eraser.
   final bool fillEraseActive;
+  /// When true, selection operations act on all visible layers instead of just the active layer.
+  final bool canvasSelectionMode;
   /// Non-null when the notifier wants PatternCanvas to show a one-shot warning banner.
   /// PatternCanvas clears this immediately after showing it.
   final String? pendingCanvasWarning;
@@ -135,6 +138,7 @@ class EditorState {
     this.snippetActivePaletteIndex = 0,
     this.eraserSize = 1,
     this.fillEraseActive = false,
+    this.canvasSelectionMode = false,
     this.pendingCanvasWarning,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
@@ -169,6 +173,12 @@ class EditorState {
   List<Stitch> get selectedStitches {
     final rect = selectionRect;
     if (rect == null) return [];
+    if (canvasSelectionMode) {
+      return pattern.layers
+          .where((l) => l.visible)
+          .expand((l) => l.stitches.where((s) => isStitchInRect(s, rect)))
+          .toList();
+    }
     return activeLayer.stitches.where((s) => isStitchInRect(s, rect)).toList();
   }
 
@@ -242,6 +252,7 @@ class EditorState {
     int? snippetActivePaletteIndex,
     int? eraserSize,
     bool? fillEraseActive,
+    bool? canvasSelectionMode,
     Object? pendingCanvasWarning = _sentinel,
   }) {
     return EditorState(
@@ -291,6 +302,7 @@ class EditorState {
       snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
       eraserSize: eraserSize ?? this.eraserSize,
       fillEraseActive: fillEraseActive ?? this.fillEraseActive,
+      canvasSelectionMode: canvasSelectionMode ?? this.canvasSelectionMode,
       pendingCanvasWarning: pendingCanvasWarning == _sentinel
           ? this.pendingCanvasWarning
           : pendingCanvasWarning as String?,
