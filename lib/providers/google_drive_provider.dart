@@ -57,7 +57,10 @@ class DriveNotifier extends Notifier<DriveState> {
 
   @override
   DriveState build() {
-    checkConnection();
+    // Schedule after build() returns so `state` is initialised before
+    // checkConnection() tries to write it (isConfigured=false short-circuits
+    // the await, making the first write synchronous otherwise).
+    Future.microtask(checkConnection);
     return const DriveState();
   }
 
