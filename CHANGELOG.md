@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0
+
+### Minor Changes
+
+- 0981f9d: add github actions build pipeline
+
 <!--
   For major version releases (x.0.0), add a hand-written summary section at
   the top of the release entry before merging the "Version Packages" PR.
@@ -54,12 +60,12 @@ Initial release of StitchX — a free, open-source cross-stitch pattern editor f
 - Full keyboard shortcut set on desktop; `?` opens the shortcut reference
 - PDF viewer and image viewer (PNG, JPG, GIF, WEBP) inline in the workspace
 
-### PDF pattern scanner *(beta)*
+### PDF pattern scanner _(beta)_
 
 - Convert a printed cross-stitch chart PDF into an editable `.stitchx` pattern with no AI or internet connection required
 - User-guided symbol sampling and template matching; flagged cells can be reviewed and corrected manually
 
-### Stitch demonstration *(beta)*
+### Stitch demonstration _(beta)_
 
 - Per-thread animated stitch-order demo with configurable playback speed
 - Automatic path planning respecting front/back alternation rules; GIF export
