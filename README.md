@@ -73,7 +73,7 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Zoom-adaptive rendering** — below a zoom threshold, stitches automatically switch to block rendering; backstitches and grid lines fade out at very low zoom
 
 ### Platform & input
-- **Multi-platform** — macOS, iOS, Android
+- **Multi-platform** — macOS, Windows, iOS, Android
 - **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode
 - **Touch** — rubber-band selection, copy/paste, and pan all work with finger on iPad
 - **Stitch mode** — simplified read-only view for stitching from a finished pattern; toggle via a floating action button (bottom-right); keep-screen-on icon toggle in the AppBar; composite thread palette shows the actual blended DMC colours produced by layer opacity settings, each with a unique symbol
@@ -104,4 +104,3 @@ Requires Flutter 3.41.4+.
 
 ### Engineering
 - Better test coverage
-- GitHub Actions: automated build, version management, and release publishing
