@@ -12,6 +12,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
   final Offset? backstitchStartPoint;
   final Offset? backstitchCurrentPoint;
   final bool isErasing;
+  final int eraserSize;
+  final bool fillEraseActive;
   final bool isDrawCursor;
   final bool isColorPickerCursor;
   final Offset? cursorScreenPos;
@@ -22,7 +24,6 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
   final List<Thread> patternThreads;
   final (int, int)? stylusHoverCell;
   final Color? stylusHoverColor;
-  final String? activeLayerName;
   final bool stitchMode;
 
   CanvasOverlayPainter({
@@ -34,6 +35,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     this.backstitchStartPoint,
     this.backstitchCurrentPoint,
     this.isErasing = false,
+    this.eraserSize = 1,
+    this.fillEraseActive = false,
     this.isDrawCursor = false,
     this.isColorPickerCursor = false,
     this.cursorScreenPos,
@@ -43,7 +46,6 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     this.ghostOpacity = 1.0,
     this.stylusHoverCell,
     this.stylusHoverColor,
-    this.activeLayerName,
     this.stitchMode = false,
   });
 
@@ -80,60 +82,46 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     // Stylus hover preview
     if (stylusHoverCell != null) {
       final (hx, hy) = stylusHoverCell!;
-      final hColor = stylusHoverColor ?? const Color(0xFF9B30D0);
-      final rect = Rect.fromLTWH(hx * cellSize, hy * cellSize, cellSize, cellSize);
-      canvas.drawRect(rect, Paint()..color = hColor.withValues(alpha: 0.25));
-      canvas.drawRect(
-          rect,
-          Paint()
-            ..color = hColor.withValues(alpha: 0.7)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5 / scale);
+      if (isErasing && !fillEraseActive) {
+        // Box eraser preview — show the full footprint that will be erased
+        const eraseColor = Color(0xFFE53935);
+        final half = (eraserSize - 1) ~/ 2;
+        final x0 = hx - half;
+        final y0 = hy - half;
+        final boxRect = Rect.fromLTWH(
+            x0 * cellSize, y0 * cellSize, eraserSize * cellSize, eraserSize * cellSize);
+        canvas.drawRect(boxRect, Paint()..color = eraseColor.withValues(alpha: 0.15));
+        canvas.drawRect(
+            boxRect,
+            Paint()
+              ..color = eraseColor.withValues(alpha: 0.75)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5 / scale);
+      } else {
+        // Draw cursor / fill-erase / non-erase: single cell highlight
+        final hColor = fillEraseActive && isErasing
+            ? const Color(0xFFFF6D00) // orange = flood erase
+            : (stylusHoverColor ?? const Color(0xFF9B30D0));
+        final rect = Rect.fromLTWH(hx * cellSize, hy * cellSize, cellSize, cellSize);
+        canvas.drawRect(rect, Paint()..color = hColor.withValues(alpha: 0.25));
+        canvas.drawRect(
+            rect,
+            Paint()
+              ..color = hColor.withValues(alpha: 0.7)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5 / scale);
+      }
     }
 
     canvas.restore();
 
     // Custom cursors (screen-space, after restore)
     if (cursorScreenPos != null) {
-      if (isErasing) _drawEraserCursor(canvas, cursorScreenPos!);
+      if (isErasing) _drawEraserCursor(canvas, cursorScreenPos!, fillErase: fillEraseActive);
       if (isDrawCursor) _drawPencilCursor(canvas, cursorScreenPos!);
       if (isColorPickerCursor) _drawEyedropperCursor(canvas, cursorScreenPos!);
     }
 
-    // ── Active layer chip ───────────────────────────────────────────────────
-    if (!stitchMode && activeLayerName != null) {
-      _drawActiveLayerChip(canvas, size, activeLayerName!);
-    }
-  }
-
-  void _drawActiveLayerChip(Canvas canvas, Size size, String layerName) {
-    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
-    const textStyle = TextStyle(
-      fontSize: 11,
-      color: Colors.white,
-      fontWeight: FontWeight.w500,
-    );
-    final label = 'Drawing on: $layerName';
-    final tp = TextPainter(
-      text: TextSpan(text: label, style: textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    const left = 8.0;
-    const bottom = 8.0;
-    final chipRect = Rect.fromLTWH(
-      left,
-      size.height - bottom - tp.height - padding.vertical,
-      tp.width + padding.horizontal,
-      tp.height + padding.vertical,
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(chipRect, const Radius.circular(4)),
-      Paint()..color = const Color(0xCC1A1A2E),
-    );
-    tp.paint(canvas,
-        Offset(chipRect.left + padding.left, chipRect.top + padding.top));
   }
 
   @override
@@ -145,6 +133,8 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       old.backstitchStartPoint != backstitchStartPoint ||
       old.backstitchCurrentPoint != backstitchCurrentPoint ||
       old.isErasing != isErasing ||
+      old.eraserSize != eraserSize ||
+      old.fillEraseActive != fillEraseActive ||
       old.isDrawCursor != isDrawCursor ||
       old.isColorPickerCursor != isColorPickerCursor ||
       old.cursorScreenPos != cursorScreenPos ||
@@ -155,6 +145,5 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
       old.patternThreads != patternThreads ||
       old.stylusHoverCell != stylusHoverCell ||
       old.stylusHoverColor != stylusHoverColor ||
-      old.activeLayerName != activeLayerName ||
       old.stitchMode != stitchMode;
 }

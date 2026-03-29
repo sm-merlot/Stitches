@@ -10,10 +10,10 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 
 ### Pattern editing
 - **Pattern canvas** — draw full stitches, half stitches (forward `/` and backward `\`), quarter stitches, and backstitches on a scalable grid
-- **Canvas layers** — named layers with per-layer visibility toggle and opacity slider; layers panel in the right sidebar; stitches scoped to the active layer; drag to reorder; organise layers into collapsible named groups; layers collapse into a single composite view for printing or export
+- **Canvas layers** — named layers with per-layer visibility toggle and opacity slider; layers panel in the right sidebar; stitches scoped to the active layer; drag to reorder; organise layers into collapsible named groups; add Layer / Group buttons appear inline below the list; layers collapse into a single composite view for printing or export
 - **DMC / Anchor color palette** — searchable library of ~300 DMC thread colors with Anchor cross-reference numbers; toggle between DMC and Anchor codes in Settings; threads enter the palette automatically on first stitch and are pruned when the last stitch is erased
 - **Symbols** — every palette thread and composite thread gets a unique symbol from a pool of ~180 UTF-8 characters; symbols are stable across save/reload and opacity changes; tap any symbol to reassign it via the symbol picker
-- **Undo / redo** — full history stack (up to 200 steps); double-tap to undo on touch devices
+- **Undo / redo** — full history stack (up to 200 steps) covering both canvas stitches and palette colour assignments; double-tap to undo on touch devices
 - **Zoom & pan** — pinch-to-zoom, scroll-wheel zoom, drag to pan, middle-click drag to pan; zoom range 0.1×–20×
 - **Resize canvas** — adjust pattern dimensions after creation
 - **Reference image overlay** — import a photo as a semi-transparent overlay on the canvas to trace from; adjustable opacity
@@ -25,11 +25,11 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - Half-cell cross / petit point
 - Backstitch (tap two grid intersections)
 - Navigate (pan without drawing)
-- Erase
+- **Erase** — size picker 1–10 (erases an N×N box of cells centred on the cursor); hover preview shows the exact cells that will be erased; **fill erase** sub-option flood-erases all connected full stitches of the same colour `[9]`
 - Color picker — samples a stitch's thread colour; layer-aware (picks the topmost visible stitch at the tapped cell)
 - Selection (rubber-band, copy, paste, delete regions); paste opacity slider blends colours with the canvas via CIE Lab nearest-DMC lookup
+- **Flip & rotate** — flip or rotate the active selection, paste clipboard, or full canvas; available in the toolbar and via keyboard shortcuts
 - **Fill colour** — 8-connected flood fill; fills all connected cells of the same colour (or empty) with the selected thread `[8]`
-- **Fill erase** — 8-connected flood fill erase; removes all connected full stitches of the same colour `[9]`
 
 ### Snippets
 - **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
@@ -76,7 +76,7 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Multi-platform** — macOS, iOS, Android
 - **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode
 - **Touch** — rubber-band selection, copy/paste, and pan all work with finger on iPad
-- **Stitch mode** — simplified read-only view for stitching from a finished pattern; accessible via a floating action button; keep-screen-on option; composite thread palette shows the actual blended DMC colours produced by layer opacity settings, each with a unique symbol
+- **Stitch mode** — simplified read-only view for stitching from a finished pattern; toggle via a floating action button (bottom-right); keep-screen-on icon toggle in the AppBar; composite thread palette shows the actual blended DMC colours produced by layer opacity settings, each with a unique symbol
 - **Keyboard shortcuts** — full shortcut set on desktop and in snippet editor (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
 - **Image viewer** — view `.png`, `.jpg`, `.gif`, `.webp`, and other image files inline in the canvas area; click any image in the sidebar to open it, click another to switch instantly
@@ -98,14 +98,12 @@ Requires Flutter 3.41.4+.
 - Palette list in the right sidebar (where the layers panel lives in the main editor)
 - Hide canvas/layer mode buttons and "drawing on layer X" label — not relevant in the snippet editor
 - Warn on close if there are unsaved changes (dirty state)
-- Flip and rotate buttons in the editor toolbar
 
 ### Snippet panel
 - "Manage palettes" in the snippet ⋮ menu currently opens the snippet editor — clarify intent or provide a dedicated inline palette manager
 
 ### Main editor
 - Active thread palette in the right sidebar, below the layers/palette list; always visible including in stitch mode
-- Select tool: flip and rotate options for the selection region, with keyboard shortcuts; same options in paste mode
 - Remove pan mode — middle-click or two-finger drag handles panning; no dedicated pan tool needed
 - Layer mode colour list should only show colours of the currently selected layer, not all layers combined
 - Stitch numbers and usage counts are incorrect for composite threads in the canvas-mode palette

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -69,6 +70,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Guard to fire flood fill only once per tap (not repeatedly on drag).
   bool _fillFired = false;
 
+  // ── Layer visibility warning ───────────────────────────────────────────────
+  String? _warningMessage;
+  Timer? _warningTimer;
+  // Suppresses repeat warnings within a single pointer-down → up gesture.
+  bool _warnedThisGesture = false;
+
   // ── Frame-coalesced rebuild ────────────────────────────────────────────────
   // Pointer events (pan, hover, pinch) can fire at 120 Hz. Calling setState on
   // every event saturates the UI thread and causes a backlog that freezes input
@@ -94,9 +101,66 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   @override
   void dispose() {
+    _warningTimer?.cancel();
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointerEvent);
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     super.dispose();
+  }
+
+  void _showWarning(String message) {
+    if (_warnedThisGesture) return;
+    _warnedThisGesture = true;
+    _warningTimer?.cancel();
+    setState(() => _warningMessage = message);
+    _warningTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _warningMessage = null);
+    });
+  }
+
+  /// Returns true if stitch [s] occupies cell (x, y).
+  /// Uses EditorState.cellCoords for non-backstitch types; skips backstitches.
+  bool _stitchAtCell(Stitch s, int x, int y) {
+    final coords = EditorState.cellCoords(s);
+    return coords != null && coords.$1 == x && coords.$2 == y;
+  }
+
+  /// Checks whether the current draw/erase at (cellX, cellY) would be invisible
+  /// due to layer visibility issues. Shows a warning and returns if so.
+  void _checkLayerWarning(EditorState state, int cellX, int cellY) {
+    final activeLayer = state.activeLayer;
+    final layers = state.pattern.layers;
+
+    if (state.drawingMode == DrawingMode.erase) {
+      // Warn if active layer has no stitch at this cell but other layers do.
+      final activeHasStitch = activeLayer.stitches.any((s) => _stitchAtCell(s, cellX, cellY));
+      if (!activeHasStitch) {
+        final othersHaveStitch = layers.any((l) =>
+            l.id != activeLayer.id &&
+            l.visible &&
+            l.stitches.any((s) => _stitchAtCell(s, cellX, cellY)));
+        if (othersHaveStitch) {
+          _showWarning('Nothing to erase on active layer here — check other layers');
+        }
+      }
+    } else if (state.drawingMode == DrawingMode.draw) {
+      if (!activeLayer.visible) {
+        _showWarning('Active layer is hidden — drawing won\'t be visible');
+        return;
+      }
+      // Warn if a fully-opaque layer above covers this cell with a full stitch.
+      final activeIdx = layers.indexWhere((l) => l.id == activeLayer.id);
+      if (activeIdx >= 0) {
+        for (var i = activeIdx + 1; i < layers.length; i++) {
+          final above = layers[i];
+          if (!above.visible || above.opacity < 1.0) continue;
+          final covered = above.stitches.any((s) => s is FullStitch && _stitchAtCell(s, cellX, cellY));
+          if (covered) {
+            _showWarning('"${above.name}" covers this cell — drawing won\'t be visible');
+            return;
+          }
+        }
+      }
+    }
   }
 
   bool _onHardwareKey(KeyEvent event) {
@@ -234,19 +298,27 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     // Erase mode is handled uniformly regardless of the current drawing tool.
     if (state.drawingMode == DrawingMode.erase) {
       final (cellX, cellY) = _canvasToCell(canvas);
-      if (_inBounds(cellX, cellY)) notifier.removeStitchesAt(cellX, cellY);
+      if (_inBounds(cellX, cellY)) _checkLayerWarning(state, cellX, cellY);
+      if (state.fillEraseActive) {
+        if (!_inBounds(cellX, cellY)) return;
+        if (_fillFired) return;
+        _fillFired = true;
+        notifier.floodFill(cellX, cellY, erase: true);
+      } else if (state.eraserSize > 1) {
+        notifier.removeStitchesInBox(cellX, cellY, state.eraserSize);
+      } else {
+        if (_inBounds(cellX, cellY)) notifier.removeStitchesAt(cellX, cellY);
+      }
       return;
     }
 
-    if (state.currentTool == DrawingTool.fill ||
-        state.currentTool == DrawingTool.fillErase) {
+    if (state.currentTool == DrawingTool.fill) {
       final (cellX, cellY) = _canvasToCell(canvas);
       if (!_inBounds(cellX, cellY)) return;
       // Flood fill is triggered once per tap, not on drag — guard with a flag.
       if (_fillFired) return;
       _fillFired = true;
-      notifier.floodFill(cellX, cellY,
-          erase: state.currentTool == DrawingTool.fillErase);
+      notifier.floodFill(cellX, cellY, erase: false);
       return;
     }
 
@@ -284,6 +356,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (!_inBounds(cellX, cellY)) return;
 
     if (state.selectedThreadId == null) return;
+
+    _checkLayerWarning(state, cellX, cellY);
 
     final (subX, subY) = _subCellPos(canvas, cellX, cellY);
     final stitch = _buildStitch(
@@ -484,6 +558,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   void _onPointerDown(PointerDownEvent event) {
     _activePointers[event.pointer] = event.localPosition;
     _mouseScreenPos = event.localPosition;
+    _warnedThisGesture = false;
     _scheduleRebuild();
 
     // Apple Pencil double-tap → toggle erase/draw (disabled in stitch mode)
@@ -504,16 +579,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final mode = ref.read(editorProvider).drawingMode;
 
       if (mode == DrawingMode.select) {
+        final editorState = ref.read(editorProvider);
         final cell = _screenToSelCell(event.localPosition);
-        final sel = ref.read(editorProvider).selectionRect;
-        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        final sel = editorState.selectionRect;
+        final inStitchMode = editorState.stitchMode;
+        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           setState(() {
             _isMovingSelection = true;
             _moveDragStartCell = cell;
             _moveDelta = Offset.zero;
           });
         } else {
-          ref.read(editorProvider.notifier).setSelectionRect(null);
+          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
           setState(() {
             _selectionAnchor = cell;
             _isMovingSelection = false;
@@ -542,16 +619,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_activePointers.length == 1) {
       final mode = ref.read(editorProvider).drawingMode;
       if (mode == DrawingMode.select) {
+        final editorState = ref.read(editorProvider);
         final cell = _screenToSelCell(event.localPosition);
-        final sel = ref.read(editorProvider).selectionRect;
-        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        final sel = editorState.selectionRect;
+        final inStitchMode = editorState.stitchMode;
+        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           setState(() {
             _isMovingSelection = true;
             _moveDragStartCell = cell;
             _moveDelta = Offset.zero;
           });
         } else {
-          ref.read(editorProvider.notifier).setSelectionRect(null);
+          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
           setState(() {
             _selectionAnchor = cell;
             _isMovingSelection = false;
@@ -891,7 +970,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   aidaColor: state.pattern.aidaColor,
                   stitchMode: state.stitchMode,
                   blockMode: state.blockMode,
-                  stitchViewMode: state.stitchViewMode,
+                  stitchCrossMode: state.stitchCrossMode,
+                  stitchBackMode: state.stitchBackMode,
                   stitchFocusThreadId: state.stitchFocusThreadId,
                   referenceImage: state.referenceImage,
                   referenceOpacity: state.referenceOpacity,
@@ -903,6 +983,35 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 size: Size.infinite,
               ),
             ),
+            // Layer visibility warning banner
+            if (_warningMessage != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    color: const Color(0xF0F57C00),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            color: Colors.white, size: 15),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _warningMessage!,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             // Overlay layer: cursor, ghost stitches, selection, hover.
             // Repaints freely without touching the cached static layer.
             CustomPaint(
@@ -915,6 +1024,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 backstitchStartPoint: state.backstitchStartPoint,
                 backstitchCurrentPoint: _backstitchHoverPoint,
                 isErasing: isErasing,
+                eraserSize: state.eraserSize,
+                fillEraseActive: state.fillEraseActive,
                 isDrawCursor: isDrawCursor,
                 isColorPickerCursor: isColorPickerCursor,
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
@@ -930,7 +1041,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                     : 1.0,
                 stylusHoverCell: _stylusHoverCell,
                 stylusHoverColor: state.selectedThread?.color,
-                activeLayerName: state.activeLayer.name,
                 stitchMode: state.stitchMode,
               ),
               size: Size.infinite,

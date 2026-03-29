@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
-import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
@@ -27,7 +25,8 @@ import '../services/pdf_scanner.dart';
 import 'pattern_scan_symbol_screen.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/file_sidebar.dart';
-import '../widgets/layers_panel.dart';
+import '../widgets/right_sidebar.dart';
+import '../widgets/right_sidebar_colours_panel.dart';
 import '../widgets/pattern_canvas.dart';
 import '../widgets/pdf_page_picker.dart';
 import '../widgets/image_viewer_panel.dart';
@@ -851,7 +850,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         case LogicalKeyboardKey.digit8:
           notifier.setTool(DrawingTool.fill);
         case LogicalKeyboardKey.digit9:
-          notifier.setTool(DrawingTool.fillErase);
+          notifier.setDrawingMode(DrawingMode.erase);
+          if (!editorState.fillEraseActive) notifier.toggleFillErase();
         case LogicalKeyboardKey.keyC:
           notifier.setDrawingMode(DrawingMode.colorPicker);
         case LogicalKeyboardKey.keyS:
@@ -1039,23 +1039,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ],
               ),
             ],
-            // Keep screen on — only shown in stitch mode with a file open
+            // Stitch mode actions — Demo + Screen Lock
             if (editorState.isFileOpen && editorState.stitchMode && openPdf == null) ...[
+              StitchDemoButton(state: editorState),
+              _WorkspaceScreenLockButton(),
               const SizedBox(width: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Checkbox(
-                    value: ref.watch(settingsProvider).keepScreenOn,
-                    onChanged: (v) => ref
-                        .read(settingsProvider.notifier)
-                        .setKeepScreenOn(v ?? false),
-                  ),
-                  const Text('Keep screen on',
-                      style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 8),
-                ],
-              ),
             ],
           ],
         ),
@@ -1091,15 +1079,46 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                               ? Focus(
                                   autofocus: true,
                                   onKeyEvent: handleKeys,
-                                  child: Column(
+                                  child: Stack(
                                     children: [
-                                      if (!editorState.isNativeFormat)
-                                        _ImportBanner(
-                                          filePath: editorState.filePath!,
-                                          onSaveAs: () => _saveAs(context),
+                                      Column(
+                                        children: [
+                                          if (!editorState.isNativeFormat)
+                                            _ImportBanner(
+                                              filePath: editorState.filePath!,
+                                              onSaveAs: () => _saveAs(context),
+                                            ),
+                                          const Expanded(child: PatternCanvas()),
+                                          const EditorToolbar(),
+                                        ],
+                                      ),
+                                      // FAB anchored to canvas column so it
+                                      // never overlaps the left file sidebar.
+                                      Positioned(
+                                        left: 12,
+                                        bottom: editorState.stitchMode ? 16 : 64,
+                                        child: FloatingActionButton.extended(
+                                          onPressed: () => ref
+                                              .read(editorProvider.notifier)
+                                              .toggleStitchMode(),
+                                          icon: Icon(editorState.stitchMode
+                                              ? Icons.edit_outlined
+                                              : Icons.auto_stories_outlined),
+                                          label: Text(editorState.stitchMode
+                                              ? 'Exit Stitch Mode'
+                                              : 'Stitch Mode'),
+                                          backgroundColor: editorState.stitchMode
+                                              ? Theme.of(context)
+                                                  .colorScheme
+                                                  .secondaryContainer
+                                              : null,
+                                          foregroundColor: editorState.stitchMode
+                                              ? Theme.of(context)
+                                                  .colorScheme
+                                                  .onSecondaryContainer
+                                              : null,
                                         ),
-                                      const Expanded(child: PatternCanvas()),
-                                      const EditorToolbar(),
+                                      ),
                                     ],
                                   ),
                                 )
@@ -1109,7 +1128,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                                       context, wsState.workspace),
                                 ),
                 ),
-                const LayersPanel(),
+                const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
               ],
             ),
             // Blocking loading overlay (Drive download in progress)
@@ -1155,30 +1174,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
           ],
         ),
-        floatingActionButton: (editorState.isFileOpen && openPdf == null)
-            ? Padding(
-                padding: const EdgeInsets.only(bottom: 58),
-                child: FloatingActionButton.extended(
-                  onPressed: () =>
-                      ref.read(editorProvider.notifier).toggleStitchMode(),
-                  icon: Icon(editorState.stitchMode
-                      ? Icons.edit_outlined
-                      : Icons.auto_stories_outlined),
-                  label: Text(editorState.stitchMode
-                      ? 'Exit Stitch Mode'
-                      : 'Stitch Mode'),
-                  backgroundColor: editorState.stitchMode
-                      ? Theme.of(context).colorScheme.secondaryContainer
-                      : null,
-                  foregroundColor: editorState.stitchMode
-                      ? Theme.of(context).colorScheme.onSecondaryContainer
-                      : null,
-                ),
-              )
-            : null,
-        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-        endDrawer: (editorState.isFileOpen && openPdf == null) ? const _StitchPalettePanel() : null,
-        endDrawerEnableOpenDragGesture: false,
       ),
     );
   }

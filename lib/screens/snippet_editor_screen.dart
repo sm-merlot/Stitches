@@ -12,6 +12,7 @@ import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
+import '../widgets/right_sidebar.dart';
 import '../widgets/snippet_thumbnail.dart';
 
 part 'snippet_editor_screen_dialogs.dart';
@@ -76,6 +77,8 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   int? _selectedPresetIndex = 1; // default 16×16
   int _canvasW = 16;
   int _canvasH = 16;
+  // Dirty-state proxy: stitch fingerprint at load time (D3).
+  int _initialStitchHash = 0;
 
   @override
   void initState() {
@@ -121,6 +124,19 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         editorNotifier.initSnippetPalettesLocal(
             [SnippetPalette.create(name: 'Palette 1')], 0);
       }
+      // Capture initial stitch fingerprint for dirty-state detection (D3).
+      // Run after a microtask so the state has settled.
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            _initialStitchHash = ref
+                .read(editorProvider)
+                .pattern
+                .stitches
+                .fold(0, (h, s) => Object.hash(h, s));
+          });
+        }
+      });
     });
   }
 
@@ -221,6 +237,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       return KeyEventResult.ignored;
     }
     final notifier = ref.read(editorProvider.notifier);
+    final state = ref.read(editorProvider);
     final keys = HardwareKeyboard.instance.logicalKeysPressed;
     final meta = keys.contains(LogicalKeyboardKey.metaLeft) ||
         keys.contains(LogicalKeyboardKey.metaRight);
@@ -251,8 +268,48 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         notifier.copySelection();
         return KeyEventResult.handled;
       }
-      if (key == LogicalKeyboardKey.keyV) {
+      if (!shift && key == LogicalKeyboardKey.keyV) {
         notifier.enterPasteMode();
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.keyH) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.flipSelectionH();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.flipClipboardH();
+        } else {
+          notifier.flipCanvasH();
+        }
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.keyV) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.flipSelectionV();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.flipClipboardV();
+        } else {
+          notifier.flipCanvasV();
+        }
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.bracketRight) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.rotateSelectionCW();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.rotateClipboardCW();
+        } else {
+          notifier.rotateCanvasCW();
+        }
+        return KeyEventResult.handled;
+      }
+      if (shift && key == LogicalKeyboardKey.bracketLeft) {
+        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+          notifier.rotateSelectionCW(); notifier.rotateSelectionCW(); notifier.rotateSelectionCW();
+        } else if (state.drawingMode == DrawingMode.paste) {
+          notifier.rotateClipboardCW(); notifier.rotateClipboardCW(); notifier.rotateClipboardCW();
+        } else {
+          notifier.rotateCanvasCW(); notifier.rotateCanvasCW(); notifier.rotateCanvasCW();
+        }
         return KeyEventResult.handled;
       }
     }
@@ -262,7 +319,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         notifier.setDrawingMode(DrawingMode.draw);
       case LogicalKeyboardKey.keyE:
         notifier.setDrawingMode(DrawingMode.erase);
-      case LogicalKeyboardKey.keyP:
       case LogicalKeyboardKey.space:
         notifier.setDrawingMode(DrawingMode.pan);
       case LogicalKeyboardKey.keyS:
@@ -286,7 +342,8 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       case LogicalKeyboardKey.digit8:
         notifier.setTool(DrawingTool.fill);
       case LogicalKeyboardKey.digit9:
-        notifier.setTool(DrawingTool.fillErase);
+        notifier.setDrawingMode(DrawingMode.erase);
+        if (!state.fillEraseActive) notifier.toggleFillErase();
       case LogicalKeyboardKey.escape:
         notifier.cancelSelection();
       case LogicalKeyboardKey.delete:
@@ -296,6 +353,22 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
+  }
+
+  Future<void> _showResizeDialog(BuildContext context) async {
+    final pattern = ref.read(editorProvider).pattern;
+    final result = await showDialog<(int, int, SnippetResizeMode)>(
+      context: context,
+      builder: (_) => _ResizeSnippetEditorDialog(
+        currentWidth: pattern.width,
+        currentHeight: pattern.height,
+      ),
+    );
+    if (result != null) {
+      ref
+          .read(editorProvider.notifier)
+          .resizeEditorPatternAsSnippet(result.$1, result.$2, result.$3);
+    }
   }
 
   void _loadSnippetIntoClipboard(Snippet other) {
@@ -357,23 +430,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     Navigator.of(context).pop(result);
   }
 
-  void _openPaletteManager(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => UncontrolledProviderScope(
-        container: ProviderScope.containerOf(context),
-        child: DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (_, ctrl) => _PaletteManagerSheet(scrollController: ctrl),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -381,8 +437,45 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     final state = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (!_isDirty()) {
+          if (context.mounted) Navigator.of(context).pop();
+          return;
+        }
+        final result = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Unsaved changes'),
+            content: const Text('Save your changes before closing?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('cancel'),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('discard'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Discard'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop('save'),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+        if (!context.mounted) return;
+        if (result == 'save') {
+          _save(context);
+        } else if (result == 'discard') {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
         title: SizedBox(
           width: 200,
           child: TextField(
@@ -404,6 +497,12 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             ),
             const SizedBox(width: 8),
           ],
+          if (!isNew)
+            IconButton(
+              tooltip: 'Resize snippet',
+              icon: const Icon(Icons.aspect_ratio),
+              onPressed: () => _showResizeDialog(context),
+            ),
           IconButton(
             tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
             isSelected: state.blockMode,
@@ -417,11 +516,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
                   )
                 : null,
           ),
-          IconButton(
-            tooltip: 'Manage palettes',
-            icon: const Icon(Icons.palette_outlined),
-            onPressed: () => _openPaletteManager(context),
-          ),
           TextButton(
             onPressed: () => _save(context),
             child: const Text('Save'),
@@ -432,20 +526,47 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       body: Focus(
         autofocus: true,
         onKeyEvent: _handleKeys,
-        child: Column(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: PatternCanvas()),
-            EditorToolbar(
-              showSnippetsButton: false,
-              showSaveAsSnippetButton: false,
-              showSpriteSheetButton: false,
-              onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
-                  ? () => _showSnippetPicker(context)
-                  : null,
+            Expanded(
+              child: Column(
+                children: [
+                  const Expanded(child: PatternCanvas()),
+                  EditorToolbar(
+                    showSnippetsButton: false,
+                    showSaveAsSnippetButton: false,
+                    showSpriteSheetButton: false,
+                    showWholeCanvasTransforms: true,
+                    showAidaButton: false,
+                    onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
+                        ? () => _showSnippetPicker(context)
+                        : null,
+                  ),
+                ],
+              ),
             ),
+            const RightSidebar(
+                sidebarContext: RightSidebarContext.snippetEditor),
           ],
         ),
       ),
+      ),
     );
+  }
+
+  bool _isDirty() {
+    // Stitch changes
+    final current = ref
+        .read(editorProvider)
+        .pattern
+        .stitches
+        .fold(0, (h, s) => Object.hash(h, s));
+    if (current != _initialStitchHash) return true;
+    // Name changes (existing snippets only — new snippets with only a name
+    // change and no stitches aren't worth warning about)
+    if (widget.snippet != null &&
+        _nameController.text.trim() != widget.snippet!.name) return true;
+    return false;
   }
 }

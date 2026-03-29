@@ -7,7 +7,7 @@ part of 'editor_provider.dart';
 mixin DrawingMixin on Notifier<EditorState> {
 
   // Abstract declarations for helpers defined in EditorNotifier / LayersMixin.
-  List<CrossStitchPattern> _buildUndoStack();
+  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
   CrossStitchPattern _patternWithActiveLayerStitches(
       CrossStitchPattern p, List<Stitch> s);
@@ -316,6 +316,45 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
   }
 
+  /// Erases all stitches in a [size]×[size] box centred on (cx, cy).
+  void removeStitchesInBox(int cx, int cy, int size) {
+    final half = (size - 1) ~/ 2;
+    final x0 = cx - half;
+    final x1 = cx + (size - 1 - half);
+    final y0 = cy - half;
+    final y1 = cy + (size - 1 - half);
+
+    bool hit(Stitch s) {
+      for (var x = x0; x <= x1; x++) {
+        for (var y = y0; y <= y1; y++) {
+          if (_stitchAtCell(s, x, y) || _backstitchInCell(s, x, y)) return true;
+        }
+      }
+      return false;
+    }
+
+    if (!state.activeLayer.stitches.any(hit)) return;
+    final newStitches = state.activeLayer.stitches.where((s) => !hit(s)).toList();
+    final newPattern = _pruneUnusedThreads(
+        _patternWithActiveLayerStitches(state.pattern, newStitches));
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
+  void setEraserSize(int size) {
+    // Selecting a size deselects fill erase — they're mutually exclusive.
+    state = state.copyWith(eraserSize: size.clamp(1, 10), fillEraseActive: false);
+  }
+
+  void toggleFillErase() {
+    // Toggling fill erase on deselects any size selection, and vice versa.
+    state = state.copyWith(fillEraseActive: !state.fillEraseActive);
+  }
+
   /// 8-connected flood fill. [erase] == false fills empty/same-colour cells;
   /// [erase] == true removes connected FullStitches sharing the same threadId.
   void floodFill(int startX, int startY, {required bool erase}) {
@@ -448,6 +487,87 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
   }
 
+  /// Resizes the current pattern using snippet resize semantics (clip / scale /
+  /// expand). Used by the snippet editor's in-AppBar resize button.
+  void resizeEditorPatternAsSnippet(
+      int newW, int newH, SnippetResizeMode mode) {
+    final old = state.pattern;
+    final oldW = old.width;
+    final oldH = old.height;
+
+    final newStitches = switch (mode) {
+      SnippetResizeMode.clip => old.stitches.where((s) {
+          return switch (s) {
+            FullStitch(:final x, :final y) => x < newW && y < newH,
+            HalfStitch(:final x, :final y) => x < newW && y < newH,
+            QuarterStitch(:final x, :final y) => x < newW && y < newH,
+            HalfCrossStitch(:final x, :final y) => x < newW && y < newH,
+            QuarterCrossStitch(:final x, :final y) => x < newW && y < newH,
+            BackStitch(:final x1, :final y1, :final x2, :final y2) =>
+              x1 < newW && y1 < newH && x2 < newW && y2 < newH,
+          };
+        }).toList(),
+      SnippetResizeMode.scale => old.stitches.map((s) {
+          int sx(int x) => (x / oldW * newW).round().clamp(0, newW - 1);
+          int sy(int y) => (y / oldH * newH).round().clamp(0, newH - 1);
+          double sdx(double x) =>
+              (x / oldW * newW).clamp(0.0, newW.toDouble());
+          double sdy(double y) =>
+              (y / oldH * newH).clamp(0.0, newH.toDouble());
+          return switch (s) {
+            FullStitch(:final x, :final y, :final threadId) =>
+              FullStitch(x: sx(x), y: sy(y), threadId: threadId),
+            HalfStitch(:final x, :final y, :final isForward, :final threadId) =>
+              HalfStitch(
+                  x: sx(x), y: sy(y), isForward: isForward, threadId: threadId),
+            QuarterStitch(
+              :final x,
+              :final y,
+              :final quadrant,
+              :final threadId
+            ) =>
+              QuarterStitch(
+                  x: sx(x), y: sy(y), quadrant: quadrant, threadId: threadId),
+            HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
+              HalfCrossStitch(
+                  x: sx(x), y: sy(y), half: half, threadId: threadId),
+            QuarterCrossStitch(
+              :final x,
+              :final y,
+              :final quadrant,
+              :final threadId
+            ) =>
+              QuarterCrossStitch(
+                  x: sx(x), y: sy(y), quadrant: quadrant, threadId: threadId),
+            BackStitch(
+              :final x1,
+              :final y1,
+              :final x2,
+              :final y2,
+              :final threadId
+            ) =>
+              BackStitch(
+                  x1: sdx(x1),
+                  y1: sdy(y1),
+                  x2: sdx(x2),
+                  y2: sdy(y2),
+                  threadId: threadId),
+          };
+        }).toList(),
+      SnippetResizeMode.expand => old.stitches,
+    };
+
+    state = state.copyWith(
+      pattern: _patternWithAllLayersTransformed(
+        old.copyWith(width: newW, height: newH),
+        (_) => newStitches,
+      ),
+      undoStack: _buildUndoStack(),
+      redoStack: [],
+      isDirty: true,
+    );
+  }
+
   // ─── Stitch / block mode ──────────────────────────────────────────────────
 
   void toggleBlockMode() {
@@ -458,17 +578,31 @@ mixin DrawingMixin on Notifier<EditorState> {
     final entering = !state.stitchMode;
     state = state.copyWith(
       stitchMode: entering,
-      drawingMode: entering ? DrawingMode.pan : DrawingMode.draw,
+      drawingMode: entering ? DrawingMode.select : DrawingMode.draw,
       selectionRect: null,
       backstitchStartPoint: null,
       showCompositeThreads: entering,
+      stitchCrossMode: false,
+      stitchBackMode: false,
     );
     if (entering) refreshCompositeCache();
     _autoSaveStitchMode();
   }
 
-  void setStitchViewMode(StitchViewMode mode) {
-    state = state.copyWith(stitchViewMode: mode);
+  /// Cross: hides backstitches. Activating clears Back.
+  void setStitchCrossMode(bool active) {
+    state = state.copyWith(
+      stitchCrossMode: active,
+      stitchBackMode: active ? false : state.stitchBackMode,
+    );
+  }
+
+  /// Back: greys normal stitches. Activating clears Cross.
+  void setStitchBackMode(bool active) {
+    state = state.copyWith(
+      stitchBackMode: active,
+      stitchCrossMode: active ? false : state.stitchCrossMode,
+    );
   }
 
   void setStitchFocusThread(String? threadId) {
@@ -510,6 +644,54 @@ mixin DrawingMixin on Notifier<EditorState> {
 
   void toggleReferenceVisible() {
     state = state.copyWith(referenceVisible: !state.referenceVisible);
+  }
+
+  // ─── Whole-canvas flip/rotate (snippet editor C3) ─────────────────────────
+
+  void flipCanvasH() {
+    final w = state.pattern.width;
+    final newPattern = _patternWithAllLayersTransformed(
+      state.pattern,
+      (stitches) => stitches
+          .map((s) => SelectionMixin._flipStitchH(s, 0, 0, w))
+          .toList(),
+    );
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+    );
+  }
+
+  void flipCanvasV() {
+    final h = state.pattern.height;
+    final newPattern = _patternWithAllLayersTransformed(
+      state.pattern,
+      (stitches) => stitches
+          .map((s) => SelectionMixin._flipStitchV(s, 0, 0, h))
+          .toList(),
+    );
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+    );
+  }
+
+  void rotateCanvasCW() {
+    final w = state.pattern.width;
+    final h = state.pattern.height;
+    final newPattern = _patternWithAllLayersTransformed(
+      state.pattern,
+      (stitches) => stitches
+          .map((s) => SelectionMixin._rotateStitchCW(s, 0, 0, w, h))
+          .toList(),
+    ).copyWith(width: h, height: w); // swap canvas dimensions
+    state = state.copyWith(
+      pattern: newPattern,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+    );
   }
 }
 
