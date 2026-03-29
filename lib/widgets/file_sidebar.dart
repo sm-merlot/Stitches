@@ -852,7 +852,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                   visualDensity: VisualDensity.compact,
                   tooltip: workspaceState.showPdfs ? 'Hide PDFs' : 'Show PDFs',
                   onPressed: () {
-                    if (workspaceState.showPdfs) _switchToViewer();
+                    if (workspaceState.showPdfs &&
+                        ref.read(pdfViewerProvider) != null) {
+                      _switchToViewer();
+                    }
                     ref.read(workspaceProvider.notifier).setShowPdfs(!workspaceState.showPdfs);
                   },
                 ),
@@ -868,7 +871,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
                   visualDensity: VisualDensity.compact,
                   tooltip: workspaceState.showImages ? 'Hide images' : 'Show images',
                   onPressed: () {
-                    if (workspaceState.showImages) _switchToViewer();
+                    if (workspaceState.showImages &&
+                        ref.read(imageViewerProvider) != null) {
+                      _switchToViewer();
+                    }
                     ref.read(workspaceProvider.notifier).setShowImages(!workspaceState.showImages);
                   },
                 ),
