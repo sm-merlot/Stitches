@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
+import '../data/symbols.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
@@ -105,6 +106,7 @@ class _DesignColoursPanel extends ConsumerWidget {
             useDmc: useDmc,
             stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
+            onLongPress: (t) => _showSymbolPicker(context, notifier, t),
           ),
         ),
       ],
@@ -404,6 +406,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
       useDmc: useDmc,
       stitchCounts: stitchCounts,
       onTap: (t) => notifier.setSelectedThread(t.dmcCode),
+      onLongPress: (t) => _showSymbolPicker(context, notifier, t),
     );
   }
 }
@@ -416,6 +419,7 @@ class _ThreadList extends StatelessWidget {
   final bool useDmc;
   final Map<String, int> stitchCounts;
   final void Function(Thread) onTap;
+  final void Function(Thread)? onLongPress;
   final bool focusMode;
 
   const _ThreadList({
@@ -424,6 +428,7 @@ class _ThreadList extends StatelessWidget {
     required this.useDmc,
     required this.stitchCounts,
     required this.onTap,
+    this.onLongPress,
     this.focusMode = false,
   });
 
@@ -469,6 +474,7 @@ class _ThreadList extends StatelessWidget {
 
         return InkWell(
           onTap: () => onTap(t),
+          onLongPress: onLongPress != null ? () => onLongPress!(t) : null,
           child: Container(
             decoration: isSelected
                 ? BoxDecoration(
@@ -555,6 +561,149 @@ class _ThreadList extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ─── Symbol picker ────────────────────────────────────────────────────────────
+
+Future<void> _showSymbolPicker(
+  BuildContext context,
+  EditorNotifier notifier,
+  Thread thread,
+) async {
+  final symbol = await showDialog<String>(
+    context: context,
+    builder: (_) => _SymbolPickerDialog(current: thread.symbol),
+  );
+  if (symbol != null) {
+    notifier.setThreadSymbol(thread.dmcCode, symbol);
+  }
+}
+
+class _SymbolPickerDialog extends StatefulWidget {
+  final String current;
+  const _SymbolPickerDialog({required this.current});
+
+  @override
+  State<_SymbolPickerDialog> createState() => _SymbolPickerDialogState();
+}
+
+class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.current);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _pick(String symbol) {
+    Navigator.of(context).pop(symbol);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Edit symbol'),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Custom input row
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      labelText: 'Custom symbol',
+                      hintText: 'Type any character…',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    maxLength: 2,
+                    style: const TextStyle(fontSize: 18),
+                    onSubmitted: (v) {
+                      if (v.isNotEmpty) _pick(v);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text('Or choose from the list:',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
+            const SizedBox(height: 6),
+            // Symbol grid
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: kPatternSymbols.map((s) {
+                    final isSelected = _controller.text == s;
+                    return GestureDetector(
+                      onTap: () => _pick(s),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 80),
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? theme.colorScheme.primaryContainer
+                              : theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(s,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isSelected
+                                  ? theme.colorScheme.onPrimaryContainer
+                                  : theme.colorScheme.onSurface,
+                            )),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final v = _controller.text;
+            if (v.isNotEmpty) _pick(v);
+          },
+          child: const Text('OK'),
+        ),
+      ],
     );
   }
 }
