@@ -6,6 +6,9 @@ on:
 
 # Skip on the version-bump PR that changesets creates.
 # Its head branch is always "changeset-release/main".
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   analyze-and-test:
     if: github.head_ref != 'changeset-release/main'
