@@ -76,6 +76,13 @@ class EditorToolbar extends ConsumerWidget {
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
+              // On iPad the toolbar is wide enough that scrolling is never
+              // needed.  NeverScrollableScrollPhysics removes the horizontal
+              // drag recogniser from the gesture arena, preventing it from
+              // competing with (and occasionally stealing) button taps.
+              physics: MediaQuery.sizeOf(context).shortestSide >= 600
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

@@ -112,6 +112,9 @@ class SnippetsPanel extends ConsumerWidget {
     final blockMode = editorState.blockMode;
 
     navigator.pop(); // close the panel
+    // Wait for the pop to settle before pushing — iOS can drop a push that
+    // fires in the same frame as a pop, showing nothing.
+    await Future.microtask(() {});
 
     final result = await navigator.push<Snippet>(
       MaterialPageRoute(
