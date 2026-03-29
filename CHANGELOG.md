@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+### Patch Changes
+
+- a07cefa: Fix gdrive signin on android
+
 ## 0.1.2
 
 ### Patch Changes
