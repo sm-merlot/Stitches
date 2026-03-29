@@ -27,6 +27,15 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: Disable code signing for CI
+        run: |
+          sed -i '' \
+            -e 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' \
+            -e 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "-";/g' \
+            -e '/DEVELOPMENT_TEAM = S5X6FCGJT8;/d' \
+            macos/Runner.xcodeproj/project.pbxproj
+
       - run: flutter build macos --release --dart-define-from-file=secrets.json
 
       - name: Zip app bundle
@@ -63,6 +72,9 @@ jobs:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
+
+      - name: Write Android local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
       - run: flutter pub get
       - run: flutter build apk --release --dart-define-from-file=secrets.json
