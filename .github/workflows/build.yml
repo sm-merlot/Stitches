@@ -15,6 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write Google credentials
+        env:
+          GOOGLE_SECRETS_JSON: ${{ secrets.GOOGLE_SECRETS_JSON }}
+        run: printf '%s' "$GOOGLE_SECRETS_JSON" > secrets.json
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.4'
@@ -22,7 +27,7 @@ jobs:
           cache: true
 
       - run: flutter pub get
-      - run: flutter build macos --release
+      - run: flutter build macos --release --dart-define-from-file=secrets.json
 
       - name: Zip app bundle
         run: |
@@ -40,6 +45,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write Google credentials
+        env:
+          GOOGLE_SECRETS_JSON: ${{ secrets.GOOGLE_SECRETS_JSON }}
+        run: printf '%s' "$GOOGLE_SECRETS_JSON" > secrets.json
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.4'
@@ -47,7 +57,7 @@ jobs:
           cache: true
 
       - run: flutter pub get
-      - run: flutter build macos --release
+      - run: flutter build macos --release --dart-define-from-file=secrets.json
 
       - name: Zip app bundle
         run: |
@@ -68,6 +78,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write Google credentials
+        env:
+          GOOGLE_SECRETS_JSON: ${{ secrets.GOOGLE_SECRETS_JSON }}
+        run: printf '%s' "$GOOGLE_SECRETS_JSON" > secrets.json
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -80,7 +95,7 @@ jobs:
           cache: true
 
       - run: flutter pub get
-      - run: flutter build apk --release
+      - run: flutter build apk --release --dart-define-from-file=secrets.json
 
       - name: Rename APK
         run: |
@@ -98,6 +113,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write Google credentials
+        env:
+          GOOGLE_SECRETS_JSON: ${{ secrets.GOOGLE_SECRETS_JSON }}
+        shell: pwsh
+        run: $env:GOOGLE_SECRETS_JSON | Set-Content -Path secrets.json -NoNewline
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.4'
@@ -105,7 +126,7 @@ jobs:
           cache: true
 
       - run: flutter pub get
-      - run: flutter build windows --release
+      - run: flutter build windows --release --dart-define-from-file=secrets.json
 
       - name: Zip build output
         shell: pwsh
