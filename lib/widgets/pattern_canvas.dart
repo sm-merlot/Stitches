@@ -110,6 +110,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   void _showWarning(String message) {
     if (_warnedThisGesture) return;
     _warnedThisGesture = true;
+    _showWarningBanner(message);
+  }
+
+  /// Shows the warning banner without the per-gesture dedup guard.
+  /// Used for warnings triggered outside pointer gestures (e.g. keyboard shortcuts).
+  void _showWarningBanner(String message) {
     _warningTimer?.cancel();
     setState(() => _warningMessage = message);
     _warningTimer = Timer(const Duration(seconds: 3), () {
@@ -268,6 +274,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   bool _inBounds(int cellX, int cellY) {
     final p = ref.read(editorProvider).pattern;
     return cellX >= 0 && cellX < p.width && cellY >= 0 && cellY < p.height;
+  }
+
+  bool _screenOnCanvas(Offset screenPos) {
+    final c = _screenToCanvas(screenPos);
+    final p = ref.read(editorProvider).pattern;
+    return c.dx >= 0 && c.dy >= 0 &&
+        c.dx < p.width * _cellSize && c.dy < p.height * _cellSize;
   }
 
   void _pan(Offset delta) {
@@ -584,18 +597,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final sel = editorState.selectionRect;
         final inStitchMode = editorState.stitchMode;
         if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
-          setState(() {
-            _isMovingSelection = true;
-            _moveDragStartCell = cell;
-            _moveDelta = Offset.zero;
-          });
+          if (editorState.selectedStitches.isEmpty) {
+            _showWarningBanner(kWarnNothingToMove);
+          } else {
+            setState(() {
+              _isMovingSelection = true;
+              _moveDragStartCell = cell;
+              _moveDelta = Offset.zero;
+            });
+          }
         } else {
           if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
-          setState(() {
-            _selectionAnchor = cell;
-            _isMovingSelection = false;
-            _hasDraggedSelection = false;
-          });
+          if (_screenOnCanvas(event.localPosition)) {
+            setState(() {
+              _selectionAnchor = cell;
+              _isMovingSelection = false;
+              _hasDraggedSelection = false;
+            });
+          }
         }
         return;
       }
@@ -624,18 +643,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final sel = editorState.selectionRect;
         final inStitchMode = editorState.stitchMode;
         if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
-          setState(() {
-            _isMovingSelection = true;
-            _moveDragStartCell = cell;
-            _moveDelta = Offset.zero;
-          });
+          if (editorState.selectedStitches.isEmpty) {
+            _showWarningBanner(kWarnNothingToMove);
+          } else {
+            setState(() {
+              _isMovingSelection = true;
+              _moveDragStartCell = cell;
+              _moveDelta = Offset.zero;
+            });
+          }
         } else {
           if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
-          setState(() {
-            _selectionAnchor = cell;
-            _isMovingSelection = false;
-            _hasDraggedSelection = false;
-          });
+          if (_screenOnCanvas(event.localPosition)) {
+            setState(() {
+              _selectionAnchor = cell;
+              _isMovingSelection = false;
+              _hasDraggedSelection = false;
+            });
+          }
         }
         return;
       }
@@ -924,6 +949,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
+
+    // Show canvas warning banner triggered by the notifier (e.g. copy with no selection).
+    ref.listen<EditorState>(editorProvider, (prev, next) {
+      if (next.pendingCanvasWarning != null &&
+          next.pendingCanvasWarning != prev?.pendingCanvasWarning) {
+        _showWarningBanner(next.pendingCanvasWarning!);
+        ref.read(editorProvider.notifier).clearCanvasWarning();
+      }
+    });
     final isErasing = state.drawingMode == DrawingMode.erase;
     final isDrawCursor = state.drawingMode == DrawingMode.draw;
     final isColorPickerCursor = state.drawingMode == DrawingMode.colorPicker;

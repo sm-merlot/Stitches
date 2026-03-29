@@ -7,6 +7,7 @@ part of 'editor_provider.dart';
 mixin SelectionMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
+  void warnNoSelection();
   List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
   CrossStitchPattern _patternWithActiveLayerStitches(
@@ -51,11 +52,19 @@ mixin SelectionMixin on Notifier<EditorState> {
 
   Future<void> copySelection() async {
     final rect = state.selectionRect;
-    if (rect == null) return;
+    if (rect == null) {
+      warnNoSelection();
+      return;
+    }
     final inSel = state.activeLayer.stitches
         .where((s) => EditorState.isStitchInRect(s, rect))
         .toList();
-    if (inSel.isEmpty) return;
+    if (inSel.isEmpty) {
+      state = state.copyWith(
+        pendingCanvasWarning: kWarnNothingToCopy,
+      );
+      return;
+    }
     final clips = inSel
         .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
         .toList();
@@ -132,7 +141,12 @@ mixin SelectionMixin on Notifier<EditorState> {
     final activeStitches = state.activeLayer.stitches;
     final inSel =
         activeStitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
-    if (inSel.isEmpty) return;
+    if (inSel.isEmpty) {
+      state = state.copyWith(
+        pendingCanvasWarning: kWarnNothingToMove,
+      );
+      return;
+    }
     var remaining =
         activeStitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
     for (final s in inSel) {
@@ -161,7 +175,12 @@ mixin SelectionMixin on Notifier<EditorState> {
     final rect = state.selectionRect;
     if (rect == null) return;
     final activeStitches = state.activeLayer.stitches;
-    if (!activeStitches.any((s) => EditorState.isStitchInRect(s, rect))) return;
+    if (!activeStitches.any((s) => EditorState.isStitchInRect(s, rect))) {
+      state = state.copyWith(
+        pendingCanvasWarning: kWarnNothingToDelete,
+      );
+      return;
+    }
     final remaining =
         activeStitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
     final newPattern = _pruneUnusedThreads(
@@ -312,6 +331,12 @@ mixin SelectionMixin on Notifier<EditorState> {
   void flipSelectionH() {
     final rect = state.selectionRect;
     if (rect == null) return;
+    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
+      state = state.copyWith(
+        pendingCanvasWarning: kWarnNothingToFlip,
+      );
+      return;
+    }
     final l = rect.left.floor();
     final t = rect.top.floor();
     final w = rect.width.round();
@@ -328,6 +353,12 @@ mixin SelectionMixin on Notifier<EditorState> {
   void flipSelectionV() {
     final rect = state.selectionRect;
     if (rect == null) return;
+    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
+      state = state.copyWith(
+        pendingCanvasWarning: kWarnNothingToFlip,
+      );
+      return;
+    }
     final l = rect.left.floor();
     final t = rect.top.floor();
     final h = rect.height.round();
@@ -344,6 +375,12 @@ mixin SelectionMixin on Notifier<EditorState> {
   void rotateSelectionCW() {
     final rect = state.selectionRect;
     if (rect == null) return;
+    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
+      state = state.copyWith(
+        pendingCanvasWarning: kWarnNothingToRotate,
+      );
+      return;
+    }
     final l = rect.left.floor();
     final t = rect.top.floor();
     final w = rect.width.round();
