@@ -94,31 +94,8 @@ Requires Flutter 3.41.4+.
 
 ## Backlog
 
-### Snippet editor
-- Palette editing inside the snippet editor (rename, reorder, manage colours per palette)
-- Hide canvas/layer mode buttons and "drawing on layer X" label — not relevant in the snippet editor
-- Warn on close if there are unsaved changes (dirty state)
-
-### Snippet panel
-- "Manage palettes" in the snippet ⋮ menu currently opens the snippet editor — clarify intent or provide a dedicated inline palette manager
-
-### Main editor
-- Remove pan mode — middle-click or two-finger drag handles panning; no dedicated pan tool needed
-- Stitch numbers and usage counts are incorrect for composite threads in the canvas-mode palette
-- Remove the opacity-layers info icon / tooltip
-
-### Stitch mode
-- Remove drawing tools — stitch mode is always in select/read-only mode; middle-click or two-finger drag pans
-- Prevent accidental moves — click-and-drag on a selection should not move stitches in stitch mode
-- Palette shows incorrect colours — should reflect only composite canvas colours (excluding threads present only in hidden/merged layers)
-- Palette list becomes the focus-mode selector
-- Stitch visibility/greying controls and demo button move to the palette side panel
-
 ### Mobile / tablet
 - Review all UI elements for touch-friendliness — check button sizes, tap targets, and layout on small screens
-
-### Snippets
-- Snippet palettes: colours should not be auto-pruned when a snippet has multiple palettes (pruning breaks alternate palette slots)
 
 ### Files & sync
 - `.stitchx` file compression at rest
@@ -127,5 +104,4 @@ Requires Flutter 3.41.4+.
 
 ### Engineering
 - Better test coverage
-- Code cleanup and refactoring
 - GitHub Actions: automated build, version management, and release publishing
