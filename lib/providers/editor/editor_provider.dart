@@ -471,6 +471,7 @@ class EditorNotifier extends Notifier<EditorState>
     state = state.copyWith(pendingCanvasWarning: null);
   }
 
+  @override
   void warnNoSelection() {
     state = state.copyWith(
       pendingCanvasWarning: kWarnSelectFirst,

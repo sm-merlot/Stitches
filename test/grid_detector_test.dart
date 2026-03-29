@@ -121,8 +121,10 @@ void _printResult(
   int knownCols,
   int knownRows,
 ) {
+  // ignore: avoid_print
   print('\n── $label ─────────────────────────────');
   if (result == null) {
+    // ignore: avoid_print
     print('  RESULT: null (detection failed)');
     return;
   }
@@ -134,17 +136,30 @@ void _printResult(
       ? (result.gridHeight / result.cellH).round()
       : 0;
 
+  // ignore: avoid_print
   print('  gridLeft:      ${result.gridLeft.round()}');
+  // ignore: avoid_print
   print('  gridTop:       ${result.gridTop.round()}');
+  // ignore: avoid_print
   print('  gridRight:     ${result.gridRight.round()}');
+  // ignore: avoid_print
   print('  gridBottom:    ${result.gridBottom.round()}');
+  // ignore: avoid_print
   print('  gridWidth:     ${result.gridWidth.round()} px');
+  // ignore: avoid_print
   print('  gridHeight:    ${result.gridHeight.round()} px');
+  // ignore: avoid_print
   print('  cellW:         ${result.cellW.toStringAsFixed(2)} px');
+  // ignore: avoid_print
   print('  cellH:         ${result.cellH.toStringAsFixed(2)} px');
+  // ignore: avoid_print
   print('  phaseX:        ${result.phaseX.toStringAsFixed(2)} px');
+  // ignore: avoid_print
   print('  phaseY:        ${result.phaseY.toStringAsFixed(2)} px');
+  // ignore: avoid_print
   print('  detectedCols:  $detectedCols  (expected ~$knownCols)');
+  // ignore: avoid_print
   print('  detectedRows:  $detectedRows  (expected ~$knownRows)');
+  // ignore: avoid_print
   print('  confidence:    ${result.confidence.toStringAsFixed(3)}');
 }

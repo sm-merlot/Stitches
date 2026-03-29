@@ -297,7 +297,6 @@ mixin SelectionMixin on Notifier<EditorState> {
         x1: (l + w) - (x1 - l), y1: y1,
         x2: (l + w) - (x2 - l), y2: y2,
         threadId: threadId),
-    _ => s,
   };
 
   /// Returns a stitch vertically flipped within a bounding box at (l,t) with height h.
@@ -335,7 +334,6 @@ mixin SelectionMixin on Notifier<EditorState> {
         x1: x1, y1: (t + h) - (y1 - t),
         x2: x2, y2: (t + h) - (y2 - t),
         threadId: threadId),
-    _ => s,
   };
 
   /// Returns a stitch rotated 90° CW within a bounding box at (l,t) with size w×h.
@@ -379,7 +377,6 @@ mixin SelectionMixin on Notifier<EditorState> {
           x1: rbsX(x1, y1), y1: rbsY(x1, y1),
           x2: rbsX(x2, y2), y2: rbsY(x2, y2),
           threadId: threadId),
-      _ => s,
     };
   }
 
@@ -391,7 +388,7 @@ mixin SelectionMixin on Notifier<EditorState> {
     final l = rect.left.floor();
     final t = rect.top.floor();
     final w = rect.width.round();
-    final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    bool inSel(Stitch s) => EditorState.isStitchInRect(s, rect);
     if (state.canvasSelectionMode) {
       final hasAny = state.pattern.layers
           .where((l) => l.visible)
@@ -430,7 +427,7 @@ mixin SelectionMixin on Notifier<EditorState> {
     final l = rect.left.floor();
     final t = rect.top.floor();
     final h = rect.height.round();
-    final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    bool inSel(Stitch s) => EditorState.isStitchInRect(s, rect);
     if (state.canvasSelectionMode) {
       final hasAny = state.pattern.layers
           .where((layer) => layer.visible)
@@ -470,7 +467,7 @@ mixin SelectionMixin on Notifier<EditorState> {
     final t = rect.top.floor();
     final w = rect.width.round();
     final h = rect.height.round();
-    final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    bool inSel(Stitch s) => EditorState.isStitchInRect(s, rect);
     // After CW rotation the selection occupies same top-left but w↔h swap
     final newRect = Rect.fromLTWH(rect.left, rect.top, rect.height, rect.width);
     if (state.canvasSelectionMode) {

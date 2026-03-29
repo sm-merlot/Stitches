@@ -40,7 +40,7 @@ class SpriteSheetPainter extends CustomPainter {
 
   void _paintCropOverlay(Canvas canvas, Size size, Rect canvasCrop) {
     final alpha = isDrawingStrip ? 0.65 : 0.45;
-    final maskPaint = Paint()..color = Colors.black.withOpacity(alpha);
+    final maskPaint = Paint()..color = Colors.black.withValues(alpha: alpha);
 
     // Draw dark mask around crop
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, canvasCrop.top), maskPaint);
@@ -73,7 +73,7 @@ class SpriteSheetPainter extends CustomPainter {
       final color = stripColors[i % stripColors.length];
 
       // Fill
-      canvas.drawRect(canvasStrip, Paint()..color = color.withOpacity(0.15));
+      canvas.drawRect(canvasStrip, Paint()..color = color.withValues(alpha: 0.15));
 
       // Border
       canvas.drawRect(
@@ -99,7 +99,7 @@ class SpriteSheetPainter extends CustomPainter {
   }
 
   void _paintDraftStrip(Canvas canvas, Rect canvasStrip) {
-    canvas.drawRect(canvasStrip, Paint()..color = Colors.amber.withOpacity(0.15));
+    canvas.drawRect(canvasStrip, Paint()..color = Colors.amber.withValues(alpha: 0.15));
     _drawDashedRect(canvas, canvasStrip, Colors.amber.shade700);
   }
 
