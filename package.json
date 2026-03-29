@@ -1,0 +1,12 @@
+{
+  "name": "stitchx",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "version": "changeset version && node scripts/sync-pubspec.js",
+    "tag": "node scripts/create-tag.js"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0"
+  }
+}

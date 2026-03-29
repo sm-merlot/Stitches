@@ -1,0 +1,161 @@
+name: Build & Publish Release
+
+# Triggered when release.yml pushes a version tag (e.g. v1.2.3).
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  # ── macOS (Apple Silicon) ──────────────────────────────────────────────────
+  build-macos-arm64:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build macos --release
+
+      - name: Zip app bundle
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r stitchx-macos-arm64.zip stitchx.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: build/macos/Build/Products/Release/stitchx-macos-arm64.zip
+
+  # ── macOS (Intel) ─────────────────────────────────────────────────────────
+  build-macos-x86_64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build macos --release
+
+      - name: Zip app bundle
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r stitchx-macos-x86_64.zip stitchx.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-x86_64
+          path: build/macos/Build/Products/Release/stitchx-macos-x86_64.zip
+
+  # ── Android APK ───────────────────────────────────────────────────────────
+  # Note: this builds with the Flutter debug signing key.
+  # For Play Store distribution, add a keystore via secrets and pass
+  # --dart-define or a key.properties file.
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/stitchx-android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: build/app/outputs/flutter-apk/stitchx-android.apk
+
+  # ── Windows ───────────────────────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      - name: Zip build output
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path build\windows\x64\runner\Release\* `
+            -DestinationPath stitchx-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: stitchx-windows-x64.zip
+
+  # ── GitHub Release ────────────────────────────────────────────────────────
+  publish:
+    needs: [build-macos-arm64, build-macos-x86_64, build-android, build-windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Pull the section for this version out of CHANGELOG.md.
+          # Assumes Keep a Changelog format produced by changesets.
+          NOTES=$(awk "/^## ${VERSION}/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md)
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.notes }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/macos-arm64/stitchx-macos-arm64.zip
+            artifacts/macos-x86_64/stitchx-macos-x86_64.zip
+            artifacts/android/stitchx-android.apk
+            artifacts/windows/stitchx-windows-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
