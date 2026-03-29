@@ -151,7 +151,8 @@ jobs:
           name: ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.notes }}
           draft: false
-          prerelease: false
+          # Mark as pre-release until v1.0.0.
+          prerelease: ${{ !startsWith(github.ref_name, 'v1.') }}
           files: |
             artifacts/macos-arm64/stitchx-macos-arm64.zip
             artifacts/macos-x86_64/stitchx-macos-x86_64.zip
