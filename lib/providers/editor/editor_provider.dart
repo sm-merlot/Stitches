@@ -42,15 +42,6 @@ enum SnippetResizeMode { clip, scale, expand }
 
 enum SnippetTransform { flipH, flipV, rotateCW }
 
-/// Controls how stitches are rendered in stitch mode.
-enum StitchViewMode {
-  /// Stitches shown at full colour (default).
-  normal,
-  /// Cross stitches are hidden; only backstitches visible.
-  hidden,
-  /// Cross stitches rendered in greyscale.
-  greyed,
-}
 
 // ─── EditorState ──────────────────────────────────────────────────────────────
 
@@ -60,8 +51,8 @@ class EditorState {
   final DrawingTool currentTool;
   final DrawingMode drawingMode;
   final String? selectedThreadId;
-  final List<CrossStitchPattern> _undoStack;
-  final List<CrossStitchPattern> _redoStack;
+  final List<(CrossStitchPattern, List<SnippetPalette>)> _undoStack;
+  final List<(CrossStitchPattern, List<SnippetPalette>)> _redoStack;
   final bool isDirty;
   final Offset? backstitchStartPoint;
   /// Most-recently-used thread IDs, most recent first. Max 5. Session-only.
@@ -75,7 +66,8 @@ class EditorState {
   final Map<String, Thread>? compositeThreadCache;
   final bool stitchMode;
   final bool blockMode;
-  final StitchViewMode stitchViewMode;
+  final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
+  final bool stitchBackMode;  // Back: greys normal stitches, backstitches shown in colour
   final String? stitchFocusThreadId;
   final ui.Image? referenceImage;
   final double referenceOpacity;
@@ -85,6 +77,10 @@ class EditorState {
   final bool isFileOpen;
   final List<SnippetPalette> snippetPalettes;
   final int snippetActivePaletteIndex;
+  /// Edge length of the eraser square (1 = single cell, 2 = 2×2, etc.).
+  final int eraserSize;
+  /// When true, erase mode uses flood-fill erase instead of the square eraser.
+  final bool fillEraseActive;
 
   /// True when the current file is in the native .stitchx format (or unsaved).
   bool get isNativeFormat {
@@ -99,8 +95,8 @@ class EditorState {
     this.currentTool = DrawingTool.fullStitch,
     this.drawingMode = DrawingMode.draw,
     this.selectedThreadId,
-    List<CrossStitchPattern> undoStack = const [],
-    List<CrossStitchPattern> redoStack = const [],
+    List<(CrossStitchPattern, List<SnippetPalette>)> undoStack = const [],
+    List<(CrossStitchPattern, List<SnippetPalette>)> redoStack = const [],
     this.isDirty = false,
     this.backstitchStartPoint,
     this.recentThreadIds = const [],
@@ -113,7 +109,8 @@ class EditorState {
     this.compositeThreadCache,
     this.stitchMode = false,
     this.blockMode = false,
-    this.stitchViewMode = StitchViewMode.normal,
+    this.stitchCrossMode = false,
+    this.stitchBackMode = false,
     this.stitchFocusThreadId,
     this.referenceImage,
     this.referenceOpacity = 0.5,
@@ -123,6 +120,8 @@ class EditorState {
     this.isFileOpen = false,
     this.snippetPalettes = const [],
     this.snippetActivePaletteIndex = 0,
+    this.eraserSize = 1,
+    this.fillEraseActive = false,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -202,8 +201,8 @@ class EditorState {
     DrawingTool? currentTool,
     DrawingMode? drawingMode,
     Object? selectedThreadId = _sentinel,
-    List<CrossStitchPattern>? undoStack,
-    List<CrossStitchPattern>? redoStack,
+    List<(CrossStitchPattern, List<SnippetPalette>)>? undoStack,
+    List<(CrossStitchPattern, List<SnippetPalette>)>? redoStack,
     bool? isDirty,
     Object? backstitchStartPoint = _sentinel,
     List<String>? recentThreadIds,
@@ -216,7 +215,8 @@ class EditorState {
     Object? compositeThreadCache = _sentinel,
     bool? stitchMode,
     bool? blockMode,
-    StitchViewMode? stitchViewMode,
+    bool? stitchCrossMode,
+    bool? stitchBackMode,
     Object? stitchFocusThreadId = _sentinel,
     Object? referenceImage = _sentinel,
     double? referenceOpacity,
@@ -226,6 +226,8 @@ class EditorState {
     bool? isFileOpen,
     List<SnippetPalette>? snippetPalettes,
     int? snippetActivePaletteIndex,
+    int? eraserSize,
+    bool? fillEraseActive,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -253,7 +255,8 @@ class EditorState {
           : compositeThreadCache as Map<String, Thread>?,
       stitchMode: stitchMode ?? this.stitchMode,
       blockMode: blockMode ?? this.blockMode,
-      stitchViewMode: stitchViewMode ?? this.stitchViewMode,
+      stitchCrossMode: stitchCrossMode ?? this.stitchCrossMode,
+      stitchBackMode: stitchBackMode ?? this.stitchBackMode,
       stitchFocusThreadId: stitchFocusThreadId == _sentinel
           ? this.stitchFocusThreadId
           : stitchFocusThreadId as String?,
@@ -271,6 +274,8 @@ class EditorState {
       isFileOpen: isFileOpen ?? this.isFileOpen,
       snippetPalettes: snippetPalettes ?? this.snippetPalettes,
       snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
+      eraserSize: eraserSize ?? this.eraserSize,
+      fillEraseActive: fillEraseActive ?? this.fillEraseActive,
     );
   }
 
@@ -406,10 +411,11 @@ class EditorNotifier extends Notifier<EditorState>
     if (!state.canUndo) return;
     final undoStack = [...state._undoStack];
     final redoStack = [...state._redoStack];
-    final previous = undoStack.removeLast();
-    redoStack.add(state.pattern);
+    final (prevPattern, prevPalettes) = undoStack.removeLast();
+    redoStack.add((state.pattern, state.snippetPalettes));
     state = state.copyWith(
-      pattern: previous,
+      pattern: prevPattern,
+      snippetPalettes: prevPalettes,
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
@@ -420,10 +426,11 @@ class EditorNotifier extends Notifier<EditorState>
     if (!state.canRedo) return;
     final undoStack = [...state._undoStack];
     final redoStack = [...state._redoStack];
-    final next = redoStack.removeLast();
-    undoStack.add(state.pattern);
+    final (nextPattern, nextPalettes) = redoStack.removeLast();
+    undoStack.add((state.pattern, state.snippetPalettes));
     state = state.copyWith(
-      pattern: next,
+      pattern: nextPattern,
+      snippetPalettes: nextPalettes,
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
@@ -433,8 +440,8 @@ class EditorNotifier extends Notifier<EditorState>
   // ─── Shared helpers (satisfy abstract declarations in mixins) ────────────────
 
   @override
-  List<CrossStitchPattern> _buildUndoStack() {
-    var stack = [...state._undoStack, state.pattern];
+  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack() {
+    var stack = [...state._undoStack, (state.pattern, state.snippetPalettes)];
     if (stack.length > _maxUndoDepth) {
       stack = stack.sublist(stack.length - _maxUndoDepth);
     }

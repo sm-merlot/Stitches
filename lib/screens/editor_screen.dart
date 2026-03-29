@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/dmc_colors.dart';
-import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
@@ -10,7 +8,8 @@ import '../services/file_service.dart';
 import '../utils/snackbars.dart';
 import 'export_dialog.dart';
 import '../widgets/editor_toolbar.dart';
-import '../widgets/layers_panel.dart';
+import '../widgets/right_sidebar.dart';
+import '../widgets/right_sidebar_colours_panel.dart';
 import '../widgets/pattern_canvas.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
@@ -135,10 +134,6 @@ class EditorScreen extends ConsumerWidget {
           notifier.setDrawingMode(DrawingMode.select);
           return KeyEventResult.handled;
         }
-        if (key == LogicalKeyboardKey.keyP || key == LogicalKeyboardKey.space) {
-          notifier.setDrawingMode(DrawingMode.pan);
-          return KeyEventResult.handled;
-        }
         if (key == LogicalKeyboardKey.escape) {
           // Clear selection first; if nothing to clear, exit stitch mode.
           if (state.selectionRect != null) {
@@ -177,8 +172,44 @@ class EditorScreen extends ConsumerWidget {
           notifier.copySelection();
           return KeyEventResult.handled;
         }
-        if (key == LogicalKeyboardKey.keyV) {
+        if (!shift && key == LogicalKeyboardKey.keyV) {
           notifier.enterPasteMode();
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.keyH) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.flipSelectionH();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.flipClipboardH();
+          }
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.keyV) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.flipSelectionV();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.flipClipboardV();
+          }
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.bracketRight) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.rotateSelectionCW();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.rotateClipboardCW();
+          }
+          return KeyEventResult.handled;
+        }
+        if (shift && key == LogicalKeyboardKey.bracketLeft) {
+          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
+            notifier.rotateSelectionCW();
+            notifier.rotateSelectionCW();
+            notifier.rotateSelectionCW();
+          } else if (state.drawingMode == DrawingMode.paste) {
+            notifier.rotateClipboardCW();
+            notifier.rotateClipboardCW();
+            notifier.rotateClipboardCW();
+          }
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -190,8 +221,6 @@ class EditorScreen extends ConsumerWidget {
           notifier.setDrawingMode(DrawingMode.draw);
         case LogicalKeyboardKey.keyE:
           notifier.setDrawingMode(DrawingMode.erase);
-        case LogicalKeyboardKey.keyP:
-          notifier.setDrawingMode(DrawingMode.pan);
         case LogicalKeyboardKey.space:
           notifier.setDrawingMode(DrawingMode.pan);
         case LogicalKeyboardKey.digit1:
@@ -211,7 +240,8 @@ class EditorScreen extends ConsumerWidget {
         case LogicalKeyboardKey.digit8:
           notifier.setTool(DrawingTool.fill);
         case LogicalKeyboardKey.digit9:
-          notifier.setTool(DrawingTool.fillErase);
+          notifier.setDrawingMode(DrawingMode.erase);
+          if (!state.fillEraseActive) notifier.toggleFillErase();
         case LogicalKeyboardKey.keyC:
           notifier.setDrawingMode(DrawingMode.colorPicker);
         case LogicalKeyboardKey.keyS:
@@ -337,23 +367,11 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Keep screen on — only shown in stitch mode
+            // Stitch mode actions — Demo + Screen Lock
             if (state.stitchMode) ...[
+              StitchDemoButton(state: state),
+              _ScreenLockButton(ref: ref),
               const SizedBox(width: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Checkbox(
-                    value: ref.watch(settingsProvider).keepScreenOn,
-                    onChanged: (v) => ref
-                        .read(settingsProvider.notifier)
-                        .setKeepScreenOn(v ?? false),
-                  ),
-                  const Text('Keep screen on',
-                      style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 8),
-                ],
-              ),
             ],
           ],
         ),
@@ -376,13 +394,13 @@ class EditorScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const LayersPanel(),
+              const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
             ],
           ),
         ),
         floatingActionButton: state.isFileOpen
             ? Padding(
-                padding: const EdgeInsets.only(bottom: 58),
+                padding: EdgeInsets.only(bottom: state.stitchMode ? 16 : 58),
                 child: FloatingActionButton.extended(
                   onPressed: () =>
                       ref.read(editorProvider.notifier).toggleStitchMode(),
@@ -401,8 +419,6 @@ class EditorScreen extends ConsumerWidget {
               )
             : null,
         floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-        endDrawer: const _StitchPalettePanel(),
-        endDrawerEnableOpenDragGesture: false,
       ),
     );
   }
@@ -480,110 +496,6 @@ class _MenuRow extends StatelessWidget {
     );
   }
 }
-
-// ─── Stitch mode palette side panel ─────────────────────────────────────────
-
-class _StitchPalettePanel extends ConsumerWidget {
-  const _StitchPalettePanel();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(editorProvider);
-    final useDmc = ref.watch(settingsProvider).useDmc;
-    final theme = Theme.of(context);
-
-    // In stitch mode, always show composite threads.
-    final List<Thread> threads;
-    if (state.stitchMode && state.compositeThreadCache != null && state.compositeThreadCache!.isNotEmpty) {
-      final unique = <String, Thread>{};
-      for (final t in state.compositeThreadCache!.values) {
-        unique[t.dmcCode] = t;
-      }
-      // Also include source threads not in composite map (e.g. non-FullStitch only threads)
-      for (final t in state.pattern.threads) {
-        unique.putIfAbsent(t.dmcCode, () => t);
-      }
-      threads = unique.values.toList();
-    } else {
-      threads = state.pattern.threads;
-    }
-
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  Text('Threads', style: theme.textTheme.titleMedium),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            if (threads.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('No threads yet.',
-                    style: TextStyle(color: Colors.grey)),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  itemCount: threads.length,
-                  itemBuilder: (_, i) {
-                    final t = threads[i];
-                    final displayCode = useDmc
-                        ? t.dmcCode
-                        : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
-                    final textColor = t.color.computeLuminance() > 0.35
-                        ? Colors.black
-                        : Colors.white;
-                    return ListTile(
-                      dense: true,
-                      leading: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: t.color,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                              color: Colors.grey.shade400, width: 1),
-                        ),
-                        alignment: Alignment.center,
-                        child: t.symbol.isNotEmpty
-                            ? Text(
-                                t.symbol,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: textColor,
-                                  height: 1.0,
-                                ),
-                              )
-                            : null,
-                      ),
-                      title: Text('$displayCode – ${t.name}',
-                          style: const TextStyle(fontSize: 13)),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {
@@ -613,6 +525,36 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
+
+// ─── Screen lock toggle button ────────────────────────────────────────────────
+
+class _ScreenLockButton extends ConsumerWidget {
+  final WidgetRef ref;
+  const _ScreenLockButton({required this.ref});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final keepOn = ref.watch(settingsProvider).keepScreenOn;
+    return Tooltip(
+      message: keepOn ? 'Screen lock: off' : 'Screen lock: on',
+      child: IconButton(
+        isSelected: keepOn,
+        icon: const Icon(Icons.screen_lock_portrait_outlined),
+        selectedIcon: const Icon(Icons.screen_lock_portrait),
+        style: keepOn
+            ? IconButton.styleFrom(
+                backgroundColor: theme.colorScheme.primaryContainer,
+                foregroundColor: theme.colorScheme.onPrimaryContainer,
+              )
+            : null,
+        onPressed: () => ref
+            .read(settingsProvider.notifier)
+            .setKeepScreenOn(!keepOn),
+      ),
+    );
+  }
+}
 
 // ─── Import format banner ─────────────────────────────────────────────────────
 

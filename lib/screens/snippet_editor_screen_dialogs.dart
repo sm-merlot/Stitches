@@ -1,5 +1,132 @@
 part of 'snippet_editor_screen.dart';
 
+// ─── Resize dialog (for editing existing snippets) ────────────────────────
+
+class _ResizeSnippetEditorDialog extends StatefulWidget {
+  final int currentWidth;
+  final int currentHeight;
+  const _ResizeSnippetEditorDialog({
+    required this.currentWidth,
+    required this.currentHeight,
+  });
+
+  @override
+  State<_ResizeSnippetEditorDialog> createState() =>
+      _ResizeSnippetEditorDialogState();
+}
+
+class _ResizeSnippetEditorDialogState
+    extends State<_ResizeSnippetEditorDialog> {
+  late final TextEditingController _wCtrl;
+  late final TextEditingController _hCtrl;
+  SnippetResizeMode _mode = SnippetResizeMode.clip;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _wCtrl =
+        TextEditingController(text: widget.currentWidth.toString());
+    _hCtrl =
+        TextEditingController(text: widget.currentHeight.toString());
+  }
+
+  @override
+  void dispose() {
+    _wCtrl.dispose();
+    _hCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final w = int.tryParse(_wCtrl.text.trim());
+    final h = int.tryParse(_hCtrl.text.trim());
+    if (w == null || h == null || w <= 0 || h <= 0) {
+      setState(
+          () => _error = 'Enter positive integers for width and height.');
+      return;
+    }
+    Navigator.of(context).pop((w, h, _mode));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Resize snippet'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+              'Current size: ${widget.currentWidth} × ${widget.currentHeight}',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _wCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly
+                  ],
+                  decoration: const InputDecoration(
+                      labelText: 'Width',
+                      border: OutlineInputBorder()),
+                  onSubmitted: (_) => _submit(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _hCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly
+                  ],
+                  decoration: const InputDecoration(
+                      labelText: 'Height',
+                      border: OutlineInputBorder()),
+                  onSubmitted: (_) => _submit(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (final mode in SnippetResizeMode.values)
+            RadioListTile<SnippetResizeMode>(
+              dense: true,
+              title: Text(_modeLabel(mode)),
+              value: mode,
+              groupValue: _mode,
+              onChanged: (v) => setState(() => _mode = v!),
+            ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!,
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12)),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: _submit, child: const Text('Resize')),
+      ],
+    );
+  }
+
+  String _modeLabel(SnippetResizeMode mode) => switch (mode) {
+        SnippetResizeMode.clip => 'Clip (drop stitches outside new size)',
+        SnippetResizeMode.scale => 'Scale (stretch/compress stitches)',
+        SnippetResizeMode.expand => 'Expand (keep stitches in place)',
+      };
+}
+
 // ─── Snippet picker sheet ──────────────────────────────────────────────────
 
 class _SnippetPickerSheet extends ConsumerWidget {
@@ -198,11 +325,15 @@ class _PaletteManagerSheetState extends ConsumerState<_PaletteManagerSheet> {
             final state = ref.read(editorProvider);
             if (state.snippetPalettes.isEmpty) return;
             final primary = state.snippetPalettes[0];
+            final existingCount = state.snippetPalettes.length;
             final result = await showDialog<SnippetPalette>(
               context: context,
               builder: (dialogContext) => UncontrolledProviderScope(
                 container: ProviderScope.containerOf(context),
-                child: _AddPaletteDialog(primaryPalette: primary),
+                child: _AddPaletteDialog(
+                  primaryPalette: primary,
+                  existingCount: existingCount,
+                ),
               ),
             );
             if (result != null) {
@@ -307,7 +438,8 @@ class _PaletteRowState extends State<_PaletteRow> {
 
 class _AddPaletteDialog extends StatefulWidget {
   final SnippetPalette primaryPalette;
-  const _AddPaletteDialog({required this.primaryPalette});
+  final int existingCount;
+  const _AddPaletteDialog({required this.primaryPalette, required this.existingCount});
 
   @override
   State<_AddPaletteDialog> createState() => _AddPaletteDialogState();
@@ -320,6 +452,7 @@ class _AddPaletteDialogState extends State<_AddPaletteDialog> {
   @override
   void initState() {
     super.initState();
+    _nameCtrl.text = 'Palette ${widget.existingCount + 1}';
     _picked = List.filled(widget.primaryPalette.threads.length, null);
   }
 

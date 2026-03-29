@@ -54,6 +54,72 @@ class _ToolbarButton extends StatelessWidget {
   }
 }
 
+// ─── Eraser size button ────────────────────────────────────────────────────────
+// Looks like _ToolbarButton but opens a popup list of sizes 1–10.
+
+class _EraserSizeButton extends StatelessWidget {
+  final int eraserSize;
+  final bool selected;
+  final ValueChanged<int> onSelected;
+
+  const _EraserSizeButton({
+    required this.eraserSize,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final bgColor = selected ? primary : Colors.transparent;
+    final borderColor = selected ? primary : Colors.grey.shade300;
+    final textColor = selected ? Colors.white : Colors.grey.shade600;
+
+    return PopupMenuButton<int>(
+      tooltip: '',
+      onSelected: onSelected,
+      offset: const Offset(0, 36),
+      itemBuilder: (_) => [
+        for (var sz = 1; sz <= 10; sz++)
+          PopupMenuItem<int>(
+            value: sz,
+            child: Text(
+              '$sz',
+              style: TextStyle(
+                fontWeight: sz == eraserSize ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+      ],
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        width: 50,
+        height: 34,
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: borderColor, width: 1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '$eraserSize',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, size: 14, color: textColor),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Stitch icon painter ──────────────────────────────────────────────────────
 // Single painter + six top-level draw functions replace the old per-type classes.
 
@@ -176,4 +242,26 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
     ..strokeWidth = 0.8;
   canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
   canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
+}
+
+// ─── Save as snippet ──────────────────────────────────────────────────────────
+
+void _saveAsSnippet(BuildContext context, WidgetRef ref) {
+  ref.read(editorProvider.notifier).saveSelectionAsSnippet('');
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    SnackBar(
+      content: const Text('Saved as snippet'),
+      duration: const Duration(seconds: 3),
+      action: SnackBarAction(
+        label: 'Open',
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const SnippetsPanel(),
+        ),
+      ),
+    ),
+  );
+  Future.delayed(const Duration(seconds: 3), messenger.hideCurrentSnackBar);
 }

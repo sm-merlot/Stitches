@@ -5,7 +5,6 @@ import '../models/layer.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
-import '../providers/editor/editor_provider.dart' show StitchViewMode;
 import '../services/sprite_importer.dart';
 
 part 'canvas_painter_drawing_methods.dart';
@@ -22,7 +21,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   @override final Color aidaColor;
   final bool stitchMode;
   final bool blockMode;
-  final StitchViewMode stitchViewMode;
+  final bool stitchCrossMode;
+  final bool stitchBackMode;
   final String? stitchFocusThreadId;
   final ui.Image? referenceImage;
   final double referenceOpacity;
@@ -47,7 +47,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     required this.aidaColor,
     this.stitchMode = false,
     this.blockMode = false,
-    this.stitchViewMode = StitchViewMode.normal,
+    this.stitchCrossMode = false,
+    this.stitchBackMode = false,
     this.stitchFocusThreadId,
     this.referenceImage,
     this.referenceOpacity = 0.5,
@@ -616,24 +617,20 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   Color? _resolveStitchColor(String threadId, Color original,
       {required bool isCrossStitch}) {
     if (!stitchMode) return original;
-    if (stitchViewMode == StitchViewMode.greyed) {
-      if (isCrossStitch) return _greyColor(original);
-      final hasFocus = stitchFocusThreadId != null;
-      if (!hasFocus || stitchFocusThreadId == threadId) return original;
-      return _greyColor(original);
-    }
+
     final hasFocus = stitchFocusThreadId != null;
     final isFocused = !hasFocus || stitchFocusThreadId == threadId;
+
+    // Focus: unfocused stitches always grey
     if (hasFocus && !isFocused) return _greyColor(original);
-    if (hasFocus && isFocused) {
-      if (stitchViewMode == StitchViewMode.hidden && !isCrossStitch) return null;
-      return original;
-    }
-    return switch (stitchViewMode) {
-      StitchViewMode.normal => original,
-      StitchViewMode.hidden => isCrossStitch ? original : null,
-      StitchViewMode.greyed => original,
-    };
+
+    // Back mode: grey normal stitches (isCrossStitch = true means non-backstitch)
+    if (stitchBackMode && isCrossStitch) return _greyColor(original);
+
+    // Cross mode: hide backstitches
+    if (stitchCrossMode && !isCrossStitch) return null;
+
+    return original;
   }
 
   static Color _greyColor(Color c) {
@@ -651,7 +648,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.aidaColor != aidaColor ||
       old.stitchMode != stitchMode ||
       old.blockMode != blockMode ||
-      old.stitchViewMode != stitchViewMode ||
+      old.stitchCrossMode != stitchCrossMode ||
+      old.stitchBackMode != stitchBackMode ||
       old.stitchFocusThreadId != stitchFocusThreadId ||
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||

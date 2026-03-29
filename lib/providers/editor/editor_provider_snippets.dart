@@ -7,7 +7,7 @@ part of 'editor_provider.dart';
 mixin SnippetsMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
-  List<CrossStitchPattern> _buildUndoStack();
+  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
   String _serializeClipboard(List<Thread> threads, List<Stitch> stitches);
 
   // cancelSelection is provided by SelectionMixin (mixed in on EditorNotifier).
@@ -374,6 +374,45 @@ mixin SnippetsMixin on Notifier<EditorState> {
         .map((p) => p.id == paletteId ? p.copyWith(name: name) : p)
         .toList();
     state = state.copyWith(snippetPalettes: newPalettes);
+  }
+
+  void setSnippetPaletteThreadColor(
+      int paletteIndex, int slotIndex, Thread newThread) {
+    final palettes = List<SnippetPalette>.from(state.snippetPalettes);
+    if (paletteIndex < 0 || paletteIndex >= palettes.length) return;
+    final threads = List<Thread>.from(palettes[paletteIndex].threads);
+    if (slotIndex < 0 || slotIndex >= threads.length) return;
+    threads[slotIndex] = newThread;
+    palettes[paletteIndex] = palettes[paletteIndex].copyWith(threads: threads);
+    // Non-zero palettes don't modify the pattern; push a palette-only undo entry.
+    if (paletteIndex > 0) {
+      state = state.copyWith(
+        snippetPalettes: palettes,
+        undoStack: _buildUndoStack(),
+        redoStack: [],
+      );
+    } else {
+      state = state.copyWith(snippetPalettes: palettes);
+    }
+  }
+
+  void deleteSnippetPaletteByIndex(int index) {
+    final palettes = List<SnippetPalette>.from(state.snippetPalettes);
+    if (palettes.length <= 1 || index < 0 || index >= palettes.length) return;
+    palettes.removeAt(index);
+    final activeIdx = state.snippetActivePaletteIndex;
+    state = state.copyWith(
+      snippetPalettes: palettes,
+      snippetActivePaletteIndex:
+          activeIdx >= palettes.length ? palettes.length - 1 : activeIdx,
+    );
+  }
+
+  void renameSnippetPaletteByIndex(int index, String name) {
+    final palettes = List<SnippetPalette>.from(state.snippetPalettes);
+    if (index < 0 || index >= palettes.length) return;
+    palettes[index] = palettes[index].copyWith(name: name);
+    state = state.copyWith(snippetPalettes: palettes);
   }
 
   void reorderSnippetPaletteLocal(int oldIndex, int newIndex) {
