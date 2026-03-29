@@ -38,13 +38,19 @@ jobs:
             -e 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "-";/g' \
             -e '/DEVELOPMENT_TEAM = S5X6FCGJT8;/d' \
             macos/Runner.xcodeproj/project.pbxproj
+          # Remove keychain-access-groups entitlement: $(AppIdentifierPrefix) doesn't
+          # expand with ad-hoc signing and causes launch failure.
+          plutil -remove 'keychain-access-groups' macos/Runner/Release.entitlements
 
       - run: flutter build macos --release --dart-define-from-file=secrets.json
 
       - name: Zip app bundle
+        # ditto preserves macOS symlinks and resource forks that zip -r can lose,
+        # which are required for Flutter's versioned framework bundles.
         run: |
-          cd build/macos/Build/Products/Release
-          zip -r stitchx-macos-arm64.zip stitchx.app
+          ditto -c -k --keepParent \
+            build/macos/Build/Products/Release/stitchx.app \
+            build/macos/Build/Products/Release/stitchx-macos-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
