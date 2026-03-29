@@ -212,6 +212,17 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
   }
 
+  /// Changes the symbol displayed on a thread's swatch.
+  void setThreadSymbol(String dmcCode, String symbol) {
+    final threads = state.pattern.threads
+        .map((t) => t.dmcCode == dmcCode ? t.copyWith(symbol: symbol) : t)
+        .toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(threads: threads),
+      isDirty: true,
+    );
+  }
+
   /// Same as [replaceThread] but operates on a snippet.
   void replaceSnippetThread(String snippetId, String oldDmcCode,
       String newDmcCode, Color newColor, String newName) {
