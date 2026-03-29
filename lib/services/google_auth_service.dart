@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,44 +9,79 @@ import '../secrets.dart';
 
 /// Singleton service for Google OAuth2 authentication.
 ///
-/// Desktop (macOS/Windows/Linux): loopback redirect via googleapis_auth.
-/// Mobile (Android/iOS): custom-scheme redirect via flutter_web_auth_2.
-///
-/// The custom-scheme redirect URI `stitchx://oauth2redirect` must be added
-/// to the authorized redirect URIs in your Google Cloud Console OAuth client.
+/// macOS/Windows: loopback redirect via googleapis_auth (Desktop OAuth client).
+/// iOS/Android:   google_sign_in v6 — traditional GoogleSignInClient, no Credential Manager.
 class GoogleAuthService {
   GoogleAuthService._();
   static final GoogleAuthService instance = GoogleAuthService._();
 
   static const _keyRefreshToken = 'google_refresh_token';
   static const _keyEmail = 'google_email';
-
   static const _driveScope = 'https://www.googleapis.com/auth/drive';
 
-  // Used for the mobile OAuth redirect — must be registered in Google Cloud Console.
-  static const _mobileRedirectScheme = 'stitchx';
-  static const _mobileRedirectUri = '$_mobileRedirectScheme://oauth2redirect';
+  bool get _isMobile =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
-  ClientId get _clientId => ClientId(kGoogleClientId, kGoogleClientSecret);
+  // ---------------------------------------------------------------------------
+  // Mobile — google_sign_in v6
+  // ---------------------------------------------------------------------------
 
-  /// True when credentials were injected via --dart-define-from-file.
-  bool get isConfigured =>
-      kGoogleClientId.isNotEmpty && kGoogleClientSecret.isNotEmpty;
+  GoogleSignIn? _googleSignIn;
 
-  /// Returns true if a refresh token is stored (i.e. the user is signed in).
+  GoogleSignIn get _signIn {
+    _googleSignIn ??= GoogleSignIn(
+      scopes: [_driveScope],
+      clientId: defaultTargetPlatform == TargetPlatform.iOS
+          ? kGoogleIosClientId
+          : null,
+      // Android: web client ID required so play-services-auth can issue tokens
+      // without google-services.json. Not needed on iOS (clientId covers it).
+      serverClientId: defaultTargetPlatform == TargetPlatform.android
+          ? kGoogleWebClientId
+          : null,
+    );
+    return _googleSignIn!;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Desktop — googleapis_auth
+  // ---------------------------------------------------------------------------
+
+  ClientId get _desktopClientId =>
+      ClientId(kGoogleClientId, kGoogleClientSecret);
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  bool get isConfigured {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return kGoogleIosClientId.isNotEmpty;
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return true; // Android verified via package name + SHA-1 at Cloud Console
+    }
+    return kGoogleClientId.isNotEmpty && kGoogleClientSecret.isNotEmpty;
+  }
+
   Future<bool> isSignedIn() async {
+    if (_isMobile) return _signIn.isSignedIn();
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_keyRefreshToken);
     return token != null && token.isNotEmpty;
   }
 
-  /// Returns the stored account identifier, or null if not signed in.
   Future<String?> accountEmail() async {
+    if (_isMobile) {
+      final account =
+          _signIn.currentUser ?? await _signIn.signInSilently();
+      return account?.email;
+    }
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyEmail);
   }
 
-  /// Runs the OAuth2 sign-in flow appropriate for the current platform.
   Future<void> signIn() async {
     if (!isConfigured) {
       throw Exception(
@@ -55,28 +90,49 @@ class GoogleAuthService {
         'then run:\n  flutter run --dart-define-from-file=secrets.json',
       );
     }
-    if (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS) {
-      await _signInMobile();
+    if (_isMobile) {
+      final account = await _signIn.signIn();
+      if (account == null) throw Exception('Sign-in cancelled.');
     } else {
       await _signInDesktop();
     }
   }
 
-  /// Desktop: loopback redirect — googleapis_auth opens a localhost server.
+  Future<void> signOut() async {
+    if (_isMobile) {
+      await _signIn.signOut();
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyRefreshToken);
+      await prefs.remove(_keyEmail);
+    }
+  }
+
+  Future<http.Client?> authClient() async {
+    if (_isMobile) {
+      final account =
+          _signIn.currentUser ?? await _signIn.signInSilently();
+      if (account == null) return null;
+      return _GoogleSignInV6Client(account);
+    }
+    return _desktopAuthClient();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Desktop
+  // ---------------------------------------------------------------------------
+
   Future<void> _signInDesktop() async {
     final client = http.Client();
     try {
       final credentials = await obtainAccessCredentialsViaUserConsent(
-        _clientId,
+        _desktopClientId,
         [_driveScope],
         client,
-        (url) => launchUrl(
-          Uri.parse(url),
-          mode: LaunchMode.externalApplication,
-        ),
+        (url) => launchUrl(Uri.parse(url),
+            mode: LaunchMode.externalApplication),
       );
-      await _saveCredentials(
+      await _saveDesktopCredentials(
         refreshToken: credentials.refreshToken,
         idToken: credentials.idToken,
       );
@@ -85,53 +141,19 @@ class GoogleAuthService {
     }
   }
 
-  /// Mobile: custom-scheme redirect via Chrome Custom Tabs / ASWebAuthenticationSession.
-  Future<void> _signInMobile() async {
-    final authUrl = Uri.https('accounts.google.com', '/o/oauth2/auth', {
-      'client_id': kGoogleClientId,
-      'redirect_uri': _mobileRedirectUri,
-      'response_type': 'code',
-      'scope': _driveScope,
-      'access_type': 'offline',
-      'prompt': 'consent',
-    });
+  Future<http.Client?> _desktopAuthClient() async {
+    final prefs = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString(_keyRefreshToken);
+    if (refreshToken == null || refreshToken.isEmpty) return null;
 
-    final result = await FlutterWebAuth2.authenticate(
-      url: authUrl.toString(),
-      callbackUrlScheme: _mobileRedirectScheme,
-    );
-
-    final code = Uri.parse(result).queryParameters['code'];
-    if (code == null) {
-      throw Exception('No auth code received from Google.');
-    }
-
-    // Exchange authorization code for tokens.
-    final tokenResponse = await http.post(
-      Uri.parse('https://oauth2.googleapis.com/token'),
-      body: {
-        'client_id': kGoogleClientId,
-        'client_secret': kGoogleClientSecret,
-        'code': code,
-        'redirect_uri': _mobileRedirectUri,
-        'grant_type': 'authorization_code',
-      },
-    );
-
-    if (tokenResponse.statusCode != 200) {
-      throw Exception(
-        'Token exchange failed (${tokenResponse.statusCode}): ${tokenResponse.body}',
-      );
-    }
-
-    final json = jsonDecode(tokenResponse.body) as Map<String, dynamic>;
-    await _saveCredentials(
-      refreshToken: json['refresh_token'] as String?,
-      idToken: json['id_token'] as String?,
-    );
+    final expiredToken =
+        AccessToken('Bearer', 'expired', DateTime.now().toUtc());
+    final credentials =
+        AccessCredentials(expiredToken, refreshToken, [_driveScope]);
+    return autoRefreshingClient(_desktopClientId, credentials, http.Client());
   }
 
-  Future<void> _saveCredentials({
+  Future<void> _saveDesktopCredentials({
     required String? refreshToken,
     required String? idToken,
   }) async {
@@ -151,9 +173,7 @@ class GoogleAuthService {
     try {
       final parts = idToken.split('.');
       if (parts.length != 3) return null;
-      String payload = parts[1]
-          .replaceAll('-', '+')
-          .replaceAll('_', '/');
+      String payload = parts[1].replaceAll('-', '+').replaceAll('_', '/');
       while (payload.length % 4 != 0) {
         payload += '=';
       }
@@ -163,31 +183,28 @@ class GoogleAuthService {
       return null;
     }
   }
+}
 
-  /// Clears stored tokens.
-  Future<void> signOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyRefreshToken);
-    await prefs.remove(_keyEmail);
+// ---------------------------------------------------------------------------
+// HTTP client for mobile — delegates to google_sign_in v6 authHeaders
+// ---------------------------------------------------------------------------
+
+class _GoogleSignInV6Client extends http.BaseClient {
+  final GoogleSignInAccount _account;
+  final http.Client _inner = http.Client();
+
+  _GoogleSignInV6Client(this._account);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final headers = await _account.authHeaders;
+    request.headers.addAll(headers);
+    return _inner.send(request);
   }
 
-  /// Returns an auto-refreshing HTTP client, or null if not signed in.
-  Future<http.Client?> authClient() async {
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString(_keyRefreshToken);
-    if (refreshToken == null || refreshToken.isEmpty) return null;
-
-    final expiredToken = AccessToken(
-      'Bearer',
-      'expired',
-      DateTime.now().toUtc(),
-    );
-    final credentials = AccessCredentials(
-      expiredToken,
-      refreshToken,
-      [_driveScope],
-    );
-
-    return autoRefreshingClient(_clientId, credentials, http.Client());
+  @override
+  void close() {
+    _inner.close();
+    super.close();
   }
 }

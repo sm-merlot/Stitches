@@ -48,7 +48,7 @@ case "$cmd" in
     ;;
 
   android)
-    exec $FLUTTER run -d android "$@"
+    exec $FLUTTER run -d 19181FDF600G2R --dart-define-from-file=secrets.json --debug "$@"
     ;;
 
   cli)

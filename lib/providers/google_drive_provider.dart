@@ -91,6 +91,7 @@ class DriveNotifier extends Notifier<DriveState> {
       state = state.copyWith(
         status: DriveStatus.error,
         error: e.toString(),
+        isConfigured: configured,
       );
     }
   }
