@@ -30,6 +30,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   Offset _gestureStartOffset = Offset.zero;
   double _pinchStartDistance = 0.0;
   Offset _pinchStartCenter = Offset.zero;
+  // True while any gesture sequence that included ≥2 fingers is still active
+  // (i.e. at least one finger from the pinch is still down).  Single-finger
+  // draw/select/paste actions are suppressed during this window so that the
+  // residual finger from a pinch never accidentally adds stitches.
+  // Reset to false only when _activePointers becomes empty (all fingers up).
+  bool _hadMultiTouch = false;
 
   // Trackpad pinch-to-zoom (macOS PointerPanZoom events)
   double _trackpadStartScale = 1.0;
@@ -635,8 +641,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
-    // Touch — handle special modes before pan/pinch setup
-    if (_activePointers.length == 1) {
+    // Touch — handle special modes before pan/pinch setup.
+    // Skip drawing/select/paste setup if this finger is the residual from a
+    // pinch — it should only pan until all fingers are lifted.
+    if (_activePointers.length == 1 && !_hadMultiTouch) {
       final mode = ref.read(editorProvider).drawingMode;
       if (mode == DrawingMode.select) {
         final editorState = ref.read(editorProvider);
@@ -680,6 +688,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_activePointers.length == 1) {
       _gestureStartOffset = _panOffset;
     } else if (_activePointers.length == 2) {
+      _hadMultiTouch = true;
       final pts = _activePointers.values.toList();
       _pinchStartDistance = (pts[0] - pts[1]).distance;
       _pinchStartCenter = (pts[0] + pts[1]) / 2;
@@ -747,7 +756,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     }
 
     // ── Touch gestures ───────────────────────────────────────────────────────
-    if (_activePointers.length == 2) {
+    if (_activePointers.length >= 2) {
+      _hadMultiTouch = true;
       // Pinch to zoom + two-finger pan
       final pts = _activePointers.values.toList();
       final currentDist = (pts[0] - pts[1]).distance;
@@ -765,6 +775,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         _scheduleRebuild();
       }
     } else if (_activePointers.length == 1) {
+      if (_hadMultiTouch) {
+        // Residual finger from a pinch — pan only, never draw.
+        _pan(event.delta);
+        return;
+      }
       final mode = ref.read(editorProvider).drawingMode;
       if (mode == DrawingMode.select) {
         final cell = _screenToSelCell(event.localPosition);
@@ -849,8 +864,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
-    // Double-tap (touch only) → undo
-    if (event.kind == PointerDeviceKind.touch && wasSinglePointer) {
+    // Double-tap (touch only) → undo; single-tap → draw.
+    // Skip both if this finger was part of a multi-touch gesture.
+    if (event.kind == PointerDeviceKind.touch && wasSinglePointer && !_hadMultiTouch) {
       final timeSinceLast = _lastTouchUpTime != null
           ? now.difference(_lastTouchUpTime!)
           : const Duration(seconds: 1);
@@ -873,7 +889,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     }
 
     _activePointers.remove(event.pointer);
-    if (_activePointers.isEmpty) _pinchStartDistance = 0;
+    if (_activePointers.isEmpty) {
+      _pinchStartDistance = 0;
+      _hadMultiTouch = false; // all fingers up — next touch starts fresh
+    }
   }
 
   // ─── Trackpad pinch-to-zoom (macOS) ──────────────────────────────────────
