@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+### Patch Changes
+
+- 9f3a2d8: fix macos build
+
 ## 0.1.1
 
 ### Patch Changes
