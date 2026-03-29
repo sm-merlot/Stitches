@@ -574,6 +574,10 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(blockMode: !state.blockMode);
   }
 
+  void toggleCanvasSelectionMode() {
+    state = state.copyWith(canvasSelectionMode: !state.canvasSelectionMode);
+  }
+
   void toggleStitchMode() {
     final entering = !state.stitchMode;
     state = state.copyWith(

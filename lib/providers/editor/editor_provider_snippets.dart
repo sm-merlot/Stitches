@@ -217,12 +217,21 @@ mixin SnippetsMixin on Notifier<EditorState> {
         );
         return false;
       }
-      final inSel = state.activeLayer.stitches
-          .where((s) => EditorState.isStitchInRect(s, rect))
-          .toList();
+      final List<Stitch> inSel;
+      if (state.canvasSelectionMode) {
+        inSel = state.pattern.layers
+            .where((l) => l.visible)
+            .expand((l) => l.stitches.where((s) => EditorState.isStitchInRect(s, rect)))
+            .toList();
+      } else {
+        inSel = state.activeLayer.stitches
+            .where((s) => EditorState.isStitchInRect(s, rect))
+            .toList();
+      }
       if (inSel.isEmpty) {
         state = state.copyWith(
-          pendingCanvasWarning: kWarnNothingToSave,
+          pendingCanvasWarning: kWarnNothingToSave +
+              (state.canvasSelectionMode ? '' : kLayerHint),
         );
         return false;
       }

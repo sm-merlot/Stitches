@@ -598,7 +598,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final inStitchMode = editorState.stitchMode;
         if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           if (editorState.selectedStitches.isEmpty) {
-            _showWarningBanner(kWarnNothingToMove);
+            _showWarningBanner(kWarnNothingToMove +
+                (editorState.canvasSelectionMode ? '' : kLayerHint));
           } else {
             setState(() {
               _isMovingSelection = true;
@@ -644,7 +645,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final inStitchMode = editorState.stitchMode;
         if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           if (editorState.selectedStitches.isEmpty) {
-            _showWarningBanner(kWarnNothingToMove);
+            _showWarningBanner(kWarnNothingToMove +
+                (editorState.canvasSelectionMode ? '' : kLayerHint));
           } else {
             setState(() {
               _isMovingSelection = true;

@@ -229,6 +229,32 @@ class EditorToolbar extends ConsumerWidget {
                   // Buttons always tappable; look disabled and show a canvas warning when no selection.
                   if (state.drawingMode == DrawingMode.select) ...[
                     Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      child: Tooltip(
+                        message: state.canvasSelectionMode
+                            ? 'Selecting all visible layers'
+                            : 'Selecting active layer only',
+                        child: IconButton(
+                          iconSize: 20,
+                          visualDensity: VisualDensity.compact,
+                          style: state.canvasSelectionMode
+                              ? ButtonStyle(
+                                  backgroundColor: WidgetStateProperty.all(
+                                      theme.colorScheme.primaryContainer),
+                                )
+                              : null,
+                          icon: Icon(
+                            Icons.layers_outlined,
+                            color: state.canvasSelectionMode
+                                ? theme.colorScheme.onPrimaryContainer
+                                : null,
+                          ),
+                          onPressed: () => notifier.toggleCanvasSelectionMode(),
+                        ),
+                      ),
+                    ),
+                    vDivider,
+                    Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Builder(builder: (context) {
                         final hasRect = state.selectionRect != null;

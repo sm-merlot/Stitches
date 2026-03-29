@@ -35,6 +35,10 @@ mixin SelectionMixin on Notifier<EditorState> {
     }
   }
 
+  // Appends the layer hint unless canvas-selection mode is active.
+  String _layerWarn(String base) =>
+      state.canvasSelectionMode ? base : base + kLayerHint;
+
   // ─── Selection management ─────────────────────────────────────────────────
 
   void setSelectionRect(Rect? rect) {
@@ -56,13 +60,19 @@ mixin SelectionMixin on Notifier<EditorState> {
       warnNoSelection();
       return;
     }
-    final inSel = state.activeLayer.stitches
-        .where((s) => EditorState.isStitchInRect(s, rect))
-        .toList();
+    final List<Stitch> inSel;
+    if (state.canvasSelectionMode) {
+      inSel = state.pattern.layers
+          .where((l) => l.visible)
+          .expand((l) => l.stitches.where((s) => EditorState.isStitchInRect(s, rect)))
+          .toList();
+    } else {
+      inSel = state.activeLayer.stitches
+          .where((s) => EditorState.isStitchInRect(s, rect))
+          .toList();
+    }
     if (inSel.isEmpty) {
-      state = state.copyWith(
-        pendingCanvasWarning: kWarnNothingToCopy,
-      );
+      state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToCopy));
       return;
     }
     final clips = inSel
@@ -138,13 +148,45 @@ mixin SelectionMixin on Notifier<EditorState> {
     if (rect == null) return;
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
+    final newRect = Rect.fromLTWH(
+      (rect.left + dx).clamp(0, maxX.toDouble()),
+      (rect.top + dy).clamp(0, maxY.toDouble()),
+      rect.width,
+      rect.height,
+    );
+    if (state.canvasSelectionMode) {
+      final hasAny = state.pattern.layers
+          .where((l) => l.visible)
+          .any((l) => l.stitches.any((s) => EditorState.isStitchInRect(s, rect)));
+      if (!hasAny) {
+        state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToMove));
+        return;
+      }
+      final newPattern = state.pattern.mapLayers((layer) {
+        if (!layer.visible) return layer;
+        final inS = layer.stitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
+        if (inS.isEmpty) return layer;
+        var remaining = layer.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList();
+        for (final s in inS) {
+          final moved = EditorState.offsetStitch(s, dx, dy);
+          if (_isInBounds(moved, maxX, maxY)) remaining = _stitchesWithAdded(remaining, moved);
+        }
+        return layer.copyWith(stitches: remaining);
+      });
+      state = state.copyWith(
+        pattern: newPattern,
+        selectionRect: newRect,
+        undoStack: _buildUndoStack(),
+        isDirty: true,
+        redoStack: [],
+      );
+      return;
+    }
     final activeStitches = state.activeLayer.stitches;
     final inSel =
         activeStitches.where((s) => EditorState.isStitchInRect(s, rect)).toList();
     if (inSel.isEmpty) {
-      state = state.copyWith(
-        pendingCanvasWarning: kWarnNothingToMove,
-      );
+      state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToMove));
       return;
     }
     var remaining =
@@ -155,12 +197,6 @@ mixin SelectionMixin on Notifier<EditorState> {
         remaining = _stitchesWithAdded(remaining, moved);
       }
     }
-    final newRect = Rect.fromLTWH(
-      (rect.left + dx).clamp(0, maxX.toDouble()),
-      (rect.top + dy).clamp(0, maxY.toDouble()),
-      rect.width,
-      rect.height,
-    );
     final newPattern = _patternWithActiveLayerStitches(state.pattern, remaining);
     state = state.copyWith(
       pattern: newPattern,
@@ -174,11 +210,32 @@ mixin SelectionMixin on Notifier<EditorState> {
   void deleteSelection() {
     final rect = state.selectionRect;
     if (rect == null) return;
+    if (state.canvasSelectionMode) {
+      final hasAny = state.pattern.layers
+          .where((l) => l.visible)
+          .any((l) => l.stitches.any((s) => EditorState.isStitchInRect(s, rect)));
+      if (!hasAny) {
+        state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToDelete));
+        return;
+      }
+      final newPattern = _pruneUnusedThreads(state.pattern.mapLayers((layer) {
+        if (!layer.visible) return layer;
+        return layer.copyWith(
+          stitches: layer.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList(),
+        );
+      }));
+      state = state.copyWith(
+        pattern: newPattern,
+        selectionRect: null,
+        undoStack: _buildUndoStack(),
+        isDirty: true,
+        redoStack: [],
+      );
+      return;
+    }
     final activeStitches = state.activeLayer.stitches;
     if (!activeStitches.any((s) => EditorState.isStitchInRect(s, rect))) {
-      state = state.copyWith(
-        pendingCanvasWarning: kWarnNothingToDelete,
-      );
+      state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToDelete));
       return;
     }
     final remaining =
@@ -331,16 +388,33 @@ mixin SelectionMixin on Notifier<EditorState> {
   void flipSelectionH() {
     final rect = state.selectionRect;
     if (rect == null) return;
-    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
-      state = state.copyWith(
-        pendingCanvasWarning: kWarnNothingToFlip,
-      );
-      return;
-    }
     final l = rect.left.floor();
     final t = rect.top.floor();
     final w = rect.width.round();
     final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    if (state.canvasSelectionMode) {
+      final hasAny = state.pattern.layers
+          .where((l) => l.visible)
+          .any((l) => l.stitches.any((s) => EditorState.isStitchInRect(s, rect)));
+      if (!hasAny) {
+        state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToFlip));
+        return;
+      }
+      state = state.copyWith(
+        pattern: state.pattern.mapLayers((layer) {
+          if (!layer.visible) return layer;
+          return layer.copyWith(
+            stitches: layer.stitches.map((s) => inSel(s) ? _flipStitchH(s, l, t, w) : s).toList(),
+          );
+        }),
+        undoStack: _buildUndoStack(),
+      );
+      return;
+    }
+    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
+      state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToFlip));
+      return;
+    }
     final newStitches = state.activeLayer.stitches
         .map((s) => inSel(s) ? _flipStitchH(s, l, t, w) : s)
         .toList();
@@ -353,16 +427,33 @@ mixin SelectionMixin on Notifier<EditorState> {
   void flipSelectionV() {
     final rect = state.selectionRect;
     if (rect == null) return;
-    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
-      state = state.copyWith(
-        pendingCanvasWarning: kWarnNothingToFlip,
-      );
-      return;
-    }
     final l = rect.left.floor();
     final t = rect.top.floor();
     final h = rect.height.round();
     final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    if (state.canvasSelectionMode) {
+      final hasAny = state.pattern.layers
+          .where((layer) => layer.visible)
+          .any((layer) => layer.stitches.any((s) => EditorState.isStitchInRect(s, rect)));
+      if (!hasAny) {
+        state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToFlip));
+        return;
+      }
+      state = state.copyWith(
+        pattern: state.pattern.mapLayers((layer) {
+          if (!layer.visible) return layer;
+          return layer.copyWith(
+            stitches: layer.stitches.map((s) => inSel(s) ? _flipStitchV(s, l, t, h) : s).toList(),
+          );
+        }),
+        undoStack: _buildUndoStack(),
+      );
+      return;
+    }
+    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
+      state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToFlip));
+      return;
+    }
     final newStitches = state.activeLayer.stitches
         .map((s) => inSel(s) ? _flipStitchV(s, l, t, h) : s)
         .toList();
@@ -375,22 +466,40 @@ mixin SelectionMixin on Notifier<EditorState> {
   void rotateSelectionCW() {
     final rect = state.selectionRect;
     if (rect == null) return;
-    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
-      state = state.copyWith(
-        pendingCanvasWarning: kWarnNothingToRotate,
-      );
-      return;
-    }
     final l = rect.left.floor();
     final t = rect.top.floor();
     final w = rect.width.round();
     final h = rect.height.round();
     final inSel = (Stitch s) => EditorState.isStitchInRect(s, rect);
+    // After CW rotation the selection occupies same top-left but w↔h swap
+    final newRect = Rect.fromLTWH(rect.left, rect.top, rect.height, rect.width);
+    if (state.canvasSelectionMode) {
+      final hasAny = state.pattern.layers
+          .where((layer) => layer.visible)
+          .any((layer) => layer.stitches.any((s) => EditorState.isStitchInRect(s, rect)));
+      if (!hasAny) {
+        state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToRotate));
+        return;
+      }
+      state = state.copyWith(
+        pattern: state.pattern.mapLayers((layer) {
+          if (!layer.visible) return layer;
+          return layer.copyWith(
+            stitches: layer.stitches.map((s) => inSel(s) ? _rotateStitchCW(s, l, t, w, h) : s).toList(),
+          );
+        }),
+        selectionRect: newRect,
+        undoStack: _buildUndoStack(),
+      );
+      return;
+    }
+    if (!state.activeLayer.stitches.any((s) => EditorState.isStitchInRect(s, rect))) {
+      state = state.copyWith(pendingCanvasWarning: _layerWarn(kWarnNothingToRotate));
+      return;
+    }
     final newStitches = state.activeLayer.stitches
         .map((s) => inSel(s) ? _rotateStitchCW(s, l, t, w, h) : s)
         .toList();
-    // After CW rotation the selection occupies same top-left but w↔h swap
-    final newRect = Rect.fromLTWH(rect.left, rect.top, rect.height, rect.width);
     state = state.copyWith(
       pattern: _patternWithActiveLayerStitches(state.pattern, newStitches),
       selectionRect: newRect,
