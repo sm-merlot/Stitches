@@ -274,9 +274,9 @@ class EditorToolbar extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    // Flip/rotate — shown when a selection with stitches is active.
+                    // Flip/rotate — shown in select mode, disabled until a selection with stitches is active.
                     // Suppressed in snippet editor where the always-visible section handles this.
-                    if (!showWholeCanvasTransforms && state.selectionRect != null && state.selectedStitches.isNotEmpty) ...[
+                    if (!showWholeCanvasTransforms) ...[
                       vDivider,
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -289,7 +289,9 @@ class EditorToolbar extends ConsumerWidget {
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
                                 icon: const Icon(Icons.flip),
-                                onPressed: () => notifier.flipSelectionH(),
+                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                    ? () => notifier.flipSelectionH()
+                                    : null,
                               ),
                             ),
                             Tooltip(
@@ -301,7 +303,9 @@ class EditorToolbar extends ConsumerWidget {
                                   angle: 1.5708,
                                   child: const Icon(Icons.flip),
                                 ),
-                                onPressed: () => notifier.flipSelectionV(),
+                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                    ? () => notifier.flipSelectionV()
+                                    : null,
                               ),
                             ),
                             Tooltip(
@@ -310,7 +314,9 @@ class EditorToolbar extends ConsumerWidget {
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
                                 icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
-                                onPressed: () => notifier.rotateSelectionCW(),
+                                onPressed: state.selectionRect != null && state.selectedStitches.isNotEmpty
+                                    ? () => notifier.rotateSelectionCW()
+                                    : null,
                               ),
                             ),
                           ],
