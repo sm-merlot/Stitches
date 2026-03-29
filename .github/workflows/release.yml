@@ -1,0 +1,51 @@
+name: Release
+
+# Runs on every push to main.
+# - If there are unconsumed changesets: creates/updates a "Version Packages" PR.
+# - If the Version Packages PR was just merged (no pending changesets):
+#   bumps pubspec.yaml, creates a git tag, which triggers build.yml.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history needed so the tag script can push.
+          fetch-depth: 0
+          # If your repo requires PRs to merge into main (branch protection),
+          # the default GITHUB_TOKEN may not have permission to push the
+          # changeset-release/main branch or open PRs. In that case, create a
+          # PAT with contents:write + pull-requests:write and store it as
+          # RELEASE_TOKEN, then uncomment the line below.
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - uses: changesets/action@v1
+        with:
+          # Bumps package.json + CHANGELOG.md, then syncs pubspec.yaml.
+          version: npm run version
+          # Creates a git tag for the new version once the PR is merged.
+          # Idempotent — safe to run on subsequent pushes with no changesets.
+          publish: npm run tag
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -75,27 +75,27 @@ class _ExportPickerDialogState extends State<_ExportPickerDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Export Pattern As…'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _FormatTile(
-            value: _ExportChoice.pdf,
-            groupValue: _selected,
-            label: 'PDF Pattern Chart',
-            subtitle: 'Printable chart with legend',
-            icon: Icons.picture_as_pdf_outlined,
-            onChanged: (v) => setState(() => _selected = v!),
-          ),
-          const Divider(height: 1),
-          _FormatTile(
-            value: _ExportChoice.oxs,
-            groupValue: _selected,
-            label: 'Open Cross Stitch (.oxs)',
-            subtitle: 'WinStitch / MacStitch compatible',
-            icon: Icons.swap_horiz,
-            onChanged: (v) => setState(() => _selected = v!),
-          ),
-        ],
+      content: RadioGroup<_ExportChoice>(
+        groupValue: _selected,
+        onChanged: (v) => setState(() => _selected = v!),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _FormatTile(
+              value: _ExportChoice.pdf,
+              label: 'PDF Pattern Chart',
+              subtitle: 'Printable chart with legend',
+              icon: Icons.picture_as_pdf_outlined,
+            ),
+            const Divider(height: 1),
+            _FormatTile(
+              value: _ExportChoice.oxs,
+              label: 'Open Cross Stitch (.oxs)',
+              subtitle: 'WinStitch / MacStitch compatible',
+              icon: Icons.swap_horiz,
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -113,27 +113,21 @@ class _ExportPickerDialogState extends State<_ExportPickerDialog> {
 
 class _FormatTile extends StatelessWidget {
   final _ExportChoice value;
-  final _ExportChoice groupValue;
   final String label;
   final String subtitle;
   final IconData icon;
-  final ValueChanged<_ExportChoice?> onChanged;
 
   const _FormatTile({
     required this.value,
-    required this.groupValue,
     required this.label,
     required this.subtitle,
     required this.icon,
-    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return RadioListTile<_ExportChoice>(
       value: value,
-      groupValue: groupValue,
-      onChanged: onChanged,
       title: Row(
         children: [
           Icon(icon, size: 18),

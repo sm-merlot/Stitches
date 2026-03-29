@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -119,7 +118,7 @@ class _ScanParams {
 List<List<dynamic>> _runCellScan(_ScanParams p) {
   final image = img.decodePng(p.gridBytes);
   if (image == null) {
-    print('[CellScanner] ERROR: failed to decode grid image');
+    debugPrint('[CellScanner] ERROR: failed to decode grid image');
     return [];
   }
 
@@ -132,7 +131,7 @@ List<List<dynamic>> _runCellScan(_ScanParams p) {
   final phaseX = p.phaseXFrac * W;
   final phaseY = p.phaseYFrac * H;
 
-  print('[CellScanner] image=${W.round()}×${H.round()} '
+  debugPrint('[CellScanner] image=${W.round()}×${H.round()} '
       'cellW=${cellW.toStringAsFixed(1)} cellH=${cellH.toStringAsFixed(1)} '
       'phaseX=${phaseX.toStringAsFixed(1)} phaseY=${phaseY.toStringAsFixed(1)} '
       'grid=${p.cols}×${p.rows} legend=${p.legendR.length}');
@@ -196,13 +195,13 @@ List<List<dynamic>> _runCellScan(_ScanParams p) {
 
       // Skip cell if fewer than 5% of pixels are ink (empty / background).
       if (col == 0 && row == 0) {
-        print('[CellScanner] cell(0,0): bounds=($x0,$y0)-($x1,$y1) '
+        debugPrint('[CellScanner] cell(0,0): bounds=($x0,$y0)-($x1,$y1) '
             'total=$total ink=${inkR.length} '
             '(${(inkR.length * 100.0 / math.max(1, total)).toStringAsFixed(1)}%)');
         if (inkR.isNotEmpty) {
           inkR.sort(); inkG.sort(); inkB.sort();
           final mid = inkR.length ~/ 2;
-          print('[CellScanner] cell(0,0) median ink RGB: '
+          debugPrint('[CellScanner] cell(0,0) median ink RGB: '
               '(${inkR[mid]},${inkG[mid]},${inkB[mid]})');
           inkR.sort(); inkG.sort(); inkB.sort(); // re-sort after read
         }
@@ -239,7 +238,7 @@ List<List<dynamic>> _runCellScan(_ScanParams p) {
     }
   }
 
-  print('[CellScanner] done: ${results.length} occupied cells '
+  debugPrint('[CellScanner] done: ${results.length} occupied cells '
       'out of ${p.cols * p.rows} total');
   return results;
 }

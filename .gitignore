@@ -1,6 +1,9 @@
 # Git worktrees
 .worktrees/
 
+# Node (changesets tooling)
+node_modules/
+
 # Miscellaneous
 *.class
 *.log

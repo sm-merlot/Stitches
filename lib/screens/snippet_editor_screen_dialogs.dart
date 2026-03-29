@@ -93,14 +93,21 @@ class _ResizeSnippetEditorDialogState
             ],
           ),
           const SizedBox(height: 16),
-          for (final mode in SnippetResizeMode.values)
-            RadioListTile<SnippetResizeMode>(
-              dense: true,
-              title: Text(_modeLabel(mode)),
-              value: mode,
-              groupValue: _mode,
-              onChanged: (v) => setState(() => _mode = v!),
+          RadioGroup<SnippetResizeMode>(
+            groupValue: _mode,
+            onChanged: (v) => setState(() => _mode = v!),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final mode in SnippetResizeMode.values)
+                  RadioListTile<SnippetResizeMode>(
+                    dense: true,
+                    title: Text(_modeLabel(mode)),
+                    value: mode,
+                  ),
+              ],
             ),
+          ),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Text(_error!,
