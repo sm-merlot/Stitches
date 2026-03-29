@@ -1,7 +1,7 @@
 name: stitchx
 description: A cross-stitch pattern editor with DMC/Anchor thread support, multiple stitch types, and local file management.
 publish_to: 'none'
-version: 0.1.2+4
+version: 0.1.3+5
 
 environment:
   sdk: ^3.11.1
