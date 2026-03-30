@@ -56,6 +56,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   bool _hasDraggedSelection = false; // true once pointer moves during a rubber-band
   Offset? _moveDragStartCell;
   Offset _moveDelta = Offset.zero;
+  // Live rubber-band rect during drag — only committed to provider on pointer up.
+  Rect? _dragSelectionRect;
 
   // Paste preview origin (grid cell coords, top-left of where clipboard will land)
   Offset? _pasteOrigin;
@@ -739,8 +741,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           _scheduleRebuild();
         } else if (_selectionAnchor != null) {
           _hasDraggedSelection = true;
-          ref.read(editorProvider.notifier).setSelectionRect(
-              _buildSelRect(_selectionAnchor!, cell));
+          _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
+          _scheduleRebuild();
         }
         return;
       }
@@ -800,8 +802,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           _scheduleRebuild();
         } else if (_selectionAnchor != null) {
           _hasDraggedSelection = true;
-          ref.read(editorProvider.notifier).setSelectionRect(
-              _buildSelRect(_selectionAnchor!, cell));
+          _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
+          _scheduleRebuild();
         }
       } else if (mode == DrawingMode.paste) {
         final c = _screenToCanvas(event.localPosition);
@@ -865,12 +867,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     // Finalize rubber-band selection
     if (_selectionAnchor != null) {
       final cell = _screenToSelCell(pos);
-      final rect = _buildSelRect(_selectionAnchor!, cell);
+      final rect = _dragSelectionRect ?? _buildSelRect(_selectionAnchor!, cell);
       // Only keep selection if the user actually dragged; a bare click deselects
       ref.read(editorProvider.notifier).setSelectionRect(
           _hasDraggedSelection && rect.width >= 1 && rect.height >= 1 ? rect : null);
       _selectionAnchor = null;
       _hasDraggedSelection = false;
+      _dragSelectionRect = null;
       _scheduleRebuild();
       _activePointers.remove(event.pointer);
       return;
@@ -1109,7 +1112,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                     ? null
                     : _mouseScreenPos,
-                selectionRect: state.selectionRect,
+                selectionRect: _dragSelectionRect ?? state.selectionRect,
                 ghostStitches: ghostStitches,
                 ghostThreads: state.drawingMode == DrawingMode.paste
                     ? state.clipboardThreads
