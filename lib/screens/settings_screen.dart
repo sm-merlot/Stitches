@@ -116,6 +116,14 @@ class SettingsScreen extends ConsumerWidget {
               title: Text('Finger double-tap'),
               subtitle: Text('Undo last action'),
             ),
+            SwitchListTile(
+              secondary: const Icon(Icons.content_paste_outlined),
+              title: const Text('Pencil-positions, finger-confirms paste'),
+              subtitle: const Text(
+                  'Hover the pencil to place the ghost, then tap with a finger to stamp.'),
+              value: settings.pencilPasteConfirm,
+              onChanged: (v) => notifier.setPencilPasteConfirm(v),
+            ),
           ],
         ],
       ),

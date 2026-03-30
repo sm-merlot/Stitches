@@ -9,6 +9,7 @@ import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
+import '../providers/settings_provider.dart';
 import 'canvas_painter.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {
@@ -639,12 +640,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
 
       if (mode == DrawingMode.paste) {
-        final origin = _pasteOrigin;
-        final clips = ref.read(editorProvider).clipboard;
-        if (origin != null && clips != null) {
-          final (dx, dy) = _pasteOffset(origin, clips);
-          ref.read(editorProvider.notifier).commitPaste(dx, dy);
-          if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
+        final pencilConfirm =
+            ref.read(settingsProvider).pencilPasteConfirm;
+        if (pencilConfirm) {
+          // Pencil-confirm mode: stylus tap positions ghost, finger confirms.
+          final c = _screenToCanvas(event.localPosition);
+          final (cx, cy) = _canvasToCell(c);
+          setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+        } else {
+          final origin = _pasteOrigin;
+          final clips = ref.read(editorProvider).clipboard;
+          if (origin != null && clips != null) {
+            final (dx, dy) = _pasteOffset(origin, clips);
+            ref.read(editorProvider.notifier).commitPaste(dx, dy);
+            if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
+          }
         }
         return;
       }
@@ -688,10 +698,23 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
 
       if (mode == DrawingMode.paste) {
-        final c = _screenToCanvas(event.localPosition);
-        final (cx, cy) = _canvasToCell(c);
-        setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
-        // Commit on pointer up to avoid double-tap undo collision
+        final pencilConfirm =
+            ref.read(settingsProvider).pencilPasteConfirm;
+        if (pencilConfirm) {
+          // Pencil-confirm mode: finger tap commits at current ghost position.
+          final origin = _pasteOrigin;
+          final clips = ref.read(editorProvider).clipboard;
+          if (origin != null && clips != null) {
+            final (dx, dy) = _pasteOffset(origin, clips);
+            ref.read(editorProvider.notifier).commitPaste(dx, dy);
+            if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
+          }
+        } else {
+          final c = _screenToCanvas(event.localPosition);
+          final (cx, cy) = _canvasToCell(c);
+          setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+          // Commit on pointer up to avoid double-tap undo collision
+        }
         return;
       }
     }
