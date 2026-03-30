@@ -106,6 +106,7 @@ class CrossStitchPattern {
       layerItems: [LayerLeaf(layer: defaultLayer)],
       editorSelectedThreadId: '310',
       editorActiveLayerId: defaultLayer.id,
+      editorBlockMode: true,
     );
   }
 

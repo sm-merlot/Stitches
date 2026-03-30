@@ -289,6 +289,16 @@ class EditorScreen extends ConsumerWidget {
                         )
                       : const Icon(Icons.cloud_done_outlined),
                 ),
+              Tooltip(
+                message: state.blockMode ? 'Block mode on' : 'Block mode off',
+                child: IconButton(
+                  icon: Icon(state.blockMode
+                      ? Icons.grid_view
+                      : Icons.grid_view_outlined),
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).toggleBlockMode(),
+                ),
+              ),
               IconButton(
                 icon: const Icon(Icons.save_outlined),
                 tooltip: 'Save  (Cmd+S)',

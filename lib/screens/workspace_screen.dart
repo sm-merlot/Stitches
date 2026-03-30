@@ -965,6 +965,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         )
                       : const Icon(Icons.cloud_done_outlined),
                 ),
+              Tooltip(
+                message: editorState.blockMode ? 'Block mode on' : 'Block mode off',
+                child: IconButton(
+                  icon: Icon(editorState.blockMode
+                      ? Icons.grid_view
+                      : Icons.grid_view_outlined),
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).toggleBlockMode(),
+                ),
+              ),
               IconButton(
                 icon: const Icon(Icons.save_as_outlined),
                 tooltip: 'Save As…',
