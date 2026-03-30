@@ -82,6 +82,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Suppresses repeat warnings within a single pointer-down → up gesture.
   bool _warnedThisGesture = false;
 
+  // ── Ghost stitch cache ────────────────────────────────────────────────────
+  // Avoids re-allocating the offset stitch list on every build when the paste
+  // offset and clipboard haven't changed.
+  List<Stitch>? _cachedGhostStitches;
+  (int, int)? _lastGhostDxDy;
+  List<Stitch>? _lastGhostClipboard;
+
   // ── Frame-coalesced rebuild ────────────────────────────────────────────────
   // Pointer events (pan, hover, pinch) can fire at 120 Hz. Calling setState on
   // every event saturates the UI thread and causes a backlog that freezes input
@@ -738,7 +745,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (mode == DrawingMode.paste) {
         final c = _screenToCanvas(event.localPosition);
         final (cx, cy) = _canvasToCell(c);
-        _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
+        final newOrigin = Offset(cx.toDouble(), cy.toDouble());
+        if (newOrigin == _pasteOrigin) return; // same cell — nothing to repaint
+        _pasteOrigin = newOrigin;
         _scheduleRebuild();
         return;
       }
@@ -933,7 +942,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (state.drawingMode == DrawingMode.paste) {
       final c = _screenToCanvas(event.localPosition);
       final (cx, cy) = _canvasToCell(c);
-      _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
+      final newOrigin = Offset(cx.toDouble(), cy.toDouble());
+      if (newOrigin == _pasteOrigin) return; // same cell — nothing to repaint
+      _pasteOrigin = newOrigin;
       _scheduleRebuild();
       return;
     }
@@ -991,8 +1002,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final origin = _pasteOrigin ??
           Offset(state.pattern.width / 2.0, state.pattern.height / 2.0);
       final (dx, dy) = _pasteOffset(origin, state.clipboard!);
-      ghostStitches =
-          state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
+      // Only rebuild the offset list when the placement or clipboard changes.
+      if (_lastGhostDxDy != (dx, dy) ||
+          !identical(_lastGhostClipboard, state.clipboard)) {
+        _lastGhostDxDy = (dx, dy);
+        _lastGhostClipboard = state.clipboard;
+        _cachedGhostStitches =
+            state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
+      }
+      ghostStitches = _cachedGhostStitches;
     } else if (_isMovingSelection && state.selectionRect != null) {
       final dx = _moveDelta.dx.round();
       final dy = _moveDelta.dy.round();
