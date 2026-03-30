@@ -223,6 +223,7 @@ class _LayerRow extends StatefulWidget {
   final String? groupId;
   final VoidCallback onTap;
   final VoidCallback onToggleVisible;
+  final VoidCallback onToggleLocked;
   final ValueChanged<double> onOpacityChanged;
   final ValueChanged<LayerBlendMode> onBlendModeChanged;
   final ValueChanged<String> onRename;
@@ -241,6 +242,7 @@ class _LayerRow extends StatefulWidget {
     required this.groupId,
     required this.onTap,
     required this.onToggleVisible,
+    required this.onToggleLocked,
     required this.onOpacityChanged,
     required this.onBlendModeChanged,
     required this.onRename,
@@ -350,6 +352,18 @@ class _LayerRowState extends State<_LayerRow> {
                     color: layer.visible
                         ? theme.colorScheme.primary
                         : theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                  ),
+                ),
+                const SizedBox(width: 2),
+                // Lock toggle
+                GestureDetector(
+                  onTap: widget.onToggleLocked,
+                  child: Icon(
+                    layer.locked ? Icons.lock_outline : Icons.lock_open_outlined,
+                    size: 14,
+                    color: layer.locked
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.2),
                   ),
                 ),
                 const SizedBox(width: 4),

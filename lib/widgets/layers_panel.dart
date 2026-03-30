@@ -161,6 +161,8 @@ class LayersPanelBody extends ConsumerWidget {
                   onTap: () => notifier.setActiveLayer(layer.id),
                   onToggleVisible: () =>
                       notifier.toggleLayerVisible(layer.id),
+                  onToggleLocked: () =>
+                      notifier.toggleLayerLocked(layer.id),
                   onOpacityChanged: (v) =>
                       notifier.setLayerOpacity(layer.id, v),
                   onBlendModeChanged: (m) =>

@@ -273,6 +273,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   // ─── Stitch drawing ───────────────────────────────────────────────────────
 
   void addStitch(Stitch stitch) {
+    if (state.activeLayer.locked) return;
     final alreadyExists = state.activeLayer.stitches
         .any((s) => s == stitch && s.threadId == stitch.threadId);
     if (alreadyExists) return;
@@ -315,6 +316,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   void removeStitchesAt(int x, int y) {
+    if (state.activeLayer.locked) return;
     bool hit(Stitch s) => _stitchAtCell(s, x, y) || _backstitchInCell(s, x, y);
     if (!state.activeLayer.stitches.any(hit)) return;
 
@@ -331,6 +333,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
   /// Erases all stitches in a [size]×[size] box centred on (cx, cy).
   void removeStitchesInBox(int cx, int cy, int size) {
+    if (state.activeLayer.locked) return;
     final half = (size - 1) ~/ 2;
     final x0 = cx - half;
     final x1 = cx + (size - 1 - half);

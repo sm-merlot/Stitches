@@ -217,6 +217,7 @@ class FileService {
     buf.writeln('${bodyIndent}id: ${_yamlStr(layer.id)}');
     buf.writeln('${bodyIndent}name: ${_yamlStr(layer.name)}');
     buf.writeln('${bodyIndent}visible: ${layer.visible}');
+    if (layer.locked) buf.writeln('${bodyIndent}locked: true');
     buf.writeln('${bodyIndent}opacity: ${layer.opacity.toStringAsFixed(3)}');
     buf.writeln('${bodyIndent}stitches:');
     for (final s in layer.stitches) {

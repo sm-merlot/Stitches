@@ -156,6 +156,12 @@ mixin LayersMixin on Notifier<EditorState> {
     if (state.showCompositeThreads) refreshCompositeCache();
   }
 
+  void toggleLayerLocked(String id) {
+    final newPattern =
+        _updateLayer(state.pattern, id, (l) => l.copyWith(locked: !l.locked));
+    state = state.copyWith(pattern: newPattern, isDirty: true);
+  }
+
   void setLayerBlendMode(String id, LayerBlendMode mode) {
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
