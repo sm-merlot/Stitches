@@ -171,9 +171,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (c == null) continue;
           switch (stitch) {
             case FullStitch(:final x, :final y):
-              // In focus mode, skip blending so the focus-greyed colour is preserved.
-              final blended = stitchFocusThreadId == null ? blendMap['$x,$y'] : null;
-              _drawFullStitch(canvas, x, y, blended ?? c);
+              final key = '$x,$y';
+              final blended = blendMap[key];
+              if (blended != null && stitchFocusThreadId != null) {
+                // Blended cell + focus: all contributing stitches at this cell
+                // resolve to the same colour using the final blended DMC code.
+                // This prevents semi-transparent grey from one layer bleeding
+                // through the focused colour of another.
+                final isFocused = _blendDmcCache[key] == stitchFocusThreadId;
+                _drawFullStitch(canvas, x, y, isFocused ? blended : _greyColor(blended));
+              } else {
+                _drawFullStitch(canvas, x, y, blended ?? c);
+              }
             case HalfStitch(:final x, :final y, :final isForward):
               _drawHalfStitch(canvas, x, y, isForward, c);
             case QuarterStitch(:final x, :final y, :final quadrant):
@@ -332,10 +341,15 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // every pan/zoom frame, which would make CIE Lab matching too expensive.
   static CrossStitchPattern? _blendMapPattern;
   static Map<String, Color> _blendMapCache = {};
+  // Maps cell key → blended DMC code for cells with overlapping layers.
+  // Used during focus mode so all contributing stitches in a cell resolve
+  // to the same focus decision (preventing semi-transparent bleed-through).
+  static Map<String, String> _blendDmcCache = {};
 
   Map<String, Color> _buildBlendMap() {
     if (identical(_blendMapPattern, pattern)) return _blendMapCache;
     _blendMapPattern = pattern;
+    _blendDmcCache = {};
 
     final threadMap = _threadMap;
     final cellStack =
@@ -370,6 +384,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       final b = (blended.b * 255).round();
       final dmc = SpriteImporter.matchPixel(r, g, b, 255);
       result[entry.key] = dmc?.color ?? blended;
+      if (dmc != null) _blendDmcCache[entry.key] = dmc.code;
     }
 
     _blendMapCache = result;
@@ -406,10 +421,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       Rect? rect;
       switch (stitch) {
         case FullStitch(:final x, :final y):
-          // In focus mode, skip blending so the focus-greyed colour is preserved.
-          effectiveColor = stitchFocusThreadId != null
-              ? c
-              : (blendMap['$x,$y'] ?? c);
+          final key = '$x,$y';
+          final blended = blendMap[key];
+          if (blended != null && stitchFocusThreadId != null) {
+            final isFocused = _blendDmcCache[key] == stitchFocusThreadId;
+            effectiveColor = isFocused ? blended : _greyColor(blended);
+          } else {
+            effectiveColor = blended ?? c;
+          }
           rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
 
         // HalfStitch (diagonal): isForward=true → `/` → right half of cell.
