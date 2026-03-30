@@ -15,7 +15,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, blockMode }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -289,15 +289,19 @@ class EditorScreen extends ConsumerWidget {
                         )
                       : const Icon(Icons.cloud_done_outlined),
                 ),
-              Tooltip(
-                message: state.blockMode ? 'Block mode on' : 'Block mode off',
-                child: IconButton(
-                  icon: Icon(state.blockMode
-                      ? Icons.grid_view
-                      : Icons.grid_view_outlined),
-                  onPressed: () =>
-                      ref.read(editorProvider.notifier).toggleBlockMode(),
-                ),
+              IconButton(
+                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
+                isSelected: state.blockMode,
+                icon: const Icon(Icons.grid_view_outlined),
+                selectedIcon: const Icon(Icons.grid_view),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).toggleBlockMode(),
+                style: state.blockMode
+                    ? IconButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
               ),
               IconButton(
                 icon: const Icon(Icons.save_outlined),
@@ -322,8 +326,6 @@ class EditorScreen extends ConsumerWidget {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
-                    case _MenuAction.blockMode:
-                      ref.read(editorProvider.notifier).toggleBlockMode();
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -334,18 +336,6 @@ class EditorScreen extends ConsumerWidget {
                       label: 'Reference Image',
                       trailing: state.referenceImage != null &&
                               state.referenceVisible
-                          ? Icon(Icons.check,
-                              size: 16,
-                              color: Theme.of(ctx).colorScheme.primary)
-                          : null,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.blockMode,
-                    child: _MenuRow(
-                      icon: Icons.grid_view_outlined,
-                      label: 'Block Mode',
-                      trailing: state.blockMode
                           ? Icon(Icons.check,
                               size: 16,
                               color: Theme.of(ctx).colorScheme.primary)
