@@ -582,6 +582,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       ref.read(editorProvider).drawingMode == DrawingMode.pan;
 
   void _onPointerDown(PointerDownEvent event) {
+    // Reclaim keyboard focus so shortcuts keep working after AppBar buttons,
+    // dialogs, or bottom sheets have taken it away.
+    Focus.maybeOf(context)?.requestFocus();
     _activePointers[event.pointer] = event.localPosition;
     _mouseScreenPos = event.localPosition;
     _warnedThisGesture = false;
