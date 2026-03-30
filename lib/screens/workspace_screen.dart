@@ -138,7 +138,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   @override
   void dispose() {
-    _autoSaveTimer?.cancel();
+    // If a pending auto-save timer was cancelled without firing, flush it now.
+    if (_autoSaveTimer != null) {
+      _autoSaveTimer!.cancel();
+      _autoSaveTimer = null;
+      final state = ref.read(editorProvider);
+      if (state.isDirty && state.filePath != null && state.isNativeFormat) {
+        FileService.saveFile(state.patternForSave, state.filePath!);
+      }
+    }
     _scanOverlayEntry?.remove();
     _scanStatus.dispose();
     super.dispose();
