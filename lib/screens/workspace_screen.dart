@@ -1030,12 +1030,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
-                  const PopupMenuItem(
-                    value: _MenuAction.shortcuts,
-                    child: _MenuRow(
-                        icon: Icons.keyboard_outlined,
-                        label: 'Keyboard Shortcuts'),
-                  ),
+                  if (defaultTargetPlatform != TargetPlatform.iOS &&
+                      defaultTargetPlatform != TargetPlatform.android)
+                    const PopupMenuItem(
+                      value: _MenuAction.shortcuts,
+                      child: _MenuRow(
+                          icon: Icons.keyboard_outlined,
+                          label: 'Keyboard Shortcuts'),
+                    ),
                 ],
               ),
             ],

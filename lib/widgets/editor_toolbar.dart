@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
@@ -21,6 +22,18 @@ part 'editor_toolbar_button.dart';
 part 'editor_toolbar_color_controls.dart';
 part 'editor_toolbar_palette_dialog.dart';
 part 'editor_toolbar_sprite_picker.dart';
+
+/// Whether the current platform uses touch as the primary input.
+/// On touch platforms keyboard shortcut hints in tooltips are hidden.
+bool get _isTouchPlatform =>
+    defaultTargetPlatform == TargetPlatform.iOS ||
+    defaultTargetPlatform == TargetPlatform.android;
+
+/// Strip trailing `  [Shortcut]` hint from a tooltip string on touch platforms.
+String _tt(String tooltip) {
+  if (!_isTouchPlatform) return tooltip;
+  return tooltip.replaceFirst(RegExp(r'\s{2,}\[.*?\]\s*$'), '');
+}
 
 class EditorToolbar extends ConsumerWidget {
   final bool showSnippetsButton;
@@ -93,14 +106,14 @@ class EditorToolbar extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _ToolbarButton(
-                          tooltip: 'Draw  [D]',
+                          tooltip: _tt('Draw  [D]'),
                           selected: state.drawingMode == DrawingMode.draw,
                           onTap: () => notifier.setDrawingMode(DrawingMode.draw),
                           builder: (c) => Icon(Icons.draw_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
-                          tooltip: 'Erase  [E]',
+                          tooltip: _tt('Erase  [E]'),
                           selected: state.drawingMode == DrawingMode.erase,
                           activeColor: theme.colorScheme.error,
                           onTap: () => notifier.setDrawingMode(DrawingMode.erase),
@@ -108,14 +121,14 @@ class EditorToolbar extends ConsumerWidget {
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
-                          tooltip: 'Pick colour  [C]',
+                          tooltip: _tt('Pick colour  [C]'),
                           selected: state.drawingMode == DrawingMode.colorPicker,
                           onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
                           builder: (c) => Icon(Icons.colorize_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
-                          tooltip: 'Select  [S]',
+                          tooltip: _tt('Select  [S]'),
                           selected: state.drawingMode == DrawingMode.select ||
                               state.drawingMode == DrawingMode.paste,
                           onTap: () => notifier.setDrawingMode(DrawingMode.select),
@@ -134,7 +147,7 @@ class EditorToolbar extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _ToolbarButton(
-                            tooltip: 'Full stitch  [1]',
+                            tooltip: _tt('Full stitch  [1]'),
                             selected: state.currentTool == DrawingTool.fullStitch,
                             onTap: () => notifier.setTool(DrawingTool.fullStitch),
                             builder: (c) => CustomPaint(
@@ -142,7 +155,7 @@ class EditorToolbar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(
-                            tooltip: 'Half diagonal /  [2]',
+                            tooltip: _tt('Half diagonal /  [2]'),
                             selected: state.currentTool == DrawingTool.halfForward,
                             onTap: () => notifier.setTool(DrawingTool.halfForward),
                             builder: (c) => CustomPaint(
@@ -150,7 +163,7 @@ class EditorToolbar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(
-                            tooltip: 'Half diagonal \\  [3]',
+                            tooltip: _tt('Half diagonal \\  [3]'),
                             selected: state.currentTool == DrawingTool.halfBackward,
                             onTap: () => notifier.setTool(DrawingTool.halfBackward),
                             builder: (c) => CustomPaint(
@@ -158,7 +171,7 @@ class EditorToolbar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(
-                            tooltip: 'Half-cell cross (X in ½ cell)  [4]',
+                            tooltip: _tt('Half-cell cross (X in ½ cell)  [4]'),
                             selected: state.currentTool == DrawingTool.halfCross,
                             onTap: () => notifier.setTool(DrawingTool.halfCross),
                             builder: (c) => CustomPaint(
@@ -166,7 +179,7 @@ class EditorToolbar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(
-                            tooltip: 'Quarter diagonal (auto-corner)  [5]',
+                            tooltip: _tt('Quarter diagonal (auto-corner)  [5]'),
                             selected: state.currentTool == DrawingTool.quarterDiag,
                             onTap: () => notifier.setTool(DrawingTool.quarterDiag),
                             builder: (c) => CustomPaint(
@@ -174,7 +187,7 @@ class EditorToolbar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(
-                            tooltip: 'Quarter-cell cross / petit point  [6]',
+                            tooltip: _tt('Quarter-cell cross / petit point  [6]'),
                             selected: state.currentTool == DrawingTool.quarterCross,
                             onTap: () => notifier.setTool(DrawingTool.quarterCross),
                             builder: (c) => CustomPaint(
@@ -182,14 +195,14 @@ class EditorToolbar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(
-                            tooltip: 'Backstitch  [7]',
+                            tooltip: _tt('Backstitch  [7]'),
                             selected: state.currentTool == DrawingTool.backstitch,
                             onTap: () => notifier.setTool(DrawingTool.backstitch),
                             builder: (c) => Icon(Icons.gesture, size: 17, color: c),
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(
-                            tooltip: 'Fill colour  [8]',
+                            tooltip: _tt('Fill colour  [8]'),
                             selected: state.currentTool == DrawingTool.fill,
                             onTap: () => notifier.setTool(DrawingTool.fill),
                             builder: (c) => Icon(Icons.format_color_fill, size: 17, color: c),
@@ -271,7 +284,7 @@ class EditorToolbar extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Tooltip(
-                              message: 'Copy  [Cmd+C]',
+                              message: _tt('Copy  [Cmd+C]'),
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
@@ -298,7 +311,7 @@ class EditorToolbar extends ConsumerWidget {
                                 ),
                               ),
                             Tooltip(
-                              message: 'Delete selection  [Del]',
+                              message: _tt('Delete selection  [Del]'),
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
@@ -330,7 +343,7 @@ class EditorToolbar extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Tooltip(
-                                message: 'Flip horizontal  [Cmd+Shift+H]',
+                                message: _tt('Flip horizontal  [Cmd+Shift+H]'),
                                 child: IconButton(
                                   iconSize: 20,
                                   visualDensity: VisualDensity.compact,
@@ -343,7 +356,7 @@ class EditorToolbar extends ConsumerWidget {
                                 ),
                               ),
                               Tooltip(
-                                message: 'Flip vertical  [Cmd+Shift+V]',
+                                message: _tt('Flip vertical  [Cmd+Shift+V]'),
                                 child: IconButton(
                                   iconSize: 20,
                                   visualDensity: VisualDensity.compact,
@@ -359,7 +372,7 @@ class EditorToolbar extends ConsumerWidget {
                                 ),
                               ),
                               Tooltip(
-                                message: 'Rotate 90° CW  [Cmd+Shift+]]',
+                                message: _tt('Rotate 90° CW  [Cmd+Shift+]]'),
                                 child: IconButton(
                                   iconSize: 20,
                                   visualDensity: VisualDensity.compact,
@@ -396,7 +409,7 @@ class EditorToolbar extends ConsumerWidget {
                               ),
                             ),
                           Tooltip(
-                            message: 'Cancel paste  [Esc]',
+                            message: _tt('Cancel paste  [Esc]'),
                             child: TextButton.icon(
                               style: TextButton.styleFrom(
                                 visualDensity: VisualDensity.compact,
@@ -418,7 +431,7 @@ class EditorToolbar extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Tooltip(
-                              message: 'Flip horizontal  [Cmd+Shift+H]',
+                              message: _tt('Flip horizontal  [Cmd+Shift+H]'),
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
@@ -427,7 +440,7 @@ class EditorToolbar extends ConsumerWidget {
                               ),
                             ),
                             Tooltip(
-                              message: 'Flip vertical  [Cmd+Shift+V]',
+                              message: _tt('Flip vertical  [Cmd+Shift+V]'),
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
@@ -439,7 +452,7 @@ class EditorToolbar extends ConsumerWidget {
                               ),
                             ),
                             Tooltip(
-                              message: 'Rotate 90° CW  [Cmd+Shift+]]',
+                              message: _tt('Rotate 90° CW  [Cmd+Shift+]]'),
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,
@@ -594,7 +607,7 @@ class EditorToolbar extends ConsumerWidget {
                 vDivider,
                 const SizedBox(width: 2),
                 Tooltip(
-                  message: 'Undo  [Cmd+Z]',
+                  message: _tt('Undo  [Cmd+Z]'),
                   child: IconButton(
                     iconSize: 20,
                     visualDensity: VisualDensity.compact,
@@ -603,7 +616,7 @@ class EditorToolbar extends ConsumerWidget {
                   ),
                 ),
                 Tooltip(
-                  message: 'Redo  [Cmd+Shift+Z]',
+                  message: _tt('Redo  [Cmd+Shift+Z]'),
                   child: IconButton(
                     iconSize: 20,
                     visualDensity: VisualDensity.compact,
