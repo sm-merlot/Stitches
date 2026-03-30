@@ -127,12 +127,19 @@ mixin SelectionMixin on Notifier<EditorState> {
       }
     }
 
-    var stitches = [...state.activeLayer.stitches];
+    // Collect all in-bounds placed stitches first, then do a single-pass merge.
+    // Stitch equality is position-based, so the set lookup correctly evicts
+    // any existing stitch at the same slot before we append the new ones.
+    final placed = <Stitch>[];
     for (final s in clips) {
-      final placed = EditorState.offsetStitch(s, dx, dy);
-      if (!_isInBounds(placed, maxX, maxY)) continue;
-      stitches = _stitchesWithAdded(stitches, placed);
+      final p = EditorState.offsetStitch(s, dx, dy);
+      if (_isInBounds(p, maxX, maxY)) placed.add(p);
     }
+    final replaceSet = <Stitch>{...placed};
+    final stitches = [
+      ...state.activeLayer.stitches.where((s) => !replaceSet.contains(s)),
+      ...placed,
+    ];
     final newPattern = _patternWithActiveLayerStitches(
         state.pattern.copyWith(threads: threads), stitches);
     state = state.copyWith(

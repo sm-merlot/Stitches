@@ -985,10 +985,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     // Compute ghost stitches for paste preview or move drag
     List<Stitch>? ghostStitches;
-    if (state.drawingMode == DrawingMode.paste &&
-        _pasteOrigin != null &&
-        state.clipboard != null) {
-      final (dx, dy) = _pasteOffset(_pasteOrigin!, state.clipboard!);
+    if (state.drawingMode == DrawingMode.paste && state.clipboard != null) {
+      // Fall back to canvas centre so the ghost is visible even before the
+      // user has moved the cursor (e.g. right after a flip/rotate).
+      final origin = _pasteOrigin ??
+          Offset(state.pattern.width / 2.0, state.pattern.height / 2.0);
+      final (dx, dy) = _pasteOffset(origin, state.clipboard!);
       ghostStitches =
           state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
     } else if (_isMovingSelection && state.selectionRect != null) {

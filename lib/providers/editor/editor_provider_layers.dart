@@ -8,6 +8,8 @@ mixin LayersMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
   List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
+
+  Timer? _opacityDebounce;
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
   String _nextSymbol(Set<String> used);
 
@@ -160,7 +162,11 @@ mixin LayersMixin on Notifier<EditorState> {
         _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
     state = state.copyWith(
         pattern: newPattern, isDirty: true, compositeThreadCache: null);
-    if (state.showCompositeThreads) refreshCompositeCache();
+    if (state.showCompositeThreads) {
+      _opacityDebounce?.cancel();
+      _opacityDebounce =
+          Timer(const Duration(milliseconds: 150), refreshCompositeCache);
+    }
   }
 
   /// [delta] = +1 moves layer up (toward top/front), -1 moves down.

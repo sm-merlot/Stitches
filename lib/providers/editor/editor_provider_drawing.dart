@@ -302,7 +302,9 @@ mixin DrawingMixin on Notifier<EditorState> {
     }
 
     final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
-    final newPattern = _patternWithActiveLayerStitches(pattern, newStitches);
+    final rawPattern = _patternWithActiveLayerStitches(pattern, newStitches);
+    // Prune threads whose last stitch was painted over by a different colour.
+    final newPattern = _pruneUnusedThreads(rawPattern);
     state = state.copyWith(
       pattern: newPattern,
       snippetPalettes: snippetPalettes,
