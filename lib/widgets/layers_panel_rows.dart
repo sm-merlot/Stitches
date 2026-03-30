@@ -123,6 +123,18 @@ class _GroupRowState extends State<_GroupRow> {
                   : theme.colorScheme.onSurface.withValues(alpha: 0.35),
             ),
           ),
+          const SizedBox(width: 2),
+          // Lock toggle (group master lock)
+          GestureDetector(
+            onTap: () => notifier.toggleGroupLocked(group.id),
+            child: Icon(
+              group.groupLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+              size: 14,
+              color: group.groupLocked
+                  ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.2),
+            ),
+          ),
           const SizedBox(width: 4),
           // Group name (double-tap to rename)
           Expanded(

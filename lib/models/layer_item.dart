@@ -30,6 +30,9 @@ class LayerGroup extends LayerItem {
   /// Master visibility override — when false, all layers in the group are hidden.
   final bool groupVisible;
 
+  /// Master lock override — when true, all layers in the group are locked.
+  final bool groupLocked;
+
   /// Ordered top-to-bottom within the group.
   final List<Layer> layers;
 
@@ -38,6 +41,7 @@ class LayerGroup extends LayerItem {
     required this.name,
     required this.collapsed,
     required this.groupVisible,
+    this.groupLocked = false,
     required this.layers,
   });
 
@@ -47,6 +51,7 @@ class LayerGroup extends LayerItem {
       name: name ?? 'Group',
       collapsed: false,
       groupVisible: true,
+      groupLocked: false,
       layers: const [],
     );
   }
@@ -55,6 +60,7 @@ class LayerGroup extends LayerItem {
     String? name,
     bool? collapsed,
     bool? groupVisible,
+    bool? groupLocked,
     List<Layer>? layers,
   }) {
     return LayerGroup(
@@ -62,6 +68,7 @@ class LayerGroup extends LayerItem {
       name: name ?? this.name,
       collapsed: collapsed ?? this.collapsed,
       groupVisible: groupVisible ?? this.groupVisible,
+      groupLocked: groupLocked ?? this.groupLocked,
       layers: layers ?? this.layers,
     );
   }

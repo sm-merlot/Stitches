@@ -240,6 +240,7 @@ class FileService {
     buf.writeln('    name: ${_yamlStr(group.name)}');
     buf.writeln('    collapsed: ${group.collapsed}');
     buf.writeln('    groupVisible: ${group.groupVisible}');
+    if (group.groupLocked) buf.writeln('    groupLocked: true');
     if (group.layers.isEmpty) {
       buf.writeln('    layers: []');
     } else {

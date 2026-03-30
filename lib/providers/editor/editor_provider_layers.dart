@@ -428,6 +428,19 @@ mixin LayersMixin on Notifier<EditorState> {
     );
   }
 
+  void toggleGroupLocked(String groupId) {
+    final newItems = state.pattern.layerItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        return item.copyWith(groupLocked: !item.groupLocked);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      isDirty: true,
+    );
+  }
+
   void toggleGroupCollapsed(String groupId) {
     final newItems = state.pattern.layerItems.map((item) {
       if (item is LayerGroup && item.id == groupId) {

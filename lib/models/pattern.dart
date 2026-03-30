@@ -66,9 +66,13 @@ class CrossStitchPattern {
   /// All rendering consumers use this getter; no rendering code needs updating.
   List<Layer> get layers => layerItems.expand((item) => switch (item) {
         LayerLeaf(:final layer) => [layer],
-        LayerGroup(:final groupVisible, :final layers) => groupVisible
-            ? layers
-            : layers.map((l) => l.copyWith(visible: false)).toList(),
+        LayerGroup(:final groupVisible, :final groupLocked, :final layers) => () {
+            var ls = groupVisible
+                ? layers
+                : layers.map((l) => l.copyWith(visible: false)).toList();
+            if (groupLocked) ls = ls.map((l) => l.copyWith(locked: true)).toList();
+            return ls;
+          }(),
       }).toList();
 
   /// Apply [fn] to every Layer in [layerItems], preserving group structure.
@@ -76,12 +80,13 @@ class CrossStitchPattern {
         layerItems: layerItems.map((item) => switch (item) {
               LayerLeaf(:final layer) => LayerLeaf(layer: fn(layer)),
               LayerGroup(:final layers, :final id, :final name,
-                      :final collapsed, :final groupVisible) =>
+                      :final collapsed, :final groupVisible, :final groupLocked) =>
                 LayerGroup(
                   id: id,
                   name: name,
                   collapsed: collapsed,
                   groupVisible: groupVisible,
+                  groupLocked: groupLocked,
                   layers: layers.map(fn).toList(),
                 ),
             }).toList(),
@@ -200,6 +205,7 @@ class CrossStitchPattern {
             name: m['name'] as String,
             collapsed: m['collapsed'] as bool? ?? false,
             groupVisible: m['groupVisible'] as bool? ?? true,
+            groupLocked: m['groupLocked'] as bool? ?? false,
             layers: innerLayers,
           );
         } else {
