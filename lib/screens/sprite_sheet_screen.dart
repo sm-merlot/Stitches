@@ -311,7 +311,25 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       width: crop.width.round().clamp(1, _image!.width),
       height: crop.height.round().clamp(1, _image!.height),
     );
-    _cropPreviewBytes = Uint8List.fromList(img.encodePng(cropped));
+    // Composite against white so indexed-PNG tRNS transparency doesn't
+    // make the preview appear blank.
+    if (cropped.numChannels >= 4) {
+      final flat = img.Image(width: cropped.width, height: cropped.height);
+      for (var py = 0; py < cropped.height; py++) {
+        for (var px = 0; px < cropped.width; px++) {
+          final p = cropped.getPixel(px, py);
+          final a = p.a.toInt();
+          if (a < 128) {
+            flat.setPixelRgba(px, py, 255, 255, 255, 255);
+          } else {
+            flat.setPixelRgba(px, py, p.r.toInt(), p.g.toInt(), p.b.toInt(), 255);
+          }
+        }
+      }
+      _cropPreviewBytes = Uint8List.fromList(img.encodePng(flat));
+    } else {
+      _cropPreviewBytes = Uint8List.fromList(img.encodePng(cropped));
+    }
   }
 
   /// Regenerates all palette preview images from current crop + strip colours.

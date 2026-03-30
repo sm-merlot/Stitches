@@ -10,6 +10,7 @@ import '../../models/layer_item.dart';
 import '../../models/pattern.dart';
 import '../../models/snippet.dart';
 import '../../models/snippet_palette.dart';
+import '../../models/snippet_palette_resolver.dart';
 import '../../models/stitch.dart';
 import '../../models/thread.dart';
 import '../../services/file_service.dart';
@@ -217,6 +218,22 @@ class EditorState {
         QuarterCrossStitch(x: x + dx, y: y + dy, quadrant: quadrant, threadId: threadId),
     BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
         BackStitch(x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy, threadId: threadId),
+  };
+
+  /// Returns a copy of [s] with its threadId replaced by [newId].
+  static Stitch remapStitchThread(Stitch s, String newId) => switch (s) {
+    FullStitch(:final x, :final y) =>
+        FullStitch(x: x, y: y, threadId: newId),
+    HalfStitch(:final x, :final y, :final isForward) =>
+        HalfStitch(x: x, y: y, isForward: isForward, threadId: newId),
+    QuarterStitch(:final x, :final y, :final quadrant) =>
+        QuarterStitch(x: x, y: y, quadrant: quadrant, threadId: newId),
+    HalfCrossStitch(:final x, :final y, :final half) =>
+        HalfCrossStitch(x: x, y: y, half: half, threadId: newId),
+    QuarterCrossStitch(:final x, :final y, :final quadrant) =>
+        QuarterCrossStitch(x: x, y: y, quadrant: quadrant, threadId: newId),
+    BackStitch(:final x1, :final y1, :final x2, :final y2) =>
+        BackStitch(x1: x1, y1: y1, x2: x2, y2: y2, threadId: newId),
   };
 
   EditorState copyWith({

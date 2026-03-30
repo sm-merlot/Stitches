@@ -110,6 +110,7 @@ class SnippetsPanel extends ConsumerWidget {
     final allSnippets = editorState.pattern.snippets;
     final siblings = allSnippets.where((s) => s.id != snippet?.id).toList();
     final blockMode = editorState.blockMode;
+    final aidaColor = editorState.pattern.aidaColor;
 
     navigator.pop(); // close the panel
     // Wait for the pop to settle before pushing — iOS can drop a push that
@@ -122,6 +123,7 @@ class SnippetsPanel extends ConsumerWidget {
           snippet: snippet,
           siblingSnippets: siblings,
           initialBlockMode: blockMode,
+          aidaColor: aidaColor,
         ),
         fullscreenDialog: true,
       ),

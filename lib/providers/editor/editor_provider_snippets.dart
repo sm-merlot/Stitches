@@ -270,14 +270,35 @@ mixin SnippetsMixin on Notifier<EditorState> {
   }
 
   /// Loads a snippet into the in-memory and system clipboard, then enters paste mode.
+  ///
+  /// When a non-primary palette is active the stitch threadIds are remapped to
+  /// use the active palette's DMC codes so the pasted stitches land with the
+  /// correct colours in the destination pattern.
   Future<void> loadSnippetToClipboard(Snippet snippet) async {
+    final activeIdx =
+        snippet.activePaletteIndex.clamp(0, snippet.palettes.length - 1);
+    final activePalette = snippet.palettes[activeIdx];
+
+    final List<Stitch> clipStitches;
+    final List<Thread> clipThreads;
+
+    if (activeIdx == 0) {
+      clipStitches = snippet.stitches;
+      clipThreads = activePalette.threads;
+    } else {
+      clipStitches = snippet.stitches.map((s) {
+        final resolved = resolveThread(snippet, s.threadId);
+        return EditorState.remapStitchThread(s, resolved.dmcCode);
+      }).toList();
+      clipThreads = activePalette.threads;
+    }
+
     await Clipboard.setData(
-      ClipboardData(
-          text: _serializeClipboard(snippet.threads, snippet.stitches)),
+      ClipboardData(text: _serializeClipboard(clipThreads, clipStitches)),
     );
     state = state.copyWith(
-      clipboard: snippet.stitches,
-      clipboardThreads: snippet.threads,
+      clipboard: clipStitches,
+      clipboardThreads: clipThreads,
       drawingMode: DrawingMode.paste,
       selectionRect: null,
       clipboardFromSnippet: true,

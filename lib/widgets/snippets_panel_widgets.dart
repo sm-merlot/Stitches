@@ -24,6 +24,13 @@ class _SnippetCard extends StatelessWidget {
         ? theme.textTheme.labelSmall
         : theme.textTheme.labelSmall?.copyWith(color: theme.disabledColor);
 
+    final activeIdx = snippet.palettes.isNotEmpty
+        ? snippet.activePaletteIndex.clamp(0, snippet.palettes.length - 1)
+        : 0;
+    final activeThreads = snippet.palettes.isNotEmpty
+        ? snippet.palettes[activeIdx].threads
+        : <Thread>[];
+
     return GestureDetector(
       onTap: onTap,
       onLongPress: onMenuTap,
@@ -71,13 +78,13 @@ class _SnippetCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (snippet.threads.isNotEmpty) ...[
+          if (activeThreads.isNotEmpty) ...[
             const SizedBox(height: 3),
-            _SnippetPaletteDots(threads: snippet.threads),
+            _SnippetPaletteDots(threads: activeThreads),
           ],
           if (snippet.palettes.length > 1) ...[
             const SizedBox(height: 4),
-            _PaletteDots(
+            _PaletteChevrons(
               snippet: snippet,
               onSwitch: onSwitchPalette,
             ),
@@ -238,56 +245,54 @@ class _SnippetPaletteDots extends StatelessWidget {
   }
 }
 
-// ─── Multi-palette dot switcher ───────────────────────────────────────────────
+// ─── Multi-palette chevron switcher ───────────────────────────────────────────
 
-class _PaletteDots extends StatelessWidget {
+class _PaletteChevrons extends StatelessWidget {
   final Snippet snippet;
   final ValueChanged<int> onSwitch;
-  const _PaletteDots({required this.snippet, required this.onSwitch});
+  const _PaletteChevrons({required this.snippet, required this.onSwitch});
 
   @override
   Widget build(BuildContext context) {
     final count = snippet.palettes.length;
     final active = snippet.activePaletteIndex.clamp(0, count - 1);
-
-    if (count > 6) {
-      return Text(
-        '${active + 1}/$count',
-        style: TextStyle(
-          fontSize: 10,
-          color: Theme.of(context)
-              .colorScheme
-              .onSurface
-              .withValues(alpha: 0.6),
-        ),
-      );
-    }
+    final palette = snippet.palettes[active];
+    final name = palette.name.isNotEmpty ? palette.name : 'Palette ${active + 1}';
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(count, (i) {
-        final isActive = i == active;
-        return GestureDetector(
-          onTap: () => onSwitch(i),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isActive
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.transparent,
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 1,
-                ),
-              ),
-            ),
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onSwitch((active - 1 + count) % count),
+          child: const SizedBox(
+            width: 28,
+            height: 28,
+            child: Icon(Icons.chevron_left, size: 14),
           ),
-        );
-      }),
+        ),
+        Flexible(
+          child: Text(
+            name,
+            style: TextStyle(
+              fontSize: 9,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onSwitch((active + 1) % count),
+          child: const SizedBox(
+            width: 28,
+            height: 28,
+            child: Icon(Icons.chevron_right, size: 14),
+          ),
+        ),
+      ],
     );
   }
 }
