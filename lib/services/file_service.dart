@@ -41,9 +41,17 @@ class FileService {
       return (pattern, path);
     }
     final bytes = await file.readAsBytes();
-    final content = _decodeBytes(bytes);
+    final content = _decodeBytes(_maybeDecompress(bytes));
     final pattern = parseYamlString(content);
     return (pattern, path);
+  }
+
+  /// Decompress gzip bytes if the gzip magic bytes (1f 8b) are present.
+  static List<int> _maybeDecompress(List<int> bytes) {
+    if (bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b) {
+      return gzip.decode(bytes);
+    }
+    return bytes;
   }
 
   /// Decode file bytes as UTF-8, stripping a BOM if present.
@@ -90,10 +98,11 @@ class FileService {
     return files;
   }
 
-  /// Save pattern to an existing file path.
+  /// Save pattern to an existing file path (gzip-compressed).
   static Future<void> saveFile(CrossStitchPattern pattern, String path) async {
-    final file = File(path);
-    await file.writeAsString(toYamlString(pattern));
+    final yaml = toYamlString(pattern);
+    final bytes = gzip.encode(utf8.encode(yaml));
+    await File(path).writeAsBytes(bytes, flush: true);
   }
 
   /// Prompt the user for a save location; returns the chosen path or null.

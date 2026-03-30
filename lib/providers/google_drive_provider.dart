@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -161,7 +163,7 @@ class DriveNotifier extends Notifier<DriveState> {
       }
 
       final yamlString = FileService.toYamlString(pattern);
-      final bytes = Uint8List.fromList(yamlString.codeUnits);
+      final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yamlString)));
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final name = '$safeName.stitchx';
 
