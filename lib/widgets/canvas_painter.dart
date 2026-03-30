@@ -171,7 +171,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (c == null) continue;
           switch (stitch) {
             case FullStitch(:final x, :final y):
-              final blended = blendMap['$x,$y'];
+              // In focus mode, skip blending so the focus-greyed colour is preserved.
+              final blended = stitchFocusThreadId == null ? blendMap['$x,$y'] : null;
               _drawFullStitch(canvas, x, y, blended ?? c);
             case HalfStitch(:final x, :final y, :final isForward):
               _drawHalfStitch(canvas, x, y, isForward, c);
@@ -405,7 +406,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       Rect? rect;
       switch (stitch) {
         case FullStitch(:final x, :final y):
-          effectiveColor = blendMap['$x,$y'] ?? c;
+          // In focus mode, skip blending so the focus-greyed colour is preserved.
+          effectiveColor = stitchFocusThreadId != null
+              ? c
+              : (blendMap['$x,$y'] ?? c);
           rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
 
         // HalfStitch (diagonal): isForward=true → `/` → right half of cell.
