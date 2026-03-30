@@ -84,6 +84,31 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Resizable file sidebar** — drag the sidebar edge to any width between 160–480 px; width is remembered between sessions
 - **Sidebar type filters** — toggle PDF and image visibility in the folder tree independently; settings are persisted; switching a filter off only deselects the currently open item if it is of the filtered type — patterns, PDFs, and images remain open independently
 
+## Known Bugs
+
+### iPad / touch / Apple Pencil
+- **Toolbar buttons unreliable with Apple Pencil** — buttons (e.g. snippets panel) intermittently fail to open; workaround: open sprite importer first, close it, then snippet button works reliably. Suspected interaction with the iOS home-indicator gesture area.
+- **Touch targets too small** — many buttons are too small for reliable finger/pencil taps on iPad; needs audit and enlargement.
+- **Apple Pencil paste workflow is awkward** — currently requires hovering the pencil to position the ghost then tapping at exactly the right moment. Proposed fix: allow pencil to rest on screen to position paste ghost without stamping, then use a finger tap to confirm placement. Should be opt-in via a setting.
+- **Keyboard shortcuts UI shown on iPad** — keyboard shortcut hints and the shortcut reference sheet appear on iPad where they are not relevant.
+- **Small palette dots unresponsive at screen edge** — the palette-switch circles under each snippet thumbnail don't register taps when near the bottom edge of the iPad; the overflow menu opens instead.
+
+### Snippets
+- **Copy always uses primary palette** — copying a snippet with a non-primary palette active copies the primary palette version instead of the currently selected one.
+- **Palette switching is difficult in snippet selector** — the UI for switching palettes in the snippet panel is not ergonomic enough.
+- **Opening / saving snippet corrupts non-primary palette colours** *(major)* — round-tripping a snippet through the editor changes colours in any palette that is not the primary one.
+- **Sprite importer breaks colours for second+ palettes** — importing a sprite sheet with more than one palette produces incorrect colours for palettes beyond the first.
+
+### Canvas / editor
+- **Copy shadow ignores flip/rotate** — when a selection is flipped or rotated, the paste ghost / shadow does not update to reflect the transformation.
+- **Stitch symbol not updated after colour change** — after recolouring stitches with the stitch tool the old symbol is displayed until the editor is reloaded.
+- **Layer opacity slider performance** — dragging the layer opacity slider is janky because thread-composite recalculation runs synchronously on every frame; consider debouncing the heavy calculation by ~0.5 s.
+- **Pasting large selections is slow** — pasting a large number of stitches causes a multi-second freeze; needs performance investigation. A loading indicator should be shown when the paste operation takes more than ~1 s.
+
+### Persistence
+- **Block mode and active layer not saved** — block mode state, active layer, and similar session settings are not persisted to the `.stitchx` file.
+- **Possible data loss on quick navigate-away** — one observed instance where stitches placed immediately before navigating away were not saved; need to confirm the file is fully written before allowing navigation.
+
 ## Getting Started
 
 ```bash
@@ -104,3 +129,7 @@ Requires Flutter 3.41.4+.
 
 ### Engineering
 - Better test coverage
+
+### Features / polish
+- **Layer lock** — mark a layer as read-only to prevent accidental edits; hidden layers should also be implicitly read-only.
+- **Block mode UX** — consider making block mode the default in design mode and moving the toggle to the AppBar rather than the overflow menu.
