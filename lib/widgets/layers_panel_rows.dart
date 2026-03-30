@@ -427,7 +427,7 @@ class _LayerRowState extends State<_LayerRow> {
                 ),
               ],
             ),
-            // ── Opacity slider ─────────────────────────────────────────────
+            // ── Opacity slider + blend mode ────────────────────────────────
             Row(
               children: [
                 SizedBox(width: 20 + widget.indent),
@@ -444,6 +444,7 @@ class _LayerRowState extends State<_LayerRow> {
                       value: layer.opacity,
                       min: 0.0,
                       max: 1.0,
+                      divisions: 20,
                       onChanged: widget.onOpacityChanged,
                     ),
                   ),
@@ -455,41 +456,27 @@ class _LayerRowState extends State<_LayerRow> {
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
+                const SizedBox(width: 4),
+                DropdownButton<LayerBlendMode>(
+                  value: layer.blendMode,
+                  isDense: true,
+                  underline: const SizedBox.shrink(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  items: LayerBlendMode.values
+                      .map((m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(m.displayName),
+                          ))
+                      .toList(),
+                  onChanged: (m) {
+                    if (m != null) widget.onBlendModeChanged(m);
+                  },
+                ),
+                const SizedBox(width: 4),
               ],
-            ),
-            // ── Blend mode selector ────────────────────────────────────────
-            Padding(
-              padding: EdgeInsets.only(left: 20 + widget.indent, right: 4, bottom: 2),
-              child: Row(
-                children: [
-                  Text(
-                    'Blend',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  DropdownButton<LayerBlendMode>(
-                    value: layer.blendMode,
-                    isDense: true,
-                    underline: const SizedBox.shrink(),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    items: LayerBlendMode.values
-                        .map((m) => DropdownMenuItem(
-                              value: m,
-                              child: Text(m.displayName),
-                            ))
-                        .toList(),
-                    onChanged: (m) {
-                      if (m != null) widget.onBlendModeChanged(m);
-                    },
-                  ),
-                ],
-              ),
             ),
           ],
         ),
