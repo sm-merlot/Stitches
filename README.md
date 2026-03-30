@@ -93,17 +93,8 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Keyboard shortcuts UI shown on iPad** — keyboard shortcut hints and the shortcut reference sheet appear on iPad where they are not relevant.
 - **Small palette dots unresponsive at screen edge** — the palette-switch circles under each snippet thumbnail don't register taps when near the bottom edge of the iPad; the overflow menu opens instead.
 
-### Snippets
-- **Copy always uses primary palette** — copying a snippet with a non-primary palette active copies the primary palette version instead of the currently selected one.
-- **Palette switching is difficult in snippet selector** — the UI for switching palettes in the snippet panel is not ergonomic enough.
-- **Opening / saving snippet corrupts non-primary palette colours** *(major)* — round-tripping a snippet through the editor changes colours in any palette that is not the primary one.
-- **Sprite importer breaks colours for second+ palettes** — importing a sprite sheet with more than one palette produces incorrect colours for palettes beyond the first.
-
 ### Canvas / editor
-- **Copy shadow ignores flip/rotate** — when a selection is flipped or rotated, the paste ghost / shadow does not update to reflect the transformation.
-- **Stitch symbol not updated after colour change** — after recolouring stitches with the stitch tool the old symbol is displayed until the editor is reloaded.
-- **Layer opacity slider performance** — dragging the layer opacity slider is janky because thread-composite recalculation runs synchronously on every frame; consider debouncing the heavy calculation by ~0.5 s.
-- **Pasting large selections is slow** — pasting a large number of stitches causes a multi-second freeze; needs performance investigation. A loading indicator should be shown when the paste operation takes more than ~1 s.
+- **Select+Click+Drag performance is not optimal, possibly needs same fix and standard copy and paste**
 
 ### Persistence
 - **Block mode and active layer not saved** — block mode state, active layer, and similar session settings are not persisted to the `.stitchx` file.
