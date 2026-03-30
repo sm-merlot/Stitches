@@ -82,7 +82,7 @@ class EditorToolbar extends ConsumerWidget {
           ),
         ],
       ),
-      height: 56,
+      height: _isTouchPlatform ? 60 : 56,
       child: Row(
         children: [
           // ── LEFT (scrollable): Cursor modes + context-sensitive tools ─────
