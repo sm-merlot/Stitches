@@ -84,22 +84,6 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 - **Resizable file sidebar** — drag the sidebar edge to any width between 160–480 px; width is remembered between sessions
 - **Sidebar type filters** — toggle PDF and image visibility in the folder tree independently; settings are persisted; switching a filter off only deselects the currently open item if it is of the filtered type — patterns, PDFs, and images remain open independently
 
-## Known Bugs
-
-### iPad / touch / Apple Pencil
-- **Toolbar buttons unreliable with Apple Pencil** — buttons (e.g. snippets panel) intermittently fail to open; workaround: open sprite importer first, close it, then snippet button works reliably. Suspected interaction with the iOS home-indicator gesture area.
-- **Touch targets too small** — many buttons are too small for reliable finger/pencil taps on iPad; needs audit and enlargement.
-- **Apple Pencil paste workflow is awkward** — currently requires hovering the pencil to position the ghost then tapping at exactly the right moment. Proposed fix: allow pencil to rest on screen to position paste ghost without stamping, then use a finger tap to confirm placement. Should be opt-in via a setting.
-- **Keyboard shortcuts UI shown on iPad** — keyboard shortcut hints and the shortcut reference sheet appear on iPad where they are not relevant.
-- **Small palette dots unresponsive at screen edge** — the palette-switch circles under each snippet thumbnail don't register taps when near the bottom edge of the iPad; the overflow menu opens instead.
-
-### Canvas / editor
-- **Select+Click+Drag performance is not optimal, possibly needs same fix and standard copy and paste**
-
-### Persistence
-- **Block mode and active layer not saved** — block mode state, active layer, and similar session settings are not persisted to the `.stitchx` file.
-- **Possible data loss on quick navigate-away** — one observed instance where stitches placed immediately before navigating away were not saved; need to confirm the file is fully written before allowing navigation.
-
 ## Getting Started
 
 ```bash
@@ -113,7 +97,19 @@ Requires Flutter 3.41.4+.
 ### Mobile / tablet
 - Review all UI elements for touch-friendliness — check button sizes, tap targets, and layout on small screens
 
+### iPad / touch / Apple Pencil
+- **Toolbar buttons unreliable with Apple Pencil** — buttons (e.g. snippets panel) intermittently fail to open; workaround: open sprite importer first, close it, then snippet button works reliably. Suspected interaction with the iOS home-indicator gesture area.
+- **Touch targets too small** — many buttons are too small for reliable finger/pencil taps on iPad; needs audit and enlargement.
+- **Apple Pencil paste workflow is awkward** — currently requires hovering the pencil to position the ghost then tapping at exactly the right moment. Proposed fix: allow pencil to rest on screen to position paste ghost without stamping, then use a finger tap to confirm placement. Should be opt-in via a setting.
+- **Keyboard shortcuts UI shown on iPad** — keyboard shortcut hints and the shortcut reference sheet appear on iPad where they are not relevant.
+- **Small palette dots unresponsive at screen edge** — the palette-switch circles under each snippet thumbnail don't register taps when near the bottom edge of the iPad; the overflow menu opens instead.
+
+### Canvas / editor
+- **Select+Click+Drag performance is not optimal, possibly needs same fix and standard copy and paste**
+
 ### Files & sync
+- **Block mode and active layer not saved** — block mode state, active layer, and similar session settings are not persisted to the `.stitchx` file.
+- **Possible data loss on quick navigate-away** — one observed instance where stitches placed immediately before navigating away were not saved; need to confirm the file is fully written before allowing navigation.
 - `.stitchx` file compression at rest
 - Proton Drive support — **on hold, waiting for SDK to mature** (expected 2026). The E2E encryption stack (OpenPGP/GopenPGP key chains) makes an unofficial implementation risky and fragile. When the official SDK ships: if an OpenAPI spec is available, generate a Dart client and wrap it in a service layer (same pattern as `google_drive_service.dart`); if only native iOS/Android SDKs are provided, consider a Flutter plugin. Plan to publish the Proton Drive integration as a standalone Dart package rather than embedding it in the app.
 - Extend supported import/export file types (Pattern Maker `.xsd`, PC Stitch `.pat`, others)
