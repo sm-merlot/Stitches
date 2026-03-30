@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/layer.dart';
+import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -336,7 +337,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     _blendMapPattern = pattern;
 
     final threadMap = _threadMap;
-    final cellStack = <String, List<({Color color, double opacity})>>{};
+    final cellStack =
+        <String, List<({Color color, double opacity, LayerBlendMode blendMode})>>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -344,8 +346,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         final thread = threadMap[stitch.threadId];
         if (thread == null) continue;
         final key = '${stitch.x},${stitch.y}';
-        (cellStack[key] ??= [])
-            .add((color: thread.color, opacity: layer.opacity));
+        (cellStack[key] ??= []).add((
+          color: thread.color,
+          opacity: layer.opacity,
+          blendMode: layer.blendMode,
+        ));
       }
     }
 
@@ -355,7 +360,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       if (stack.length < 2) continue; // lone stitches excluded
       var blended = stack.first.color;
       for (int i = 1; i < stack.length; i++) {
-        blended = Color.lerp(blended, stack[i].color, stack[i].opacity)!;
+        blended = stack[i].blendMode.apply(blended, stack[i].color, stack[i].opacity);
       }
       // Snap to nearest DMC thread so the displayed colour is always a real
       // thread colour — opacity produces discrete jumps, not a smooth gradient.

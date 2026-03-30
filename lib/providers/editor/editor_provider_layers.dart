@@ -156,6 +156,14 @@ mixin LayersMixin on Notifier<EditorState> {
     if (state.showCompositeThreads) refreshCompositeCache();
   }
 
+  void setLayerBlendMode(String id, LayerBlendMode mode) {
+    final newPattern =
+        _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
+    state = state.copyWith(
+        pattern: newPattern, isDirty: true, compositeThreadCache: null);
+    if (state.showCompositeThreads) refreshCompositeCache();
+  }
+
   void setLayerOpacity(String id, double opacity) {
     final clamped = opacity.clamp(0.0, 1.0);
     final newPattern =

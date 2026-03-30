@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/dmc_colors.dart';
 import '../../data/symbols.dart';
 import '../../models/layer.dart';
+import '../../models/layer_blend_mode.dart';
 import '../../models/layer_item.dart';
 import '../../models/pattern.dart';
 import '../../models/snippet.dart';
@@ -646,7 +647,7 @@ Map<String, Thread> computeCompositeThreads(CrossStitchPattern pattern) {
       final hit = hits[i];
       final layerColor = threadMap[hit.stitch.threadId]?.color;
       if (layerColor == null) continue;
-      blended = Color.lerp(blended!, layerColor, hit.layer.opacity)!;
+      blended = hit.layer.blendMode.apply(blended!, layerColor, hit.layer.opacity);
     }
 
     if (blended == null) continue;

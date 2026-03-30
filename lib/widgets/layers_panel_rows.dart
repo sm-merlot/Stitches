@@ -224,6 +224,7 @@ class _LayerRow extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onToggleVisible;
   final ValueChanged<double> onOpacityChanged;
+  final ValueChanged<LayerBlendMode> onBlendModeChanged;
   final ValueChanged<String> onRename;
   final VoidCallback onDuplicate;
   final VoidCallback? onMergeDown;
@@ -241,6 +242,7 @@ class _LayerRow extends StatefulWidget {
     required this.onTap,
     required this.onToggleVisible,
     required this.onOpacityChanged,
+    required this.onBlendModeChanged,
     required this.onRename,
     required this.onDuplicate,
     this.onMergeDown,
@@ -454,6 +456,40 @@ class _LayerRowState extends State<_LayerRow> {
                   ),
                 ),
               ],
+            ),
+            // ── Blend mode selector ────────────────────────────────────────
+            Padding(
+              padding: EdgeInsets.only(left: 20 + widget.indent, right: 4, bottom: 2),
+              child: Row(
+                children: [
+                  Text(
+                    'Blend',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  DropdownButton<LayerBlendMode>(
+                    value: layer.blendMode,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    items: LayerBlendMode.values
+                        .map((m) => DropdownMenuItem(
+                              value: m,
+                              child: Text(m.displayName),
+                            ))
+                        .toList(),
+                    onChanged: (m) {
+                      if (m != null) widget.onBlendModeChanged(m);
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
