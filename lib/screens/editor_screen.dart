@@ -400,7 +400,7 @@ class EditorScreen extends ConsumerWidget {
                         onSaveAs: () => _saveAs(context, ref),
                       ),
                     const Expanded(child: PatternCanvas()),
-                    const EditorToolbar(),
+                    const SafeArea(top: false, child: EditorToolbar()),
                   ],
                 ),
               ),

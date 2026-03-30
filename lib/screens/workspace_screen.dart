@@ -1109,7 +1109,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                                               onSaveAs: () => _saveAs(context),
                                             ),
                                           const Expanded(child: PatternCanvas()),
-                                          const EditorToolbar(),
+                                          const SafeArea(
+                                            top: false,
+                                            child: EditorToolbar(),
+                                          ),
                                         ],
                                       ),
                                       // FAB anchored to canvas column so it
