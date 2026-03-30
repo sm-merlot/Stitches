@@ -161,6 +161,7 @@ class EditorState {
     editorSelectedThreadId: selectedThreadId,
     editorStitchMode: stitchMode,
     editorActiveLayerId: activeLayerId.isEmpty ? null : activeLayerId,
+    editorBlockMode: blockMode,
   );
 
   Thread? get selectedThread {
@@ -375,6 +376,7 @@ class EditorNotifier extends Notifier<EditorState>
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
       stitchMode: pattern.editorStitchMode,
+      blockMode: pattern.editorBlockMode,
       drawingMode: hasClipboard
           ? DrawingMode.paste
           : (pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw),

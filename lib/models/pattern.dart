@@ -26,6 +26,9 @@ class CrossStitchPattern {
   /// Last-saved editor state — which layer was active.
   final String? editorActiveLayerId;
 
+  /// Last-saved editor state — whether block mode was active.
+  final bool editorBlockMode;
+
   /// Path to a reference image overlay (persisted with the file).
   final String? referenceImagePath;
 
@@ -50,6 +53,7 @@ class CrossStitchPattern {
     this.editorTool,
     this.editorStitchMode = false,
     this.editorActiveLayerId,
+    this.editorBlockMode = false,
     this.referenceImagePath,
     this.referenceOpacity = 0.5,
     this.snippets = const [],
@@ -116,6 +120,7 @@ class CrossStitchPattern {
     Object? editorTool = _sentinel,
     bool? editorStitchMode,
     Object? editorActiveLayerId = _sentinel,
+    bool? editorBlockMode,
     Object? referenceImagePath = _sentinel,
     double? referenceOpacity,
     List<Snippet>? snippets,
@@ -138,6 +143,7 @@ class CrossStitchPattern {
       editorActiveLayerId: editorActiveLayerId == _sentinel
           ? this.editorActiveLayerId
           : editorActiveLayerId as String?,
+      editorBlockMode: editorBlockMode ?? this.editorBlockMode,
       referenceImagePath: referenceImagePath == _sentinel
           ? this.referenceImagePath
           : referenceImagePath as String?,
@@ -235,6 +241,7 @@ class CrossStitchPattern {
       editorTool: editor?['tool'] as String?,
       editorStitchMode: editor?['stitchMode'] as bool? ?? false,
       editorActiveLayerId: editor?['activeLayer'] as String?,
+      editorBlockMode: editor?['blockMode'] as bool? ?? false,
       referenceImagePath: yaml['overlay']?['imagePath'] as String?,
       referenceOpacity:
           (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,

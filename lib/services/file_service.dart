@@ -128,7 +128,8 @@ class FileService {
     if (pattern.editorSelectedThreadId != null ||
         pattern.editorTool != null ||
         pattern.editorStitchMode ||
-        pattern.editorActiveLayerId != null) {
+        pattern.editorActiveLayerId != null ||
+        pattern.editorBlockMode) {
       buf.writeln('editor:');
       if (pattern.editorSelectedThreadId != null) {
         buf.writeln(
@@ -142,6 +143,9 @@ class FileService {
       }
       if (pattern.editorActiveLayerId != null) {
         buf.writeln('  activeLayer: ${_yamlStr(pattern.editorActiveLayerId!)}');
+      }
+      if (pattern.editorBlockMode) {
+        buf.writeln('  blockMode: true');
       }
     }
 
