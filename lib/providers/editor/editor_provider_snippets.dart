@@ -56,8 +56,10 @@ mixin SnippetsMixin on Notifier<EditorState> {
             QuarterStitch(:final x, :final y) => x < newW && y < newH,
             HalfCrossStitch(:final x, :final y) => x < newW && y < newH,
             QuarterCrossStitch(:final x, :final y) => x < newW && y < newH,
+            // BackStitch uses grid-point coords (0..width inclusive), so the
+            // right/bottom boundary is <= not <.
             BackStitch(:final x1, :final y1, :final x2, :final y2) =>
-              x1 < newW && y1 < newH && x2 < newW && y2 < newH,
+              x1 <= newW && y1 <= newH && x2 <= newW && y2 <= newH,
           };
         }).toList();
       case SnippetResizeMode.scale:
