@@ -66,7 +66,8 @@ class SnippetsPanel extends ConsumerWidget {
                   ? _EmptyState(onNew: () => _openEditor(context, ref, null))
                   : GridView.builder(
                       controller: scrollController,
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.fromLTRB(
+                          16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
                         maxCrossAxisExtent: 120,
