@@ -360,10 +360,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
     if (file is LocalPatternFile) {
       try {
-        final (pattern, path) = await FileService.openFileFromPath(file.path);
+        final (pattern, path, wasCompressed) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
         _switchToEditor();
-        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not open file: $e');
       }
@@ -378,7 +378,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
         if (await cached.exists()) {
           // Load from cache immediately, then refresh from Drive in background.
-          final (pattern, path) = await FileService.openFileFromPath(tempPath);
+          final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
           if (!context.mounted) return;
           _switchToEditor();
           ref.read(editorProvider.notifier).loadPattern(
@@ -386,6 +386,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             filePath: path,
             driveFileId: file.fileId,
             driveParentFolderId: file.parentFolder.folderId,
+            compressOnSave: wasCompressed,
           );
           unawaited(_refreshFromDrive(file, tempPath));
         } else {
@@ -403,7 +404,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             if (!context.mounted) return;
             await cached.writeAsBytes(bytes);
             if (!context.mounted) return;
-            final (pattern, path) = await FileService.openFileFromPath(tempPath);
+            final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
             if (!context.mounted) return;
             _switchToEditor();
             ref.read(editorProvider.notifier).loadPattern(
@@ -411,6 +412,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
               filePath: path,
               driveFileId: file.fileId,
               driveParentFolderId: file.parentFolder.folderId,
+              compressOnSave: wasCompressed,
             );
           } finally {
             if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
@@ -453,7 +455,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       if (state.driveFileId != file.fileId || state.isDirty) return;
       await File(tempPath).writeAsBytes(bytes);
       if (!mounted) return;
-      final (pattern, path) = await FileService.openFileFromPath(tempPath);
+      final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
       if (!mounted) return;
       // Re-check: still the same file and still unedited?
       final current = ref.read(editorProvider);
@@ -463,6 +465,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           filePath: path,
           driveFileId: file.fileId,
           driveParentFolderId: file.parentFolder.folderId,
+          compressOnSave: wasCompressed,
         );
       }
     } catch (_) {

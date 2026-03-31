@@ -41,7 +41,7 @@ import 'resize_canvas_dialog.dart';
 
 part 'workspace_screen_components.dart';
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, shortcuts }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, shortcuts, toggleCompress }
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -144,7 +144,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       _autoSaveTimer = null;
       final state = ref.read(editorProvider);
       if (state.isDirty && state.filePath != null && state.isNativeFormat) {
-        FileService.saveFile(state.patternForSave, state.filePath!);
+        FileService.saveFile(state.patternForSave, state.filePath!,
+            compress: state.compressOnSave);
       }
     }
     _scanOverlayEntry?.remove();
@@ -181,7 +182,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           }
         } else {
           await FileService.saveFile(
-              _patternWithEditorState(state), state.filePath!);
+              _patternWithEditorState(state), state.filePath!,
+              compress: state.compressOnSave);
         }
         ref.read(editorProvider.notifier).markSaved();
         if (!quiet && context.mounted) showSuccess(context, 'Saved');
@@ -211,7 +213,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final state = ref.read(editorProvider);
     try {
       final path =
-          await FileService.saveFileAs(_patternWithEditorState(state));
+          await FileService.saveFileAs(_patternWithEditorState(state),
+              compress: state.compressOnSave);
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);
         ref.read(editorProvider.notifier).markSaved();
@@ -260,11 +263,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final filePath =
           '${workspace.path}${Platform.pathSeparator}$safeName.stitchx';
+      final compress = ref.read(settingsProvider).compressNewFiles;
       try {
-        await FileService.saveFile(pattern, filePath);
+        await FileService.saveFile(pattern, filePath, compress: compress);
         ref.read(pdfViewerProvider.notifier).set(null);
     ref.read(imageViewerProvider.notifier).set(null);
-        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath, compressOnSave: compress);
         refreshFolder(ref, workspace);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not create file: $e');
@@ -278,12 +282,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/$fileName';
-        await FileService.saveFile(pattern, tempPath);
+        final driveCompress = ref.read(settingsProvider).compressNewFiles;
+        await FileService.saveFile(pattern, tempPath, compress: driveCompress);
 
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
           filePath: tempPath,
           driveParentFolderId: workspace.folderId,
+          compressOnSave: driveCompress,
           // driveFileId left null — set after background upload.
         );
 
@@ -577,8 +583,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           // Auto-save the new pattern next to the source PDF.
           final savePath =
               '${File(pdfPath).parent.path}${Platform.pathSeparator}$title.stitchx';
+          final scanCompress = ref.read(settingsProvider).compressNewFiles;
           try {
-            await FileService.saveFile(pattern, savePath);
+            await FileService.saveFile(pattern, savePath, compress: scanCompress);
           } catch (_) {
             // Saving failed (e.g. read-only location) — load without a file path.
           }
@@ -586,6 +593,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ref.read(editorProvider.notifier).loadPattern(
             pattern,
             filePath: File(savePath).existsSync() ? savePath : null,
+            compressOnSave: scanCompress,
           );
           ref.read(pdfViewerProvider.notifier).set(null);
     ref.read(imageViewerProvider.notifier).set(null);
@@ -997,6 +1005,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
+                    case _MenuAction.toggleCompress:
+                      ref.read(editorProvider.notifier).toggleCompressOnSave();
                     case _MenuAction.shortcuts:
                       showDialog(
                         context: context,
@@ -1040,6 +1050,21 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
+                  if (editorState.isNativeFormat)
+                    PopupMenuItem(
+                      value: _MenuAction.toggleCompress,
+                      child: _MenuRow(
+                        icon: Icons.folder_zip_outlined,
+                        label: editorState.compressOnSave
+                            ? 'Compress file'
+                            : 'Uncompress file',
+                        trailing: editorState.compressOnSave
+                            ? Icon(Icons.check,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.primary)
+                            : null,
+                      ),
+                    ),
                   if (defaultTargetPlatform != TargetPlatform.iOS &&
                       defaultTargetPlatform != TargetPlatform.android)
                     const PopupMenuItem(

@@ -15,7 +15,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, toggleCompress }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -24,7 +24,8 @@ class EditorScreen extends ConsumerWidget {
     final state = ref.read(editorProvider);
     try {
       if (state.filePath != null) {
-        await FileService.saveFile(state.patternForSave, state.filePath!);
+        await FileService.saveFile(state.patternForSave, state.filePath!,
+            compress: state.compressOnSave);
         ref.read(editorProvider.notifier).markSaved();
         if (context.mounted) showSuccess(context, 'Saved');
 
@@ -53,7 +54,8 @@ class EditorScreen extends ConsumerWidget {
   Future<void> _saveAs(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     try {
-      final path = await FileService.saveFileAs(state.patternForSave);
+      final path = await FileService.saveFileAs(state.patternForSave,
+          compress: state.compressOnSave);
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);
         ref.read(editorProvider.notifier).markSaved();
@@ -326,6 +328,8 @@ class EditorScreen extends ConsumerWidget {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
+                    case _MenuAction.toggleCompress:
+                      ref.read(editorProvider.notifier).toggleCompressOnSave();
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -364,6 +368,21 @@ class EditorScreen extends ConsumerWidget {
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
+                  if (state.isNativeFormat)
+                    PopupMenuItem(
+                      value: _MenuAction.toggleCompress,
+                      child: _MenuRow(
+                        icon: Icons.folder_zip_outlined,
+                        label: state.compressOnSave
+                            ? 'Compress file'
+                            : 'Uncompress file',
+                        trailing: state.compressOnSave
+                            ? Icon(Icons.check,
+                                size: 16,
+                                color: Theme.of(ctx).colorScheme.primary)
+                            : null,
+                      ),
+                    ),
                 ],
               ),
             ],

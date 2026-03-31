@@ -9,21 +9,28 @@ class AppSettings {
   /// finger tap confirms placement (instead of pencil tap stamping immediately).
   final bool pencilPasteConfirm;
 
+  /// Whether new patterns are saved as gzip-compressed .stitchx files.
+  /// Existing files keep their compression state when re-saved.
+  final bool compressNewFiles;
+
   const AppSettings({
     this.useDmc = true,
     this.keepScreenOn = false,
     this.pencilPasteConfirm = false,
+    this.compressNewFiles = true,
   });
 
   AppSettings copyWith({
     bool? useDmc,
     bool? keepScreenOn,
     bool? pencilPasteConfirm,
+    bool? compressNewFiles,
   }) {
     return AppSettings(
       useDmc: useDmc ?? this.useDmc,
       keepScreenOn: keepScreenOn ?? this.keepScreenOn,
       pencilPasteConfirm: pencilPasteConfirm ?? this.pencilPasteConfirm,
+      compressNewFiles: compressNewFiles ?? this.compressNewFiles,
     );
   }
 }
@@ -32,6 +39,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
   static const _keyUseDmc = 'use_dmc';
   static const _keyKeepScreenOn = 'keep_screen_on';
   static const _keyPencilPasteConfirm = 'pencil_paste_confirm';
+  static const _keyCompressNewFiles = 'compress_new_files';
 
   @override
   AppSettings build() {
@@ -46,6 +54,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
       useDmc: prefs.getBool(_keyUseDmc) ?? true,
       keepScreenOn: prefs.getBool(_keyKeepScreenOn) ?? false,
       pencilPasteConfirm: prefs.getBool(_keyPencilPasteConfirm) ?? false,
+      compressNewFiles: prefs.getBool(_keyCompressNewFiles) ?? true,
     );
   }
 
@@ -65,6 +74,12 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(pencilPasteConfirm: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyPencilPasteConfirm, value);
+  }
+
+  Future<void> setCompressNewFiles(bool value) async {
+    state = state.copyWith(compressNewFiles: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyCompressNewFiles, value);
   }
 
 }

@@ -18,6 +18,7 @@ import '../../models/thread.dart';
 import '../../services/file_service.dart';
 import '../../services/reference_image_service.dart';
 import '../../services/sprite_importer.dart';
+import '../settings_provider.dart';
 
 part 'editor_provider_drawing.dart';
 part 'editor_provider_layers.dart';
@@ -101,6 +102,11 @@ class EditorState {
   /// PatternCanvas clears this immediately after showing it.
   final String? pendingCanvasWarning;
 
+  /// Whether to gzip-compress this file when saving.
+  /// Set from the file's detected compression on open; defaults to the app
+  /// setting for new patterns. Toggled per-file via the overflow menu.
+  final bool compressOnSave;
+
   /// True when the current file is in the native .stitchx format (or unsaved).
   bool get isNativeFormat {
     final path = filePath;
@@ -143,6 +149,7 @@ class EditorState {
     this.fillEraseActive = false,
     this.canvasSelectionMode = false,
     this.pendingCanvasWarning,
+    this.compressOnSave = true,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -274,6 +281,7 @@ class EditorState {
     bool? fillEraseActive,
     bool? canvasSelectionMode,
     Object? pendingCanvasWarning = _sentinel,
+    bool? compressOnSave,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -326,6 +334,7 @@ class EditorState {
       pendingCanvasWarning: pendingCanvasWarning == _sentinel
           ? this.pendingCanvasWarning
           : pendingCanvasWarning as String?,
+      compressOnSave: compressOnSave ?? this.compressOnSave,
     );
   }
 
@@ -349,6 +358,7 @@ class EditorNotifier extends Notifier<EditorState>
     String? filePath,
     String? driveFileId,
     String? driveParentFolderId,
+    bool compressOnSave = true,
   }) {
     DrawingTool tool = DrawingTool.fullStitch;
     if (pattern.editorTool != null) {
@@ -389,6 +399,7 @@ class EditorNotifier extends Notifier<EditorState>
       isFileOpen: true,
       activeLayerId: withSymbols.editorActiveLayerId ??
           (withSymbols.layers.isNotEmpty ? withSymbols.layers.first.id : ''),
+      compressOnSave: compressOnSave,
     );
 
     if (withSymbols.referenceImagePath != null) {
@@ -410,6 +421,7 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   void newPattern(CrossStitchPattern pattern) {
+    final compress = ref.read(settingsProvider).compressNewFiles;
     final threads = _assignSymbols(pattern.threads);
     final seeded = pattern.copyWith(threads: threads);
     state = EditorState(
@@ -418,7 +430,12 @@ class EditorNotifier extends Notifier<EditorState>
       recentThreadIds: [threads.first.dmcCode],
       isFileOpen: true,
       activeLayerId: seeded.layers.isNotEmpty ? seeded.layers.first.id : '',
+      compressOnSave: compress,
     );
+  }
+
+  void toggleCompressOnSave() {
+    state = state.copyWith(compressOnSave: !state.compressOnSave);
   }
 
   void closeFile() {

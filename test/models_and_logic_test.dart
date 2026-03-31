@@ -9,6 +9,8 @@
 //     0..width inclusive, not 0..width-1 like cell coords).
 //   • Layer group visibility + lock propagation through pattern.layers
 //   • YAML serialization of layer lock / group lock fields
+//   • File compression: FileService.toYamlString + saveFile/compress param
+//   • AppSettings.compressNewFiles default and EditorState.compressOnSave default
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,9 +19,12 @@ import 'package:stitchx/models/layer.dart';
 import 'package:stitchx/models/layer_item.dart';
 import 'package:stitchx/models/pattern.dart';
 import 'package:stitchx/models/snippet.dart';
+import 'dart:convert';
 import 'package:stitchx/models/snippet_palette.dart';
 import 'package:stitchx/models/stitch.dart';
 import 'package:stitchx/providers/editor/editor_provider.dart';
+import 'package:stitchx/providers/settings_provider.dart';
+import 'package:stitchx/services/file_service.dart';
 
 void main() {
   // ─── Stitch YAML round-trip ────────────────────────────────────────────────
@@ -447,6 +452,52 @@ void main() {
       final p = CrossStitchPattern.fromYaml(yaml);
       expect(p.layerItems, hasLength(2));
       expect(p.layerItems.every((i) => i is LayerLeaf), isTrue);
+    });
+  });
+
+  // ─── Compression settings ───────────────────────────────────────────────────
+
+  group('Compression settings', () {
+    test('AppSettings.compressNewFiles defaults to true', () {
+      const settings = AppSettings();
+      expect(settings.compressNewFiles, isTrue);
+    });
+
+    test('AppSettings.copyWith preserves compressNewFiles', () {
+      const settings = AppSettings(compressNewFiles: false);
+      final copy = settings.copyWith(useDmc: false);
+      expect(copy.compressNewFiles, isFalse);
+    });
+
+    test('AppSettings.copyWith overrides compressNewFiles', () {
+      const settings = AppSettings(compressNewFiles: true);
+      final copy = settings.copyWith(compressNewFiles: false);
+      expect(copy.compressNewFiles, isFalse);
+    });
+
+    test('EditorState.compressOnSave defaults to true', () {
+      final state = EditorState(pattern: CrossStitchPattern.empty());
+      expect(state.compressOnSave, isTrue);
+    });
+
+    test('EditorState.copyWith toggles compressOnSave', () {
+      final state = EditorState(pattern: CrossStitchPattern.empty());
+      expect(state.copyWith(compressOnSave: false).compressOnSave, isFalse);
+      expect(state.copyWith(compressOnSave: true).compressOnSave, isTrue);
+    });
+
+    test('FileService.toYamlString produces text parseable by parseYamlString', () {
+      final pattern = CrossStitchPattern.empty().copyWith(name: 'Compression Test');
+      final yaml = FileService.toYamlString(pattern);
+      final reloaded = FileService.parseYamlString(yaml);
+      expect(reloaded.name, equals('Compression Test'));
+    });
+
+    test('Uncompressed YAML bytes do not have gzip magic bytes', () {
+      final pattern = CrossStitchPattern.empty();
+      final bytes = utf8.encode(FileService.toYamlString(pattern));
+      // gzip magic: 0x1f 0x8b
+      expect(bytes[0], isNot(0x1f));
     });
   });
 }

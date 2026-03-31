@@ -18,8 +18,8 @@ class FileService {
 
   static const List<String> _openExtensions = [_ext, 'oxs'];
 
-  /// Pick a .stitchx or .oxs file; returns (pattern, filePath), or null if cancelled.
-  static Future<(CrossStitchPattern, String)?> openFile() async {
+  /// Pick a .stitchx or .oxs file; returns (pattern, filePath, wasCompressed), or null if cancelled.
+  static Future<(CrossStitchPattern, String, bool)?> openFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: _isMobile ? FileType.any : FileType.custom,
       allowedExtensions: _isMobile ? null : _openExtensions,
@@ -33,18 +33,21 @@ class FileService {
 
   /// Load a pattern directly from a known file path.
   /// Supports both .stitchx (YAML) and .oxs (XML) formats.
-  static Future<(CrossStitchPattern, String)> openFileFromPath(
+  /// Returns (pattern, filePath, wasCompressed).
+  static Future<(CrossStitchPattern, String, bool)> openFileFromPath(
       String path) async {
     final file = File(path);
     if (!await file.exists()) throw Exception('File not found: $path');
     if (path.toLowerCase().endsWith('.oxs')) {
       final pattern = await FormatService.importFile(path);
-      return (pattern, path);
+      return (pattern, path, false);
     }
     final bytes = await file.readAsBytes();
+    final wasCompressed =
+        bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
     final content = _decodeBytes(_maybeDecompress(bytes));
     final pattern = parseYamlString(content);
-    return (pattern, path);
+    return (pattern, path, wasCompressed);
   }
 
   /// Decompress gzip bytes if the gzip magic bytes (1f 8b) are present.
@@ -99,15 +102,20 @@ class FileService {
     return files;
   }
 
-  /// Save pattern to an existing file path (gzip-compressed).
-  static Future<void> saveFile(CrossStitchPattern pattern, String path) async {
+  /// Save pattern to an existing file path.
+  /// Pass [compress] = true (default) for gzip compression, false for plain UTF-8 text.
+  static Future<void> saveFile(CrossStitchPattern pattern, String path,
+      {bool compress = true}) async {
     final yaml = toYamlString(pattern);
-    final bytes = gzip.encode(utf8.encode(yaml));
+    final bytes =
+        compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
     await File(path).writeAsBytes(bytes, flush: true);
   }
 
   /// Prompt the user for a save location; returns the chosen path or null.
-  static Future<String?> saveFileAs(CrossStitchPattern pattern) async {
+  /// [compress] controls whether the written file is gzip-compressed.
+  static Future<String?> saveFileAs(CrossStitchPattern pattern,
+      {bool compress = true}) async {
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final path = await FilePicker.platform.saveFile(
       fileName: _isMobile ? '$suggestedName.$_ext' : suggestedName,
@@ -116,7 +124,7 @@ class FileService {
     );
     if (path == null) return null;
     final finalPath = path.endsWith('.$_ext') ? path : '$path.$_ext';
-    await saveFile(pattern, finalPath);
+    await saveFile(pattern, finalPath, compress: compress);
     return finalPath;
   }
 
