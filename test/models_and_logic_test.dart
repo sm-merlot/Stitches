@@ -167,7 +167,7 @@ void main() {
     // Build a minimal snippet: 4×4, one backstitch from (0,0)→(4,4).
     // That endpoint at (4,4) is the corner grid point of the snippet.
     // Clipping to the same 4×4 size must keep the stitch.
-    Snippet _makeSnippet({
+    Snippet makeSnippet({
       required int w,
       required int h,
       required List<Stitch> stitches,
@@ -185,7 +185,7 @@ void main() {
 
     test('clip keeps backstitch endpoint exactly on right/bottom edge', () {
       // A 4×4 snippet with a backstitch from (0,0) to (4,4).
-      final snippet = _makeSnippet(
+      final snippet = makeSnippet(
         w: 4,
         h: 4,
         stitches: [
@@ -199,7 +199,7 @@ void main() {
     });
 
     test('clip keeps backstitch touching only the right edge', () {
-      final snippet = _makeSnippet(
+      final snippet = makeSnippet(
         w: 3,
         h: 3,
         stitches: [
@@ -211,7 +211,7 @@ void main() {
     });
 
     test('clip removes backstitch whose endpoint is outside', () {
-      final snippet = _makeSnippet(
+      final snippet = makeSnippet(
         w: 3,
         h: 3,
         stitches: [
@@ -223,7 +223,7 @@ void main() {
     });
 
     test('clip keeps cell stitches within bounds', () {
-      final snippet = _makeSnippet(
+      final snippet = makeSnippet(
         w: 4,
         h: 4,
         stitches: [
@@ -240,7 +240,7 @@ void main() {
   // ─── Layer lock propagation ────────────────────────────────────────────────
 
   group('Layer lock propagation', () {
-    Layer _makeLayer({required String id, bool locked = false}) => Layer(
+    Layer makeLayer({required String id, bool locked = false}) => Layer(
           id: id,
           name: id,
           visible: true,
@@ -250,7 +250,7 @@ void main() {
         );
 
     test('locked layer is returned as locked in pattern.layers', () {
-      final layer = _makeLayer(id: 'L1', locked: true);
+      final layer = makeLayer(id: 'L1', locked: true);
       final pattern = CrossStitchPattern(
         name: 'p',
         width: 10,
@@ -262,7 +262,7 @@ void main() {
     });
 
     test('unlocked layer remains unlocked', () {
-      final layer = _makeLayer(id: 'L1', locked: false);
+      final layer = makeLayer(id: 'L1', locked: false);
       final pattern = CrossStitchPattern(
         name: 'p',
         width: 10,
@@ -275,8 +275,8 @@ void main() {
 
     test('groupLocked forces all child layers to locked', () {
       final layers = [
-        _makeLayer(id: 'L1', locked: false),
-        _makeLayer(id: 'L2', locked: false),
+        makeLayer(id: 'L1', locked: false),
+        makeLayer(id: 'L2', locked: false),
       ];
       final group = LayerGroup(
         id: 'G1',
@@ -301,8 +301,8 @@ void main() {
 
     test('groupLocked=false leaves child lock states unchanged', () {
       final layers = [
-        _makeLayer(id: 'L1', locked: true),
-        _makeLayer(id: 'L2', locked: false),
+        makeLayer(id: 'L1', locked: true),
+        makeLayer(id: 'L2', locked: false),
       ];
       final group = LayerGroup(
         id: 'G1',
@@ -325,8 +325,8 @@ void main() {
 
     test('groupVisible=false forces all child layers invisible', () {
       final layers = [
-        _makeLayer(id: 'L1'),
-        _makeLayer(id: 'L2'),
+        makeLayer(id: 'L1'),
+        makeLayer(id: 'L2'),
       ];
       final group = LayerGroup(
         id: 'G1',
@@ -349,7 +349,7 @@ void main() {
     });
 
     test('both groupVisible=false and groupLocked=true stack correctly', () {
-      final layers = [_makeLayer(id: 'L1')];
+      final layers = [makeLayer(id: 'L1')];
       final group = LayerGroup(
         id: 'G1',
         name: 'Group',
