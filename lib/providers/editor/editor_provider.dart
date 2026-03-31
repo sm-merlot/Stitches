@@ -423,6 +423,9 @@ class EditorNotifier extends Notifier<EditorState>
       compressOnSave: compressOnSave,
     );
 
+    // Rebuild composite cache when restoring a file that was saved in stitch mode.
+    if (pattern.editorStitchMode) refreshCompositeCache();
+
     if (withSymbols.referenceImagePath != null) {
       ReferenceImageService.decodeFromPath(withSymbols.referenceImagePath!)
           .then((img) {

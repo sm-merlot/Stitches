@@ -103,6 +103,21 @@ class CrossStitchPattern {
   /// Flat union of all stitches across all layers.
   List<Stitch> get stitches => layers.expand((l) => l.stitches).toList();
 
+  /// Number of unique grid cells covered by cross-stitches (deduplicates cells
+  /// that appear on multiple layers; excludes back stitches).
+  int get canvasCellCount {
+    final cells = <(int, int)>{};
+    for (final s in stitches) {
+      if (s is BackStitch) continue;
+      if (s is FullStitch) cells.add((s.x, s.y));
+      else if (s is HalfStitch) cells.add((s.x, s.y));
+      else if (s is QuarterStitch) cells.add((s.x, s.y));
+      else if (s is HalfCrossStitch) cells.add((s.x, s.y));
+      else if (s is QuarterCrossStitch) cells.add((s.x, s.y));
+    }
+    return cells.length;
+  }
+
   factory CrossStitchPattern.empty({
     String name = 'New Pattern',
     int width = 30,

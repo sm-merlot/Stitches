@@ -489,7 +489,9 @@ class EditorScreen extends ConsumerWidget {
             _InfoRow('Name', p.name),
             _InfoRow('Size', '${p.width} × ${p.height} stitches'),
             _InfoRow('Threads', '${p.threads.length}'),
-            _InfoRow('Stitches',
+            _InfoRow('Stitches (canvas)',
+                '${p.canvasCellCount}'),
+            _InfoRow('Stitches (all layers)',
                 '${p.layers.fold(0, (sum, l) => sum + l.stitches.length)}'),
             if (state.filePath != null)
               _InfoRow(
