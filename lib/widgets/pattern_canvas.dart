@@ -593,10 +593,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     _warnedThisGesture = false;
     _scheduleRebuild();
 
-    // Apple Pencil double-tap → toggle erase/draw (disabled in stitch mode)
+    // Apple Pencil double-tap button
     if (event.kind == PointerDeviceKind.stylus &&
         event.buttons == kSecondaryStylusButton) {
-      if (!ref.read(editorProvider).stitchMode) {
+      final state = ref.read(editorProvider);
+      if (state.drawingMode == DrawingMode.paste) {
+        // In paste mode, pencil button commits paste (same as a tap/screen button)
+        final origin = _pasteOrigin;
+        final clips = state.clipboard;
+        if (origin != null && clips != null) {
+          final (dx, dy) = _pasteOffset(origin, clips);
+          ref.read(editorProvider.notifier).commitPaste(dx, dy);
+          if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
+        }
+      } else if (!state.stitchMode) {
+        // Outside paste mode: toggle erase/draw
         ref.read(editorProvider.notifier).toggleDrawingMode();
       }
       return;

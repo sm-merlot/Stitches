@@ -1,4 +1,4 @@
-// StitchX CLI — animate a stitching plan as a GIF.
+// Stitches CLI — animate a stitching plan as a GIF.
 //
 // Compile to a standalone binary:
 //   dart compile exe bin/stitchx_cli.dart -o stitchx-cli
@@ -20,11 +20,11 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:image/image.dart' as img;
-import 'package:stitchx/services/gif_renderer.dart'
+import 'package:stitches/services/gif_renderer.dart'
     show kDemoSubFrames, renderDemoGif;
-import 'package:stitchx/services/grid_parser.dart';
-import 'package:stitchx/services/stitch_planner.dart';
-import 'package:stitchx/services/stitch_renderer.dart';
+import 'package:stitches/services/grid_parser.dart';
+import 'package:stitches/services/stitch_planner.dart';
+import 'package:stitches/services/stitch_renderer.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -205,7 +205,7 @@ img.DitherKernel _parseDither(String name) => switch (name) {
 
 void _printUsage(ArgParser parser) {
   print('''
-StitchX CLI — animate a stitching plan as a GIF.
+Stitches CLI — animate a stitching plan as a GIF.
 
 Usage:
   stitchx-cli -i <grid.pattern> -o <out.gif>          file input

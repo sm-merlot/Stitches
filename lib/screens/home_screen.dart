@@ -346,7 +346,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'StitchX',
+                      'Stitches',
                       style: theme.textTheme.headlineMedium
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),

@@ -147,7 +147,7 @@ class _StitchColoursPanel extends ConsumerWidget {
     final theme = Theme.of(context);
 
     final threads = _compositeThreads(state);
-    final stitchCounts = _countStitches(state.pattern.stitches);
+    final stitchCounts = _countStitchesComposite(state);
 
     // Only show the stitch focus row when both types of stitch are present.
     final allStitches = state.pattern.stitches;
@@ -219,6 +219,27 @@ class _StitchColoursPanel extends ConsumerWidget {
       return unique.values.toList();
     }
     return state.pattern.threads;
+  }
+
+  /// Counts stitches using composite cache for FullStitches (so blended cells
+  /// are attributed to the composite DMC code, not the raw per-layer thread)
+  /// and raw threadId for non-FullStitch types.
+  Map<String, int> _countStitchesComposite(EditorState state) {
+    final cache = state.compositeThreadCache;
+    if (cache == null || cache.isEmpty) {
+      return _countStitches(state.pattern.stitches);
+    }
+    final counts = <String, int>{};
+    // FullStitch cells → composite result
+    for (final thread in cache.values) {
+      counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
+    }
+    // Non-FullStitch stitches → raw threadId
+    for (final s in state.pattern.stitches) {
+      if (s is FullStitch) continue;
+      counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
+    }
+    return counts;
   }
 }
 

@@ -281,16 +281,16 @@ class EditorScreen extends ConsumerWidget {
                   message: driveState.isSyncing
                       ? 'Syncing to Google Drive…'
                       : 'Synced to Google Drive',
-                  child: driveState.isSyncing
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: SizedBox(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: driveState.isSyncing
+                        ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : const Icon(Icons.cloud_done_outlined),
+                          )
+                        : const Icon(Icons.cloud_done_outlined, size: 22),
+                  ),
                 ),
               IconButton(
                 tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
