@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+### Patch Changes
+
+- b5ee54a: Fix android gradle configuration for ci
+
 ## 0.2.0
 
 ### Minor Changes
