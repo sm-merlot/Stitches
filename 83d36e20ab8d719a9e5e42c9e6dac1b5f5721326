@@ -1,0 +1,23 @@
+ios/Runner/Info.plist
+  d87ffa7acd0cedc7 60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "83d36e20ab8d719a9e5e42c9e6dac1b5f5721326",
+  "prompts": {
+    "d87ffa7acd0cedc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9009c935-336b-417f-87a5-2088097f5b0c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
