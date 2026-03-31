@@ -255,7 +255,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || thread.symbol.isEmpty) continue;
 
-          final c = _resolveStitchColor(stitch.threadId,
+          // For blended cells use the composite thread's DMC code for focus
+          // checks so the symbol shows as focused when the composited colour
+          // matches the selected thread — not the raw per-layer threadId.
+          final focusId = compositeThread?.dmcCode ?? stitch.threadId;
+          final c = _resolveStitchColor(focusId,
               _applyPaletteOverride(stitch.threadId, thread.color),
               isCrossStitch: true);
           if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
@@ -661,11 +665,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     return original;
   }
 
-  static Color _greyColor(Color c) {
-    final lum = 0.299 * (c.r * 255) + 0.587 * (c.g * 255) + 0.114 * (c.b * 255);
-    final g = lum.round().clamp(80, 210);
-    return Color.fromARGB(160, g, g, g);
-  }
+  // A single uniform grey used for all unfocused stitches so that different
+  // thread colours don't produce different grey shades (which caused streaks
+  // when multiple layers each contributed their own luminance-based grey).
+  static const Color _unfocusedGrey = Color(0xA0B8B8B8);
+  static Color _greyColor(Color c) => _unfocusedGrey;
 
   @override
   bool shouldRepaint(CanvasStaticPainter old) =>

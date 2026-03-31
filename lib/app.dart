@@ -4,8 +4,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
 
-class StitchXApp extends ConsumerWidget {
-  const StitchXApp({super.key});
+class StitchesApp extends ConsumerWidget {
+  const StitchesApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,7 +20,7 @@ class StitchXApp extends ConsumerWidget {
     if (keepScreenOn) WakelockPlus.enable();
 
     return MaterialApp(
-      title: 'StitchX',
+      title: 'Stitches',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

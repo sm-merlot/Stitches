@@ -8,7 +8,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitchx/services/grid_detector.dart';
+import 'package:stitches/services/grid_detector.dart';
 
 // ── Expected values — fill these in once you have confirmed coordinates ───────
 //

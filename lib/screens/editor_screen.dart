@@ -281,16 +281,16 @@ class EditorScreen extends ConsumerWidget {
                   message: driveState.isSyncing
                       ? 'Syncing to Google Drive…'
                       : 'Synced to Google Drive',
-                  child: driveState.isSyncing
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: SizedBox(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: driveState.isSyncing
+                        ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : const Icon(Icons.cloud_done_outlined),
+                          )
+                        : const Icon(Icons.cloud_done_outlined, size: 22),
+                  ),
                 ),
               IconButton(
                 tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
@@ -387,8 +387,22 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Stitch mode actions — Demo + Screen Lock
+            // Stitch mode actions — Block mode + Demo + Screen Lock
             if (state.stitchMode) ...[
+              IconButton(
+                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
+                isSelected: state.blockMode,
+                icon: const Icon(Icons.grid_view_outlined),
+                selectedIcon: const Icon(Icons.grid_view),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).toggleBlockMode(),
+                style: state.blockMode
+                    ? IconButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
+              ),
               StitchDemoButton(state: state),
               _ScreenLockButton(ref: ref),
               const SizedBox(width: 4),
@@ -475,7 +489,9 @@ class EditorScreen extends ConsumerWidget {
             _InfoRow('Name', p.name),
             _InfoRow('Size', '${p.width} × ${p.height} stitches'),
             _InfoRow('Threads', '${p.threads.length}'),
-            _InfoRow('Stitches',
+            _InfoRow('Stitches (canvas)',
+                '${p.canvasCellCount}'),
+            _InfoRow('Stitches (all layers)',
                 '${p.layers.fold(0, (sum, l) => sum + l.stitches.length)}'),
             if (state.filePath != null)
               _InfoRow(

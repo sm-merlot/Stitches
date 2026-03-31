@@ -147,7 +147,8 @@ class FileService {
         pattern.editorTool != null ||
         pattern.editorStitchMode ||
         pattern.editorActiveLayerId != null ||
-        pattern.editorBlockMode) {
+        pattern.editorBlockMode ||
+        pattern.editorViewScale > 0) {
       buf.writeln('editor:');
       if (pattern.editorSelectedThreadId != null) {
         buf.writeln(
@@ -164,6 +165,11 @@ class FileService {
       }
       if (pattern.editorBlockMode) {
         buf.writeln('  blockMode: true');
+      }
+      if (pattern.editorViewScale > 0) {
+        buf.writeln('  panX: ${pattern.editorViewPanX.toStringAsFixed(1)}');
+        buf.writeln('  panY: ${pattern.editorViewPanY.toStringAsFixed(1)}');
+        buf.writeln('  scale: ${pattern.editorViewScale.toStringAsFixed(4)}');
       }
     }
 

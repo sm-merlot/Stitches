@@ -23,7 +23,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
     const ProviderScope(
-      child: StitchXApp(),
+      child: StitchesApp(),
     ),
   );
 }
