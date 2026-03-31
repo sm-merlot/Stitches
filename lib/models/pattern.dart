@@ -26,6 +26,9 @@ class CrossStitchPattern {
   /// Last-saved editor state — which layer was active.
   final String? editorActiveLayerId;
 
+  /// Last-saved editor state — whether block mode was active.
+  final bool editorBlockMode;
+
   /// Path to a reference image overlay (persisted with the file).
   final String? referenceImagePath;
 
@@ -50,6 +53,7 @@ class CrossStitchPattern {
     this.editorTool,
     this.editorStitchMode = false,
     this.editorActiveLayerId,
+    this.editorBlockMode = false,
     this.referenceImagePath,
     this.referenceOpacity = 0.5,
     this.snippets = const [],
@@ -62,9 +66,13 @@ class CrossStitchPattern {
   /// All rendering consumers use this getter; no rendering code needs updating.
   List<Layer> get layers => layerItems.expand((item) => switch (item) {
         LayerLeaf(:final layer) => [layer],
-        LayerGroup(:final groupVisible, :final layers) => groupVisible
-            ? layers
-            : layers.map((l) => l.copyWith(visible: false)).toList(),
+        LayerGroup(:final groupVisible, :final groupLocked, :final layers) => () {
+            var ls = groupVisible
+                ? layers
+                : layers.map((l) => l.copyWith(visible: false)).toList();
+            if (groupLocked) ls = ls.map((l) => l.copyWith(locked: true)).toList();
+            return ls;
+          }(),
       }).toList();
 
   /// Apply [fn] to every Layer in [layerItems], preserving group structure.
@@ -72,12 +80,13 @@ class CrossStitchPattern {
         layerItems: layerItems.map((item) => switch (item) {
               LayerLeaf(:final layer) => LayerLeaf(layer: fn(layer)),
               LayerGroup(:final layers, :final id, :final name,
-                      :final collapsed, :final groupVisible) =>
+                      :final collapsed, :final groupVisible, :final groupLocked) =>
                 LayerGroup(
                   id: id,
                   name: name,
                   collapsed: collapsed,
                   groupVisible: groupVisible,
+                  groupLocked: groupLocked,
                   layers: layers.map(fn).toList(),
                 ),
             }).toList(),
@@ -102,6 +111,7 @@ class CrossStitchPattern {
       layerItems: [LayerLeaf(layer: defaultLayer)],
       editorSelectedThreadId: '310',
       editorActiveLayerId: defaultLayer.id,
+      editorBlockMode: true,
     );
   }
 
@@ -116,6 +126,7 @@ class CrossStitchPattern {
     Object? editorTool = _sentinel,
     bool? editorStitchMode,
     Object? editorActiveLayerId = _sentinel,
+    bool? editorBlockMode,
     Object? referenceImagePath = _sentinel,
     double? referenceOpacity,
     List<Snippet>? snippets,
@@ -138,6 +149,7 @@ class CrossStitchPattern {
       editorActiveLayerId: editorActiveLayerId == _sentinel
           ? this.editorActiveLayerId
           : editorActiveLayerId as String?,
+      editorBlockMode: editorBlockMode ?? this.editorBlockMode,
       referenceImagePath: referenceImagePath == _sentinel
           ? this.referenceImagePath
           : referenceImagePath as String?,
@@ -193,6 +205,7 @@ class CrossStitchPattern {
             name: m['name'] as String,
             collapsed: m['collapsed'] as bool? ?? false,
             groupVisible: m['groupVisible'] as bool? ?? true,
+            groupLocked: m['groupLocked'] as bool? ?? false,
             layers: innerLayers,
           );
         } else {
@@ -235,6 +248,7 @@ class CrossStitchPattern {
       editorTool: editor?['tool'] as String?,
       editorStitchMode: editor?['stitchMode'] as bool? ?? false,
       editorActiveLayerId: editor?['activeLayer'] as String?,
+      editorBlockMode: editor?['blockMode'] as bool? ?? false,
       referenceImagePath: yaml['overlay']?['imagePath'] as String?,
       referenceOpacity:
           (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,

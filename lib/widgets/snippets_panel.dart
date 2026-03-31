@@ -66,7 +66,8 @@ class SnippetsPanel extends ConsumerWidget {
                   ? _EmptyState(onNew: () => _openEditor(context, ref, null))
                   : GridView.builder(
                       controller: scrollController,
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.fromLTRB(
+                          16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
                         maxCrossAxisExtent: 120,
@@ -110,8 +111,12 @@ class SnippetsPanel extends ConsumerWidget {
     final allSnippets = editorState.pattern.snippets;
     final siblings = allSnippets.where((s) => s.id != snippet?.id).toList();
     final blockMode = editorState.blockMode;
+    final aidaColor = editorState.pattern.aidaColor;
 
     navigator.pop(); // close the panel
+    // Wait for the pop to settle before pushing — iOS can drop a push that
+    // fires in the same frame as a pop, showing nothing.
+    await Future.microtask(() {});
 
     final result = await navigator.push<Snippet>(
       MaterialPageRoute(
@@ -119,6 +124,7 @@ class SnippetsPanel extends ConsumerWidget {
           snippet: snippet,
           siblingSnippets: siblings,
           initialBlockMode: blockMode,
+          aidaColor: aidaColor,
         ),
         fullscreenDialog: true,
       ),

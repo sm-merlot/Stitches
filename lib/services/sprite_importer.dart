@@ -246,14 +246,14 @@ class SpriteImporter {
     // Squared threshold — avoids sqrt per pixel.
     final dropSq = dropThreshold * dropThreshold;
 
-    final hasAlpha = image.numChannels >= 4;
     final out = img.Image(width: w, height: h);
 
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
-        final alpha = hasAlpha ? pixel.a.toInt() : 255;
-        if (alpha < 128) continue; // leave transparent
+        // Do not skip low-alpha pixels here: indexed PNGs (e.g. SNES rips) mark
+        // background palette entries as transparent even when the pixels carry
+        // real colour data. The drop threshold below handles background exclusion.
 
         final (pl, pa, pb) =
             _rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
@@ -415,9 +415,10 @@ class SpriteImporter {
       );
     }
 
-    // Import crop pixels restricted to primary-palette threads only.
-    final stitches =
-        _importRegionRestricted(image, x, y, w, h, primaryThreads);
+    // Import crop pixels: match against raw strip colours for accuracy,
+    // then assign the corresponding DMC thread code.
+    final stitches = _importRegionRestrictedFromRaw(
+        image, x, y, w, h, paletteStrips[0], primaryThreads);
 
     final palettes = <SnippetPalette>[
       SnippetPalette.create(name: 'Palette 1', threads: primaryThreads),
@@ -446,56 +447,51 @@ class SpriteImporter {
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
-  /// DMC-matches each raw [Color] in [stripColours] in order.
-  /// Preserves position so that index N here maps to slot N.
-  static List<Thread> _dmcMatchStrip(List<Color> stripColours) {
-    return stripColours.map((c) {
-      final dmc = matchPixel(
-          (c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round(), 255);
-      if (dmc == null) return null;
-      return Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
-    }).whereType<Thread>().toList();
-  }
-
-  /// Imports crop pixels matching only against [allowedThreads].
-  /// Pixels whose nearest match exceeds 30 Lab units are dropped (background).
-  static List<Stitch> _importRegionRestricted(
+  /// Like [_importRegionRestricted] but matches crop pixels against [rawStripColors]
+  /// (the original palette-strip pixel colours) rather than their DMC translations.
+  /// This avoids the double-approximation error where a pixel fails the drop
+  /// threshold only because the DMC translation shifted the strip colour.
+  /// [dmcThreads] must be parallel to [rawStripColors]; the winning slot's
+  /// DMC code is used as the stitch threadId.
+  static List<Stitch> _importRegionRestrictedFromRaw(
     img.Image image,
     int x,
     int y,
     int w,
     int h,
-    List<Thread> allowedThreads,
+    List<Color> rawStripColors,
+    List<Thread> dmcThreads,
   ) {
     final x0 = x.clamp(0, image.width);
     final y0 = y.clamp(0, image.height);
     final x1 = (x + w).clamp(x0, image.width);
     final y1 = (y + h).clamp(y0, image.height);
 
-    final threadLab = allowedThreads.map((t) {
-      final r = (t.color.r * 255).round();
-      final g = (t.color.g * 255).round();
-      final b = (t.color.b * 255).round();
+    final stripLab = List.generate(rawStripColors.length, (i) {
+      final c = rawStripColors[i];
+      final r = (c.r * 255).round();
+      final g = (c.g * 255).round();
+      final b = (c.b * 255).round();
       final (l, a, bb) = _rgbToLab(r, g, b);
-      return (thread: t, l: l, a: a, b: bb);
-    }).toList();
+      return (thread: dmcThreads[i], l: l, a: a, b: bb);
+    });
 
     const dropSq = 30.0 * 30.0;
-    final hasAlpha = image.numChannels >= 4;
     final stitches = <Stitch>[];
 
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
-        final alpha = hasAlpha ? pixel.a.toInt() : 255;
-        if (alpha < 128) continue;
+        // Do not skip low-alpha pixels: indexed PNGs (e.g. SNES rips) mark
+        // background entries as transparent even when they carry real colour.
+        // The drop threshold below provides background exclusion instead.
 
         final (pl, pa, pb) =
             _rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
 
         double best = double.infinity;
         Thread? bestThread;
-        for (final entry in threadLab) {
+        for (final entry in stripLab) {
           final dl = pl - entry.l;
           final da = pa - entry.a;
           final db = pb - entry.b;
@@ -515,4 +511,18 @@ class SpriteImporter {
 
     return stitches;
   }
+
+  /// DMC-matches each raw [Color] in [stripColours] in order.
+  /// Preserves position so that index N here maps to slot N.
+  static List<Thread> _dmcMatchStrip(List<Color> stripColours) {
+    return stripColours.map((c) {
+      final dmc = matchPixel(
+          (c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round(), 255);
+      if (dmc == null) return null;
+      return Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
+    }).whereType<Thread>().toList();
+  }
+
+  /// Imports crop pixels matching only against [allowedThreads].
+  /// Pixels whose nearest match exceeds 30 Lab units are dropped (background).
 }

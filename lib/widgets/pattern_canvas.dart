@@ -9,6 +9,7 @@ import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
+import '../providers/settings_provider.dart';
 import 'canvas_painter.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {
@@ -30,6 +31,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   Offset _gestureStartOffset = Offset.zero;
   double _pinchStartDistance = 0.0;
   Offset _pinchStartCenter = Offset.zero;
+  // True while any gesture sequence that included ≥2 fingers is still active
+  // (i.e. at least one finger from the pinch is still down).  Single-finger
+  // draw/select/paste actions are suppressed during this window so that the
+  // residual finger from a pinch never accidentally adds stitches.
+  // Reset to false only when _activePointers becomes empty (all fingers up).
+  bool _hadMultiTouch = false;
 
   // Trackpad pinch-to-zoom (macOS PointerPanZoom events)
   double _trackpadStartScale = 1.0;
@@ -50,6 +57,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   bool _hasDraggedSelection = false; // true once pointer moves during a rubber-band
   Offset? _moveDragStartCell;
   Offset _moveDelta = Offset.zero;
+  // Live rubber-band rect during drag — only committed to provider on pointer up.
+  Rect? _dragSelectionRect;
 
   // Paste preview origin (grid cell coords, top-left of where clipboard will land)
   Offset? _pasteOrigin;
@@ -75,6 +84,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   Timer? _warningTimer;
   // Suppresses repeat warnings within a single pointer-down → up gesture.
   bool _warnedThisGesture = false;
+
+  // ── Ghost stitch cache ────────────────────────────────────────────────────
+  // Avoids re-allocating the offset stitch list on every build when the paste
+  // offset and clipboard haven't changed.
+  List<Stitch>? _cachedGhostStitches;
+  (int, int)? _lastGhostDxDy;
+  List<Stitch>? _lastGhostClipboard;
 
   // ── Frame-coalesced rebuild ────────────────────────────────────────────────
   // Pointer events (pan, hover, pinch) can fire at 120 Hz. Calling setState on
@@ -569,6 +585,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       ref.read(editorProvider).drawingMode == DrawingMode.pan;
 
   void _onPointerDown(PointerDownEvent event) {
+    // Reclaim keyboard focus so shortcuts keep working after AppBar buttons,
+    // dialogs, or bottom sheets have taken it away.
+    Focus.maybeOf(context)?.requestFocus();
     _activePointers[event.pointer] = event.localPosition;
     _mouseScreenPos = event.localPosition;
     _warnedThisGesture = false;
@@ -621,12 +640,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
 
       if (mode == DrawingMode.paste) {
-        final origin = _pasteOrigin;
-        final clips = ref.read(editorProvider).clipboard;
-        if (origin != null && clips != null) {
-          final (dx, dy) = _pasteOffset(origin, clips);
-          ref.read(editorProvider.notifier).commitPaste(dx, dy);
-          if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
+        final pencilConfirm =
+            ref.read(settingsProvider).pencilPasteConfirm;
+        if (pencilConfirm) {
+          // Pencil-confirm mode: stylus tap positions ghost, finger confirms.
+          final c = _screenToCanvas(event.localPosition);
+          final (cx, cy) = _canvasToCell(c);
+          setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+        } else {
+          final origin = _pasteOrigin;
+          final clips = ref.read(editorProvider).clipboard;
+          if (origin != null && clips != null) {
+            final (dx, dy) = _pasteOffset(origin, clips);
+            ref.read(editorProvider.notifier).commitPaste(dx, dy);
+            if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
+          }
         }
         return;
       }
@@ -635,8 +663,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
-    // Touch — handle special modes before pan/pinch setup
-    if (_activePointers.length == 1) {
+    // Touch — handle special modes before pan/pinch setup.
+    // Skip drawing/select/paste setup if this finger is the residual from a
+    // pinch — it should only pan until all fingers are lifted.
+    if (_activePointers.length == 1 && !_hadMultiTouch) {
       final mode = ref.read(editorProvider).drawingMode;
       if (mode == DrawingMode.select) {
         final editorState = ref.read(editorProvider);
@@ -668,10 +698,23 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
 
       if (mode == DrawingMode.paste) {
-        final c = _screenToCanvas(event.localPosition);
-        final (cx, cy) = _canvasToCell(c);
-        setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
-        // Commit on pointer up to avoid double-tap undo collision
+        final pencilConfirm =
+            ref.read(settingsProvider).pencilPasteConfirm;
+        if (pencilConfirm) {
+          // Pencil-confirm mode: finger tap commits at current ghost position.
+          final origin = _pasteOrigin;
+          final clips = ref.read(editorProvider).clipboard;
+          if (origin != null && clips != null) {
+            final (dx, dy) = _pasteOffset(origin, clips);
+            ref.read(editorProvider.notifier).commitPaste(dx, dy);
+            if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
+          }
+        } else {
+          final c = _screenToCanvas(event.localPosition);
+          final (cx, cy) = _canvasToCell(c);
+          setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+          // Commit on pointer up to avoid double-tap undo collision
+        }
         return;
       }
     }
@@ -680,6 +723,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_activePointers.length == 1) {
       _gestureStartOffset = _panOffset;
     } else if (_activePointers.length == 2) {
+      _hadMultiTouch = true;
       final pts = _activePointers.values.toList();
       _pinchStartDistance = (pts[0] - pts[1]).distance;
       _pinchStartCenter = (pts[0] + pts[1]) / 2;
@@ -720,8 +764,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           _scheduleRebuild();
         } else if (_selectionAnchor != null) {
           _hasDraggedSelection = true;
-          ref.read(editorProvider.notifier).setSelectionRect(
-              _buildSelRect(_selectionAnchor!, cell));
+          _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
+          _scheduleRebuild();
         }
         return;
       }
@@ -729,7 +773,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (mode == DrawingMode.paste) {
         final c = _screenToCanvas(event.localPosition);
         final (cx, cy) = _canvasToCell(c);
-        _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
+        final newOrigin = Offset(cx.toDouble(), cy.toDouble());
+        if (newOrigin == _pasteOrigin) return; // same cell — nothing to repaint
+        _pasteOrigin = newOrigin;
         _scheduleRebuild();
         return;
       }
@@ -747,7 +793,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     }
 
     // ── Touch gestures ───────────────────────────────────────────────────────
-    if (_activePointers.length == 2) {
+    if (_activePointers.length >= 2) {
+      _hadMultiTouch = true;
       // Pinch to zoom + two-finger pan
       final pts = _activePointers.values.toList();
       final currentDist = (pts[0] - pts[1]).distance;
@@ -765,6 +812,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         _scheduleRebuild();
       }
     } else if (_activePointers.length == 1) {
+      if (_hadMultiTouch) {
+        // Residual finger from a pinch — pan only, never draw.
+        _pan(event.delta);
+        return;
+      }
       final mode = ref.read(editorProvider).drawingMode;
       if (mode == DrawingMode.select) {
         final cell = _screenToSelCell(event.localPosition);
@@ -773,8 +825,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           _scheduleRebuild();
         } else if (_selectionAnchor != null) {
           _hasDraggedSelection = true;
-          ref.read(editorProvider.notifier).setSelectionRect(
-              _buildSelRect(_selectionAnchor!, cell));
+          _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
+          _scheduleRebuild();
         }
       } else if (mode == DrawingMode.paste) {
         final c = _screenToCanvas(event.localPosition);
@@ -838,19 +890,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     // Finalize rubber-band selection
     if (_selectionAnchor != null) {
       final cell = _screenToSelCell(pos);
-      final rect = _buildSelRect(_selectionAnchor!, cell);
+      final rect = _dragSelectionRect ?? _buildSelRect(_selectionAnchor!, cell);
       // Only keep selection if the user actually dragged; a bare click deselects
       ref.read(editorProvider.notifier).setSelectionRect(
           _hasDraggedSelection && rect.width >= 1 && rect.height >= 1 ? rect : null);
       _selectionAnchor = null;
       _hasDraggedSelection = false;
+      _dragSelectionRect = null;
       _scheduleRebuild();
       _activePointers.remove(event.pointer);
       return;
     }
 
-    // Double-tap (touch only) → undo
-    if (event.kind == PointerDeviceKind.touch && wasSinglePointer) {
+    // Double-tap (touch only) → undo; single-tap → draw.
+    // Skip both if this finger was part of a multi-touch gesture.
+    if (event.kind == PointerDeviceKind.touch && wasSinglePointer && !_hadMultiTouch) {
       final timeSinceLast = _lastTouchUpTime != null
           ? now.difference(_lastTouchUpTime!)
           : const Duration(seconds: 1);
@@ -873,7 +927,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     }
 
     _activePointers.remove(event.pointer);
-    if (_activePointers.isEmpty) _pinchStartDistance = 0;
+    if (_activePointers.isEmpty) {
+      _pinchStartDistance = 0;
+      _hadMultiTouch = false; // all fingers up — next touch starts fresh
+    }
   }
 
   // ─── Trackpad pinch-to-zoom (macOS) ──────────────────────────────────────
@@ -914,7 +971,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (state.drawingMode == DrawingMode.paste) {
       final c = _screenToCanvas(event.localPosition);
       final (cx, cy) = _canvasToCell(c);
-      _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
+      final newOrigin = Offset(cx.toDouble(), cy.toDouble());
+      if (newOrigin == _pasteOrigin) return; // same cell — nothing to repaint
+      _pasteOrigin = newOrigin;
       _scheduleRebuild();
       return;
     }
@@ -966,12 +1025,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     // Compute ghost stitches for paste preview or move drag
     List<Stitch>? ghostStitches;
-    if (state.drawingMode == DrawingMode.paste &&
-        _pasteOrigin != null &&
-        state.clipboard != null) {
-      final (dx, dy) = _pasteOffset(_pasteOrigin!, state.clipboard!);
-      ghostStitches =
-          state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
+    if (state.drawingMode == DrawingMode.paste && state.clipboard != null) {
+      // Fall back to canvas centre so the ghost is visible even before the
+      // user has moved the cursor (e.g. right after a flip/rotate).
+      final origin = _pasteOrigin ??
+          Offset(state.pattern.width / 2.0, state.pattern.height / 2.0);
+      final (dx, dy) = _pasteOffset(origin, state.clipboard!);
+      // Only rebuild the offset list when the placement or clipboard changes.
+      if (_lastGhostDxDy != (dx, dy) ||
+          !identical(_lastGhostClipboard, state.clipboard)) {
+        _lastGhostDxDy = (dx, dy);
+        _lastGhostClipboard = state.clipboard;
+        _cachedGhostStitches =
+            state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
+      }
+      ghostStitches = _cachedGhostStitches;
     } else if (_isMovingSelection && state.selectionRect != null) {
       final dx = _moveDelta.dx.round();
       final dy = _moveDelta.dy.round();
@@ -1067,7 +1135,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                     ? null
                     : _mouseScreenPos,
-                selectionRect: state.selectionRect,
+                selectionRect: _dragSelectionRect ?? state.selectionRect,
                 ghostStitches: ghostStitches,
                 ghostThreads: state.drawingMode == DrawingMode.paste
                     ? state.clipboardThreads

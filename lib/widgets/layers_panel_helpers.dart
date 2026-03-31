@@ -27,7 +27,7 @@ class _FlatLayer extends _FlatItem {
 
 enum _LayerAction { rename, duplicate, mergeDown, delete }
 
-enum _GroupAction { rename, addLayer, ungroup, delete }
+enum _GroupAction { rename, addLayer, toggleLock, ungroup, delete }
 
 // ─── Flat list helpers ─────────────────────────────────────────────────────────
 

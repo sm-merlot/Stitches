@@ -8,6 +8,8 @@ mixin LayersMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
   List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
+
+  Timer? _opacityDebounce;
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
   String _nextSymbol(Set<String> used);
 
@@ -154,13 +156,31 @@ mixin LayersMixin on Notifier<EditorState> {
     if (state.showCompositeThreads) refreshCompositeCache();
   }
 
+  void toggleLayerLocked(String id) {
+    final newPattern =
+        _updateLayer(state.pattern, id, (l) => l.copyWith(locked: !l.locked));
+    state = state.copyWith(pattern: newPattern, isDirty: true);
+  }
+
+  void setLayerBlendMode(String id, LayerBlendMode mode) {
+    final newPattern =
+        _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
+    state = state.copyWith(
+        pattern: newPattern, isDirty: true, compositeThreadCache: null);
+    if (state.showCompositeThreads) refreshCompositeCache();
+  }
+
   void setLayerOpacity(String id, double opacity) {
     final clamped = opacity.clamp(0.0, 1.0);
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
     state = state.copyWith(
         pattern: newPattern, isDirty: true, compositeThreadCache: null);
-    if (state.showCompositeThreads) refreshCompositeCache();
+    if (state.showCompositeThreads) {
+      _opacityDebounce?.cancel();
+      _opacityDebounce =
+          Timer(const Duration(milliseconds: 150), refreshCompositeCache);
+    }
   }
 
   /// [delta] = +1 moves layer up (toward top/front), -1 moves down.
@@ -183,7 +203,9 @@ mixin LayersMixin on Notifier<EditorState> {
       id: const Uuid().v4(),
       name: '${src.name} copy',
       visible: src.visible,
+      locked: src.locked,
       opacity: src.opacity,
+      blendMode: src.blendMode,
       stitches: List<Stitch>.from(src.stitches),
     );
     final newItems = _insertLayerAbove(state.pattern.layerItems, duplicate, id);
@@ -405,6 +427,19 @@ mixin LayersMixin on Notifier<EditorState> {
       pattern: state.pattern.copyWith(layerItems: newItems),
       isDirty: true,
       compositeThreadCache: null,
+    );
+  }
+
+  void toggleGroupLocked(String groupId) {
+    final newItems = state.pattern.layerItems.map((item) {
+      if (item is LayerGroup && item.id == groupId) {
+        return item.copyWith(groupLocked: !item.groupLocked);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(layerItems: newItems),
+      isDirty: true,
     );
   }
 

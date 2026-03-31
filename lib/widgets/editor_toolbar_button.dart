@@ -34,14 +34,15 @@ class _ToolbarButton extends StatelessWidget {
             ? Colors.white
             : Colors.grey.shade600;
 
+    final size = _isTouchPlatform ? 40.0 : 34.0;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: 34,
-          height: 34,
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(6),
@@ -93,8 +94,8 @@ class _EraserSizeButton extends StatelessWidget {
       ],
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        width: 50,
-        height: 34,
+        width: _isTouchPlatform ? 56 : 50,
+        height: _isTouchPlatform ? 40 : 34,
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(6),

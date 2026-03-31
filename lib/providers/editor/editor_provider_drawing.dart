@@ -273,6 +273,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   // ─── Stitch drawing ───────────────────────────────────────────────────────
 
   void addStitch(Stitch stitch) {
+    if (state.activeLayer.locked) return;
     final alreadyExists = state.activeLayer.stitches
         .any((s) => s == stitch && s.threadId == stitch.threadId);
     if (alreadyExists) return;
@@ -302,7 +303,9 @@ mixin DrawingMixin on Notifier<EditorState> {
     }
 
     final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
-    final newPattern = _patternWithActiveLayerStitches(pattern, newStitches);
+    final rawPattern = _patternWithActiveLayerStitches(pattern, newStitches);
+    // Prune threads whose last stitch was painted over by a different colour.
+    final newPattern = _pruneUnusedThreads(rawPattern);
     state = state.copyWith(
       pattern: newPattern,
       snippetPalettes: snippetPalettes,
@@ -313,6 +316,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   void removeStitchesAt(int x, int y) {
+    if (state.activeLayer.locked) return;
     bool hit(Stitch s) => _stitchAtCell(s, x, y) || _backstitchInCell(s, x, y);
     if (!state.activeLayer.stitches.any(hit)) return;
 
@@ -329,6 +333,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
   /// Erases all stitches in a [size]×[size] box centred on (cx, cy).
   void removeStitchesInBox(int cx, int cy, int size) {
+    if (state.activeLayer.locked) return;
     final half = (size - 1) ~/ 2;
     final x0 = cx - half;
     final x1 = cx + (size - 1 - half);
@@ -514,8 +519,10 @@ mixin DrawingMixin on Notifier<EditorState> {
             QuarterStitch(:final x, :final y) => x < newW && y < newH,
             HalfCrossStitch(:final x, :final y) => x < newW && y < newH,
             QuarterCrossStitch(:final x, :final y) => x < newW && y < newH,
+            // BackStitch uses grid-point coords (0..width inclusive), so the
+            // right/bottom boundary is <= not <.
             BackStitch(:final x1, :final y1, :final x2, :final y2) =>
-              x1 < newW && y1 < newH && x2 < newW && y2 < newH,
+              x1 <= newW && y1 <= newH && x2 <= newW && y2 <= newH,
           };
         }).toList(),
       SnippetResizeMode.scale => old.stitches.map((s) {
@@ -582,7 +589,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   // ─── Stitch / block mode ──────────────────────────────────────────────────
 
   void toggleBlockMode() {
-    state = state.copyWith(blockMode: !state.blockMode);
+    state = state.copyWith(blockMode: !state.blockMode, isDirty: true);
   }
 
   void toggleCanvasSelectionMode() {

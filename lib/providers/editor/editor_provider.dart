@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
@@ -6,15 +7,18 @@ import 'package:uuid/uuid.dart';
 import '../../data/dmc_colors.dart';
 import '../../data/symbols.dart';
 import '../../models/layer.dart';
+import '../../models/layer_blend_mode.dart';
 import '../../models/layer_item.dart';
 import '../../models/pattern.dart';
 import '../../models/snippet.dart';
 import '../../models/snippet_palette.dart';
+import '../../models/snippet_palette_resolver.dart';
 import '../../models/stitch.dart';
 import '../../models/thread.dart';
 import '../../services/file_service.dart';
 import '../../services/reference_image_service.dart';
 import '../../services/sprite_importer.dart';
+import '../settings_provider.dart';
 
 part 'editor_provider_drawing.dart';
 part 'editor_provider_layers.dart';
@@ -98,6 +102,11 @@ class EditorState {
   /// PatternCanvas clears this immediately after showing it.
   final String? pendingCanvasWarning;
 
+  /// Whether to gzip-compress this file when saving.
+  /// Set from the file's detected compression on open; defaults to the app
+  /// setting for new patterns. Toggled per-file via the overflow menu.
+  final bool compressOnSave;
+
   /// True when the current file is in the native .stitchx format (or unsaved).
   bool get isNativeFormat {
     final path = filePath;
@@ -140,6 +149,7 @@ class EditorState {
     this.fillEraseActive = false,
     this.canvasSelectionMode = false,
     this.pendingCanvasWarning,
+    this.compressOnSave = true,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -158,6 +168,7 @@ class EditorState {
     editorSelectedThreadId: selectedThreadId,
     editorStitchMode: stitchMode,
     editorActiveLayerId: activeLayerId.isEmpty ? null : activeLayerId,
+    editorBlockMode: blockMode,
   );
 
   Thread? get selectedThread {
@@ -219,6 +230,22 @@ class EditorState {
         BackStitch(x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy, threadId: threadId),
   };
 
+  /// Returns a copy of [s] with its threadId replaced by [newId].
+  static Stitch remapStitchThread(Stitch s, String newId) => switch (s) {
+    FullStitch(:final x, :final y) =>
+        FullStitch(x: x, y: y, threadId: newId),
+    HalfStitch(:final x, :final y, :final isForward) =>
+        HalfStitch(x: x, y: y, isForward: isForward, threadId: newId),
+    QuarterStitch(:final x, :final y, :final quadrant) =>
+        QuarterStitch(x: x, y: y, quadrant: quadrant, threadId: newId),
+    HalfCrossStitch(:final x, :final y, :final half) =>
+        HalfCrossStitch(x: x, y: y, half: half, threadId: newId),
+    QuarterCrossStitch(:final x, :final y, :final quadrant) =>
+        QuarterCrossStitch(x: x, y: y, quadrant: quadrant, threadId: newId),
+    BackStitch(:final x1, :final y1, :final x2, :final y2) =>
+        BackStitch(x1: x1, y1: y1, x2: x2, y2: y2, threadId: newId),
+  };
+
   EditorState copyWith({
     CrossStitchPattern? pattern,
     Object? filePath = _sentinel,
@@ -254,6 +281,7 @@ class EditorState {
     bool? fillEraseActive,
     bool? canvasSelectionMode,
     Object? pendingCanvasWarning = _sentinel,
+    bool? compressOnSave,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -306,6 +334,7 @@ class EditorState {
       pendingCanvasWarning: pendingCanvasWarning == _sentinel
           ? this.pendingCanvasWarning
           : pendingCanvasWarning as String?,
+      compressOnSave: compressOnSave ?? this.compressOnSave,
     );
   }
 
@@ -329,6 +358,7 @@ class EditorNotifier extends Notifier<EditorState>
     String? filePath,
     String? driveFileId,
     String? driveParentFolderId,
+    bool compressOnSave = true,
   }) {
     DrawingTool tool = DrawingTool.fullStitch;
     if (pattern.editorTool != null) {
@@ -356,6 +386,7 @@ class EditorNotifier extends Notifier<EditorState>
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
       stitchMode: pattern.editorStitchMode,
+      blockMode: pattern.editorBlockMode,
       drawingMode: hasClipboard
           ? DrawingMode.paste
           : (pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw),
@@ -368,6 +399,7 @@ class EditorNotifier extends Notifier<EditorState>
       isFileOpen: true,
       activeLayerId: withSymbols.editorActiveLayerId ??
           (withSymbols.layers.isNotEmpty ? withSymbols.layers.first.id : ''),
+      compressOnSave: compressOnSave,
     );
 
     if (withSymbols.referenceImagePath != null) {
@@ -389,6 +421,7 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   void newPattern(CrossStitchPattern pattern) {
+    final compress = ref.read(settingsProvider).compressNewFiles;
     final threads = _assignSymbols(pattern.threads);
     final seeded = pattern.copyWith(threads: threads);
     state = EditorState(
@@ -397,7 +430,12 @@ class EditorNotifier extends Notifier<EditorState>
       recentThreadIds: [threads.first.dmcCode],
       isFileOpen: true,
       activeLayerId: seeded.layers.isNotEmpty ? seeded.layers.first.id : '',
+      compressOnSave: compress,
     );
+  }
+
+  void toggleCompressOnSave() {
+    state = state.copyWith(compressOnSave: !state.compressOnSave, isDirty: true);
   }
 
   void closeFile() {
@@ -628,7 +666,7 @@ Map<String, Thread> computeCompositeThreads(CrossStitchPattern pattern) {
       final hit = hits[i];
       final layerColor = threadMap[hit.stitch.threadId]?.color;
       if (layerColor == null) continue;
-      blended = Color.lerp(blended!, layerColor, hit.layer.opacity)!;
+      blended = hit.layer.blendMode.apply(blended!, layerColor, hit.layer.opacity);
     }
 
     if (blended == null) continue;
