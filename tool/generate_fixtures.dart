@@ -18,9 +18,9 @@
 
 import 'dart:io';
 
-import 'package:stitchx/models/stitch_plan.dart';
-import 'package:stitchx/services/grid_parser.dart';
-import 'package:stitchx/services/stitch_planner.dart';
+import 'package:stitches/models/stitch_plan.dart';
+import 'package:stitches/services/grid_parser.dart';
+import 'package:stitches/services/stitch_planner.dart';
 
 // ── Corner serialisation ───────────────────────────────────────────────────
 

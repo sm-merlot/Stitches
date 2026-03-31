@@ -267,7 +267,7 @@ class FormatService {
     final buf = StringBuffer()
       ..writeln('<?xml version="1.0" encoding="UTF-8"?>')
       ..writeln('<chart>')
-      ..writeln('  <properties oxsversion="1.0" software="StitchX"'
+      ..writeln('  <properties oxsversion="1.0" software="Stitches"'
           ' chartheight="${pattern.height}" chartwidth="${pattern.width}"'
           ' palettecount="${usedThreads.length}" />')
       ..writeln('  <palette>');
