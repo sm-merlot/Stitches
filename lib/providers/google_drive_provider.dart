@@ -144,11 +144,13 @@ class DriveNotifier extends Notifier<DriveState> {
 
   /// Serialises and uploads a pattern to Drive.
   /// [fileId] null = create new file; non-null = update existing.
+  /// Pass [compress] = true (default) for gzip compression, false for plain UTF-8 text.
   /// Returns the Drive file ID of the uploaded file.
   Future<String?> uploadPattern(
     CrossStitchPattern pattern,
     String? driveFileId,
     String parentFolderId,
+      {bool compress = true}
   ) async {
     state = state.copyWith(isSyncing: true);
     try {
@@ -163,7 +165,8 @@ class DriveNotifier extends Notifier<DriveState> {
       }
 
       final yamlString = FileService.toYamlString(pattern);
-      final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yamlString)));
+      final bytes =
+      Uint8List.fromList(compress ? gzip.encode(utf8.encode(yamlString)) : utf8.encode(yamlString));
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final name = '$safeName.stitchx';
 

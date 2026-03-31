@@ -189,6 +189,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               state.patternForSave,
               driveFileId,
               parentFolderId,
+              compress: state.compressOnSave,
             );
           }
         }
@@ -249,12 +250,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       builder: (_) => const NewPatternDialog(),
     );
     if (pattern == null || !context.mounted) return;
+    final compress = ref.read(settingsProvider).compressNewFiles;
 
     if (workspace is LocalFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final filePath =
           '${workspace.path}${Platform.pathSeparator}$safeName.stitchx';
-      final compress = ref.read(settingsProvider).compressNewFiles;
       try {
         await FileService.saveFile(pattern, filePath, compress: compress);
         ref.read(pdfViewerProvider.notifier).set(null);
@@ -273,14 +274,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/$fileName';
-        final driveCompress = ref.read(settingsProvider).compressNewFiles;
-        await FileService.saveFile(pattern, tempPath, compress: driveCompress);
+        await FileService.saveFile(pattern, tempPath, compress: compress);
 
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
           filePath: tempPath,
           driveParentFolderId: workspace.folderId,
-          compressOnSave: driveCompress,
+          compressOnSave: compress,
           // driveFileId left null — set after background upload.
         );
 
@@ -296,7 +296,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ),
         );
 
-        unawaited(_uploadNewFileToDrive(workspace, pattern, tempPath));
+        unawaited(_uploadNewFileToDrive(workspace, pattern, tempPath, compress: compress));
       } catch (e) {
         if (context.mounted) showError(context, 'Could not create file: $e');
       } finally {
@@ -309,9 +309,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   }
 
   Future<void> _uploadNewFileToDrive(
-      DriveFolder folder, CrossStitchPattern pattern, String tempPath) async {
+      DriveFolder folder, CrossStitchPattern pattern, String tempPath, {bool compress = true }) async {
     final newFileId = await ref.read(googleDriveProvider.notifier).uploadPattern(
-      pattern, null, folder.folderId);
+      pattern, null, folder.folderId, compress: compress);
     if (!mounted) return;
     // Remove the optimistic placeholder before refreshing from Drive.
     clearPendingDriveFiles(ref, folder.folderId);
@@ -1047,8 +1047,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       child: _MenuRow(
                         icon: Icons.folder_zip_outlined,
                         label: editorState.compressOnSave
-                            ? 'Compress file'
-                            : 'Uncompress file',
+                            ? 'File Compressed'
+                            : 'File Uncompressed',
                         trailing: editorState.compressOnSave
                             ? Icon(Icons.check,
                                 size: 16,

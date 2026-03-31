@@ -38,6 +38,7 @@ class EditorScreen extends ConsumerWidget {
             state.patternForSave,
             driveFileId,
             parentFolderId,
+            compress: state.compressOnSave,
           );
           if (newId != null && context.mounted) {
             showSuccess(context, 'Synced to Google Drive');
@@ -374,8 +375,8 @@ class EditorScreen extends ConsumerWidget {
                       child: _MenuRow(
                         icon: Icons.folder_zip_outlined,
                         label: state.compressOnSave
-                            ? 'Compress file'
-                            : 'Uncompress file',
+                            ? 'File Compressed'
+                            : 'File Uncompressed',
                         trailing: state.compressOnSave
                             ? Icon(Icons.check,
                                 size: 16,
