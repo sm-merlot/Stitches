@@ -92,6 +92,21 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   (int, int)? _lastGhostDxDy;
   List<Stitch>? _lastGhostClipboard;
 
+  // ── View position persistence ──────────────────────────────────────────────
+  // Debounce timer used only for scroll-wheel zoom (no discrete end event).
+  // All other gestures save directly on pointer-up / trackpad-zoom-end.
+  Timer? _viewSaveTimer;
+
+  void _saveViewPosition() {
+    ref.read(editorProvider.notifier)
+        .updateViewPosition(_panOffset.dx, _panOffset.dy, _scale);
+  }
+
+  void _debouncedSaveViewPosition() {
+    _viewSaveTimer?.cancel();
+    _viewSaveTimer = Timer(const Duration(milliseconds: 400), _saveViewPosition);
+  }
+
   // ── Frame-coalesced rebuild ────────────────────────────────────────────────
   // Pointer events (pan, hover, pinch) can fire at 120 Hz. Calling setState on
   // every event saturates the UI thread and causes a backlog that freezes input
@@ -113,11 +128,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     super.initState();
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
+    // Restore saved view position from the loaded pattern (if any).
+    final editorState = ref.read(editorProvider);
+    if (editorState.viewScale > 0) {
+      _scale = editorState.viewScale;
+      _panOffset = Offset(editorState.viewPanX, editorState.viewPanY);
+    }
   }
 
   @override
   void dispose() {
     _warningTimer?.cancel();
+    _viewSaveTimer?.cancel();
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointerEvent);
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     super.dispose();
@@ -941,6 +963,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_activePointers.isEmpty) {
       _pinchStartDistance = 0;
       _hadMultiTouch = false; // all fingers up — next touch starts fresh
+      _saveViewPosition();
     }
   }
 
@@ -1014,6 +1037,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       // Trackpad two-finger pan (horizontal or mixed)
       _pan(Offset(-dx, -dy));
     }
+    // No discrete end event for scroll; debounce the save.
+    _debouncedSaveViewPosition();
+  }
+
+  void _onPointerPanZoomEnd(PointerPanZoomEndEvent event) {
+    _saveViewPosition();
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -1028,6 +1057,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           next.pendingCanvasWarning != prev?.pendingCanvasWarning) {
         _showWarningBanner(next.pendingCanvasWarning!);
         ref.read(editorProvider.notifier).clearCanvasWarning();
+      }
+      // When the file changes, restore the saved view position for the new file.
+      if (next.filePath != prev?.filePath && next.isFileOpen) {
+        setState(() {
+          if (next.viewScale > 0) {
+            _scale = next.viewScale;
+            _panOffset = Offset(next.viewPanX, next.viewPanY);
+          } else {
+            _scale = 1.0;
+            _panOffset = const Offset(20, 20);
+          }
+        });
       }
     });
     final isErasing = state.drawingMode == DrawingMode.erase;
@@ -1069,6 +1110,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         onPointerSignal: _onPointerSignal,
         onPointerPanZoomStart: _onPointerPanZoomStart,
         onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
+        onPointerPanZoomEnd: _onPointerPanZoomEnd,
         behavior: HitTestBehavior.opaque,
         child: Stack(
           children: [

@@ -29,6 +29,11 @@ class CrossStitchPattern {
   /// Last-saved editor state — whether block mode was active.
   final bool editorBlockMode;
 
+  /// Last-saved canvas view position. Zero values mean "use default".
+  final double editorViewPanX;
+  final double editorViewPanY;
+  final double editorViewScale;
+
   /// Path to a reference image overlay (persisted with the file).
   final String? referenceImagePath;
 
@@ -54,6 +59,9 @@ class CrossStitchPattern {
     this.editorStitchMode = false,
     this.editorActiveLayerId,
     this.editorBlockMode = false,
+    this.editorViewPanX = 0,
+    this.editorViewPanY = 0,
+    this.editorViewScale = 0,
     this.referenceImagePath,
     this.referenceOpacity = 0.5,
     this.snippets = const [],
@@ -127,6 +135,9 @@ class CrossStitchPattern {
     bool? editorStitchMode,
     Object? editorActiveLayerId = _sentinel,
     bool? editorBlockMode,
+    double? editorViewPanX,
+    double? editorViewPanY,
+    double? editorViewScale,
     Object? referenceImagePath = _sentinel,
     double? referenceOpacity,
     List<Snippet>? snippets,
@@ -150,6 +161,9 @@ class CrossStitchPattern {
           ? this.editorActiveLayerId
           : editorActiveLayerId as String?,
       editorBlockMode: editorBlockMode ?? this.editorBlockMode,
+      editorViewPanX: editorViewPanX ?? this.editorViewPanX,
+      editorViewPanY: editorViewPanY ?? this.editorViewPanY,
+      editorViewScale: editorViewScale ?? this.editorViewScale,
       referenceImagePath: referenceImagePath == _sentinel
           ? this.referenceImagePath
           : referenceImagePath as String?,
@@ -249,6 +263,9 @@ class CrossStitchPattern {
       editorStitchMode: editor?['stitchMode'] as bool? ?? false,
       editorActiveLayerId: editor?['activeLayer'] as String?,
       editorBlockMode: editor?['blockMode'] as bool? ?? false,
+      editorViewPanX: (editor?['panX'] as num?)?.toDouble() ?? 0,
+      editorViewPanY: (editor?['panY'] as num?)?.toDouble() ?? 0,
+      editorViewScale: (editor?['scale'] as num?)?.toDouble() ?? 0,
       referenceImagePath: yaml['overlay']?['imagePath'] as String?,
       referenceOpacity:
           (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,

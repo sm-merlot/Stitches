@@ -96,6 +96,12 @@ class EditorState {
   final int eraserSize;
   /// When true, erase mode uses flood-fill erase instead of the square eraser.
   final bool fillEraseActive;
+
+  /// Last-known canvas view position — written on pointer-up, read on file open.
+  /// Scale == 0 means no saved position (use PatternCanvas default).
+  final double viewPanX;
+  final double viewPanY;
+  final double viewScale;
   /// When true, selection operations act on all visible layers instead of just the active layer.
   final bool canvasSelectionMode;
   /// Non-null when the notifier wants PatternCanvas to show a one-shot warning banner.
@@ -147,6 +153,9 @@ class EditorState {
     this.snippetActivePaletteIndex = 0,
     this.eraserSize = 1,
     this.fillEraseActive = false,
+    this.viewPanX = 0,
+    this.viewPanY = 0,
+    this.viewScale = 0,
     this.canvasSelectionMode = false,
     this.pendingCanvasWarning,
     this.compressOnSave = true,
@@ -169,6 +178,9 @@ class EditorState {
     editorStitchMode: stitchMode,
     editorActiveLayerId: activeLayerId.isEmpty ? null : activeLayerId,
     editorBlockMode: blockMode,
+    editorViewPanX: viewPanX,
+    editorViewPanY: viewPanY,
+    editorViewScale: viewScale,
   );
 
   Thread? get selectedThread {
@@ -279,6 +291,9 @@ class EditorState {
     int? snippetActivePaletteIndex,
     int? eraserSize,
     bool? fillEraseActive,
+    double? viewPanX,
+    double? viewPanY,
+    double? viewScale,
     bool? canvasSelectionMode,
     Object? pendingCanvasWarning = _sentinel,
     bool? compressOnSave,
@@ -330,6 +345,9 @@ class EditorState {
       snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
       eraserSize: eraserSize ?? this.eraserSize,
       fillEraseActive: fillEraseActive ?? this.fillEraseActive,
+      viewPanX: viewPanX ?? this.viewPanX,
+      viewPanY: viewPanY ?? this.viewPanY,
+      viewScale: viewScale ?? this.viewScale,
       canvasSelectionMode: canvasSelectionMode ?? this.canvasSelectionMode,
       pendingCanvasWarning: pendingCanvasWarning == _sentinel
           ? this.pendingCanvasWarning
@@ -399,6 +417,9 @@ class EditorNotifier extends Notifier<EditorState>
       isFileOpen: true,
       activeLayerId: withSymbols.editorActiveLayerId ??
           (withSymbols.layers.isNotEmpty ? withSymbols.layers.first.id : ''),
+      viewPanX: withSymbols.editorViewPanX,
+      viewPanY: withSymbols.editorViewPanY,
+      viewScale: withSymbols.editorViewScale,
       compressOnSave: compressOnSave,
     );
 
@@ -410,6 +431,13 @@ class EditorNotifier extends Notifier<EditorState>
         }
       });
     }
+  }
+
+  /// Called by PatternCanvas on gesture end to persist the current view
+  /// position. Does NOT mark the file dirty — this is saved on the next
+  /// explicit save rather than triggering an auto-save.
+  void updateViewPosition(double panX, double panY, double scale) {
+    state = state.copyWith(viewPanX: panX, viewPanY: panY, viewScale: scale);
   }
 
   void setDriveFileId(String? id) {
