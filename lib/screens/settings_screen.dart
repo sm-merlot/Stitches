@@ -55,6 +55,17 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
 
+          // ── Files ─────────────────────────────────────────────────────────
+          const _SectionHeader('Files'),
+          SwitchListTile(
+            title: const Text('Compress new files'),
+            subtitle: const Text('New patterns are saved as gzip-compressed .stitchx files. Existing files keep their current format.'),
+            secondary: const Icon(Icons.folder_zip_outlined),
+            value: settings.compressNewFiles,
+            onChanged: (v) => notifier.setCompressNewFiles(v),
+          ),
+          const Divider(),
+
           // ── Thread Colours ────────────────────────────────────────────────
           const _SectionHeader('Thread Colours'),
           SwitchListTile(
@@ -115,6 +126,14 @@ class SettingsScreen extends ConsumerWidget {
               leading: Icon(Icons.touch_app_outlined),
               title: Text('Finger double-tap'),
               subtitle: Text('Undo last action'),
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.content_paste_outlined),
+              title: const Text('Pencil-positions, finger-confirms paste'),
+              subtitle: const Text(
+                  'Hover the pencil to place the ghost, then tap with a finger to stamp.'),
+              value: settings.pencilPasteConfirm,
+              onChanged: (v) => notifier.setPencilPasteConfirm(v),
             ),
           ],
         ],

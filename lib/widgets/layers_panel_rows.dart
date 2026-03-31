@@ -123,6 +123,18 @@ class _GroupRowState extends State<_GroupRow> {
                   : theme.colorScheme.onSurface.withValues(alpha: 0.35),
             ),
           ),
+          const SizedBox(width: 2),
+          // Lock toggle (group master lock)
+          GestureDetector(
+            onTap: () => notifier.toggleGroupLocked(group.id),
+            child: Icon(
+              group.groupLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+              size: 14,
+              color: group.groupLocked
+                  ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.2),
+            ),
+          ),
           const SizedBox(width: 4),
           // Group name (double-tap to rename)
           Expanded(
@@ -167,6 +179,8 @@ class _GroupRowState extends State<_GroupRow> {
                   _startRename();
                 case _GroupAction.addLayer:
                   notifier.addLayerToGroup(group.id);
+                case _GroupAction.toggleLock:
+                  notifier.toggleGroupLocked(group.id);
                 case _GroupAction.ungroup:
                   notifier.ungroupGroup(group.id);
                 case _GroupAction.delete:
@@ -178,6 +192,11 @@ class _GroupRowState extends State<_GroupRow> {
                   _GroupAction.rename, Icons.edit_outlined, 'Rename'),
               _groupMenuItem(
                   _GroupAction.addLayer, Icons.add, 'Add Layer to Group'),
+              _groupMenuItem(
+                _GroupAction.toggleLock,
+                group.groupLocked ? Icons.lock_open_outlined : Icons.lock_outline,
+                group.groupLocked ? 'Unlock Group' : 'Lock Group',
+              ),
               _groupMenuItem(_GroupAction.ungroup,
                   Icons.folder_open_outlined, 'Ungroup'),
               _groupMenuItem(
@@ -223,7 +242,9 @@ class _LayerRow extends StatefulWidget {
   final String? groupId;
   final VoidCallback onTap;
   final VoidCallback onToggleVisible;
+  final VoidCallback onToggleLocked;
   final ValueChanged<double> onOpacityChanged;
+  final ValueChanged<LayerBlendMode> onBlendModeChanged;
   final ValueChanged<String> onRename;
   final VoidCallback onDuplicate;
   final VoidCallback? onMergeDown;
@@ -240,7 +261,9 @@ class _LayerRow extends StatefulWidget {
     required this.groupId,
     required this.onTap,
     required this.onToggleVisible,
+    required this.onToggleLocked,
     required this.onOpacityChanged,
+    required this.onBlendModeChanged,
     required this.onRename,
     required this.onDuplicate,
     this.onMergeDown,
@@ -350,6 +373,18 @@ class _LayerRowState extends State<_LayerRow> {
                         : theme.colorScheme.onSurface.withValues(alpha: 0.35),
                   ),
                 ),
+                const SizedBox(width: 2),
+                // Lock toggle
+                GestureDetector(
+                  onTap: widget.onToggleLocked,
+                  child: Icon(
+                    layer.locked ? Icons.lock_outline : Icons.lock_open_outlined,
+                    size: 14,
+                    color: layer.locked
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                  ),
+                ),
                 const SizedBox(width: 4),
                 // Name (double-tap to rename)
                 Expanded(
@@ -425,7 +460,7 @@ class _LayerRowState extends State<_LayerRow> {
                 ),
               ],
             ),
-            // ── Opacity slider ─────────────────────────────────────────────
+            // ── Opacity slider + blend mode ────────────────────────────────
             Row(
               children: [
                 SizedBox(width: 20 + widget.indent),
@@ -442,6 +477,7 @@ class _LayerRowState extends State<_LayerRow> {
                       value: layer.opacity,
                       min: 0.0,
                       max: 1.0,
+                      divisions: 20,
                       onChanged: widget.onOpacityChanged,
                     ),
                   ),
@@ -453,6 +489,26 @@ class _LayerRowState extends State<_LayerRow> {
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
+                const SizedBox(width: 4),
+                DropdownButton<LayerBlendMode>(
+                  value: layer.blendMode,
+                  isDense: true,
+                  underline: const SizedBox.shrink(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  items: LayerBlendMode.values
+                      .map((m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(m.displayName),
+                          ))
+                      .toList(),
+                  onChanged: (m) {
+                    if (m != null) widget.onBlendModeChanged(m);
+                  },
+                ),
+                const SizedBox(width: 4),
               ],
             ),
           ],

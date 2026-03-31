@@ -78,6 +78,9 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
           onSecondaryTapDown: (details) {
             widget.onFolderContextMenu(widget.folder, details.globalPosition);
           },
+          onLongPressStart: (details) {
+            widget.onFolderContextMenu(widget.folder, details.globalPosition);
+          },
           child: InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
@@ -264,12 +267,9 @@ class _FileTile extends StatelessWidget {
 
     return GestureDetector(
       onSecondaryTapDown: (details) => onContextMenu(details.globalPosition),
+      onLongPressStart: (details) => onContextMenu(details.globalPosition),
       child: InkWell(
         onTap: onTap,
-        onLongPress: () {
-          // Long-press for mobile context menu — we need a position estimate
-          // (use the widget's center as best we can without pointer details)
-        },
         child: Container(
           color: selected
               ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)

@@ -3,6 +3,7 @@ import 'dart:math' show pi;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/layer.dart';
+import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
 import '../providers/editor/editor_provider.dart';
 
@@ -160,8 +161,12 @@ class LayersPanelBody extends ConsumerWidget {
                   onTap: () => notifier.setActiveLayer(layer.id),
                   onToggleVisible: () =>
                       notifier.toggleLayerVisible(layer.id),
+                  onToggleLocked: () =>
+                      notifier.toggleLayerLocked(layer.id),
                   onOpacityChanged: (v) =>
                       notifier.setLayerOpacity(layer.id, v),
+                  onBlendModeChanged: (m) =>
+                      notifier.setLayerBlendMode(layer.id, m),
                   onRename: (name) => notifier.renameLayer(layer.id, name),
                   onDuplicate: () => notifier.duplicateLayer(layer.id),
                   onMergeDown: canMerge

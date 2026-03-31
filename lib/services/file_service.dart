@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/layer.dart';
+import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
@@ -17,8 +18,8 @@ class FileService {
 
   static const List<String> _openExtensions = [_ext, 'oxs'];
 
-  /// Pick a .stitchx or .oxs file; returns (pattern, filePath), or null if cancelled.
-  static Future<(CrossStitchPattern, String)?> openFile() async {
+  /// Pick a .stitchx or .oxs file; returns (pattern, filePath, wasCompressed), or null if cancelled.
+  static Future<(CrossStitchPattern, String, bool)?> openFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: _isMobile ? FileType.any : FileType.custom,
       allowedExtensions: _isMobile ? null : _openExtensions,
@@ -32,18 +33,29 @@ class FileService {
 
   /// Load a pattern directly from a known file path.
   /// Supports both .stitchx (YAML) and .oxs (XML) formats.
-  static Future<(CrossStitchPattern, String)> openFileFromPath(
+  /// Returns (pattern, filePath, wasCompressed).
+  static Future<(CrossStitchPattern, String, bool)> openFileFromPath(
       String path) async {
     final file = File(path);
     if (!await file.exists()) throw Exception('File not found: $path');
     if (path.toLowerCase().endsWith('.oxs')) {
       final pattern = await FormatService.importFile(path);
-      return (pattern, path);
+      return (pattern, path, false);
     }
     final bytes = await file.readAsBytes();
-    final content = _decodeBytes(bytes);
+    final wasCompressed =
+        bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
+    final content = _decodeBytes(_maybeDecompress(bytes));
     final pattern = parseYamlString(content);
-    return (pattern, path);
+    return (pattern, path, wasCompressed);
+  }
+
+  /// Decompress gzip bytes if the gzip magic bytes (1f 8b) are present.
+  static List<int> _maybeDecompress(List<int> bytes) {
+    if (bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b) {
+      return gzip.decode(bytes);
+    }
+    return bytes;
   }
 
   /// Decode file bytes as UTF-8, stripping a BOM if present.
@@ -91,13 +103,19 @@ class FileService {
   }
 
   /// Save pattern to an existing file path.
-  static Future<void> saveFile(CrossStitchPattern pattern, String path) async {
-    final file = File(path);
-    await file.writeAsString(toYamlString(pattern));
+  /// Pass [compress] = true (default) for gzip compression, false for plain UTF-8 text.
+  static Future<void> saveFile(CrossStitchPattern pattern, String path,
+      {bool compress = true}) async {
+    final yaml = toYamlString(pattern);
+    final bytes =
+        compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
+    await File(path).writeAsBytes(bytes, flush: true);
   }
 
   /// Prompt the user for a save location; returns the chosen path or null.
-  static Future<String?> saveFileAs(CrossStitchPattern pattern) async {
+  /// [compress] controls whether the written file is gzip-compressed.
+  static Future<String?> saveFileAs(CrossStitchPattern pattern,
+      {bool compress = true}) async {
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final path = await FilePicker.platform.saveFile(
       fileName: _isMobile ? '$suggestedName.$_ext' : suggestedName,
@@ -106,7 +124,7 @@ class FileService {
     );
     if (path == null) return null;
     final finalPath = path.endsWith('.$_ext') ? path : '$path.$_ext';
-    await saveFile(pattern, finalPath);
+    await saveFile(pattern, finalPath, compress: compress);
     return finalPath;
   }
 
@@ -128,7 +146,8 @@ class FileService {
     if (pattern.editorSelectedThreadId != null ||
         pattern.editorTool != null ||
         pattern.editorStitchMode ||
-        pattern.editorActiveLayerId != null) {
+        pattern.editorActiveLayerId != null ||
+        pattern.editorBlockMode) {
       buf.writeln('editor:');
       if (pattern.editorSelectedThreadId != null) {
         buf.writeln(
@@ -142,6 +161,9 @@ class FileService {
       }
       if (pattern.editorActiveLayerId != null) {
         buf.writeln('  activeLayer: ${_yamlStr(pattern.editorActiveLayerId!)}');
+      }
+      if (pattern.editorBlockMode) {
+        buf.writeln('  blockMode: true');
       }
     }
 
@@ -213,7 +235,11 @@ class FileService {
     buf.writeln('${bodyIndent}id: ${_yamlStr(layer.id)}');
     buf.writeln('${bodyIndent}name: ${_yamlStr(layer.name)}');
     buf.writeln('${bodyIndent}visible: ${layer.visible}');
+    if (layer.locked) buf.writeln('${bodyIndent}locked: true');
     buf.writeln('${bodyIndent}opacity: ${layer.opacity.toStringAsFixed(3)}');
+    if (layer.blendMode != LayerBlendMode.normal) {
+      buf.writeln('${bodyIndent}blendMode: ${layer.blendMode.yamlKey}');
+    }
     buf.writeln('${bodyIndent}stitches:');
     for (final s in layer.stitches) {
       _writeStitch(buf, s, indent: '$bodyIndent  ');
@@ -226,6 +252,7 @@ class FileService {
     buf.writeln('    name: ${_yamlStr(group.name)}');
     buf.writeln('    collapsed: ${group.collapsed}');
     buf.writeln('    groupVisible: ${group.groupVisible}');
+    if (group.groupLocked) buf.writeln('    groupLocked: true');
     if (group.layers.isEmpty) {
       buf.writeln('    layers: []');
     } else {

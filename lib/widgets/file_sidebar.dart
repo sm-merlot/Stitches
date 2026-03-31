@@ -10,6 +10,7 @@ import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/pdf_viewer_provider.dart';
+import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/drive_cache.dart';
 import '../services/file_service.dart';
@@ -46,13 +47,13 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       builder: (_) => const NewPatternDialog(),
     );
     if (pattern == null || !context.mounted) return;
-
+    final compress = ref.read(settingsProvider).compressNewFiles;
     if (folder is LocalFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final filePath = '${folder.path}${Platform.pathSeparator}$safeName.stitchx';
       try {
-        await FileService.saveFile(pattern, filePath);
-        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
+        await FileService.saveFile(pattern, filePath, compress: compress);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath, compressOnSave: compress);
         refreshFolder(ref, folder);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not create file: $e');
@@ -66,12 +67,13 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/$fileName';
-        await FileService.saveFile(pattern, tempPath);
+        await FileService.saveFile(pattern, tempPath, compress: compress);
 
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
           filePath: tempPath,
           driveParentFolderId: folder.folderId,
+          compressOnSave: compress,
           // driveFileId left null — set after background upload completes.
         );
 
@@ -89,7 +91,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         );
 
         // Upload to Drive in the background.
-        unawaited(_uploadNewFileToDrive(folder, pattern, tempPath));
+        unawaited(_uploadNewFileToDrive(folder, pattern, tempPath, compress: compress));
       } catch (e) {
         if (context.mounted) showError(context, 'Could not create file: $e');
       } finally {
@@ -360,10 +362,10 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
     if (file is LocalPatternFile) {
       try {
-        final (pattern, path) = await FileService.openFileFromPath(file.path);
+        final (pattern, path, wasCompressed) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
         _switchToEditor();
-        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not open file: $e');
       }
@@ -378,7 +380,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
         if (await cached.exists()) {
           // Load from cache immediately, then refresh from Drive in background.
-          final (pattern, path) = await FileService.openFileFromPath(tempPath);
+          final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
           if (!context.mounted) return;
           _switchToEditor();
           ref.read(editorProvider.notifier).loadPattern(
@@ -386,6 +388,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             filePath: path,
             driveFileId: file.fileId,
             driveParentFolderId: file.parentFolder.folderId,
+            compressOnSave: wasCompressed,
           );
           unawaited(_refreshFromDrive(file, tempPath));
         } else {
@@ -403,7 +406,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             if (!context.mounted) return;
             await cached.writeAsBytes(bytes);
             if (!context.mounted) return;
-            final (pattern, path) = await FileService.openFileFromPath(tempPath);
+            final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
             if (!context.mounted) return;
             _switchToEditor();
             ref.read(editorProvider.notifier).loadPattern(
@@ -411,6 +414,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
               filePath: path,
               driveFileId: file.fileId,
               driveParentFolderId: file.parentFolder.folderId,
+              compressOnSave: wasCompressed,
             );
           } finally {
             if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
@@ -424,9 +428,9 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
   /// Uploads a newly created pattern to Drive and stores the resulting file ID.
   Future<void> _uploadNewFileToDrive(
-      DriveFolder folder, CrossStitchPattern pattern, String tempPath) async {
+      DriveFolder folder, CrossStitchPattern pattern, String tempPath, { bool compress = true }) async {
     final newFileId = await ref.read(googleDriveProvider.notifier).uploadPattern(
-      pattern, null, folder.folderId);
+      pattern, null, folder.folderId, compress: compress);
     if (!mounted) return;
     // Remove the optimistic placeholder before refreshing from Drive.
     clearPendingDriveFiles(ref, folder.folderId);
@@ -453,7 +457,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       if (state.driveFileId != file.fileId || state.isDirty) return;
       await File(tempPath).writeAsBytes(bytes);
       if (!mounted) return;
-      final (pattern, path) = await FileService.openFileFromPath(tempPath);
+      final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
       if (!mounted) return;
       // Re-check: still the same file and still unedited?
       final current = ref.read(editorProvider);
@@ -463,6 +467,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           filePath: path,
           driveFileId: file.fileId,
           driveParentFolderId: file.parentFolder.folderId,
+          compressOnSave: wasCompressed,
         );
       }
     } catch (_) {

@@ -41,7 +41,7 @@ import 'resize_canvas_dialog.dart';
 
 part 'workspace_screen_components.dart';
 
-enum _MenuAction { export, resize, patternInfo, referenceImage, shortcuts, blockMode }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, shortcuts, toggleCompress }
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -138,7 +138,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   @override
   void dispose() {
-    _autoSaveTimer?.cancel();
+    // If a pending auto-save timer was cancelled without firing, flush it now.
+    if (_autoSaveTimer != null) {
+      _autoSaveTimer!.cancel();
+      _autoSaveTimer = null;
+      final state = ref.read(editorProvider);
+      if (state.isDirty && state.filePath != null && state.isNativeFormat) {
+        FileService.saveFile(state.patternForSave, state.filePath!,
+            compress: state.compressOnSave);
+      }
+    }
     _scanOverlayEntry?.remove();
     _scanStatus.dispose();
     super.dispose();
@@ -151,15 +160,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     });
   }
 
-  // ─── Helpers (mirrored from EditorScreen) ─────────────────────────────────
-
-  CrossStitchPattern _patternWithEditorState(EditorState state) {
-    return state.pattern.copyWith(
-      editorSelectedThreadId: state.selectedThreadId,
-      editorTool: state.currentTool.name,
-    );
-  }
-
   Future<void> _save(BuildContext context, {bool quiet = false}) async {
     final state = ref.read(editorProvider);
     try {
@@ -169,11 +169,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           final format = CrossStitchFormat.forPath(state.filePath!);
           if (format != null) {
             await FormatService.exportFile(
-                _patternWithEditorState(state), state.filePath!, format);
+                state.patternForSave, state.filePath!, format);
           }
         } else {
           await FileService.saveFile(
-              _patternWithEditorState(state), state.filePath!);
+              state.patternForSave, state.filePath!,
+              compress: state.compressOnSave);
         }
         ref.read(editorProvider.notifier).markSaved();
         if (!quiet && context.mounted) showSuccess(context, 'Saved');
@@ -185,9 +186,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           if (driveFileId != null && parentFolderId != null) {
             final notifier = ref.read(googleDriveProvider.notifier);
             await notifier.uploadPattern(
-              _patternWithEditorState(state),
+              state.patternForSave,
               driveFileId,
               parentFolderId,
+              compress: state.compressOnSave,
             );
           }
         }
@@ -203,7 +205,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final state = ref.read(editorProvider);
     try {
       final path =
-          await FileService.saveFileAs(_patternWithEditorState(state));
+          await FileService.saveFileAs(state.patternForSave,
+              compress: state.compressOnSave);
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);
         ref.read(editorProvider.notifier).markSaved();
@@ -247,16 +250,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       builder: (_) => const NewPatternDialog(),
     );
     if (pattern == null || !context.mounted) return;
+    final compress = ref.read(settingsProvider).compressNewFiles;
 
     if (workspace is LocalFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final filePath =
           '${workspace.path}${Platform.pathSeparator}$safeName.stitchx';
       try {
-        await FileService.saveFile(pattern, filePath);
+        await FileService.saveFile(pattern, filePath, compress: compress);
         ref.read(pdfViewerProvider.notifier).set(null);
     ref.read(imageViewerProvider.notifier).set(null);
-        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath, compressOnSave: compress);
         refreshFolder(ref, workspace);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not create file: $e');
@@ -270,12 +274,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
         final tempPath = '${tempDir.path}/$fileName';
-        await FileService.saveFile(pattern, tempPath);
+        await FileService.saveFile(pattern, tempPath, compress: compress);
 
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
           filePath: tempPath,
           driveParentFolderId: workspace.folderId,
+          compressOnSave: compress,
           // driveFileId left null — set after background upload.
         );
 
@@ -291,7 +296,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ),
         );
 
-        unawaited(_uploadNewFileToDrive(workspace, pattern, tempPath));
+        unawaited(_uploadNewFileToDrive(workspace, pattern, tempPath, compress: compress));
       } catch (e) {
         if (context.mounted) showError(context, 'Could not create file: $e');
       } finally {
@@ -304,9 +309,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   }
 
   Future<void> _uploadNewFileToDrive(
-      DriveFolder folder, CrossStitchPattern pattern, String tempPath) async {
+      DriveFolder folder, CrossStitchPattern pattern, String tempPath, {bool compress = true }) async {
     final newFileId = await ref.read(googleDriveProvider.notifier).uploadPattern(
-      pattern, null, folder.folderId);
+      pattern, null, folder.folderId, compress: compress);
     if (!mounted) return;
     // Remove the optimistic placeholder before refreshing from Drive.
     clearPendingDriveFiles(ref, folder.folderId);
@@ -569,8 +574,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           // Auto-save the new pattern next to the source PDF.
           final savePath =
               '${File(pdfPath).parent.path}${Platform.pathSeparator}$title.stitchx';
+          final scanCompress = ref.read(settingsProvider).compressNewFiles;
           try {
-            await FileService.saveFile(pattern, savePath);
+            await FileService.saveFile(pattern, savePath, compress: scanCompress);
           } catch (_) {
             // Saving failed (e.g. read-only location) — load without a file path.
           }
@@ -578,6 +584,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ref.read(editorProvider.notifier).loadPattern(
             pattern,
             filePath: File(savePath).existsSync() ? savePath : null,
+            compressOnSave: scanCompress,
           );
           ref.read(pdfViewerProvider.notifier).set(null);
     ref.read(imageViewerProvider.notifier).set(null);
@@ -958,14 +965,25 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       : const Icon(Icons.cloud_done_outlined),
                 ),
               IconButton(
-                icon: const Icon(Icons.save_as_outlined),
-                tooltip: 'Save As…',
-                onPressed: () => _saveAs(context),
+                tooltip: editorState.blockMode ? 'Block mode: on' : 'Block mode: off',
+                isSelected: editorState.blockMode,
+                icon: const Icon(Icons.grid_view_outlined),
+                selectedIcon: const Icon(Icons.grid_view),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).toggleBlockMode(),
+                style: editorState.blockMode
+                    ? IconButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
               ),
               PopupMenuButton<_MenuAction>(
                 tooltip: 'More',
                 onSelected: (action) {
                   switch (action) {
+                    case _MenuAction.saveAs:
+                      _saveAs(context);
                     case _MenuAction.export:
                       _showExportDialog(context, editorState);
                     case _MenuAction.resize:
@@ -978,13 +996,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
+                    case _MenuAction.toggleCompress:
+                      ref.read(editorProvider.notifier).toggleCompressOnSave();
                     case _MenuAction.shortcuts:
                       showDialog(
                         context: context,
                         builder: (_) => const _ShortcutsDialog(),
                       );
-                    case _MenuAction.blockMode:
-                      ref.read(editorProvider.notifier).toggleBlockMode();
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -995,18 +1013,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       label: 'Reference Image',
                       trailing: editorState.referenceImage != null &&
                               editorState.referenceVisible
-                          ? Icon(Icons.check,
-                              size: 16,
-                              color: Theme.of(ctx).colorScheme.primary)
-                          : null,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.blockMode,
-                    child: _MenuRow(
-                      icon: Icons.grid_view_outlined,
-                      label: 'Block Mode',
-                      trailing: editorState.blockMode
                           ? Icon(Icons.check,
                               size: 16,
                               color: Theme.of(ctx).colorScheme.primary)
@@ -1025,17 +1031,39 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   ),
                   const PopupMenuDivider(),
                   const PopupMenuItem(
+                    value: _MenuAction.saveAs,
+                    child: _MenuRow(
+                        icon: Icons.save_as_outlined, label: 'Save As…'),
+                  ),
+                  const PopupMenuItem(
                     value: _MenuAction.export,
                     child: _MenuRow(
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
-                  const PopupMenuItem(
-                    value: _MenuAction.shortcuts,
-                    child: _MenuRow(
-                        icon: Icons.keyboard_outlined,
-                        label: 'Keyboard Shortcuts'),
-                  ),
+                  if (editorState.isNativeFormat)
+                    PopupMenuItem(
+                      value: _MenuAction.toggleCompress,
+                      child: _MenuRow(
+                        icon: Icons.folder_zip_outlined,
+                        label: editorState.compressOnSave
+                            ? 'File Compressed'
+                            : 'File Uncompressed',
+                        trailing: editorState.compressOnSave
+                            ? Icon(Icons.check,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.primary)
+                            : null,
+                      ),
+                    ),
+                  if (defaultTargetPlatform != TargetPlatform.iOS &&
+                      defaultTargetPlatform != TargetPlatform.android)
+                    const PopupMenuItem(
+                      value: _MenuAction.shortcuts,
+                      child: _MenuRow(
+                          icon: Icons.keyboard_outlined,
+                          label: 'Keyboard Shortcuts'),
+                    ),
                 ],
               ),
             ],
@@ -1089,7 +1117,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                                               onSaveAs: () => _saveAs(context),
                                             ),
                                           const Expanded(child: PatternCanvas()),
-                                          const EditorToolbar(),
+                                          const SafeArea(
+                                            top: false,
+                                            child: EditorToolbar(),
+                                          ),
                                         ],
                                       ),
                                       // FAB anchored to canvas column so it

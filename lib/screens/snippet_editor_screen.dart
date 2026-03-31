@@ -34,12 +34,14 @@ class SnippetEditorScreen extends StatelessWidget {
   final Snippet? snippet;
   final List<Snippet> siblingSnippets;
   final bool initialBlockMode;
+  final Color aidaColor;
 
   const SnippetEditorScreen({
     super.key,
     this.snippet,
     this.siblingSnippets = const [],
     this.initialBlockMode = false,
+    this.aidaColor = Colors.white,
   });
 
   @override
@@ -52,6 +54,7 @@ class SnippetEditorScreen extends StatelessWidget {
         snippet: snippet,
         siblingSnippets: siblingSnippets,
         initialBlockMode: initialBlockMode,
+        aidaColor: aidaColor,
       ),
     );
   }
@@ -61,10 +64,12 @@ class _SnippetEditorBody extends ConsumerStatefulWidget {
   final Snippet? snippet;
   final List<Snippet> siblingSnippets;
   final bool initialBlockMode;
+  final Color aidaColor;
   const _SnippetEditorBody({
     required this.snippet,
     required this.siblingSnippets,
     required this.initialBlockMode,
+    required this.aidaColor,
   });
 
   @override
@@ -95,6 +100,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             width: s.width,
             height: s.height,
             threads: s.threads,
+            aidaColor: widget.aidaColor,
             layerItems: [
               LayerLeaf(
                 layer: Layer(
@@ -152,7 +158,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         name: _nameController.text,
         width: _canvasW,
         height: _canvasH,
-      ),
+      ).copyWith(aidaColor: widget.aidaColor),
     );
   }
 
@@ -393,22 +399,18 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     final pattern = editorState.pattern;
     final name = _nameController.text.trim();
 
-    // Collect only the threads actually used by stitches in this snippet.
-    final usedIds = pattern.stitches.map((s) => s.threadId).toSet();
-    final usedThreads =
-        pattern.threads.where((t) => usedIds.contains(t.dmcCode)).toList();
-
     final localPalettes = editorState.snippetPalettes;
     final activePaletteIdx = editorState.snippetActivePaletteIndex;
 
-    // Build the final palette list: update primary palette threads with
-    // currently used threads, keep additional palettes as-is.
+    // Preserve all primary palette threads without pruning unused ones.
+    // Pruning can shorten the primary palette list, which shifts secondary
+    // palette slot indices and corrupts the colour mapping on reload.
     final savedPalettes = localPalettes.isNotEmpty
         ? [
-            localPalettes[0].copyWith(threads: usedThreads),
+            localPalettes[0].copyWith(threads: pattern.threads),
             ...localPalettes.skip(1),
           ]
-        : [SnippetPalette.create(name: 'Palette 1', threads: usedThreads)];
+        : [SnippetPalette.create(name: 'Palette 1', threads: pattern.threads)];
 
     final result = widget.snippet != null
         ? widget.snippet!.copyWith(
@@ -423,7 +425,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             name: name,
             width: pattern.width,
             height: pattern.height,
-            threads: usedThreads,
+            threads: pattern.threads,
             stitches: pattern.stitches,
           );
 

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/layer.dart';
+import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -170,8 +171,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (c == null) continue;
           switch (stitch) {
             case FullStitch(:final x, :final y):
-              final blended = blendMap['$x,$y'];
-              _drawFullStitch(canvas, x, y, blended ?? c);
+              final key = '$x,$y';
+              final blended = blendMap[key];
+              if (blended != null && stitchFocusThreadId != null) {
+                // Blended cell + focus: all contributing stitches at this cell
+                // resolve to the same colour using the final blended DMC code.
+                // This prevents semi-transparent grey from one layer bleeding
+                // through the focused colour of another.
+                final isFocused = _blendDmcCache[key] == stitchFocusThreadId;
+                _drawFullStitch(canvas, x, y, isFocused ? blended : _greyColor(blended));
+              } else {
+                _drawFullStitch(canvas, x, y, blended ?? c);
+              }
             case HalfStitch(:final x, :final y, :final isForward):
               _drawHalfStitch(canvas, x, y, isForward, c);
             case QuarterStitch(:final x, :final y, :final quadrant):
@@ -330,13 +341,19 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // every pan/zoom frame, which would make CIE Lab matching too expensive.
   static CrossStitchPattern? _blendMapPattern;
   static Map<String, Color> _blendMapCache = {};
+  // Maps cell key → blended DMC code for cells with overlapping layers.
+  // Used during focus mode so all contributing stitches in a cell resolve
+  // to the same focus decision (preventing semi-transparent bleed-through).
+  static Map<String, String> _blendDmcCache = {};
 
   Map<String, Color> _buildBlendMap() {
     if (identical(_blendMapPattern, pattern)) return _blendMapCache;
     _blendMapPattern = pattern;
+    _blendDmcCache = {};
 
     final threadMap = _threadMap;
-    final cellStack = <String, List<({Color color, double opacity})>>{};
+    final cellStack =
+        <String, List<({Color color, double opacity, LayerBlendMode blendMode})>>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -344,8 +361,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         final thread = threadMap[stitch.threadId];
         if (thread == null) continue;
         final key = '${stitch.x},${stitch.y}';
-        (cellStack[key] ??= [])
-            .add((color: thread.color, opacity: layer.opacity));
+        (cellStack[key] ??= []).add((
+          color: thread.color,
+          opacity: layer.opacity,
+          blendMode: layer.blendMode,
+        ));
       }
     }
 
@@ -355,7 +375,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       if (stack.length < 2) continue; // lone stitches excluded
       var blended = stack.first.color;
       for (int i = 1; i < stack.length; i++) {
-        blended = Color.lerp(blended, stack[i].color, stack[i].opacity)!;
+        blended = stack[i].blendMode.apply(blended, stack[i].color, stack[i].opacity);
       }
       // Snap to nearest DMC thread so the displayed colour is always a real
       // thread colour — opacity produces discrete jumps, not a smooth gradient.
@@ -364,6 +384,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       final b = (blended.b * 255).round();
       final dmc = SpriteImporter.matchPixel(r, g, b, 255);
       result[entry.key] = dmc?.color ?? blended;
+      if (dmc != null) _blendDmcCache[entry.key] = dmc.code;
     }
 
     _blendMapCache = result;
@@ -400,7 +421,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       Rect? rect;
       switch (stitch) {
         case FullStitch(:final x, :final y):
-          effectiveColor = blendMap['$x,$y'] ?? c;
+          final key = '$x,$y';
+          final blended = blendMap[key];
+          if (blended != null && stitchFocusThreadId != null) {
+            final isFocused = _blendDmcCache[key] == stitchFocusThreadId;
+            effectiveColor = isFocused ? blended : _greyColor(blended);
+          } else {
+            effectiveColor = blended ?? c;
+          }
           rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
 
         // HalfStitch (diagonal): isForward=true → `/` → right half of cell.

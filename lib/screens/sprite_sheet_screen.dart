@@ -77,6 +77,13 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   double _trackpadStartZoom = 1.0;
   Offset _trackpadStartPan = Offset.zero;
   Offset? _lastFocalPoint;
+  // Set to true as soon as two or more fingers are down in the current gesture
+  // sequence.  While true, single-finger events pan the view instead of
+  // starting crop/strip draws, preventing the residual finger from a pinch from
+  // accidentally triggering a new selection.  Resets only when _pointerCount
+  // drops to 0 (all fingers lifted), so a fresh single-finger touch works
+  // normally.
+  bool _hadMultiTouch = false;
   // Deferred crop-draw intent: set in _onScaleStart, consumed or cancelled
   // in _onScaleUpdate once _pointerCount is known (prevents pinch from
   // accidentally starting a crop draw via the first-finger-down event).
@@ -304,7 +311,25 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       width: crop.width.round().clamp(1, _image!.width),
       height: crop.height.round().clamp(1, _image!.height),
     );
-    _cropPreviewBytes = Uint8List.fromList(img.encodePng(cropped));
+    // Composite against white so indexed-PNG tRNS transparency doesn't
+    // make the preview appear blank.
+    if (cropped.numChannels >= 4) {
+      final flat = img.Image(width: cropped.width, height: cropped.height);
+      for (var py = 0; py < cropped.height; py++) {
+        for (var px = 0; px < cropped.width; px++) {
+          final p = cropped.getPixel(px, py);
+          final a = p.a.toInt();
+          if (a < 128) {
+            flat.setPixelRgba(px, py, 255, 255, 255, 255);
+          } else {
+            flat.setPixelRgba(px, py, p.r.toInt(), p.g.toInt(), p.b.toInt(), 255);
+          }
+        }
+      }
+      _cropPreviewBytes = Uint8List.fromList(img.encodePng(flat));
+    } else {
+      _cropPreviewBytes = Uint8List.fromList(img.encodePng(cropped));
+    }
   }
 
   /// Regenerates all palette preview images from current crop + strip colours.
@@ -438,32 +463,40 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     _pendingCropPos = null;
     _pendingRecrop = false;
 
-    if (d.pointerCount == 1) {
-      // Check for corner handle hit first.
-      final cornerHit = _hitTestCorner(d.localFocalPoint);
-      if (cornerHit != null) {
-        // Crop corner drags are blocked while palette strips exist.
-        if (cornerHit is _CropCorner && _confirmedStrips.isNotEmpty) {
-          _confirmRecrop();
-          return;
-        }
-        setState(() => _activeCornerHit = cornerHit);
+    if (d.pointerCount >= 2) {
+      _hadMultiTouch = true;
+      return; // multi-touch: zoom/pan handled in _onScaleUpdate
+    }
+
+    if (_hadMultiTouch) {
+      // A finger is still on screen from a pinch — just pan, don't draw.
+      return;
+    }
+
+    // Fresh single-touch: check for corner handle hit first.
+    final cornerHit = _hitTestCorner(d.localFocalPoint);
+    if (cornerHit != null) {
+      // Crop corner drags are blocked while palette strips exist.
+      if (cornerHit is _CropCorner && _confirmedStrips.isNotEmpty) {
+        _confirmRecrop();
         return;
       }
+      setState(() => _activeCornerHit = cornerHit);
+      return;
+    }
 
-      final imgPos = _toImage(d.localFocalPoint);
-      if (_stripState == _StripDrawState.drawing) {
-        setState(() {
-          _stripStart = imgPos;
-          _stripEnd = imgPos;
-        });
-      } else if (_confirmedStrips.isNotEmpty) {
-        // Defer the recrop modal until _onScaleUpdate confirms single-touch.
-        _pendingRecrop = true;
-      } else {
-        // Defer crop start until _onScaleUpdate confirms single-touch.
-        _pendingCropPos = imgPos;
-      }
+    final imgPos = _toImage(d.localFocalPoint);
+    if (_stripState == _StripDrawState.drawing) {
+      setState(() {
+        _stripStart = imgPos;
+        _stripEnd = imgPos;
+      });
+    } else if (_confirmedStrips.isNotEmpty) {
+      // Defer the recrop modal until _onScaleUpdate confirms single-touch.
+      _pendingRecrop = true;
+    } else {
+      // Defer crop start until _onScaleUpdate confirms single-touch.
+      _pendingCropPos = imgPos;
     }
   }
 
@@ -471,7 +504,8 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     final focal = d.localFocalPoint;
 
     if (d.pointerCount >= 2) {
-      // Multi-touch pinch: cancel any deferred crop/recrop intent and zoom.
+      // Multi-touch pinch: mark as multi-touch, cancel any draw intent, zoom.
+      _hadMultiTouch = true;
       _pendingCropPos = null;
       _pendingRecrop = false;
       final scaleDelta = d.scale / _lastScale;
@@ -484,6 +518,11 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         _pan = focal + (_pan - focal) * sf + panDelta;
         _zoom = newZoom;
       });
+    } else if (_hadMultiTouch) {
+      // Residual single finger after a pinch — pan only, never draw.
+      final panDelta =
+          _lastFocalPoint != null ? focal - _lastFocalPoint! : Offset.zero;
+      setState(() => _pan += panDelta);
     } else if (_activeCornerHit != null) {
       _applyCornerDrag(_activeCornerHit!, _toImage(focal));
     } else if (_stripState == _StripDrawState.drawing) {
@@ -553,6 +592,9 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   void _onScaleEnd(ScaleEndDetails d) {
     _pendingCropPos = null;
     _pendingRecrop = false;
+    // All fingers are off the screen — safe to reset the multi-touch guard so
+    // the next fresh single-finger touch can draw normally.
+    if (_pointerCount == 0) _hadMultiTouch = false;
     final cornerHit = _activeCornerHit;
 
     if (cornerHit != null) {

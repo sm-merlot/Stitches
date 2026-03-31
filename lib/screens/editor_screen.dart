@@ -15,7 +15,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, blockMode }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, toggleCompress }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -24,7 +24,8 @@ class EditorScreen extends ConsumerWidget {
     final state = ref.read(editorProvider);
     try {
       if (state.filePath != null) {
-        await FileService.saveFile(state.patternForSave, state.filePath!);
+        await FileService.saveFile(state.patternForSave, state.filePath!,
+            compress: state.compressOnSave);
         ref.read(editorProvider.notifier).markSaved();
         if (context.mounted) showSuccess(context, 'Saved');
 
@@ -37,6 +38,7 @@ class EditorScreen extends ConsumerWidget {
             state.patternForSave,
             driveFileId,
             parentFolderId,
+            compress: state.compressOnSave,
           );
           if (newId != null && context.mounted) {
             showSuccess(context, 'Synced to Google Drive');
@@ -53,7 +55,8 @@ class EditorScreen extends ConsumerWidget {
   Future<void> _saveAs(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     try {
-      final path = await FileService.saveFileAs(state.patternForSave);
+      final path = await FileService.saveFileAs(state.patternForSave,
+          compress: state.compressOnSave);
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);
         ref.read(editorProvider.notifier).markSaved();
@@ -290,6 +293,20 @@ class EditorScreen extends ConsumerWidget {
                       : const Icon(Icons.cloud_done_outlined),
                 ),
               IconButton(
+                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
+                isSelected: state.blockMode,
+                icon: const Icon(Icons.grid_view_outlined),
+                selectedIcon: const Icon(Icons.grid_view),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).toggleBlockMode(),
+                style: state.blockMode
+                    ? IconButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
+              ),
+              IconButton(
                 icon: const Icon(Icons.save_outlined),
                 tooltip: 'Save  (Cmd+S)',
                 onPressed: () => _save(context, ref),
@@ -312,8 +329,8 @@ class EditorScreen extends ConsumerWidget {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
-                    case _MenuAction.blockMode:
-                      ref.read(editorProvider.notifier).toggleBlockMode();
+                    case _MenuAction.toggleCompress:
+                      ref.read(editorProvider.notifier).toggleCompressOnSave();
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -324,18 +341,6 @@ class EditorScreen extends ConsumerWidget {
                       label: 'Reference Image',
                       trailing: state.referenceImage != null &&
                               state.referenceVisible
-                          ? Icon(Icons.check,
-                              size: 16,
-                              color: Theme.of(ctx).colorScheme.primary)
-                          : null,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _MenuAction.blockMode,
-                    child: _MenuRow(
-                      icon: Icons.grid_view_outlined,
-                      label: 'Block Mode',
-                      trailing: state.blockMode
                           ? Icon(Icons.check,
                               size: 16,
                               color: Theme.of(ctx).colorScheme.primary)
@@ -364,6 +369,21 @@ class EditorScreen extends ConsumerWidget {
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
+                  if (state.isNativeFormat)
+                    PopupMenuItem(
+                      value: _MenuAction.toggleCompress,
+                      child: _MenuRow(
+                        icon: Icons.folder_zip_outlined,
+                        label: state.compressOnSave
+                            ? 'File Compressed'
+                            : 'File Uncompressed',
+                        trailing: state.compressOnSave
+                            ? Icon(Icons.check,
+                                size: 16,
+                                color: Theme.of(ctx).colorScheme.primary)
+                            : null,
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -390,7 +410,7 @@ class EditorScreen extends ConsumerWidget {
                         onSaveAs: () => _saveAs(context, ref),
                       ),
                     const Expanded(child: PatternCanvas()),
-                    const EditorToolbar(),
+                    const SafeArea(top: false, child: EditorToolbar()),
                   ],
                 ),
               ),
