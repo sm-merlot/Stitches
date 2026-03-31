@@ -1,0 +1,23 @@
+docs/superpowers/specs/2026-03-31-materials-list-skein-calculator-design.md
+  f84a02c855e00f57 1-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "8df015f2cb5d78e729f7830bafc4a4b172579da0",
+  "prompts": {
+    "f84a02c855e00f57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c182656d-9b06-47b8-bba3-2a5e697ae420",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 196,
+      "total_deletions": 0,
+      "accepted_lines": 196,
+      "overriden_lines": 0
+    }
+  }
+}
