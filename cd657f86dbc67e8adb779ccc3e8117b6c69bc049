@@ -1,0 +1,23 @@
+lib/screens/editor_screen.dart
+  f84a02c855e00f57 390,392-405
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "cd657f86dbc67e8adb779ccc3e8117b6c69bc049",
+  "prompts": {
+    "f84a02c855e00f57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c182656d-9b06-47b8-bba3-2a5e697ae420",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 15,
+      "total_deletions": 1,
+      "accepted_lines": 15,
+      "overriden_lines": 0
+    }
+  }
+}

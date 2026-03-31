@@ -1,0 +1,51 @@
+lib/widgets/pattern_canvas.dart
+  f84a02c855e00f57 596,599-610
+lib/widgets/canvas_painter.dart
+  f84a02c855e00f57 258-262,668-672
+lib/services/format_service.dart
+  f84a02c855e00f57 270
+pubspec.yaml
+  f84a02c855e00f57 1
+lib/screens/home_screen.dart
+  f84a02c855e00f57 349
+lib/main.dart
+  f84a02c855e00f57 26
+lib/screens/editor_screen.dart
+  f84a02c855e00f57 284-287,291-293
+lib/app.dart
+  f84a02c855e00f57 7-8,23
+lib/widgets/right_sidebar_colours_panel.dart
+  f84a02c855e00f57 150,223-243
+ios/Runner/Info.plist
+  f84a02c855e00f57 10,18
+android/app/src/main/AndroidManifest.xml
+  f84a02c855e00f57 3
+bin/stitchx_cli.dart
+  f84a02c855e00f57 1,208
+macos/Runner/Configs/AppInfo.xcconfig
+  f84a02c855e00f57 8,11,14
+test/widget_test.dart
+  f84a02c855e00f57 17,19
+android/app/build.gradle.kts
+  f84a02c855e00f57 10,25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "65e3b4ba93cd323149c318ca69ccf0899a99f6b0",
+  "prompts": {
+    "f84a02c855e00f57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c182656d-9b06-47b8-bba3-2a5e697ae420",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 71,
+      "total_deletions": 35,
+      "accepted_lines": 71,
+      "overriden_lines": 0
+    }
+  }
+}
