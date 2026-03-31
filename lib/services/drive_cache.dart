@@ -3,7 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'google_drive_service.dart';
 
 /// Downloads [fileId] from Drive to the device's temp directory as
-/// `${tempDir}/${localName}` (e.g. `'${fileId}.stitchx'`).
+/// `${tempDir}/${localName}` (e.g. `'${fileId}.stitches'`).
 ///
 /// Returns the local path. Uses a cached file if one already exists.
 /// Throws if the download fails.

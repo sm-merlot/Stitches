@@ -168,7 +168,7 @@ class DriveNotifier extends Notifier<DriveState> {
       final bytes =
       Uint8List.fromList(compress ? gzip.encode(utf8.encode(yamlString)) : utf8.encode(yamlString));
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
-      final name = '$safeName.stitchx';
+      final name = '$safeName.stitches';
 
       final newId = await service.uploadFile(
         fileId: driveFileId,

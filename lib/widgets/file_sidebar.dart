@@ -50,7 +50,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     final compress = ref.read(settingsProvider).compressNewFiles;
     if (folder is LocalFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
-      final filePath = '${folder.path}${Platform.pathSeparator}$safeName.stitchx';
+      final filePath = '${folder.path}${Platform.pathSeparator}$safeName.stitches';
       try {
         await FileService.saveFile(pattern, filePath, compress: compress);
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: filePath, compressOnSave: compress);
@@ -60,7 +60,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       }
     } else if (folder is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
-      final fileName = '$safeName.stitchx';
+      final fileName = '$safeName.stitches';
       ref.read(fileLoadingProvider.notifier).set(true);
       try {
         // Write to temp dir and open immediately — no waiting for Drive.
@@ -375,7 +375,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         await Directory(tempDir.path).create(recursive: true);
         // Use fileId as cache key so the same Drive file always maps to the
         // same local path regardless of renames.
-        final tempPath = '${tempDir.path}/${file.fileId}.stitchx';
+        final tempPath = '${tempDir.path}/${file.fileId}.stitches';
         final cached = File(tempPath);
 
         if (await cached.exists()) {
@@ -510,7 +510,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     if (file is LocalPatternFile) {
       try {
         final dir = file.path.substring(0, file.path.lastIndexOf(Platform.pathSeparator));
-        final newPath = '$dir${Platform.pathSeparator}$newName.stitchx';
+        final newPath = '$dir${Platform.pathSeparator}$newName.stitches';
         await File(file.path).rename(newPath);
 
         // If this file is currently open, update the editor file path
@@ -533,7 +533,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           showError(context, 'Not connected to Google Drive.');
           return;
         }
-        await service.renameItem(file.fileId, '$newName.stitchx');
+        await service.renameItem(file.fileId, '$newName.stitches');
         refreshFolder(ref, file.parent);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not rename Drive file: $e');

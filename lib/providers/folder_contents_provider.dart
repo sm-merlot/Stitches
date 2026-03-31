@@ -12,7 +12,7 @@ final folderContentsProvider = FutureProvider.autoDispose
 });
 
 bool _isHidden(String name) => name.startsWith('.');
-bool _isPatternFile(String path) => path.endsWith('.stitchx');
+bool _isPatternFile(String path) => path.endsWith('.stitches');
 bool _isPdfFile(String path) => path.endsWith('.pdf');
 
 const _kImageExtensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'};

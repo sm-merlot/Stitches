@@ -45,7 +45,7 @@
 
 ## 0.0.1
 
-Initial release of StitchX — a free, open-source cross-stitch pattern editor for macOS, iOS, and Android.
+Initial release of Stitches — a free, open-source cross-stitch pattern editor for macOS, iOS, and Android.
 
 ### Pattern editing
 
@@ -69,14 +69,14 @@ Initial release of StitchX — a free, open-source cross-stitch pattern editor f
 
 ### Snippets
 
-- Per-pattern snippet library stored inside the `.stitchx` file; thumbnails in a slide-up panel; tap to paste, long-press for rename / resize / flip / rotate / edit / delete
+- Per-pattern snippet library stored inside the `.stitches` file; thumbnails in a slide-up panel; tap to paste, long-press for rename / resize / flip / rotate / edit / delete
 - Full snippet editor for drawing from scratch with preset or custom sizes
 - Multi-palette snippets with a Palettes tab in the right sidebar; positional slot mapping; new colours drawn on the canvas propagate to all palettes automatically
 - Sprite sheet importer — crop a region, match pixels to nearest DMC via CIE Lab, define multiple colour palettes from colour-strip regions; output saved as a snippet
 
 ### Files & workspace
 
-- `.stitchx` file format (YAML internally)
+- `.stitches` file format (YAML internally)
 - Folder workspace with a resizable file tree sidebar (160–480 px); PDF and image visibility toggles persist between sessions; toggling a filter only deselects the current item if it is of the filtered type
 - Google Drive sync — connect an account; patterns auto-save and sync in the background
 - Recent files list including Drive items
@@ -92,7 +92,7 @@ Initial release of StitchX — a free, open-source cross-stitch pattern editor f
 
 ### PDF pattern scanner _(beta)_
 
-- Convert a printed cross-stitch chart PDF into an editable `.stitchx` pattern with no AI or internet connection required
+- Convert a printed cross-stitch chart PDF into an editable `.stitches` pattern with no AI or internet connection required
 - User-guided symbol sampling and template matching; flagged cells can be reviewed and corrected manually
 
 ### Stitch demonstration _(beta)_

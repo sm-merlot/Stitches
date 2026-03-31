@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run -- project task runner for StitchX
+# run -- project task runner for Stitches
 #
 # Usage:  ./run <command>
 #
@@ -27,8 +27,8 @@ export PATH="/opt/homebrew/bin:$PATH"
 
 FLUTTER=flutter
 DART=dart
-CLI_ENTRY=bin/stitchx_cli.dart
-CLI_BIN=build/cli/macos_arm64/bundle/bin/stitchx_cli
+CLI_ENTRY=bin/stitches_cli.dart
+CLI_BIN=build/cli/macos_arm64/bundle/bin/stitches_cli
 
 cmd=${1:-help}
 shift || true   # remaining args forwarded where needed
@@ -57,7 +57,7 @@ case "$cmd" in
 
   build)
     $FLUTTER build macos --release --dart-define-from-file=secrets.json "$@"
-    echo "Built: build/macos/Build/Products/Release/stitchx.app"
+    echo "Built: build/macos/Build/Products/Release/stitches.app"
     ;;
 
   build-ipad)

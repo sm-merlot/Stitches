@@ -2,10 +2,10 @@
 // Never hardcode secrets here. See secrets.json.example for setup instructions.
 
 // Desktop app OAuth client (macOS/Windows) — has client secret.
-const String kGoogleClientId =
-    String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: '');
-const String kGoogleClientSecret =
-    String.fromEnvironment('GOOGLE_CLIENT_SECRET', defaultValue: '');
+const String kGoogleDesktopClientId =
+    String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID', defaultValue: '');
+const String kGoogleDesktopClientSecret =
+    String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_SECRET', defaultValue: '');
 
 // iOS OAuth client (bundle ID verified by Google).
 const String kGoogleIosClientId =

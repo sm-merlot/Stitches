@@ -21,7 +21,7 @@ class DriveFileSelection {
 }
 
 /// A dialog that lets the user navigate their Google Drive and select a
-/// .stitchx file to open.
+/// .stitches file to open.
 class DriveFilePickerDialog extends ConsumerStatefulWidget {
   const DriveFilePickerDialog({super.key});
 
@@ -231,7 +231,7 @@ class _DriveFilePickerDialogState
     }
     if (_subfolders.isEmpty && _files.isEmpty) {
       return Center(
-        child: Text('No .stitchx files here.',
+        child: Text('No .stitches files here.',
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
       );
     }

@@ -1,40 +1,40 @@
 {
   "project_info": {
-    "project_number": "982682300061",
-    "project_id": "stitchx",
-    "storage_bucket": "stitchx.firebasestorage.app"
+    "project_number": "1010470926805",
+    "project_id": "stitches-491915",
+    "storage_bucket": "stitches-491915.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:982682300061:android:3c86f88ac3713b7e4fee74",
+        "mobilesdk_app_id": "1:1010470926805:android:7166285ce5de06c272e55c",
         "android_client_info": {
           "package_name": "com.scme0.stitches"
         }
       },
       "oauth_client": [
         {
-          "client_id": "982682300061-vjo441ao929porblonskve1kn1qu3mg5.apps.googleusercontent.com",
+          "client_id": "1010470926805-7loom4dq1v6jgm7d4j6vbr2ohmblr41i.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDZEM568qeGq9PxJqDN2WUWBvP2z6Inl4o"
+          "current_key": "AIzaSyDqSsB5DjVRmrROxHqJ5sr6jQhMiukf_xA"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "982682300061-vjo441ao929porblonskve1kn1qu3mg5.apps.googleusercontent.com",
+              "client_id": "1010470926805-7loom4dq1v6jgm7d4j6vbr2ohmblr41i.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "982682300061-i2sju6h25epo2jftraqfcco46aab4jvd.apps.googleusercontent.com",
+              "client_id": "1010470926805-941bsbbckuoe0hi55ba0h6rmedtkiqoh.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.stitchx.stitchx"
+                "bundle_id": "com.scme0.stitches"
               }
             }
           ]

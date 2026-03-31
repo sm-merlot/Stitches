@@ -11,14 +11,14 @@ import '../models/snippet.dart';
 import 'format_service.dart';
 
 class FileService {
-  static const String _ext = 'stitchx';
+  static const String _ext = 'stitches';
 
   static bool get _isMobile =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   static const List<String> _openExtensions = [_ext, 'oxs'];
 
-  /// Pick a .stitchx or .oxs file; returns (pattern, filePath, wasCompressed), or null if cancelled.
+  /// Pick a .stitches or .oxs file; returns (pattern, filePath, wasCompressed), or null if cancelled.
   static Future<(CrossStitchPattern, String, bool)?> openFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: _isMobile ? FileType.any : FileType.custom,
@@ -32,7 +32,7 @@ class FileService {
   }
 
   /// Load a pattern directly from a known file path.
-  /// Supports both .stitchx (YAML) and .oxs (XML) formats.
+  /// Supports both .stitches (YAML) and .oxs (XML) formats.
   /// Returns (pattern, filePath, wasCompressed).
   static Future<(CrossStitchPattern, String, bool)> openFileFromPath(
       String path) async {
@@ -75,7 +75,7 @@ class FileService {
     }
   }
 
-  /// Open a known directory path and return all .stitchx file paths within it.
+  /// Open a known directory path and return all .stitches file paths within it.
   static Future<List<String>> openFolderFromPath(String dir) async {
     final directory = Directory(dir);
     if (!await directory.exists()) throw Exception('Folder not found: $dir');
@@ -88,7 +88,7 @@ class FileService {
     return files;
   }
 
-  /// Pick a directory and return all .stitchx file paths within it, or null if cancelled.
+  /// Pick a directory and return all .stitches file paths within it, or null if cancelled.
   static Future<List<String>?> openFolder() async {
     final dir = await FilePicker.platform.getDirectoryPath();
     if (dir == null) return null;
@@ -132,7 +132,7 @@ class FileService {
 
   static CrossStitchPattern parseYamlString(String yamlString) {
     final doc = loadYaml(yamlString);
-    if (doc is! Map) throw const FormatException('Invalid .stitchx file');
+    if (doc is! Map) throw const FormatException('Invalid .stitches file');
     return CrossStitchPattern.fromYaml(Map<String, dynamic>.from(doc));
   }
 

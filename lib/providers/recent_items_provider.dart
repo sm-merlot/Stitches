@@ -32,7 +32,7 @@ class RecentItem {
     if (isDrive) return driveName ?? 'Drive Folder';
     final seg = _localPathParts.last;
     if (isFolder) return seg;
-    return seg.endsWith('.stitchx') ? seg.substring(0, seg.length - 8) : seg;
+    return seg.endsWith('.stitches') ? seg.substring(0, seg.length - 8) : seg;
   }
 
   String get displayPath {
