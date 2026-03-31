@@ -160,15 +160,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     });
   }
 
-  // ─── Helpers (mirrored from EditorScreen) ─────────────────────────────────
-
-  CrossStitchPattern _patternWithEditorState(EditorState state) {
-    return state.pattern.copyWith(
-      editorSelectedThreadId: state.selectedThreadId,
-      editorTool: state.currentTool.name,
-    );
-  }
-
   Future<void> _save(BuildContext context, {bool quiet = false}) async {
     final state = ref.read(editorProvider);
     try {
@@ -178,11 +169,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           final format = CrossStitchFormat.forPath(state.filePath!);
           if (format != null) {
             await FormatService.exportFile(
-                _patternWithEditorState(state), state.filePath!, format);
+                state.patternForSave, state.filePath!, format);
           }
         } else {
           await FileService.saveFile(
-              _patternWithEditorState(state), state.filePath!,
+              state.patternForSave, state.filePath!,
               compress: state.compressOnSave);
         }
         ref.read(editorProvider.notifier).markSaved();
@@ -195,7 +186,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           if (driveFileId != null && parentFolderId != null) {
             final notifier = ref.read(googleDriveProvider.notifier);
             await notifier.uploadPattern(
-              _patternWithEditorState(state),
+              state.patternForSave,
               driveFileId,
               parentFolderId,
             );
@@ -213,7 +204,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final state = ref.read(editorProvider);
     try {
       final path =
-          await FileService.saveFileAs(_patternWithEditorState(state),
+          await FileService.saveFileAs(state.patternForSave,
               compress: state.compressOnSave);
       if (path != null) {
         ref.read(editorProvider.notifier).setFilePath(path);

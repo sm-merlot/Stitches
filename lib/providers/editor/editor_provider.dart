@@ -435,7 +435,7 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   void toggleCompressOnSave() {
-    state = state.copyWith(compressOnSave: !state.compressOnSave);
+    state = state.copyWith(compressOnSave: !state.compressOnSave, isDirty: true);
   }
 
   void closeFile() {

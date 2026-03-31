@@ -589,7 +589,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   // ─── Stitch / block mode ──────────────────────────────────────────────────
 
   void toggleBlockMode() {
-    state = state.copyWith(blockMode: !state.blockMode);
+    state = state.copyWith(blockMode: !state.blockMode, isDirty: true);
   }
 
   void toggleCanvasSelectionMode() {
