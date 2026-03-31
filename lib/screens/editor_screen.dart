@@ -497,7 +497,7 @@ class EditorScreen extends ConsumerWidget {
               _InfoRow(
                 'File',
                 state.driveParentFolderId != null
-                    ? '${p.name}.stitchx  (Google Drive)'
+                    ? '${p.name}.stitches  (Google Drive)'
                     : state.filePath!.split('/').last,
               ),
           ],
@@ -618,7 +618,7 @@ class _ImportBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Imported $_ext file — snippets require .stitchx format.',
+                'Imported $_ext file — snippets require .stitches format.',
                 style: TextStyle(fontSize: 12, color: cs.onTertiaryContainer),
               ),
             ),
@@ -630,7 +630,7 @@ class _ImportBanner extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               onPressed: onSaveAs,
-              child: const Text('Save As .stitchx', style: TextStyle(fontSize: 12)),
+              child: const Text('Save As .stitches', style: TextStyle(fontSize: 12)),
             ),
           ],
         ),

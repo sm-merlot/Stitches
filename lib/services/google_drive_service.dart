@@ -47,7 +47,7 @@ class GoogleDriveService {
           name: name,
           parentId: parent.folderId,
         ));
-      } else if (name.endsWith('.stitchx')) {
+      } else if (name.endsWith('.stitches')) {
         files.add(DrivePatternFile(
           fileId: id,
           name: name,
@@ -98,7 +98,7 @@ class GoogleDriveService {
     return Uint8List.fromList(bytes);
   }
 
-  /// Uploads (create or update) a .stitchx file.
+  /// Uploads (create or update) a .stitches file.
   /// Returns the Drive file ID.
   Future<String> uploadFile({
     String? fileId,

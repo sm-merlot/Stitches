@@ -1,12 +1,12 @@
 // Stitches CLI — animate a stitching plan as a GIF.
 //
 // Compile to a standalone binary:
-//   dart compile exe bin/stitchx_cli.dart -o stitchx-cli
+//   dart compile exe bin/stitches_cli.dart -o stitches-cli
 //
 // Input methods (pick one):
-//   stitchx-cli -i grid.pattern -o out.gif          # file
-//   cat grid.pattern | stitchx-cli -o out.gif        # stdin pipe
-//   stitchx-cli -p "╳ ▞\n▚ ╳" -o out.gif        # inline (\n = newline)
+//   stitches-cli -i grid.pattern -o out.gif          # file
+//   cat grid.pattern | stitches-cli -o out.gif        # stdin pipe
+//   stitches-cli -p "╳ ▞\n▚ ╳" -o out.gif        # inline (\n = newline)
 //
 // Grid format: rows separated by newlines, cells separated by single spaces.
 // Use two consecutive spaces for an empty cell inside a row.
@@ -208,9 +208,9 @@ void _printUsage(ArgParser parser) {
 Stitches CLI — animate a stitching plan as a GIF.
 
 Usage:
-  stitchx-cli -i <grid.pattern> -o <out.gif>          file input
-  cat grid.pattern | stitchx-cli -o <out.gif>          stdin input
-  stitchx-cli -p "╳ ▞\\n▚ ╳" -o <out.gif>         inline input
+  stitches-cli -i <grid.pattern> -o <out.gif>          file input
+  cat grid.pattern | stitches-cli -o <out.gif>          stdin input
+  stitches-cli -p "╳ ▞\\n▚ ╳" -o <out.gif>         inline input
 
 Grid format:
   Rows are separated by newlines.

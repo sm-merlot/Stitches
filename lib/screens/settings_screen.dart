@@ -59,7 +59,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SectionHeader('Files'),
           SwitchListTile(
             title: const Text('Compress new files'),
-            subtitle: const Text('New patterns are saved as gzip-compressed .stitchx files. Existing files keep their current format.'),
+            subtitle: const Text('New patterns are saved as gzip-compressed .stitches files. Existing files keep their current format.'),
             secondary: const Icon(Icons.folder_zip_outlined),
             value: settings.compressNewFiles,
             onChanged: (v) => notifier.setCompressNewFiles(v),

@@ -83,7 +83,7 @@ class LocalPatternFile extends PatternFile {
 
   @override
   String get displayName =>
-      path.split(Platform.pathSeparator).last.replaceAll('.stitchx', '');
+      path.split(Platform.pathSeparator).last.replaceAll('.stitches', '');
 
   @override
   StorageLocation get parent =>
@@ -115,7 +115,7 @@ class DrivePatternFile extends PatternFile {
   });
 
   @override
-  String get displayName => name.replaceAll('.stitchx', '');
+  String get displayName => name.replaceAll('.stitches', '');
 
   @override
   StorageLocation get parent => parentFolder;
@@ -157,7 +157,7 @@ class LocalPdfFile extends PatternFile {
 }
 
 /// A cross-stitch file in a third-party format (.oxs, etc.) on local storage.
-/// Loaded as a pattern but not in .stitchx format, so some features are gated.
+/// Loaded as a pattern but not in .stitches format, so some features are gated.
 class LocalImportableFile extends PatternFile {
   final String path;
   @override
@@ -326,7 +326,7 @@ class DriveImageFile extends PatternFile {
 // Folder contents
 // ---------------------------------------------------------------------------
 
-/// The contents of a folder: child folders and .stitchx files.
+/// The contents of a folder: child folders and .stitches files.
 class FolderContents {
   final List<StorageLocation> subfolders;
   final List<PatternFile> files;

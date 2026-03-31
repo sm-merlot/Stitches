@@ -179,7 +179,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         ref.read(editorProvider.notifier).markSaved();
         if (!quiet && context.mounted) showSuccess(context, 'Saved');
 
-        // Auto-upload to Drive only for native .stitchx files.
+        // Auto-upload to Drive only for native .stitches files.
         if (state.isNativeFormat) {
           final driveFileId = state.driveFileId;
           final parentFolderId = state.driveParentFolderId;
@@ -255,7 +255,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (workspace is LocalFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
       final filePath =
-          '${workspace.path}${Platform.pathSeparator}$safeName.stitchx';
+          '${workspace.path}${Platform.pathSeparator}$safeName.stitches';
       try {
         await FileService.saveFile(pattern, filePath, compress: compress);
         ref.read(pdfViewerProvider.notifier).set(null);
@@ -267,7 +267,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       }
     } else if (workspace is DriveFolder) {
       final safeName = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
-      final fileName = '$safeName.stitchx';
+      final fileName = '$safeName.stitches';
       ref.read(fileLoadingProvider.notifier).set(true);
       try {
         // Write to temp and open immediately — Drive upload happens in background.
@@ -367,7 +367,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               _InfoRow(
                 'File',
                 state.driveParentFolderId != null
-                    ? '${p.name}.stitchx  (Google Drive)'
+                    ? '${p.name}.stitches  (Google Drive)'
                     : state.filePath!.split('/').last,
               ),
           ],
@@ -575,7 +575,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         if (pattern != null && context.mounted) {
           // Auto-save the new pattern next to the source PDF.
           final savePath =
-              '${File(pdfPath).parent.path}${Platform.pathSeparator}$title.stitchx';
+              '${File(pdfPath).parent.path}${Platform.pathSeparator}$title.stitches';
           final scanCompress = ref.read(settingsProvider).compressNewFiles;
           try {
             await FileService.saveFile(pattern, savePath, compress: scanCompress);

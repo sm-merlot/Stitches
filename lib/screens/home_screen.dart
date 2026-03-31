@@ -82,7 +82,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final tempDir = await getTemporaryDirectory();
       await Directory(tempDir.path).create(recursive: true);
-      final tempPath = '${tempDir.path}/${selection.fileId}.stitchx';
+      final tempPath = '${tempDir.path}/${selection.fileId}.stitches';
       final cached = File(tempPath);
 
       Future<void> addToRecents() {
@@ -210,7 +210,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final tempDir = await getTemporaryDirectory();
         await Directory(tempDir.path).create(recursive: true);
         // Use fileId as cache key for stable lookups.
-        final tempPath = '${tempDir.path}/${item.id}.stitchx';
+        final tempPath = '${tempDir.path}/${item.id}.stitches';
         final cached = File(tempPath);
 
         if (await cached.exists()) {

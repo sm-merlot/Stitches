@@ -9,7 +9,7 @@ class AppSettings {
   /// finger tap confirms placement (instead of pencil tap stamping immediately).
   final bool pencilPasteConfirm;
 
-  /// Whether new patterns are saved as gzip-compressed .stitchx files.
+  /// Whether new patterns are saved as gzip-compressed .stitches files.
   /// Existing files keep their compression state when re-saved.
   final bool compressNewFiles;
 
