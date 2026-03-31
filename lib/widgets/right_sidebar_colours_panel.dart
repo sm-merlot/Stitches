@@ -155,9 +155,32 @@ class _StitchColoursPanel extends ConsumerWidget {
     final hasBack = allStitches.any((s) => s is BackStitch);
     final showFocus = hasNonBack && hasBack;
 
+    final totalCross = stitchCounts.values
+        .fold<int>(0, (sum, c) => sum + c) -
+        allStitches.whereType<BackStitch>().length;
+    final totalBack = allStitches.whereType<BackStitch>().length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── Total stitch count summary ──────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+          child: Row(
+            children: [
+              Icon(Icons.grid_4x4, size: 13,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+              const SizedBox(width: 4),
+              Text(
+                '$totalCross stitches${totalBack > 0 ? '  •  $totalBack backstitches' : ''}',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
         // ── Stitch Focus header ─────────────────────────────────────────────
         if (showFocus) ...[
           Padding(
