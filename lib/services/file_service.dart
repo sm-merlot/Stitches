@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/layer.dart';
+import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
@@ -228,6 +229,9 @@ class FileService {
     buf.writeln('${bodyIndent}visible: ${layer.visible}');
     if (layer.locked) buf.writeln('${bodyIndent}locked: true');
     buf.writeln('${bodyIndent}opacity: ${layer.opacity.toStringAsFixed(3)}');
+    if (layer.blendMode != LayerBlendMode.normal) {
+      buf.writeln('${bodyIndent}blendMode: ${layer.blendMode.yamlKey}');
+    }
     buf.writeln('${bodyIndent}stitches:');
     for (final s in layer.stitches) {
       _writeStitch(buf, s, indent: '$bodyIndent  ');
