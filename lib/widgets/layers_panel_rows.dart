@@ -179,6 +179,8 @@ class _GroupRowState extends State<_GroupRow> {
                   _startRename();
                 case _GroupAction.addLayer:
                   notifier.addLayerToGroup(group.id);
+                case _GroupAction.toggleLock:
+                  notifier.toggleGroupLocked(group.id);
                 case _GroupAction.ungroup:
                   notifier.ungroupGroup(group.id);
                 case _GroupAction.delete:
@@ -190,6 +192,11 @@ class _GroupRowState extends State<_GroupRow> {
                   _GroupAction.rename, Icons.edit_outlined, 'Rename'),
               _groupMenuItem(
                   _GroupAction.addLayer, Icons.add, 'Add Layer to Group'),
+              _groupMenuItem(
+                _GroupAction.toggleLock,
+                group.groupLocked ? Icons.lock_open_outlined : Icons.lock_outline,
+                group.groupLocked ? 'Unlock Group' : 'Lock Group',
+              ),
               _groupMenuItem(_GroupAction.ungroup,
                   Icons.folder_open_outlined, 'Ungroup'),
               _groupMenuItem(

@@ -203,7 +203,9 @@ mixin LayersMixin on Notifier<EditorState> {
       id: const Uuid().v4(),
       name: '${src.name} copy',
       visible: src.visible,
+      locked: src.locked,
       opacity: src.opacity,
+      blendMode: src.blendMode,
       stitches: List<Stitch>.from(src.stitches),
     );
     final newItems = _insertLayerAbove(state.pattern.layerItems, duplicate, id);
