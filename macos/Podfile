@@ -38,5 +38,11 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+    # Bump Pod deployment targets to match the Runner target (10.15).
+    # Several Auth/Fetch pods ship with 10.11/10.12 which triggers a warning
+    # when the Xcode-supported range starts at 10.13.
+    target.build_configurations.each do |config|
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'
+    end
   end
 end
