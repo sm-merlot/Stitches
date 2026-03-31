@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- 79e5520: iPad & polish improvements: layer group locking, gzip file compression, block mode AppBar toggle, Apple Pencil opt-in paste mode, enlarged touch targets, focus mode fix for multi-layer blended cells, layer blend mode now persisted correctly to file, BackStitch clip boundary fix on snippet resize, and initial unit test suite.
+
 ## 0.1.3
 
 ### Patch Changes
