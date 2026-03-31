@@ -1,0 +1,31 @@
+lib/screens/materials_list_screen.dart
+  d87ffa7acd0cedc7 1-460
+.changeset/materials-list-skein-calculator.md
+  d87ffa7acd0cedc7 1-7
+lib/screens/workspace_screen.dart
+  d87ffa7acd0cedc7 22,1073,1075-1079
+lib/screens/editor_screen.dart
+  d87ffa7acd0cedc7 14,391,393-397
+pubspec.yaml
+  d87ffa7acd0cedc7 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "504788f988cd311b6e52a9b607f3f046ec60995f",
+  "prompts": {
+    "d87ffa7acd0cedc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9009c935-336b-417f-87a5-2088097f5b0c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 483,
+      "total_deletions": 3,
+      "accepted_lines": 482,
+      "overriden_lines": 0
+    }
+  }
+}
