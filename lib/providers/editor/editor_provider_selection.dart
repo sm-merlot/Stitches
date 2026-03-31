@@ -21,7 +21,7 @@ mixin SelectionMixin on Notifier<EditorState> {
 
   (List<Thread>, List<Stitch>)? _parseClipboard(String text) {
     try {
-      final root = (jsonDecode(text) as Map<String, dynamic>)['stitchx'];
+      final root = (jsonDecode(text) as Map<String, dynamic>)['stitches'];
       if (root == null) return null;
       final threads = (root['threads'] as List)
           .map((t) => Thread.fromYaml(t as Map<String, dynamic>))
@@ -91,7 +91,7 @@ mixin SelectionMixin on Notifier<EditorState> {
     );
   }
 
-  /// Reads the system clipboard and enters paste mode if valid stitchx data is found.
+  /// Reads the system clipboard and enters paste mode if valid stitches data is found.
   /// Falls back to the in-memory clipboard if the system clipboard has other content.
   Future<void> enterPasteMode() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);

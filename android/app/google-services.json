@@ -1,8 +1,8 @@
 {
   "project_info": {
     "project_number": "982682300061",
-    "project_id": "stitchx",
-    "storage_bucket": "stitchx.firebasestorage.app"
+    "project_id": "stitches",
+    "storage_bucket": "stitches.firebasestorage.app"
   },
   "client": [
     {
@@ -34,7 +34,7 @@
               "client_id": "982682300061-i2sju6h25epo2jftraqfcco46aab4jvd.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.stitchx.stitchx"
+                "bundle_id": "com.scme0.stitches"
               }
             }
           ]

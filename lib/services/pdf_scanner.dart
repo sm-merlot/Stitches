@@ -52,7 +52,7 @@ class PdfScanner {
         // DEBUG: save rasterised pages to disk for inspection.
         if (kDebugMode) {
           try {
-            const debugDir = '/tmp/stitchx_pages';
+            const debugDir = '/tmp/stitches_pages';
             await Directory(debugDir).create(recursive: true);
             final pageNum = pageNumber.toString().padLeft(2, '0');
             await File('$debugDir/page_$pageNum.png').writeAsBytes(bytes);

@@ -49,7 +49,7 @@ class GoogleAuthService {
   // ---------------------------------------------------------------------------
 
   ClientId get _desktopClientId =>
-      ClientId(kGoogleClientId, kGoogleClientSecret);
+      ClientId(kGoogleDesktopClientId, kGoogleDesktopClientSecret);
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -62,7 +62,7 @@ class GoogleAuthService {
     if (defaultTargetPlatform == TargetPlatform.android) {
       return true; // Android verified via package name + SHA-1 at Cloud Console
     }
-    return kGoogleClientId.isNotEmpty && kGoogleClientSecret.isNotEmpty;
+    return kGoogleDesktopClientId.isNotEmpty && kGoogleDesktopClientSecret.isNotEmpty;
   }
 
   Future<bool> isSignedIn() async {

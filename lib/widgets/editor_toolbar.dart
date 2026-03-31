@@ -548,7 +548,7 @@ class EditorToolbar extends ConsumerWidget {
                       child: Tooltip(
                         message: state.isNativeFormat
                             ? 'Import sprite sheet'
-                            : 'Sprite sheet import requires .stitchx format — Save As to convert',
+                            : 'Sprite sheet import requires .stitches format — Save As to convert',
                         child: IconButton(
                           iconSize: 20,
                           visualDensity: VisualDensity.compact,
@@ -576,7 +576,7 @@ class EditorToolbar extends ConsumerWidget {
                           : Tooltip(
                               message: state.isNativeFormat
                                   ? 'Snippets'
-                                  : 'Snippets require .stitchx format — Save As to convert',
+                                  : 'Snippets require .stitches format — Save As to convert',
                               child: IconButton(
                                 iconSize: 20,
                                 visualDensity: VisualDensity.compact,

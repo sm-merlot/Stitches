@@ -113,11 +113,11 @@ class EditorState {
   /// setting for new patterns. Toggled per-file via the overflow menu.
   final bool compressOnSave;
 
-  /// True when the current file is in the native .stitchx format (or unsaved).
+  /// True when the current file is in the native .stitches format (or unsaved).
   bool get isNativeFormat {
     final path = filePath;
     if (path == null) return true;
-    return path.endsWith('.stitchx');
+    return path.endsWith('.stitches');
   }
 
   const EditorState({
@@ -630,7 +630,7 @@ class EditorNotifier extends Notifier<EditorState>
   @override
   String _serializeClipboard(List<Thread> threads, List<Stitch> stitches) {
     return jsonEncode({
-      'stitchx': {
+      'stitches': {
         'version': 1,
         'threads': threads.map((t) => t.toYaml()).toList(),
         'stitches': stitches.map((s) => s.toYaml()).toList(),

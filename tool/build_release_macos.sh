@@ -23,4 +23,4 @@ flutter build macos --release
 echo "→ restoring pdfrx WASM module"
 dart run pdfrx:remove_wasm_modules --revert
 
-echo "✓ Build complete: build/macos/Build/Products/Release/stitchx.app"
+echo "✓ Build complete: build/macos/Build/Products/Release/stitches.app"

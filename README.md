@@ -1,8 +1,8 @@
-# StitchX
+# Stitches
 > [!NOTE]
 > Built with the assistance of AI tools (Claude Code).
 
-A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows), Mobile, and Tablet (iOS, Android). StitchX lets you design and edit counted cross-stitch patterns using DMC (or Anchor) thread colors, with a touch- and Apple Pencil-friendly canvas.
+A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows), Mobile, and Tablet (iOS, Android). Stitches lets you design and edit counted cross-stitch patterns using DMC (or Anchor) thread colors, with a touch- and Apple Pencil-friendly canvas.
 > [!NOTE]
 > *may not be free on Apple App Store (when it's eventually published there) to offset the Apple Developer Program fees (99USD/year).
 
@@ -32,7 +32,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - **Fill colour** — 8-connected flood fill; fills all connected cells of the same colour (or empty) with the selected thread `[8]`
 
 ### Snippets
-- **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitchx` file
+- **Per-pattern snippet library** — save any selection or clipboard as a named snippet stored inside the `.stitches` file
 - **Snippet panel** — slide-up panel showing all snippets as thumbnails; tap to enter paste mode, long-press or tap ⋮ for rename / resize / flip / rotate / edit / delete
 - **Snippet editor** — full canvas editor for drawing a snippet from scratch, with preset sizes (8×8 up to 64×64) or a custom size; paste any other snippet from the library directly onto the canvas via the toolbar; block mode toggle in the AppBar with visual active state
 - **Multi-palette snippets** — each snippet can hold multiple named colour palettes; switch between palettes via the Palettes tab in the right sidebar or the palette dots in the snippet panel; palettes use positional slot mapping so swapping applies consistently across the whole design; new colours drawn on the canvas propagate to all palettes automatically
@@ -40,7 +40,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - **Sprite sheet importer** — open any sprite sheet image and crop a region; pixel colours matched to nearest DMC thread via CIE Lab colour space; define multiple colour palettes by selecting colour-strip regions on the image; background pixels outside the palette are dropped automatically; output saved directly as a snippet; available on tablet and desktop
 
 ### Files & workspace
-- **File format** — patterns saved as `.stitchx` files (YAML internally, gzip-compressed; backwards-compatible with older uncompressed files)
+- **File format** — patterns saved as `.stitches` files (YAML internally, gzip-compressed; backwards-compatible with older uncompressed files)
 - **Folder workspace** — open a local folder as a workspace with a file tree sidebar
 - **Google Drive sync** — connect a Google Drive account; patterns auto-save and sync in the background
 - **Recent files** — quick access to recently opened files and folders, including Drive items
@@ -55,7 +55,7 @@ Convert a printed cross-stitch chart PDF into an editable pattern without any AI
 5. **Template matching** — every cell is compared against the sampled templates using mean absolute pixel difference; cells with ambiguous matches are flagged for manual review
 6. **Review** — tap any flagged cell to reassign it; confirm to finish
 
-The resulting pattern is saved automatically as a `.stitchx` file next to the source PDF.
+The resulting pattern is saved automatically as a `.stitches` file next to the source PDF.
 
 > The scanner works best on clean, high-contrast charts. Backstitches and half-stitches are not extracted (full stitches only in this release).
 
@@ -69,7 +69,7 @@ The resulting pattern is saved automatically as a `.stitchx` file next to the so
 > The stitch demonstration is in beta. Some pattern shapes may produce incorrect or suboptimal stitch paths.
 
 ### View options
-- **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle button in the AppBar (highlighted when active) on all canvases; on by default for new patterns. In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean. Block mode state is persisted to the `.stitchx` file.
+- **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle button in the AppBar (highlighted when active) on all canvases; on by default for new patterns. In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean. Block mode state is persisted to the `.stitches` file.
 - **Zoom-adaptive rendering** — below a zoom threshold, stitches automatically switch to block rendering; backstitches and grid lines fade out at very low zoom
 
 ### Platform & input

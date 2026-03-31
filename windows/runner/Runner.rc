@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.stitchx" "\0"
-            VALUE "FileDescription", "stitchx" "\0"
+            VALUE "CompanyName", "com.stitches" "\0"
+            VALUE "FileDescription", "stitches" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "stitchx" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.stitchx. All rights reserved." "\0"
-            VALUE "OriginalFilename", "stitchx.exe" "\0"
-            VALUE "ProductName", "stitchx" "\0"
+            VALUE "InternalName", "stitches" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.stitches. All rights reserved." "\0"
+            VALUE "OriginalFilename", "stitches.exe" "\0"
+            VALUE "ProductName", "stitches" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
