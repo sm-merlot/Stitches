@@ -6,15 +6,15 @@
 	<false/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
-	<key>com.apple.security.network.server</key>
+	<key>com.apple.security.files.downloads.read-write</key>
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
-	<key>com.apple.security.files.downloads.read-write</key>
+	<key>com.apple.security.network.server</key>
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.stitchx.stitchx</string>
+		<string>$(AppIdentifierPrefix)com.scme0.stitches</string>
 	</array>
 </dict>
 </plist>
