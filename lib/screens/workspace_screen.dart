@@ -19,6 +19,7 @@ import '../services/file_service.dart';
 import '../services/format_service.dart';
 import '../utils/snackbars.dart';
 import 'export_dialog.dart';
+import 'materials_list_screen.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
 import '../services/pdf_scanner.dart';
@@ -1069,8 +1070,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ],
               ),
             ],
-            // Stitch mode actions — Demo + Screen Lock
+            // Stitch mode actions — Materials + Demo + Screen Lock
             if (editorState.isFileOpen && editorState.stitchMode && openPdf == null) ...[
+              IconButton(
+                tooltip: 'Materials list',
+                icon: const Icon(Icons.shopping_bag_outlined),
+                onPressed: () => showMaterialsList(context, editorState),
+              ),
               StitchDemoButton(state: editorState),
               _WorkspaceScreenLockButton(),
               const SizedBox(width: 4),

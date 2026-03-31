@@ -1,0 +1,460 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import '../models/stitch.dart';
+import '../models/thread.dart';
+import '../providers/editor/editor_provider.dart';
+
+// ─── Public entry point ───────────────────────────────────────────────────────
+
+void showMaterialsList(BuildContext context, EditorState state) {
+  final isWide = MediaQuery.of(context).size.shortestSide >= 600;
+  if (isWide) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        child: SizedBox(
+          width: 480,
+          child: MaterialsListScreen(state: state),
+        ),
+      ),
+    );
+  } else {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => MaterialsListScreen(state: state),
+      ),
+    );
+  }
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+class MaterialsListScreen extends StatefulWidget {
+  final EditorState state;
+  const MaterialsListScreen({super.key, required this.state});
+
+  @override
+  State<MaterialsListScreen> createState() => _MaterialsListScreenState();
+}
+
+class _MaterialsListScreenState extends State<MaterialsListScreen> {
+  int _aidaCount = 14;
+  int _strands = 2;
+  final _shareButtonKey = GlobalKey();
+
+  static const _aidaCounts = [11, 14, 16, 18, 28, 32];
+  static const _strandOptions = [1, 2, 3, 4, 5, 6];
+
+  // Skein calculation constants
+  static const _dmcSkeinMetres = 8.0;
+  static const _dmcTotalStrands = 6;
+  static const _wasteFactor = 1.3;
+
+  // ─── Data helpers ─────────────────────────────────────────────────────────
+
+  /// Unique threads to display — from composite cache if available, else pattern.threads.
+  List<Thread> _threads() {
+    final cache = widget.state.compositeThreadCache;
+    if (cache != null && cache.isNotEmpty) {
+      final unique = <String, Thread>{};
+      for (final t in cache.values) {
+        unique[t.dmcCode] = t;
+      }
+      return unique.values.toList();
+    }
+    return widget.state.pattern.threads;
+  }
+
+  /// Cross-stitch equivalents per dmcCode (FullStitch=1.0, Half=0.5, Quarter=0.25).
+  Map<String, double> _crossEquiv() {
+    final state = widget.state;
+    final cache = state.compositeThreadCache;
+    final equiv = <String, double>{};
+
+    // FullStitches: use composite cache (attributes blended cells correctly)
+    if (cache != null && cache.isNotEmpty) {
+      for (final t in cache.values) {
+        equiv[t.dmcCode] = (equiv[t.dmcCode] ?? 0) + 1.0;
+      }
+    } else {
+      for (final s in state.pattern.stitches) {
+        if (s is FullStitch) {
+          equiv[s.threadId] = (equiv[s.threadId] ?? 0) + 1.0;
+        }
+      }
+    }
+
+    // Non-full cross-stitches always use raw threadId
+    for (final s in state.pattern.stitches) {
+      if (s is FullStitch || s is BackStitch) continue;
+      final e = switch (s) {
+        HalfStitch() => 0.5,
+        QuarterStitch() => 0.25,
+        HalfCrossStitch() => 0.5,
+        QuarterCrossStitch() => 0.25,
+        _ => 0.0,
+      };
+      if (e > 0) equiv[s.threadId] = (equiv[s.threadId] ?? 0) + e;
+    }
+
+    return equiv;
+  }
+
+  /// Backstitch Euclidean cell-unit length per dmcCode.
+  Map<String, double> _backCells() {
+    final cells = <String, double>{};
+    for (final s in widget.state.pattern.stitches) {
+      if (s is! BackStitch) continue;
+      final dx = s.x2 - s.x1;
+      final dy = s.y2 - s.y1;
+      cells[s.threadId] = (cells[s.threadId] ?? 0) + sqrt(dx * dx + dy * dy);
+    }
+    return cells;
+  }
+
+  // ─── Skein calculation ────────────────────────────────────────────────────
+
+  int _skeins(
+    String dmcCode,
+    Map<String, double> crossEquiv,
+    Map<String, double> backCells,
+  ) {
+    final cellMm = 25.4 / _aidaCount;
+    final metersPerFullStitch =
+        _strands * 4 * sqrt(2) * (cellMm / 1000) * _wasteFactor;
+    final metersPerBackCell = _strands * 2 * (cellMm / 1000) * _wasteFactor;
+    final usableMetresPerSkein =
+        _dmcSkeinMetres * (_dmcTotalStrands / _strands);
+
+    final totalMetres = (crossEquiv[dmcCode] ?? 0) * metersPerFullStitch +
+        (backCells[dmcCode] ?? 0) * metersPerBackCell;
+
+    return max(1, (totalMetres / usableMetresPerSkein).ceil());
+  }
+
+  // ─── Aida size ────────────────────────────────────────────────────────────
+
+  ({double widthCm, double heightCm, double widthIn, double heightIn})
+      get _aidaSize {
+    final p = widget.state.pattern;
+    final wCm = (p.width / _aidaCount) * 2.54 + 10;
+    final hCm = (p.height / _aidaCount) * 2.54 + 10;
+    return (
+      widthCm: wCm,
+      heightCm: hCm,
+      widthIn: wCm / 2.54,
+      heightIn: hCm / 2.54,
+    );
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  String _threadName(Thread t) {
+    // Composite blended threads may lack a real name — fall back to pattern threads
+    return widget.state.pattern.threadByCode(t.dmcCode)?.name ?? t.name;
+  }
+
+  List<Thread> _sorted(List<Thread> threads) {
+    return [...threads]..sort((a, b) {
+        final ia = int.tryParse(a.dmcCode) ?? 999999;
+        final ib = int.tryParse(b.dmcCode) ?? 999999;
+        return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
+      });
+  }
+
+  // ─── Share ────────────────────────────────────────────────────────────────
+
+  void _share(
+    List<Thread> sorted,
+    Map<String, double> crossEquiv,
+    Map<String, double> backCells,
+  ) {
+    final p = widget.state.pattern;
+    final s = _aidaSize;
+    final totalSkeins = sorted.fold<int>(
+        0, (sum, t) => sum + _skeins(t.dmcCode, crossEquiv, backCells));
+
+    final buf = StringBuffer()
+      ..writeln('Materials List — ${p.name}')
+      ..writeln('$_aidaCount-count aida · $_strands strands')
+      ..writeln(
+          'Aida: at least ${s.widthCm.toStringAsFixed(1)} × ${s.heightCm.toStringAsFixed(1)} cm'
+          '  (${s.widthIn.toStringAsFixed(1)} × ${s.heightIn.toStringAsFixed(1)} in)')
+      ..writeln();
+    for (final t in sorted) {
+      final n = _skeins(t.dmcCode, crossEquiv, backCells);
+      buf.writeln(
+          '☐ ${t.dmcCode}  ${_threadName(t)}  $n skein${n == 1 ? '' : 's'}');
+    }
+    buf
+      ..writeln()
+      ..write(
+          'Total: ${sorted.length} thread${sorted.length == 1 ? '' : 's'} · '
+          '$totalSkeins skein${totalSkeins == 1 ? '' : 's'}');
+
+    final box = _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    Share.share(buf.toString(), sharePositionOrigin: origin);
+  }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isWide = MediaQuery.of(context).size.shortestSide >= 600;
+
+    final threads = _threads();
+    final sorted = _sorted(threads);
+    final crossEquiv = _crossEquiv();
+    final backCells = _backCells();
+    final size = _aidaSize;
+    final totalSkeins = sorted.fold<int>(
+        0, (sum, t) => sum + _skeins(t.dmcCode, crossEquiv, backCells));
+
+    // ── Controls ──────────────────────────────────────────────────────────────
+    final controls = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: Row(
+        children: [
+          const Text('Aida count:', style: TextStyle(fontSize: 13)),
+          const SizedBox(width: 8),
+          DropdownButton<int>(
+            value: _aidaCount,
+            isDense: true,
+            items: _aidaCounts
+                .map((v) => DropdownMenuItem(value: v, child: Text('$v')))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) setState(() => _aidaCount = v);
+            },
+          ),
+          const SizedBox(width: 20),
+          const Text('Strands:', style: TextStyle(fontSize: 13)),
+          const SizedBox(width: 8),
+          DropdownButton<int>(
+            value: _strands,
+            isDense: true,
+            items: _strandOptions
+                .map((v) => DropdownMenuItem(value: v, child: Text('$v')))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) setState(() => _strands = v);
+            },
+          ),
+        ],
+      ),
+    );
+
+    // ── Aida size row ─────────────────────────────────────────────────────────
+    final aidaRow = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: widget.state.pattern.aidaColor,
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(color: Colors.grey.shade400, width: 1),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Aida: at least '
+              '${size.widthCm.toStringAsFixed(1)} × ${size.heightCm.toStringAsFixed(1)} cm  '
+              '(${size.widthIn.toStringAsFixed(1)} × ${size.heightIn.toStringAsFixed(1)} in)',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          Tooltip(
+            message:
+                'Includes a 5 cm (2 in) border on each side for framing and mounting.',
+            triggerMode: TooltipTriggerMode.tap,
+            child: Icon(
+              Icons.info_outline,
+              size: 16,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // ── Table header ──────────────────────────────────────────────────────────
+    const tableHeader = Padding(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(width: 36),
+          SizedBox(
+            width: 52,
+            child: Text('DMC',
+                style:
+                    TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+          Expanded(
+            child: Text('Name',
+                style:
+                    TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+          SizedBox(
+            width: 52,
+            child: Text('Skeins',
+                textAlign: TextAlign.right,
+                style:
+                    TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    // ── Thread list ───────────────────────────────────────────────────────────
+    final listView = ListView.builder(
+      padding: EdgeInsets.zero,
+      itemCount: sorted.length,
+      itemBuilder: (_, i) {
+        final t = sorted[i];
+        final n = _skeins(t.dmcCode, crossEquiv, backCells);
+        final textColor =
+            t.color.computeLuminance() > 0.35 ? Colors.black : Colors.white;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          child: Row(
+            children: [
+              // Swatch with symbol
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: t.color,
+                  borderRadius: BorderRadius.circular(5),
+                  border:
+                      Border.all(color: Colors.grey.shade400, width: 1),
+                ),
+                alignment: Alignment.center,
+                child: t.symbol.isNotEmpty
+                    ? Text(t.symbol,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                            height: 1.0))
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              // DMC code
+              SizedBox(
+                width: 44,
+                child:
+                    Text(t.dmcCode, style: const TextStyle(fontSize: 13)),
+              ),
+              // Name
+              Expanded(
+                child: Text(
+                  _threadName(t),
+                  style: const TextStyle(fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Skeins
+              SizedBox(
+                width: 52,
+                child: Text(
+                  '$n',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    final footer = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
+      child: Row(
+        children: [
+          Text(
+            '${sorted.length} thread${sorted.length == 1 ? '' : 's'}  ·  '
+            '$totalSkeins skein${totalSkeins == 1 ? '' : 's'}',
+            style: TextStyle(
+                fontSize: 13,
+                color:
+                    theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+          ),
+          const Spacer(),
+          FilledButton.icon(
+            key: _shareButtonKey,
+            icon: const Icon(Icons.share_outlined, size: 16),
+            label: const Text('Share'),
+            onPressed: () => _share(sorted, crossEquiv, backCells),
+          ),
+        ],
+      ),
+    );
+
+    // ── Layout: dialog vs full-screen ─────────────────────────────────────────
+    if (isWide) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header with close button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            child: Row(
+              children: [
+                Expanded(
+                    child: Text('Materials List',
+                        style: theme.textTheme.titleLarge)),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          controls,
+          aidaRow,
+          const Divider(height: 1),
+          tableHeader,
+          const Divider(height: 1),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: listView,
+          ),
+          const Divider(height: 1),
+          footer,
+        ],
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Materials List')),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          controls,
+          aidaRow,
+          const Divider(height: 1),
+          tableHeader,
+          const Divider(height: 1),
+          Expanded(child: listView),
+          const Divider(height: 1),
+          SafeArea(top: false, child: footer),
+        ],
+      ),
+    );
+  }
+}
