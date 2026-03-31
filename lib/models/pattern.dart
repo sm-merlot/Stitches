@@ -108,12 +108,12 @@ class CrossStitchPattern {
   int get canvasCellCount {
     final cells = <(int, int)>{};
     for (final s in stitches) {
-      if (s is BackStitch) continue;
-      if (s is FullStitch) cells.add((s.x, s.y));
-      else if (s is HalfStitch) cells.add((s.x, s.y));
-      else if (s is QuarterStitch) cells.add((s.x, s.y));
-      else if (s is HalfCrossStitch) cells.add((s.x, s.y));
-      else if (s is QuarterCrossStitch) cells.add((s.x, s.y));
+      if (s is BackStitch) { continue; }
+      if (s is FullStitch) { cells.add((s.x, s.y)); }
+      else if (s is HalfStitch) { cells.add((s.x, s.y)); }
+      else if (s is QuarterStitch) { cells.add((s.x, s.y)); }
+      else if (s is HalfCrossStitch) { cells.add((s.x, s.y)); }
+      else if (s is QuarterCrossStitch) { cells.add((s.x, s.y)); }
     }
     return cells.length;
   }
