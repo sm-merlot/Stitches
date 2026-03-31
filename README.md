@@ -97,6 +97,7 @@ Requires Flutter 3.41.4+.
 ### Files & sync
 - Proton Drive support — **on hold, waiting for SDK to mature** (expected 2026). The E2E encryption stack (OpenPGP/GopenPGP key chains) makes an unofficial implementation risky and fragile. When the official SDK ships: if an OpenAPI spec is available, generate a Dart client and wrap it in a service layer (same pattern as `google_drive_service.dart`); if only native iOS/Android SDKs are provided, consider a Flutter plugin. Plan to publish the Proton Drive integration as a standalone Dart package rather than embedding it in the app.
 - Extend supported import/export file types (Pattern Maker `.xsd`, PC Stitch `.pat`, others)
+- Fix Google Drive support for Android/Windows
 
 ### Engineering
 - Better test coverage (unit tests exist for models, stitch logic, and layer behaviour; integration and widget tests not yet written)
