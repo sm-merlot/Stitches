@@ -1,0 +1,23 @@
+docs/superpowers/specs/2026-04-01-pdf-branch-tests-design.md
+  794232f7b9dde9fe 1-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "9e8fb8f29780c4b241acaa04ceb7bb39b2e7bb87",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 120,
+      "total_deletions": 0,
+      "accepted_lines": 120,
+      "overriden_lines": 0
+    }
+  }
+}
