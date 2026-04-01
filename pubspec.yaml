@@ -29,6 +29,7 @@ dependencies:
   xml: ^6.6.1
   google_sign_in: ^6.2.2
   share_plus: ^10.0.0
+  markdown: ^7.2.2
 
 dev_dependencies:
   flutter_test:
@@ -38,6 +39,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/stitches_icon.png
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/NotoSans-Bold.ttf
+    - assets/fonts/NotoSans-Italic.ttf
+    - assets/fonts/NotoSansSymbols2-Regular.ttf
 
 flutter_launcher_icons:
   android: true

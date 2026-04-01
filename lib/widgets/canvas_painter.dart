@@ -6,6 +6,7 @@ import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
+import '../data/symbols.dart';
 import '../services/sprite_importer.dart';
 
 part 'canvas_painter_drawing_methods.dart';
@@ -253,7 +254,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
             }
           }
           final thread = compositeThread ?? _threadMap[stitch.threadId];
-          if (thread == null || thread.symbol.isEmpty) continue;
+          if (thread == null || !symbolIsVisible(thread.symbol)) continue;
 
           // For blended cells use the composite thread's DMC code for focus
           // checks so the symbol shows as focused when the composited colour

@@ -5,6 +5,7 @@ import '../data/aida_presets.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
+import '../services/skein_calculator.dart';
 
 // ─── Share text builder ───────────────────────────────────────────────────────
 
@@ -75,11 +76,6 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
   static const _aidaCounts = [11, 14, 16, 18, 28, 32];
   static const _strandOptions = [1, 2, 3, 4, 5, 6];
 
-  // Skein calculation constants
-  static const _dmcSkeinMetres = 8.0;
-  static const _dmcTotalStrands = 6;
-  static const _wasteFactor = 1.3;
-
   // ─── Data helpers ─────────────────────────────────────────────────────────
 
   /// Unique threads to display — from composite cache if available, else pattern.threads.
@@ -148,19 +144,14 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
     String dmcCode,
     Map<String, double> crossEquiv,
     Map<String, double> backCells,
-  ) {
-    final cellMm = 25.4 / _aidaCount;
-    final metersPerFullStitch =
-        _strands * 4 * sqrt(2) * (cellMm / 1000) * _wasteFactor;
-    final metersPerBackCell = _strands * 2 * (cellMm / 1000) * _wasteFactor;
-    final usableMetresPerSkein =
-        _dmcSkeinMetres * (_dmcTotalStrands / _strands);
-
-    final totalMetres = (crossEquiv[dmcCode] ?? 0) * metersPerFullStitch +
-        (backCells[dmcCode] ?? 0) * metersPerBackCell;
-
-    return max(1, (totalMetres / usableMetresPerSkein).ceil());
-  }
+  ) =>
+      calculateSkeins(
+        dmcCode: dmcCode,
+        crossEquiv: crossEquiv,
+        backCells: backCells,
+        aidaCount: _aidaCount,
+        strands: _strands,
+      );
 
   // ─── Aida size ────────────────────────────────────────────────────────────
 

@@ -47,6 +47,16 @@ class CrossStitchPattern {
   /// Maps dmcCode → symbol. Persisted so symbols survive save/reload.
   final Map<String, String> compositeSymbols;
 
+  /// Optional metadata fields.
+  final String? designer;
+  final String? description;
+  final String? difficulty;
+  final String? estimatedHours;
+  final String? copyright;
+
+  /// Materials suggestions: list of {aidaCount, strands} records.
+  final List<({int aidaCount, int strands})> materialsSuggestions;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -66,6 +76,12 @@ class CrossStitchPattern {
     this.referenceOpacity = 0.5,
     this.snippets = const [],
     this.compositeSymbols = const {},
+    this.designer,
+    this.description,
+    this.difficulty,
+    this.estimatedHours,
+    this.copyright,
+    this.materialsSuggestions = const [],
   });
 
   /// Flattened list of all layers, applying group visibility overrides.
@@ -157,6 +173,12 @@ class CrossStitchPattern {
     double? referenceOpacity,
     List<Snippet>? snippets,
     Object? compositeSymbols = _sentinel,
+    Object? designer = _sentinel,
+    Object? description = _sentinel,
+    Object? difficulty = _sentinel,
+    Object? estimatedHours = _sentinel,
+    Object? copyright = _sentinel,
+    List<({int aidaCount, int strands})>? materialsSuggestions,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -187,6 +209,12 @@ class CrossStitchPattern {
       compositeSymbols: compositeSymbols == _sentinel
           ? this.compositeSymbols
           : compositeSymbols as Map<String, String>,
+      designer: designer == _sentinel ? this.designer : designer as String?,
+      description: description == _sentinel ? this.description : description as String?,
+      difficulty: difficulty == _sentinel ? this.difficulty : difficulty as String?,
+      estimatedHours: estimatedHours == _sentinel ? this.estimatedHours : estimatedHours as String?,
+      copyright: copyright == _sentinel ? this.copyright : copyright as String?,
+      materialsSuggestions: materialsSuggestions ?? this.materialsSuggestions,
     );
   }
 
@@ -300,6 +328,14 @@ class CrossStitchPattern {
         if (raw == null) return const <String, String>{};
         return Map<String, String>.from(raw as Map);
       }(),
+      designer: yaml['designer'] as String?,
+      description: yaml['description'] as String?,
+      difficulty: yaml['difficulty'] as String?,
+      estimatedHours: yaml['estimatedHours'] as String?,
+      copyright: yaml['copyright'] as String?,
+      materialsSuggestions: (yaml['materialsSuggestions'] as List? ?? [])
+          .map((e) => (aidaCount: e['aidaCount'] as int, strands: e['strands'] as int))
+          .toList(),
     );
   }
 }

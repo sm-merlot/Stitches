@@ -55,8 +55,38 @@ class _DesignColoursPanel extends ConsumerWidget {
 
     // Stitch counts for the current view (canvas or layer).
     final stitchCounts = state.showCompositeThreads
-        ? _countStitches(state.pattern.stitches)
+        ? _countStitchesComposite(state)
         : _countStitches(activeLayer.stitches);
+
+    // Symbol issue count (no symbol, duplicate, or similar) across displayed threads.
+    // Uses `threads` (canvas composites or layer threads) so the banner matches
+    // what _ThreadList actually shows.
+    final allSymbolCounts = <String, int>{};
+    for (final t in threads) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
+        allSymbolCounts[t.symbol] = (allSymbolCounts[t.symbol] ?? 0) + 1;
+      }
+    }
+    final allGroupSymbols = <int, Set<String>>{};
+    for (final t in threads) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
+        final g = symbolSimilarityGroup(t.symbol);
+        if (g >= 0) (allGroupSymbols[g] ??= {}).add(t.symbol);
+      }
+    }
+    final allConflictingGroups = allGroupSymbols.entries
+        .where((e) => e.value.length > 1)
+        .map((e) => e.key)
+        .toSet();
+    final issueCount = threads
+        .where((t) {
+          if (!symbolIsVisible(t.symbol)) return true;
+          if (symbolIsPdfUnsupported(t.symbol)) return true;
+          if ((allSymbolCounts[t.symbol] ?? 0) > 1) return true;
+          final g = symbolSimilarityGroup(t.symbol);
+          return g >= 0 && allConflictingGroups.contains(g);
+        })
+        .length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -99,6 +129,47 @@ class _DesignColoursPanel extends ConsumerWidget {
           ),
         ),
         const Divider(height: 1),
+        if (issueCount > 0) ...[
+          Container(
+            color: theme.colorScheme.errorContainer.withValues(alpha: 0.25),
+            padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: 13, color: Colors.orange.shade700),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '$issueCount symbol ${issueCount == 1 ? 'issue' : 'issues'}',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.7)),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    _autoFixSymbols(notifier, state.pattern.threads);
+                    // Rebuild composite cache so blended-thread symbols are
+                    // also reassigned using the fixed pattern-thread symbols.
+                    if (state.showCompositeThreads) {
+                      notifier.refreshCompositeCache();
+                    }
+                  },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 0),
+                    minimumSize: const Size(0, 24),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: const TextStyle(fontSize: 11),
+                  ),
+                  child: const Text('Auto-fix'),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+        ],
         Expanded(
           child: _ThreadList(
             threads: threads,
@@ -106,7 +177,34 @@ class _DesignColoursPanel extends ConsumerWidget {
             useDmc: useDmc,
             stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
-            onLongPress: (t) => _showSymbolPicker(context, notifier, t),
+            onSwatchTap: (t) {
+              final isLayerThread = state.pattern.threads
+                  .any((pt) => pt.dmcCode == t.dmcCode);
+              if (isLayerThread) {
+                _showSymbolPicker(
+                  context, notifier, t,
+                  state.pattern.threads
+                      .where((pt) => pt.dmcCode != t.dmcCode)
+                      .map((pt) => pt.symbol)
+                      .where(symbolIsVisible)
+                      .toSet(),
+                );
+              } else {
+                // Composite thread — use changeCompositeSymbol so the
+                // compositeSymbols registry (and PDF) is updated correctly.
+                final usedSymbols = <String>{
+                  ...state.pattern.threads
+                      .map((pt) => pt.symbol)
+                      .where(symbolIsVisible),
+                  ...state.pattern.compositeSymbols.entries
+                      .where((e) => e.key != t.dmcCode)
+                      .map((e) => e.value)
+                      .where(symbolIsVisible),
+                };
+                _showCompositeSymbolPicker(
+                    context, notifier, t, usedSymbols);
+              }
+            },
           ),
         ),
       ],
@@ -126,9 +224,81 @@ class _DesignColoursPanel extends ConsumerWidget {
   }
 }
 
+/// Assigns new symbols to every thread that:
+/// - has no visible symbol,
+/// - shares its exact symbol with another thread (duplicate), or
+/// - uses a symbol from the same visual-similarity group as another thread.
+/// Lowest DMC number keeps its symbol when resolving conflicts.
+void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
+  final sorted = [...allThreads]..sort((a, b) {
+      final ia = int.tryParse(a.dmcCode) ?? 999999;
+      final ib = int.tryParse(b.dmcCode) ?? 999999;
+      return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
+    });
+
+  // Phase 1: collect kept symbols, flagging no-symbol, PDF-incompatible, and exact duplicates.
+  final kept = <String>{};
+  final toFix = <String>{};  // dmcCodes that need a new symbol
+  for (final t in sorted) {
+    if (!symbolIsVisible(t.symbol) || symbolIsPdfUnsupported(t.symbol) ||
+        kept.contains(t.symbol)) {
+      toFix.add(t.dmcCode);
+    } else {
+      kept.add(t.symbol);
+    }
+  }
+
+  // Phase 2: flag similar-symbol conflicts. Lowest DMC keeps its symbol;
+  // higher-DMC threads whose symbol shares a group get reassigned.
+  final usedGroups = <int, String>{};  // groupIndex → symbol that claimed it
+  for (final t in sorted) {
+    if (toFix.contains(t.dmcCode)) continue;
+    final g = symbolSimilarityGroup(t.symbol);
+    if (g < 0) continue;
+    if (usedGroups.containsKey(g)) {
+      toFix.add(t.dmcCode);
+      kept.remove(t.symbol);
+    } else {
+      usedGroups[g] = t.symbol;
+    }
+  }
+
+  // Assign new symbols — pick candidates not in kept and not in a conflicting group.
+  for (final t in sorted) {
+    if (!toFix.contains(t.dmcCode)) continue;
+    for (final s in kPatternSymbols) {
+      if (kept.contains(s)) continue;
+      final g = symbolSimilarityGroup(s);
+      if (g >= 0 && usedGroups.containsKey(g)) continue;
+      kept.add(s);
+      if (g >= 0) usedGroups[g] = s;
+      notifier.setThreadSymbol(t.dmcCode, s);
+      break;
+    }
+  }
+}
+
 Map<String, int> _countStitches(List<Stitch> stitches) {
   final counts = <String, int>{};
   for (final s in stitches) {
+    counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/// Counts stitches using the composite cache for FullStitches (deduplicates
+/// cells shared across layers) and raw threadId for non-FullStitch types.
+Map<String, int> _countStitchesComposite(EditorState state) {
+  final cache = state.compositeThreadCache;
+  if (cache == null || cache.isEmpty) {
+    return _countStitches(state.pattern.stitches);
+  }
+  final counts = <String, int>{};
+  for (final thread in cache.values) {
+    counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
+  }
+  for (final s in state.pattern.stitches) {
+    if (s is FullStitch) continue;
     counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
   }
   return counts;
@@ -244,26 +414,6 @@ class _StitchColoursPanel extends ConsumerWidget {
     return state.pattern.threads;
   }
 
-  /// Counts stitches using composite cache for FullStitches (so blended cells
-  /// are attributed to the composite DMC code, not the raw per-layer thread)
-  /// and raw threadId for non-FullStitch types.
-  Map<String, int> _countStitchesComposite(EditorState state) {
-    final cache = state.compositeThreadCache;
-    if (cache == null || cache.isEmpty) {
-      return _countStitches(state.pattern.stitches);
-    }
-    final counts = <String, int>{};
-    // FullStitch cells → composite result
-    for (final thread in cache.values) {
-      counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
-    }
-    // Non-FullStitch stitches → raw threadId
-    for (final s in state.pattern.stitches) {
-      if (s is FullStitch) continue;
-      counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
-    }
-    return counts;
-  }
 }
 
 class _FocusToggle extends StatelessWidget {
@@ -450,7 +600,14 @@ class _SnippetColoursPanel extends ConsumerWidget {
       useDmc: useDmc,
       stitchCounts: stitchCounts,
       onTap: (t) => notifier.setSelectedThread(t.dmcCode),
-      onLongPress: (t) => _showSymbolPicker(context, notifier, t),
+      onSwatchTap: (t) => _showSymbolPicker(
+        context, notifier, t,
+        state.pattern.threads
+            .where((pt) => pt.dmcCode != t.dmcCode)
+            .map((pt) => pt.symbol)
+            .where(symbolIsVisible)
+            .toSet(),
+      ),
     );
   }
 }
@@ -463,7 +620,7 @@ class _ThreadList extends StatelessWidget {
   final bool useDmc;
   final Map<String, int> stitchCounts;
   final void Function(Thread) onTap;
-  final void Function(Thread)? onLongPress;
+  final void Function(Thread)? onSwatchTap;
   final bool focusMode;
 
   const _ThreadList({
@@ -472,7 +629,7 @@ class _ThreadList extends StatelessWidget {
     required this.useDmc,
     required this.stitchCounts,
     required this.onTap,
-    this.onLongPress,
+    this.onSwatchTap,
     this.focusMode = false,
   });
 
@@ -485,7 +642,44 @@ class _ThreadList extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 12)),
       );
     }
+    // Pre-compute duplicate symbols across the displayed list.
+    final symbolCounts = <String, int>{};
+    for (final t in threads) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
+        symbolCounts[t.symbol] = (symbolCounts[t.symbol] ?? 0) + 1;
+      }
+    }
+    // Pre-compute similar-symbol conflicts (different symbols from same group).
+    final groupSymbols = <int, Set<String>>{};
+    for (final t in threads) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
+        final g = symbolSimilarityGroup(t.symbol);
+        if (g >= 0) (groupSymbols[g] ??= {}).add(t.symbol);
+      }
+    }
+    final conflictingGroups = groupSymbols.entries
+        .where((e) => e.value.length > 1)
+        .map((e) => e.key)
+        .toSet();
+
+    bool isSimilarOnly(Thread t) {
+      if (!symbolIsVisible(t.symbol) || symbolIsPdfUnsupported(t.symbol)) return false;
+      if ((symbolCounts[t.symbol] ?? 0) > 1) return false; // already a dup
+      final g = symbolSimilarityGroup(t.symbol);
+      return g >= 0 && conflictingGroups.contains(g);
+    }
+
     final sorted = [...threads]..sort((a, b) {
+        // No-symbol (incl. PDF-incompatible) first, then duplicates, then similar, then normal.
+        final aNoSym = !symbolIsVisible(a.symbol) || symbolIsPdfUnsupported(a.symbol);
+        final bNoSym = !symbolIsVisible(b.symbol) || symbolIsPdfUnsupported(b.symbol);
+        if (aNoSym != bNoSym) return aNoSym ? -1 : 1;
+        final aDup = !aNoSym && (symbolCounts[a.symbol] ?? 0) > 1;
+        final bDup = !bNoSym && (symbolCounts[b.symbol] ?? 0) > 1;
+        if (aDup != bDup) return aDup ? -1 : 1;
+        final aSim = !aDup && isSimilarOnly(a);
+        final bSim = !bDup && isSimilarOnly(b);
+        if (aSim != bSim) return aSim ? -1 : 1;
         if (useDmc) {
           final ia = int.tryParse(a.dmcCode) ?? 999999;
           final ib = int.tryParse(b.dmcCode) ?? 999999;
@@ -516,9 +710,103 @@ class _ThreadList extends StatelessWidget {
             : Colors.white;
         final count = stitchCounts[t.dmcCode];
 
+        final hasSymbol = symbolIsVisible(t.symbol);
+        final isPdfBad = hasSymbol && symbolIsPdfUnsupported(t.symbol);
+        final isDuplicate = hasSymbol && !isPdfBad && (symbolCounts[t.symbol] ?? 0) > 1;
+        final isSimilar = !isPdfBad && isSimilarOnly(t);
+        // PDF-incompatible symbols are treated as "no symbol" for display.
+        final effectivelyNoSymbol = !hasSymbol || isPdfBad;
+
+        final swatchBorderColor = effectivelyNoSymbol
+            ? Colors.orange.shade600
+            : isDuplicate
+                ? Colors.red.shade500
+                : isSimilar
+                    ? Colors.amber.shade600
+                    : Colors.grey.shade400;
+
+        Widget swatch = Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: t.color,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(
+              color: swatchBorderColor,
+              width: (effectivelyNoSymbol || isDuplicate || isSimilar) ? 1.5 : 1.0,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: effectivelyNoSymbol
+              ? Text('?',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: textColor.withValues(alpha: 0.4),
+                      height: 1.0))
+              : Text(t.symbol,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                      height: 1.0)),
+        );
+        if (isDuplicate || isSimilar) {
+          swatch = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              swatch,
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  width: 13,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    color: isDuplicate
+                        ? Colors.red.shade500
+                        : Colors.amber.shade600,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(isDuplicate ? '!' : '~',
+                      style: const TextStyle(
+                          fontSize: 7,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          height: 1.0)),
+                ),
+              ),
+            ],
+          );
+        }
+        if (onSwatchTap != null) {
+          swatch = Tooltip(
+            message: isPdfBad
+                ? "Symbol '${t.symbol}' won't render in PDF — tap to assign a compatible one"
+                : !hasSymbol
+                    ? 'No symbol — tap to assign'
+                    : isDuplicate
+                        ? 'Duplicate symbol — tap to fix'
+                        : isSimilar
+                            ? 'Similar to another symbol — may be hard to distinguish'
+                            : 'Tap to edit symbol',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onSwatchTap!(t),
+                child: swatch,
+              ),
+            ),
+          );
+        }
+
         return InkWell(
           onTap: () => onTap(t),
-          onLongPress: onLongPress != null ? () => onLongPress!(t) : null,
           child: Container(
             decoration: isSelected
                 ? BoxDecoration(
@@ -540,25 +828,7 @@ class _ThreadList extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               children: [
-                // Colour swatch with symbol
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: t.color,
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: Colors.grey.shade400, width: 1),
-                  ),
-                  alignment: Alignment.center,
-                  child: t.symbol.isNotEmpty
-                      ? Text(t.symbol,
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                              height: 1.0))
-                      : null,
-                ),
+                swatch,
                 const SizedBox(width: 8),
                 // Code + name
                 Expanded(
@@ -615,19 +885,48 @@ Future<void> _showSymbolPicker(
   BuildContext context,
   EditorNotifier notifier,
   Thread thread,
+  Set<String> usedSymbols,
 ) async {
   final symbol = await showDialog<String>(
     context: context,
-    builder: (_) => _SymbolPickerDialog(current: thread.symbol),
+    builder: (_) => _SymbolPickerDialog(
+      current: symbolIsVisible(thread.symbol) ? thread.symbol : '',
+      usedSymbols: usedSymbols,
+    ),
   );
   if (symbol != null) {
     notifier.setThreadSymbol(thread.dmcCode, symbol);
   }
 }
 
+/// Symbol picker for composite (blended-layer) threads.
+/// Uses [changeCompositeSymbol] so the compositeSymbols registry is updated
+/// rather than the layer-thread list.
+Future<void> _showCompositeSymbolPicker(
+  BuildContext context,
+  EditorNotifier notifier,
+  Thread thread,
+  Set<String> usedSymbols,
+) async {
+  final symbol = await showDialog<String>(
+    context: context,
+    builder: (_) => _SymbolPickerDialog(
+      current: symbolIsVisible(thread.symbol) ? thread.symbol : '',
+      usedSymbols: usedSymbols,
+    ),
+  );
+  if (symbol != null) {
+    notifier.changeCompositeSymbol(thread.dmcCode, symbol);
+  }
+}
+
 class _SymbolPickerDialog extends StatefulWidget {
   final String current;
-  const _SymbolPickerDialog({required this.current});
+  final Set<String> usedSymbols;
+  const _SymbolPickerDialog({
+    required this.current,
+    this.usedSymbols = const {},
+  });
 
   @override
   State<_SymbolPickerDialog> createState() => _SymbolPickerDialogState();
@@ -650,6 +949,41 @@ class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
 
   void _pick(String symbol) {
     Navigator.of(context).pop(symbol);
+  }
+
+  Widget _symbolTile(String s, ThemeData theme, {bool disabled = false}) {
+    final isSelected = !disabled && _controller.text == s;
+    return GestureDetector(
+      onTap: disabled ? null : () => _pick(s),
+      child: Opacity(
+        opacity: disabled ? 0.3 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 80),
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: isSelected
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(s,
+              style: TextStyle(
+                fontSize: 14,
+                color: isSelected
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.colorScheme.onSurface,
+              )),
+        ),
+      ),
+    );
   }
 
   @override
@@ -690,44 +1024,40 @@ class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
             const SizedBox(height: 6),
-            // Symbol grid
+            // Symbol grid — available symbols first, in-use greyed out below
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
+              constraints: const BoxConstraints(maxHeight: 300),
               child: SingleChildScrollView(
-                child: Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: kPatternSymbols.map((s) {
-                    final isSelected = _controller.text == s;
-                    return GestureDetector(
-                      onTap: () => _pick(s),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 80),
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? theme.colorScheme.primaryContainer
-                              : theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isSelected
-                                ? theme.colorScheme.primary
-                                : Colors.transparent,
-                            width: 1.5,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(s,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isSelected
-                                  ? theme.colorScheme.onPrimaryContainer
-                                  : theme.colorScheme.onSurface,
-                            )),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: kPatternSymbols
+                          .where((s) => !widget.usedSymbols.contains(s))
+                          .map((s) => _symbolTile(s, theme))
+                          .toList(),
+                    ),
+                    if (widget.usedSymbols
+                        .any((s) => kPatternSymbols.contains(s))) ...[
+                      const SizedBox(height: 10),
+                      Text('Already in use:',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.45))),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: kPatternSymbols
+                            .where((s) => widget.usedSymbols.contains(s))
+                            .map((s) => _symbolTile(s, theme, disabled: true))
+                            .toList(),
                       ),
-                    );
-                  }).toList(),
+                    ],
+                    const SizedBox(height: 4),
+                  ],
                 ),
               ),
             ),

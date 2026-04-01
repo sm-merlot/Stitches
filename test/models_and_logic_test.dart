@@ -11,8 +11,11 @@
 //   • YAML serialization of layer lock / group lock fields
 //   • File compression: FileService.toYamlString + saveFile/compress param
 //   • AppSettings.compressNewFiles default and EditorState.compressOnSave default
+//   • CrossStitchPattern metadata YAML round-trip (description, copyright, materialsSuggestions)
+//   • EditorNotifier._assignSymbols — symbol auto-assignment and conflict avoidance
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:stitches/models/layer.dart';
@@ -22,6 +25,7 @@ import 'package:stitches/models/snippet.dart';
 import 'dart:convert';
 import 'package:stitches/models/snippet_palette.dart';
 import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/thread.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';
 import 'package:stitches/services/file_service.dart';
@@ -498,6 +502,110 @@ void main() {
       final bytes = utf8.encode(FileService.toYamlString(pattern));
       // gzip magic: 0x1f 0x8b
       expect(bytes[0], isNot(0x1f));
+    });
+  });
+
+  // ─── CrossStitchPattern metadata YAML round-trip ──────────────────────────
+
+  group('CrossStitchPattern metadata YAML round-trip', () {
+    test('description survives toYaml/fromYaml', () {
+      final p = CrossStitchPattern.empty().copyWith(description: 'A nice pattern');
+      final yaml = FileService.toYamlString(p);
+      final back = FileService.parseYamlString(yaml);
+      expect(back.description, equals('A nice pattern'));
+    });
+
+    test('copyright survives toYaml/fromYaml', () {
+      final p = CrossStitchPattern.empty().copyWith(copyright: '© 2026 Test');
+      final yaml = FileService.toYamlString(p);
+      final back = FileService.parseYamlString(yaml);
+      expect(back.copyright, equals('© 2026 Test'));
+    });
+
+    test('materialsSuggestions survive toYaml/fromYaml', () {
+      final p = CrossStitchPattern.empty().copyWith(
+        materialsSuggestions: [
+          (aidaCount: 14, strands: 2),
+          (aidaCount: 18, strands: 3),
+        ],
+      );
+      final yaml = FileService.toYamlString(p);
+      final back = FileService.parseYamlString(yaml);
+      expect(back.materialsSuggestions, hasLength(2));
+      expect(back.materialsSuggestions[0].aidaCount, equals(14));
+      expect(back.materialsSuggestions[0].strands, equals(2));
+      expect(back.materialsSuggestions[1].aidaCount, equals(18));
+      expect(back.materialsSuggestions[1].strands, equals(3));
+    });
+
+    test('null metadata fields are omitted from YAML output', () {
+      final p = CrossStitchPattern.empty();
+      final yaml = FileService.toYamlString(p);
+      expect(yaml, isNot(contains('description:')));
+      expect(yaml, isNot(contains('copyright:')));
+    });
+
+    test('empty materialsSuggestions list is omitted from YAML', () {
+      final p = CrossStitchPattern.empty();
+      final yaml = FileService.toYamlString(p);
+      expect(yaml, isNot(contains('materialsSuggestions:')));
+    });
+  });
+
+  // ─── EditorNotifier._assignSymbols ────────────────────────────────────────
+
+  group('EditorNotifier._assignSymbols', () {
+    EditorNotifier notifier() {
+      final container = ProviderContainer();
+      return container.read(editorProvider.notifier);
+    }
+
+    Thread t(String code, String symbol) => Thread(
+          dmcCode: code,
+          color: const Color(0xFF000000),
+          name: code,
+          symbol: symbol,
+        );
+
+    test('thread with valid visible symbol keeps it unchanged', () {
+      final result = notifier().assignSymbolsForTest([t('310', 'A')]);
+      expect(result.single.symbol, equals('A'));
+    });
+
+    test('thread with empty symbol gets auto-assigned from kPatternSymbols', () {
+      final result = notifier().assignSymbolsForTest([t('310', '')]);
+      expect(result.single.symbol, isNotEmpty);
+    });
+
+    test('thread with PDF-unsupported symbol gets reassigned', () {
+      final result = notifier().assignSymbolsForTest([t('310', '↑')]);
+      expect(result.single.symbol, isNot(equals('↑')));
+      expect(result.single.symbol, isNotEmpty);
+    });
+
+    test('two threads without symbols get distinct symbols', () {
+      final result = notifier().assignSymbolsForTest([t('310', ''), t('321', '')]);
+      expect(result[0].symbol, isNotEmpty);
+      expect(result[1].symbol, isNotEmpty);
+      expect(result[0].symbol, isNot(equals(result[1].symbol)));
+    });
+
+    test('existingSymbols param blocks those symbols from assignment', () {
+      // 'A' is the first symbol in kPatternSymbols — passing it as existing
+      // means the first empty thread must receive something else.
+      final result = notifier()
+          .assignSymbolsForTest([t('310', '')], existingSymbols: {'A'});
+      expect(result.single.symbol, isNot(equals('A')));
+      expect(result.single.symbol, isNotEmpty);
+    });
+
+    test('composite symbols in existingSymbols are not reused for layer threads', () {
+      // Simulate a pattern where '■' is already used by a composite thread.
+      // A regular thread with no symbol should not be assigned '■'.
+      final result = notifier()
+          .assignSymbolsForTest([t('310', '')], existingSymbols: {'A', '■'});
+      expect(result.single.symbol, isNot(equals('A')));
+      expect(result.single.symbol, isNot(equals('■')));
     });
   });
 }

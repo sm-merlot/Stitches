@@ -11,8 +11,6 @@ mixin LayersMixin on Notifier<EditorState> {
 
   Timer? _opacityDebounce;
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
-  String _nextSymbol(Set<String> used);
-
   // ─── Private helpers (unique to this mixin) ───────────────────────────────
 
   CrossStitchPattern _updateLayer(
@@ -565,12 +563,34 @@ mixin LayersMixin on Notifier<EditorState> {
 
     final oldRegistry = state.pattern.compositeSymbols;
 
+    // Returns true when [sym] can be safely assigned: not already in [used]
+    // and not in the same visual-similarity group as any symbol in [used].
+    bool symbolAvailable(String sym, Set<String> used) {
+      if (used.contains(sym)) return false;
+      final g = symbolSimilarityGroup(sym);
+      if (g < 0) return true;
+      return !used.any((s) => symbolSimilarityGroup(s) == g);
+    }
+
+    // Pick the next available symbol from the pool, respecting similarity groups.
+    String pickSymbol(List<String> freed, Set<String> used) {
+      for (int i = 0; i < freed.length; i++) {
+        if (symbolAvailable(freed[i], used)) return freed.removeAt(i);
+      }
+      for (final s in kPatternSymbols) {
+        if (symbolAvailable(s, used)) return s;
+      }
+      return '';
+    }
+
+    // Freed symbols: old composite codes no longer active, whose symbols
+    // don't conflict (exact or similar group) with pattern symbols.
     final freedSymbols = <String>[
       for (final entry in oldRegistry.entries)
         if (!activeCodes.contains(entry.key) &&
             !patternMap.containsKey(entry.key) &&
             entry.value.isNotEmpty &&
-            !patternSymbols.contains(entry.value))
+            symbolAvailable(entry.value, patternSymbols))
           entry.value,
     ];
 
@@ -580,13 +600,12 @@ mixin LayersMixin on Notifier<EditorState> {
     for (final dmcCode in activeCodes) {
       if (patternMap.containsKey(dmcCode)) continue;
       final stored = oldRegistry[dmcCode];
-      if (stored != null && stored.isNotEmpty && !patternSymbols.contains(stored)) {
+      // Re-use the stored symbol only if it still doesn't conflict.
+      if (stored != null && stored.isNotEmpty && symbolAvailable(stored, used)) {
         used.add(stored);
         preAssigned[dmcCode] = stored;
       } else {
-        final sym = freedSymbols.isNotEmpty
-            ? freedSymbols.removeAt(0)
-            : _nextSymbol(used);
+        final sym = pickSymbol(freedSymbols, used);
         if (sym.isNotEmpty) {
           used.add(sym);
           preAssigned[dmcCode] = sym;
