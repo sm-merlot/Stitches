@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../data/aida_presets.dart';
 import '../data/dmc_colors.dart';
+import '../data/symbols.dart';
 import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
@@ -398,7 +399,7 @@ class PdfService {
 
       // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt)
       final sym = pdfSymbols[thread.dmcCode] ?? '';
-      if (sym.isNotEmpty) {
+      if (symbolIsVisible(sym)) {
         final subSize = _stitchSubRegionSize(s, cellSize);
         if (subSize >= 4) {
           final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);

@@ -618,10 +618,10 @@ class EditorNotifier extends Notifier<EditorState>
   @override
   Thread _resolveThreadSymbol(Thread thread, List<Thread> existingThreads) {
     final usedSymbols = {
-      ...existingThreads.map((t) => t.symbol).where((s) => s.isNotEmpty),
-      ...state.pattern.compositeSymbols.values.where((s) => s.isNotEmpty),
+      ...existingThreads.map((t) => t.symbol).where(symbolIsVisible),
+      ...state.pattern.compositeSymbols.values.where(symbolIsVisible),
     };
-    if (thread.symbol.isEmpty || usedSymbols.contains(thread.symbol)) {
+    if (!symbolIsVisible(thread.symbol) || usedSymbols.contains(thread.symbol)) {
       return thread.copyWith(symbol: _nextSymbol(usedSymbols));
     }
     return thread;
@@ -642,7 +642,7 @@ class EditorNotifier extends Notifier<EditorState>
   List<Thread> _assignSymbols(List<Thread> threads) {
     final assigned = <String>{};
     return threads.map((t) {
-      if (t.symbol.isNotEmpty) {
+      if (symbolIsVisible(t.symbol)) {
         assigned.add(t.symbol);
         return t;
       }

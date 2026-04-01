@@ -110,7 +110,7 @@ Map<String, String> _missingSymbolAssignments(CrossStitchPattern pattern) {
       pattern.threads.map((t) => t.symbol).where((s) => s.isNotEmpty).toSet();
   final result = <String, String>{};
   for (final t in pattern.threads) {
-    if (t.symbol.isEmpty) {
+    if (!symbolIsVisible(t.symbol)) {
       String proposed = '';
       for (final s in kPatternSymbols) {
         if (!used.contains(s)) {

@@ -516,7 +516,7 @@ class _ThreadList extends StatelessWidget {
             : Colors.white;
         final count = stitchCounts[t.dmcCode];
 
-        final hasSymbol = t.symbol.isNotEmpty;
+        final hasSymbol = symbolIsVisible(t.symbol);
         Widget swatch = Container(
           width: 28,
           height: 28,
@@ -640,7 +640,8 @@ Future<void> _showSymbolPicker(
 ) async {
   final symbol = await showDialog<String>(
     context: context,
-    builder: (_) => _SymbolPickerDialog(current: thread.symbol),
+    builder: (_) => _SymbolPickerDialog(
+        current: symbolIsVisible(thread.symbol) ? thread.symbol : ''),
   );
   if (symbol != null) {
     notifier.setThreadSymbol(thread.dmcCode, symbol);
