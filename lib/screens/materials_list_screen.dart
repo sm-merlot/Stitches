@@ -6,6 +6,33 @@ import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 
+// ─── Share text builder ───────────────────────────────────────────────────────
+
+/// Builds the markdown materials list string.
+/// [threads] is a list of `(dmcCode, name, skeins)` records, already sorted.
+String buildMaterialsListMarkdown({
+  required String patternName,
+  required Color aidaColor,
+  required int aidaCount,
+  required double widthCm,
+  required double heightCm,
+  required double widthIn,
+  required double heightIn,
+  required List<({String dmcCode, String name, int skeins})> threads,
+}) {
+  final buf = StringBuffer()
+    ..writeln('# $patternName Materials List')
+    ..writeln()
+    ..writeln('- [ ] ${aidaColorLabel(aidaColor)} $aidaCount-count Aida min '
+        '${widthCm.toStringAsFixed(1)} x ${heightCm.toStringAsFixed(1)} cm '
+        '(${widthIn.toStringAsFixed(1)} x ${heightIn.toStringAsFixed(1)} in)');
+  for (final t in threads) {
+    buf.writeln(
+        '- [ ] DMC ${t.dmcCode} ${t.name} x ${t.skeins} skein${t.skeins == 1 ? '' : 's'}');
+  }
+  return buf.toString();
+}
+
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 void showMaterialsList(BuildContext context, EditorState state) {
@@ -175,20 +202,26 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
     final p = widget.state.pattern;
     final s = _aidaSize;
 
-    final buf = StringBuffer()
-      ..writeln('# ${p.name} Materials List')
-      ..writeln()
-      ..writeln('- [ ] ${aidaColorLabel(p.aidaColor)} $_aidaCount-count Aida min '
-          '${s.widthCm.toStringAsFixed(1)} x ${s.heightCm.toStringAsFixed(1)} cm '
-          '(${s.widthIn.toStringAsFixed(1)} x ${s.heightIn.toStringAsFixed(1)} in)');
-    for (final t in sorted) {
-      final n = _skeins(t.dmcCode, crossEquiv, backCells);
-      buf.writeln('- [ ] DMC ${t.dmcCode} ${_threadName(t)} x $n skein${n == 1 ? '' : 's'}');
-    }
+    final text = buildMaterialsListMarkdown(
+      patternName: p.name,
+      aidaColor: p.aidaColor,
+      aidaCount: _aidaCount,
+      widthCm: s.widthCm,
+      heightCm: s.heightCm,
+      widthIn: s.widthIn,
+      heightIn: s.heightIn,
+      threads: sorted
+          .map((t) => (
+                dmcCode: t.dmcCode,
+                name: _threadName(t),
+                skeins: _skeins(t.dmcCode, crossEquiv, backCells),
+              ))
+          .toList(),
+    );
 
     final box = _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
-    Share.share(buf.toString(), sharePositionOrigin: origin);
+    Share.share(text, sharePositionOrigin: origin);
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
