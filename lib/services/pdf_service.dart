@@ -801,7 +801,11 @@ class PdfService {
 
       if (pattern.designer != null) metaRow('Designer', pattern.designer!);
       if (pattern.difficulty != null) metaRow('Difficulty', pattern.difficulty!);
-      if (pattern.estimatedHours != null) metaRow('Est. time', pattern.estimatedHours!);
+      if (pattern.estimatedHours != null) {
+        final raw = pattern.estimatedHours!.trim();
+        final display = raw.toLowerCase().contains('hour') ? raw : '$raw hours';
+        metaRow('Est. time', display);
+      }
 
       if (pattern.description != null) {
         my -= 2;
@@ -811,8 +815,10 @@ class PdfService {
       }
 
       if (pattern.copyright != null) {
+        final year = DateTime.now().year;
+        final copyrightLine = 'Copyright \u00A9 ${pattern.copyright!} $year';
         canvas.setFillColor(PdfColors.grey600);
-        canvas.drawString(pdfFont, 7.0, _ascii(pattern.copyright!), margin, my);
+        canvas.drawString(pdfFont, 7.0, _ascii(copyrightLine), margin, my);
       }
     }
 
