@@ -106,7 +106,7 @@ class _DesignColoursPanel extends ConsumerWidget {
             useDmc: useDmc,
             stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
-            onLongPress: (t) => _showSymbolPicker(context, notifier, t),
+            onSwatchTap: (t) => _showSymbolPicker(context, notifier, t),
           ),
         ),
       ],
@@ -450,7 +450,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
       useDmc: useDmc,
       stitchCounts: stitchCounts,
       onTap: (t) => notifier.setSelectedThread(t.dmcCode),
-      onLongPress: (t) => _showSymbolPicker(context, notifier, t),
+      onSwatchTap: (t) => _showSymbolPicker(context, notifier, t),
     );
   }
 }
@@ -463,7 +463,7 @@ class _ThreadList extends StatelessWidget {
   final bool useDmc;
   final Map<String, int> stitchCounts;
   final void Function(Thread) onTap;
-  final void Function(Thread)? onLongPress;
+  final void Function(Thread)? onSwatchTap;
   final bool focusMode;
 
   const _ThreadList({
@@ -472,7 +472,7 @@ class _ThreadList extends StatelessWidget {
     required this.useDmc,
     required this.stitchCounts,
     required this.onTap,
-    this.onLongPress,
+    this.onSwatchTap,
     this.focusMode = false,
   });
 
@@ -516,9 +516,49 @@ class _ThreadList extends StatelessWidget {
             : Colors.white;
         final count = stitchCounts[t.dmcCode];
 
+        final hasSymbol = t.symbol.isNotEmpty;
+        Widget swatch = Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: t.color,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(
+              color: hasSymbol ? Colors.grey.shade400 : Colors.orange.shade600,
+              width: hasSymbol ? 1.0 : 1.5,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: hasSymbol
+              ? Text(t.symbol,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                      height: 1.0))
+              : Text('?',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: textColor.withValues(alpha: 0.4),
+                      height: 1.0)),
+        );
+        if (onSwatchTap != null) {
+          swatch = Tooltip(
+            message: hasSymbol ? 'Tap to edit symbol' : 'No symbol — tap to assign',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onSwatchTap!(t),
+                child: swatch,
+              ),
+            ),
+          );
+        }
+
         return InkWell(
           onTap: () => onTap(t),
-          onLongPress: onLongPress != null ? () => onLongPress!(t) : null,
           child: Container(
             decoration: isSelected
                 ? BoxDecoration(
@@ -540,25 +580,7 @@ class _ThreadList extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               children: [
-                // Colour swatch with symbol
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: t.color,
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: Colors.grey.shade400, width: 1),
-                  ),
-                  alignment: Alignment.center,
-                  child: t.symbol.isNotEmpty
-                      ? Text(t.symbol,
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                              height: 1.0))
-                      : null,
-                ),
+                swatch,
                 const SizedBox(width: 8),
                 // Code + name
                 Expanded(
