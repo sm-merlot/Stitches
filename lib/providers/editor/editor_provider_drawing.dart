@@ -213,12 +213,15 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   /// Changes the symbol displayed on a thread's swatch.
+  /// Clears the composite cache so the colours panel immediately reflects the
+  /// updated symbol rather than serving stale Thread objects from the cache.
   void setThreadSymbol(String dmcCode, String symbol) {
     final threads = state.pattern.threads
         .map((t) => t.dmcCode == dmcCode ? t.copyWith(symbol: symbol) : t)
         .toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(threads: threads),
+      compositeThreadCache: null,
       isDirty: true,
     );
   }
