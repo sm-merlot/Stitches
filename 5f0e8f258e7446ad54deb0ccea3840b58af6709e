@@ -1,0 +1,29 @@
+lib/screens/editor_screen.dart
+  1b4e555c113ce8c9 15,327
+lib/screens/pattern_info_dialog.dart
+  1b4e555c113ce8c9 1-431
+lib/providers/editor/editor_provider_drawing.dart
+  1b4e555c113ce8c9 718-743
+lib/screens/workspace_screen.dart
+  1b4e555c113ce8c9 40,961
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "5f0e8f258e7446ad54deb0ccea3840b58af6709e",
+  "prompts": {
+    "1b4e555c113ce8c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1e26622-ee4f-48bc-be91-07234e7903a6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 461,
+      "total_deletions": 129,
+      "accepted_lines": 461,
+      "overriden_lines": 0
+    }
+  }
+}
