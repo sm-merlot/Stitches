@@ -58,17 +58,31 @@ class _DesignColoursPanel extends ConsumerWidget {
         ? _countStitchesComposite(state)
         : _countStitches(activeLayer.stitches);
 
-    // Symbol issue count (no symbol or duplicate) across all pattern threads.
+    // Symbol issue count (no symbol, duplicate, or similar) across all pattern threads.
     final allSymbolCounts = <String, int>{};
     for (final t in state.pattern.threads) {
       if (symbolIsVisible(t.symbol)) {
         allSymbolCounts[t.symbol] = (allSymbolCounts[t.symbol] ?? 0) + 1;
       }
     }
+    final allGroupSymbols = <int, Set<String>>{};
+    for (final t in state.pattern.threads) {
+      if (symbolIsVisible(t.symbol)) {
+        final g = symbolSimilarityGroup(t.symbol);
+        if (g >= 0) (allGroupSymbols[g] ??= {}).add(t.symbol);
+      }
+    }
+    final allConflictingGroups = allGroupSymbols.entries
+        .where((e) => e.value.length > 1)
+        .map((e) => e.key)
+        .toSet();
     final issueCount = state.pattern.threads
-        .where((t) =>
-            !symbolIsVisible(t.symbol) ||
-            (allSymbolCounts[t.symbol] ?? 0) > 1)
+        .where((t) {
+          if (!symbolIsVisible(t.symbol)) return true;
+          if ((allSymbolCounts[t.symbol] ?? 0) > 1) return true;
+          final g = symbolSimilarityGroup(t.symbol);
+          return g >= 0 && allConflictingGroups.contains(g);
+        })
         .length;
 
     return Column(
@@ -181,9 +195,11 @@ class _DesignColoursPanel extends ConsumerWidget {
   }
 }
 
-/// Assigns new symbols to every thread that has no visible symbol or shares
-/// its symbol with another thread. Lowest DMC number keeps its symbol when
-/// resolving duplicates.
+/// Assigns new symbols to every thread that:
+/// - has no visible symbol,
+/// - shares its exact symbol with another thread (duplicate), or
+/// - uses a symbol from the same visual-similarity group as another thread.
+/// Lowest DMC number keeps its symbol when resolving conflicts.
 void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
   final sorted = [...allThreads]..sort((a, b) {
       final ia = int.tryParse(a.dmcCode) ?? 999999;
@@ -191,25 +207,43 @@ void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
       return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
     });
 
+  // Phase 1: collect kept symbols, flagging no-symbol and exact duplicates.
   final kept = <String>{};
-  final toFix = <Thread>[];
+  final toFix = <String>{};  // dmcCodes that need a new symbol
   for (final t in sorted) {
-    if (!symbolIsVisible(t.symbol)) {
-      toFix.add(t);
-    } else if (kept.contains(t.symbol)) {
-      toFix.add(t); // duplicate — will get a new symbol
+    if (!symbolIsVisible(t.symbol) || kept.contains(t.symbol)) {
+      toFix.add(t.dmcCode);
     } else {
       kept.add(t.symbol);
     }
   }
 
-  for (final t in toFix) {
+  // Phase 2: flag similar-symbol conflicts. Lowest DMC keeps its symbol;
+  // higher-DMC threads whose symbol shares a group get reassigned.
+  final usedGroups = <int, String>{};  // groupIndex → symbol that claimed it
+  for (final t in sorted) {
+    if (toFix.contains(t.dmcCode)) continue;
+    final g = symbolSimilarityGroup(t.symbol);
+    if (g < 0) continue;
+    if (usedGroups.containsKey(g)) {
+      toFix.add(t.dmcCode);
+      kept.remove(t.symbol);
+    } else {
+      usedGroups[g] = t.symbol;
+    }
+  }
+
+  // Assign new symbols — pick candidates not in kept and not in a conflicting group.
+  for (final t in sorted) {
+    if (!toFix.contains(t.dmcCode)) continue;
     for (final s in kPatternSymbols) {
-      if (!kept.contains(s)) {
-        kept.add(s);
-        notifier.setThreadSymbol(t.dmcCode, s);
-        break;
-      }
+      if (kept.contains(s)) continue;
+      final g = symbolSimilarityGroup(s);
+      if (g >= 0 && usedGroups.containsKey(g)) continue;
+      kept.add(s);
+      if (g >= 0) usedGroups[g] = s;
+      notifier.setThreadSymbol(t.dmcCode, s);
+      break;
     }
   }
 }
@@ -585,15 +619,37 @@ class _ThreadList extends StatelessWidget {
         symbolCounts[t.symbol] = (symbolCounts[t.symbol] ?? 0) + 1;
       }
     }
+    // Pre-compute similar-symbol conflicts (different symbols from same group).
+    final groupSymbols = <int, Set<String>>{};
+    for (final t in threads) {
+      if (symbolIsVisible(t.symbol)) {
+        final g = symbolSimilarityGroup(t.symbol);
+        if (g >= 0) (groupSymbols[g] ??= {}).add(t.symbol);
+      }
+    }
+    final conflictingGroups = groupSymbols.entries
+        .where((e) => e.value.length > 1)
+        .map((e) => e.key)
+        .toSet();
+
+    bool isSimilarOnly(Thread t) {
+      if (!symbolIsVisible(t.symbol)) return false;
+      if ((symbolCounts[t.symbol] ?? 0) > 1) return false; // already a dup
+      final g = symbolSimilarityGroup(t.symbol);
+      return g >= 0 && conflictingGroups.contains(g);
+    }
 
     final sorted = [...threads]..sort((a, b) {
-        // No-symbol threads first, then duplicates, then normal.
+        // No-symbol threads first, then duplicates, then similar, then normal.
         final aNoSym = !symbolIsVisible(a.symbol);
         final bNoSym = !symbolIsVisible(b.symbol);
         if (aNoSym != bNoSym) return aNoSym ? -1 : 1;
         final aDup = !aNoSym && (symbolCounts[a.symbol] ?? 0) > 1;
         final bDup = !bNoSym && (symbolCounts[b.symbol] ?? 0) > 1;
         if (aDup != bDup) return aDup ? -1 : 1;
+        final aSim = !aDup && isSimilarOnly(a);
+        final bSim = !bDup && isSimilarOnly(b);
+        if (aSim != bSim) return aSim ? -1 : 1;
         if (useDmc) {
           final ia = int.tryParse(a.dmcCode) ?? 999999;
           final ib = int.tryParse(b.dmcCode) ?? 999999;
@@ -626,12 +682,15 @@ class _ThreadList extends StatelessWidget {
 
         final hasSymbol = symbolIsVisible(t.symbol);
         final isDuplicate = hasSymbol && (symbolCounts[t.symbol] ?? 0) > 1;
+        final isSimilar = isSimilarOnly(t);
 
         final swatchBorderColor = !hasSymbol
             ? Colors.orange.shade600
             : isDuplicate
                 ? Colors.red.shade500
-                : Colors.grey.shade400;
+                : isSimilar
+                    ? Colors.amber.shade600
+                    : Colors.grey.shade400;
 
         Widget swatch = Container(
           width: 28,
@@ -641,7 +700,7 @@ class _ThreadList extends StatelessWidget {
             borderRadius: BorderRadius.circular(5),
             border: Border.all(
               color: swatchBorderColor,
-              width: (!hasSymbol || isDuplicate) ? 1.5 : 1.0,
+              width: (!hasSymbol || isDuplicate || isSimilar) ? 1.5 : 1.0,
             ),
           ),
           alignment: Alignment.center,
@@ -659,7 +718,7 @@ class _ThreadList extends StatelessWidget {
                       color: textColor.withValues(alpha: 0.4),
                       height: 1.0)),
         );
-        if (isDuplicate) {
+        if (isDuplicate || isSimilar) {
           swatch = Stack(
             clipBehavior: Clip.none,
             children: [
@@ -671,15 +730,17 @@ class _ThreadList extends StatelessWidget {
                   width: 13,
                   height: 13,
                   decoration: BoxDecoration(
-                    color: Colors.red.shade500,
+                    color: isDuplicate
+                        ? Colors.red.shade500
+                        : Colors.amber.shade600,
                     shape: BoxShape.circle,
                     border: Border.all(
                         color: Theme.of(context).scaffoldBackgroundColor,
                         width: 1.5),
                   ),
                   alignment: Alignment.center,
-                  child: const Text('!',
-                      style: TextStyle(
+                  child: Text(isDuplicate ? '!' : '~',
+                      style: const TextStyle(
                           fontSize: 7,
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -695,7 +756,9 @@ class _ThreadList extends StatelessWidget {
                 ? 'No symbol — tap to assign'
                 : isDuplicate
                     ? 'Duplicate symbol — tap to fix'
-                    : 'Tap to edit symbol',
+                    : isSimilar
+                        ? 'Similar to another symbol — may be hard to distinguish'
+                        : 'Tap to edit symbol',
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(

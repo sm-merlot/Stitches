@@ -51,17 +51,39 @@ const kPatternSymbols = [
   'ξ', 'π', 'ρ', 'σ', 'τ', 'φ', 'χ', 'ψ', 'ω',
   // Playing card suits (outline variants — filled suits have emoji presentation)
   '♤', '♧', '♡', '♢',
-  // Arrows
-  '↑', '↓', '→', '←', '↗', '↘', '↙', '↖', '↔', '↕',
-  // Circled operators
-  '⊕', '⊖', '⊗', '⊙', '⊚',
+  // Circled operators (only ⊙ is covered by NotoSansSymbols2)
+  '⊙',
   // More filled / outline shapes
-  '▶', '◀', '▸', '◂', '⬡', '⬢', '⬤', '⬥',
-  '▪', '▫', '▴', '▾', '◉', '◎',
-  // Stars / snowflakes
-  '✦', '✧', '✩', '✪', '✫', '✬', '✭', '✮', '✯', '✰',
-  // Dingbats / marks
-  '✓', '✗', '✚', '✜', '✝',
+  '▶', '◀', '⬡', '⬢', '⬤', '⬥', '◉', '◎',
+  // Stars — kept to visually distinct variants only
+  '✦', '✩',
+  // Dingbats / marks (✝ U+271D is absent from both bundled fonts — omitted)
+  '✓', '✗', '✚', '✜',
   // Misc punctuation / currency / special
   '§', '¶', '°', '±', '×', '÷', '€', '£', '¥', '¢',
 ];
+
+/// Groups of symbols that are visually similar at small cell sizes.
+/// If a pattern uses two symbols from the same group, a warning is shown in
+/// the colours panel.
+const kSimilarSymbolGroups = [
+  // Circles / ovals
+  {'O', 'o', '0', '○'},
+  // Vertical strokes
+  {'I', 'l', '1', '|', 'i'},
+  // Filled circles
+  {'●', '◉', '⬤'},
+  // Diamonds
+  {'◆', '◇', '⬥'},
+  // Stars
+  {'★', '✦', '✩'},
+];
+
+/// Returns the similarity group index (0-based) that [symbol] belongs to,
+/// or -1 if [symbol] is not in any group.
+int symbolSimilarityGroup(String symbol) {
+  for (int i = 0; i < kSimilarSymbolGroups.length; i++) {
+    if (kSimilarSymbolGroups[i].contains(symbol)) return i;
+  }
+  return -1;
+}

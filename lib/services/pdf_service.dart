@@ -57,35 +57,51 @@ class PdfService {
         .whereType<BackStitch>()
         .toList();
 
-    // Stitch counts built from composited list — each occupied cell counts once.
+    // Stitch counts from all raw layer stitches — not the deduped composites —
+    // so every thread (including blend-layer overlays) gets a correct count.
     final crossStitchEquiv = <String, double>{};
     final backStitchEquiv = <String, double>{};
-    for (final s in nonBack) {
-      final v = switch (s) {
-        FullStitch() => 1.0,
-        HalfStitch() => 0.5,
-        QuarterStitch() => 0.25,
-        HalfCrossStitch() => 0.5,
-        QuarterCrossStitch() => 0.25,
-        BackStitch() => 0.0,
-      };
-      crossStitchEquiv[s.threadId] =
-          (crossStitchEquiv[s.threadId] ?? 0) + v;
-    }
-    for (final bs in backstitches) {
-      final v = math.sqrt(
-          math.pow(bs.x2 - bs.x1, 2) + math.pow(bs.y2 - bs.y1, 2));
-      backStitchEquiv[bs.threadId] =
-          (backStitchEquiv[bs.threadId] ?? 0) + v;
+    for (final layer in pattern.layers) {
+      if (!layer.visible) continue;
+      for (final s in layer.stitches) {
+        if (s is BackStitch) {
+          final v = math.sqrt(
+              math.pow(s.x2 - s.x1, 2) + math.pow(s.y2 - s.y1, 2));
+          backStitchEquiv[s.threadId] =
+              (backStitchEquiv[s.threadId] ?? 0) + v;
+        } else {
+          final v = switch (s) {
+            FullStitch() => 1.0,
+            HalfStitch() => 0.5,
+            HalfCrossStitch() => 0.5,
+            QuarterStitch() => 0.25,
+            QuarterCrossStitch() => 0.25,
+            BackStitch() => 0.0, // unreachable
+          };
+          if (v > 0) {
+            crossStitchEquiv[s.threadId] =
+                (crossStitchEquiv[s.threadId] ?? 0) + v;
+          }
+        }
+      }
     }
 
-    // Threads that have cross-type stitches / backstitches respectively
+    // Threads that have cross-type stitches / backstitches respectively,
+    // sorted by DMC number so colour tables are easy to reference.
+    int dmcSort(Thread a, Thread b) {
+      final ia = int.tryParse(a.dmcCode) ?? 999999;
+      final ib = int.tryParse(b.dmcCode) ?? 999999;
+      return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
+    }
+
     final crossThreads = pattern.threads
         .where((t) => crossStitchEquiv.containsKey(t.dmcCode))
-        .toList();
+        .toList()
+      ..sort(dmcSort);
     final backThreads = pattern.threads
         .where((t) => backStitchEquiv.containsKey(t.dmcCode))
-        .toList();
+        .toList()
+      ..sort(dmcSort);
 
     // Build per-export symbol map
     final pdfSymbols = _buildPdfSymbolMap([
@@ -140,6 +156,7 @@ class PdfService {
     final titlePage = PdfPage(doc.document, pageFormat: pageFormat);
     _drawTitlePage(
       titlePage.getGraphics(),
+      page: titlePage,
       format: pageFormat,
       pattern: pattern,
       nonBack: nonBack,
@@ -408,7 +425,8 @@ class PdfService {
           final fs = math.max(3.5, subSize * 0.44);
           canvas.setFillColor(textColor);
           final symFont = _fontFor(sym, fonts.regular, fonts.symbol);
-          canvas.drawString(symFont, fs, sym, sx - fs * 0.55 / 2, sy - fs / 2 + 0.5);
+          canvas.drawString(symFont, fs, sym,
+              sx - _textWidth(symFont, fs, sym) / 2, sy - fs * 0.35);
         }
       }
     }
@@ -521,7 +539,8 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        fonts: fonts);
+        fonts: fonts,
+        copyright: pattern.copyright);
   }
 
   // ── Colour table page ─────────────────────────────────────────────────────
@@ -663,7 +682,8 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        fonts: fonts);
+        fonts: fonts,
+        copyright: pattern.copyright);
 
     return finalY;
   }
@@ -721,6 +741,7 @@ class PdfService {
 
   static void _drawTitlePage(
     PdfGraphics canvas, {
+    required PdfPage page,
     required PdfPageFormat format,
     required CrossStitchPattern pattern,
     required List<Stitch> nonBack,
@@ -760,7 +781,6 @@ class PdfService {
       if (pattern.description != null) {
         metaBlockH += _parseMarkdownBlocks(pattern.description!, usableW, fonts).totalHeight + 4;
       }
-      if (pattern.copyright != null) metaBlockH += 10.0;
       metaBlockH += metaGap; // top gap before metadata
     }
 
@@ -822,7 +842,7 @@ class PdfService {
       canvas.setLineWidth(0.5);
       canvas.drawRect(margin, my - metaSwatchSize, metaSwatchSize, metaSwatchSize);
       canvas.strokePath();
-      final aidaLabel = aidaColorLabel(pattern.aidaColor);
+      final aidaLabel = 'On ${aidaColorLabel(pattern.aidaColor)} Aida';
       canvas.setFillColor(PdfColors.grey700);
       canvas.drawString(fonts.regular, 9.0, aidaLabel,
           margin + metaSwatchSize + 5, my - metaSwatchSize + 2);
@@ -851,13 +871,39 @@ class PdfService {
         my -= 4;
       }
 
-      if (pattern.copyright != null) {
-        final year = DateTime.now().year;
-        final copyrightLine = 'Copyright \u00A9 ${pattern.copyright!} $year';
-        canvas.setFillColor(PdfColors.grey600);
-        canvas.drawString(fonts.regular, 7.0, copyrightLine, margin, my);
-      }
     }
+
+    // ── App attribution (above footer rule) ──────────────────────────────
+    const attrFs = 7.0;
+    const attrPrefix = 'Pattern crafted with ';
+    const attrLink = 'Stitches';
+    const attrUrl = 'https://github.com/scme0/Stitches';
+    final prefixW = _textWidth(fonts.italic, attrFs, attrPrefix);
+    final linkW = _textWidth(fonts.italic, attrFs, attrLink);
+    final attrX = (format.width - prefixW - linkW) / 2;
+    final attrY = margin + footerH + 2;
+
+    canvas.setFillColor(PdfColors.grey500);
+    canvas.drawString(fonts.italic, attrFs, attrPrefix, attrX, attrY);
+
+    const linkColor = PdfColor(0.18, 0.46, 0.80);
+    canvas.setFillColor(linkColor);
+    canvas.drawString(fonts.italic, attrFs, attrLink, attrX + prefixW, attrY);
+    // Underline
+    canvas.setStrokeColor(linkColor);
+    canvas.setLineWidth(0.4);
+    canvas.moveTo(attrX + prefixW, attrY - 1);
+    canvas.lineTo(attrX + prefixW + linkW, attrY - 1);
+    canvas.strokePath();
+
+    // Clickable URL annotation over "Stitches"
+    PdfAnnot(
+      page,
+      PdfAnnotUrlLink(
+        rect: PdfRect(attrX + prefixW, attrY - 1, linkW, attrFs + 2),
+        url: attrUrl,
+      ),
+    );
 
     // ── Footer ────────────────────────────────────────────────────────────
     _drawPageFooter(canvas,
@@ -866,7 +912,8 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        fonts: fonts);
+        fonts: fonts,
+        copyright: pattern.copyright);
   }
 
   // ── Materials section ─────────────────────────────────────────────────────
@@ -970,20 +1017,25 @@ class PdfService {
         'Sizes include a 5cm border on each side for framing.', margin, y - borderNoteFs - 1);
     y -= borderNoteFs + 10;
 
-    // ── Skeins sub-table ──────────────────────────────────────────────────
-    const skeinSwatchW = 18.0;
-    const codeColW = 44.0;
-    final skeinColW = 46.0;
-    final nameColW = tableW - skeinSwatchW - codeColW - skeinColW * suggestions.length;
-    final skeinColWidths = [
-      skeinSwatchW,
-      codeColW,
-      nameColW,
-      ...List.filled(suggestions.length, skeinColW),
+    // ── Skeins sub-table (two-column) ────────────────────────────────────
+    const gutterW = 8.0;
+    final halfW = (tableW - gutterW) / 2;
+
+    const twoSwatchW = 16.0;
+    const twoCodeW = 38.0;
+    const twoSkeinW = 38.0; // per Aida-size column
+    final twoNameW =
+        (halfW - twoSwatchW - twoCodeW - twoSkeinW * suggestions.length)
+            .clamp(30.0, double.infinity);
+    final halfColWidths = [
+      twoSwatchW,
+      twoCodeW,
+      twoNameW,
+      ...List.filled(suggestions.length, twoSkeinW),
     ];
 
     final codeHeader = useDmc ? 'DMC' : 'Anchor';
-    final skeinHeaders = [
+    final halfHeaders = [
       '',
       codeHeader,
       'Name',
@@ -991,16 +1043,18 @@ class PdfService {
     ];
 
     void drawSkeinHeader(PdfGraphics cv, double headerY) {
-      _drawTableRow(cv,
-          x: margin,
-          y: headerY,
-          colWidths: skeinColWidths,
-          rowH: headRowH,
-          bgColor: PdfColors.grey200,
-          cells: skeinHeaders,
-          fonts: fonts,
-          fontSize: tableFs,
-          isHeader: true);
+      for (int col = 0; col < 2; col++) {
+        _drawTableRow(cv,
+            x: margin + col * (halfW + gutterW),
+            y: headerY,
+            colWidths: halfColWidths,
+            rowH: headRowH,
+            bgColor: PdfColors.grey200,
+            cells: halfHeaders,
+            fonts: fonts,
+            fontSize: tableFs,
+            isHeader: true);
+      }
     }
 
     drawSkeinHeader(currentCanvas, y);
@@ -1009,11 +1063,45 @@ class PdfService {
     // Sub-header note clarifying the column values are skein counts
     const noteFs = 6.5;
     currentCanvas.setFillColor(PdfColors.grey600);
-    currentCanvas.drawString(
-        fonts.regular, noteFs, 'Values are estimated skein quantities (8m/skein, 10% overlap assumed).', margin, y - noteFs - 1);
+    currentCanvas.drawString(fonts.regular, noteFs,
+        'Values are estimated skein quantities (8m/skein, 10% overlap assumed).',
+        margin, y - noteFs - 1);
     y -= noteFs + 8;
 
-    for (final t in threads) {
+    String threadDisplayCode(Thread t) =>
+        useDmc ? t.dmcCode : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
+    List<String> threadSkeinCells(Thread t) => suggestions.map((s) {
+          final n = calculateSkeins(
+            dmcCode: t.dmcCode,
+            crossEquiv: crossEquiv,
+            backCells: backCells,
+            aidaCount: s.aidaCount,
+            strands: s.strands,
+          );
+          return '$n';
+        }).toList();
+
+    void drawThreadRow(Thread t, int col) {
+      _drawTableRow(currentCanvas,
+          x: margin + col * (halfW + gutterW),
+          y: y,
+          colWidths: halfColWidths,
+          rowH: rowH,
+          bgColor: null,
+          cells: ['', threadDisplayCode(t), t.name, ...threadSkeinCells(t)],
+          fonts: fonts,
+          fontSize: tableFs,
+          isHeader: false,
+          swatchColor: _pdfColor(t.color));
+    }
+
+    // Full left column first, then right column — threads[0..mid-1] on left,
+    // threads[mid..end] on right, drawn row by row simultaneously.
+    final mid = (threads.length / 2).ceil();
+    final leftThreads = threads.sublist(0, mid);
+    final rightThreads = threads.sublist(mid);
+
+    for (int i = 0; i < leftThreads.length; i++) {
       // Paginate when near the bottom
       if (y - rowH < margin + footerH + 4) {
         _drawPageFooter(currentCanvas,
@@ -1022,7 +1110,8 @@ class PdfService {
             footerH: footerH,
             pageNum: currentPageNum,
             totalPages: totalPages,
-            fonts: fonts);
+            fonts: fonts,
+            copyright: pattern.copyright);
         currentCanvas = PdfPage(doc, pageFormat: format).getGraphics();
         onOriginalCanvas = false;
         currentPageNum++;
@@ -1039,31 +1128,8 @@ class PdfService {
         y -= headRowH;
       }
 
-      final displayCode = useDmc
-          ? t.dmcCode
-          : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
-      final skeinCells = suggestions.map((s) {
-        final n = calculateSkeins(
-          dmcCode: t.dmcCode,
-          crossEquiv: crossEquiv,
-          backCells: backCells,
-          aidaCount: s.aidaCount,
-          strands: s.strands,
-        );
-        return '$n';
-      }).toList();
-
-      _drawTableRow(currentCanvas,
-          x: margin,
-          y: y,
-          colWidths: skeinColWidths,
-          rowH: rowH,
-          bgColor: null,
-          cells: ['', displayCode, t.name, ...skeinCells],
-          fonts: fonts,
-          fontSize: tableFs,
-          isHeader: false,
-          swatchColor: _pdfColor(t.color));
+      drawThreadRow(leftThreads[i], 0);
+      if (i < rightThreads.length) drawThreadRow(rightThreads[i], 1);
       y -= rowH;
     }
 
@@ -1078,7 +1144,8 @@ class PdfService {
           footerH: footerH,
           pageNum: currentPageNum,
           totalPages: totalPages,
-          fonts: fonts);
+          fonts: fonts,
+          copyright: pattern.copyright);
     }
   }
 
@@ -1184,6 +1251,7 @@ class PdfService {
     required int pageNum,
     required int totalPages,
     required _PdfFonts fonts,
+    String? copyright,
   }) {
     const footerFs = 7.5;
     final ruleY = margin + footerH - 4;
@@ -1193,11 +1261,20 @@ class PdfService {
     canvas.lineTo(format.width - margin, ruleY);
     canvas.strokePath();
 
-    final label = 'Page $pageNum of $totalPages';
-    final lw = label.length * footerFs * 0.55;
     canvas.setFillColor(PdfColors.grey600);
+
+    // Copyright on the left (if present)
+    if (copyright != null) {
+      final year = DateTime.now().year;
+      canvas.drawString(fonts.regular, footerFs,
+          'Copyright \u00A9 $copyright $year', margin, margin);
+    }
+
+    // Page number on the right
+    final label = 'Page $pageNum of $totalPages';
+    final lw = _textWidth(fonts.regular, footerFs, label);
     canvas.drawString(
-        fonts.regular, footerFs, label, format.width / 2 - lw / 2, margin);
+        fonts.regular, footerFs, label, format.width - margin - lw, margin);
   }
 
   /// Draws a single table row.
@@ -1273,12 +1350,12 @@ class PdfService {
               swatchColor.blue * 0.114;
           final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
           final sf = math.max(3.5, (rowH - 2 * pad) * 0.58);
-          canvas.setFillColor(textColor);
-          final tw = sf * 0.55;
           final symFont = _fontFor(swatchSymbol, fonts.regular, fonts.symbol);
+          final tw = _textWidth(symFont, sf, swatchSymbol);
+          canvas.setFillColor(textColor);
           canvas.drawString(symFont, sf, swatchSymbol,
               cx + pad + (cw - 2 * pad - tw) / 2,
-              y - rowH + pad + (rowH - 2 * pad - sf) / 2 + 1.0);
+              y - rowH + pad + (rowH - 2 * pad) / 2 - sf * 0.35);
         }
       } else if (cells[i].isNotEmpty) {
         canvas.setFillColor(PdfColors.black);
@@ -1688,16 +1765,22 @@ class PdfService {
         BackStitch() => 0,
       };
 
-  /// Returns [sym] font if [text] contains a character in the Unicode symbol /
-  /// geometric-shapes range (U+2000+), otherwise returns [base].
+  /// Returns [sym] font if [text] contains a character that requires
+  /// NotoSansSymbols2, otherwise returns [base] (NotoSans-Regular).
   ///
-  /// NotoSans-Regular covers Basic Latin, Latin-1 Supplement (¼ Æ © etc.),
-  /// Latin Extended, and Greek — all of which are below U+2000. Routing those
-  /// characters to NotoSansSymbols2 caused glyphs to be substituted incorrectly
-  /// (e.g. ¼ rendering as Æ) because Symbols2 does not cover that range.
+  /// NotoSans-Regular (as bundled) covers only:
+  ///   Latin, Latin-1 Supplement (¼ © £ € etc.), Greek.
+  /// NotoSansSymbols2 covers from U+2200 upward, including:
+  ///   Geometric Shapes (U+25A0–25FF: ■ ● ▲ ▼ ◆ ○ etc.),
+  ///   Misc Symbols (U+2600–26FF: ★ ♤ ♧ ♡ ♢),
+  ///   Dingbats (U+2700–27BF: ✦ ✩ ✓ ✗ ✚),
+  ///   Misc Symbols and Arrows (U+2B00+: ⬡ ⬢ ⬤ ⬥),
+  ///   some Math Operators (U+2299: ⊙).
+  /// NOTE: Arrows (U+2190–21FF) and most Math Operators (⊕⊖⊗⊚) are absent
+  /// from both fonts — they must not appear in kPatternSymbols.
   static PdfFont _fontFor(String text, PdfFont base, PdfFont sym) {
     for (final rune in text.runes) {
-      if (rune >= 0x2000) return sym;
+      if (rune >= 0x2200) return sym;
     }
     return base;
   }
@@ -1757,7 +1840,16 @@ class PdfService {
 
     for (final entry in cellStack.entries) {
       final stack = entry.value;
-      deduped.add(stack.last.stitch); // topmost layer wins for symbol/threadId
+      // Symbol/threadId: topmost layer wins only when it fully covers (Normal
+      // blend at ≥99% opacity). For Add/Screen/Multiply/etc. the bottom layer
+      // provides the primary thread identity — its symbol distinguishes the
+      // different coloured areas of the base pattern.
+      final top = stack.last;
+      final symbolStitch =
+          (top.blendMode == LayerBlendMode.normal && top.opacity >= 0.99)
+              ? top.stitch
+              : stack.first.stitch;
+      deduped.add(symbolStitch);
       if (stack.length > 1) {
         var blended = stack.first.color;
         for (int i = 1; i < stack.length; i++) {
