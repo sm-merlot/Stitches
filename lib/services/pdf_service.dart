@@ -392,7 +392,7 @@ class PdfService {
           final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
           final lum = thread.color.computeLuminance();
           final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
-          final fs = math.max(3.5, subSize * 0.52);
+          final fs = math.max(3.5, subSize * 0.44);
           canvas.setFillColor(textColor);
           canvas.drawString(pdfFont, fs, sym, sx - fs * 0.55 / 2, sy - fs / 2 + 0.5);
         }
