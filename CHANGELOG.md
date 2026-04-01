@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- 0e9b3c8: Stitch focus mode: draw an orange perimeter outline around connected groups of focused cells when the thread colour would be hard to see against the unfocused-grey background. Trigger uses CIE Lab ΔE so only near-grey colours are affected; vivid hues are unaffected.
+- d824929: Finalise name change from stitchx to stitches
+- b94d823: Polish: bug fixes and small features — app rename to Stitches (bundle ID com.scme0.stitches), view position persistence, block mode in stitch mode AppBar, focus mode colour fixes, stitch count corrections, Apple Pencil paste fix.
+- c64ad3e: Add materials list / skein calculator
+
+  Shows a shopping bag icon in stitch mode. Opens a materials list with aida count and strand count dropdowns, fabric size, per-thread skein counts, and a share button that exports a plain-text checklist via the native share sheet.
+
+- 3194f07: PDF export improvements: symbol visibility filtering, blended cell colours, composite symbol map, skein calculator, pattern metadata fields, and unit tests covering all new logic.
+
 ## 0.2.1
 
 ### Patch Changes
