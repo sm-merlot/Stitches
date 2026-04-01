@@ -1,0 +1,27 @@
+lib/widgets/right_sidebar_colours_panel.dart
+  69dc89aaccde6b35 61,68-78,80-85,198-202,210,212,214-215,221-238,240-246,622-633,635-640,643,650-652,685,691-693,703,721,733-735,742-743,759-761
+lib/data/symbols.dart
+  69dc89aaccde6b35 54-55,57-61,65-89
+lib/services/pdf_service.dart
+  69dc89aaccde6b35 60-61,64-86,88-94,99-100,103-104,159,428-429,542-543,685-686,744,845,876-907,915-916,1020-1034,1038,1046-1057,1066-1068,1071-1096,1098-1104,1113-1114,1131-1132,1147-1148,1254,1265-1275,1277,1354-1355,1358,1768-1769,1771-1780,1783,1843-1852
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "d32a460cb3cd5b1ea5d3618fda1bb33586a94e4f",
+  "prompts": {
+    "69dc89aaccde6b35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ca4f087-b89e-4245-a1c4-8d37b16b2e7f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 337,
+      "total_deletions": 160,
+      "accepted_lines": 310,
+      "overriden_lines": 0
+    }
+  }
+}
