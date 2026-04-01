@@ -1,0 +1,23 @@
+lib/widgets/right_sidebar_colours_panel.dart
+  69dc89aaccde6b35 509,513-515
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "82704022f4bf92c8871b608bbd0609815bbbde54",
+  "prompts": {
+    "69dc89aaccde6b35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ca4f087-b89e-4245-a1c4-8d37b16b2e7f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 1,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
