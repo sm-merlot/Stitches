@@ -64,6 +64,12 @@ class PdfService {
         .where((t) => backStitchEquiv.containsKey(t.dmcCode))
         .toList();
 
+    // Build per-export symbol map (handles non-ASCII symbols with fallbacks)
+    final pdfSymbols = _buildPdfSymbolMap([
+      ...crossThreads,
+      ...backThreads.where((t) => !crossThreads.any((c) => c.dmcCode == t.dmcCode)),
+    ]);
+
     // ── Page layout constants ───────────────────────────────────────────────
     const pageFormat = PdfPageFormat.a4; // portrait
     const margin = 40.0;
@@ -154,6 +160,7 @@ class PdfService {
         stitchEquiv: crossStitchEquiv,
         isBackstitch: false,
         twoColumn: twoCol,
+        pdfSymbols: pdfSymbols,
         margin: margin,
         headerH: headerH,
         footerH: footerH,
@@ -192,6 +199,7 @@ class PdfService {
         stitchEquiv: backStitchEquiv,
         isBackstitch: true,
         twoColumn: twoCol,
+        pdfSymbols: pdfSymbols,
         margin: margin,
         headerH: headerH,
         footerH: footerH,
@@ -260,6 +268,7 @@ class PdfService {
           nonBack: nonBack,
           backstitches: backstitches,
           threadMap: threadMap,
+          pdfSymbols: pdfSymbols,
           cellSize: cellSize,
           startX: startX,
           startY: startY,
@@ -302,6 +311,7 @@ class PdfService {
     required List<Stitch> nonBack,
     required List<BackStitch> backstitches,
     required Map<String, Thread> threadMap,
+    required Map<String, String> pdfSymbols,
     required double cellSize,
     required int startX,
     required int startY,
@@ -360,18 +370,16 @@ class PdfService {
       _fillStitch(canvas, s, gx, gy, cellSize);
 
       // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt)
-      if (thread.symbol.isNotEmpty) {
+      final sym = pdfSymbols[thread.dmcCode] ?? '';
+      if (sym.isNotEmpty) {
         final subSize = _stitchSubRegionSize(s, cellSize);
         if (subSize >= 4) {
-          final sym = _ascii(thread.symbol);
-          if (sym.isNotEmpty) {
-            final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
-            final lum = thread.color.computeLuminance();
-            final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
-            final fs = math.max(3.5, subSize * 0.52);
-            canvas.setFillColor(textColor);
-            canvas.drawString(pdfFont, fs, sym, sx - fs * 0.55 / 2, sy - fs / 2 + 0.5);
-          }
+          final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
+          final lum = thread.color.computeLuminance();
+          final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
+          final fs = math.max(3.5, subSize * 0.52);
+          canvas.setFillColor(textColor);
+          canvas.drawString(pdfFont, fs, sym, sx - fs * 0.55 / 2, sy - fs / 2 + 0.5);
         }
       }
     }
@@ -497,6 +505,7 @@ class PdfService {
     required Map<String, double> stitchEquiv,
     required bool isBackstitch,
     required bool twoColumn,
+    required Map<String, String> pdfSymbols,
     required double margin,
     required double headerH,
     required double footerH,
@@ -569,6 +578,7 @@ class PdfService {
             t: t,
             stitchEquiv: stitchEquiv,
             isBackstitch: isBackstitch,
+            pdfSymbols: pdfSymbols,
             pdfFont: pdfFont,
             tableFs: tableFs);
         y -= rowH;
@@ -610,6 +620,7 @@ class PdfService {
               t: t,
               stitchEquiv: stitchEquiv,
               isBackstitch: isBackstitch,
+              pdfSymbols: pdfSymbols,
               pdfFont: pdfFont,
               tableFs: tableFs);
           y -= rowH;
@@ -641,6 +652,7 @@ class PdfService {
     required Thread t,
     required Map<String, double> stitchEquiv,
     required bool isBackstitch,
+    required Map<String, String> pdfSymbols,
     required PdfFont pdfFont,
     required double tableFs,
   }) {
@@ -674,7 +686,7 @@ class PdfService {
           fontSize: tableFs,
           isHeader: false,
           swatchColor: _pdfColor(t.color),
-          swatchSymbol: _ascii(t.symbol));
+          swatchSymbol: pdfSymbols[t.dmcCode] ?? '');
     }
   }
 
@@ -1330,9 +1342,39 @@ class PdfService {
         BackStitch() => 0,
       };
 
-  /// Strip characters outside printable ASCII — required by built-in PDF fonts.
+  /// Strip characters outside printable Latin-1 range — required by built-in
+  /// PDF fonts (Type1/Helvetica supports ISO 8859-1 = 0x20–0xFF).
   static String _ascii(String s) =>
-      s.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
+      s.replaceAll(RegExp(r'[^\x20-\xFF]'), '');
+
+  /// Fallback single-char ASCII codes for non-ASCII symbols (not already in
+  /// the kPatternSymbols ASCII pool). Used when a thread symbol strips to ''.
+  static const _symbolFallbacks = [
+    'l', 'o', 't', '_', '(', ')', '[', ']', '{', '}',
+    ',', '.', ':', ';', "'", r'"', '`', r'\',
+  ];
+
+  /// Build a per-export symbol map: dmcCode → PDF-renderable char.
+  /// Non-ASCII symbols (geometric shapes, Greek, etc.) get a unique fallback.
+  static Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
+    final map = <String, String>{};
+    var fallbackIdx = 0;
+    for (final t in threads) {
+      if (t.symbol.isEmpty) {
+        map[t.dmcCode] = '';
+        continue;
+      }
+      final ascii = _ascii(t.symbol);
+      if (ascii.isNotEmpty) {
+        map[t.dmcCode] = ascii;
+      } else {
+        map[t.dmcCode] = fallbackIdx < _symbolFallbacks.length
+            ? _symbolFallbacks[fallbackIdx++]
+            : '?';
+      }
+    }
+    return map;
+  }
 
   static PdfColor _pdfColor(Color c) =>
       PdfColor(c.r.toDouble(), c.g.toDouble(), c.b.toDouble());
