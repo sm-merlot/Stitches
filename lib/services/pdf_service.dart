@@ -18,10 +18,16 @@ class PdfService {
 
     // ── Data prep ──────────────────────────────────────────────────────────
 
+    // Only export stitches from visible layers (respects group/layer visibility).
+    final visibleStitches = pattern.layers
+        .where((l) => l.visible)
+        .expand((l) => l.stitches)
+        .toList();
+
     // Per-thread stitch equivalents split into cross-type and backstitch
     final crossStitchEquiv = <String, double>{};
     final backStitchEquiv = <String, double>{};
-    for (final s in pattern.stitches) {
+    for (final s in visibleStitches) {
       if (s is BackStitch) {
         final v = math.sqrt(
             math.pow(s.x2 - s.x1, 2) + math.pow(s.y2 - s.y1, 2));
@@ -40,8 +46,8 @@ class PdfService {
       }
     }
 
-    final backstitches = pattern.stitches.whereType<BackStitch>().toList();
-    final nonBack = pattern.stitches.where((s) => s is! BackStitch).toList();
+    final backstitches = visibleStitches.whereType<BackStitch>().toList();
+    final nonBack = visibleStitches.where((s) => s is! BackStitch).toList();
     final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
 
     // Threads that have cross-type stitches / backstitches respectively
@@ -232,7 +238,7 @@ class PdfService {
       margin: margin,
       headerH: headerH,
       subtitle:
-          'Cols ${startX + 1}\u2013$endX, Rows ${startY + 1}\u2013$endY  |  Page $pageNum of $totalPages',
+          'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages',
       pdfFont: pdfFont,
       pdfFontBold: pdfFontBold,
     );
@@ -256,10 +262,10 @@ class PdfService {
       canvas.setFillColor(_pdfColor(thread.color));
       _fillStitch(canvas, s, gx, gy, cellSize);
 
-      // Symbol centred in the stitch's sub-region (shown when sub-region >= 6 pt)
+      // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt)
       if (thread.symbol.isNotEmpty) {
         final subSize = _stitchSubRegionSize(s, cellSize);
-        if (subSize >= 6) {
+        if (subSize >= 4) {
           final sym = _ascii(thread.symbol);
           if (sym.isNotEmpty) {
             final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
@@ -435,7 +441,6 @@ class PdfService {
         pdfFontBold, sectionHeadFs, sectionLabel, margin, y - sectionHeadFs);
     y -= sectionHeadFs + 6;
 
-    final symbolHeader = isBackstitch ? 'Colour' : 'Symbol';
     final countHeader = isBackstitch ? 'Units (approx)' : 'Stitches (approx)';
     _drawTableRow(canvas,
         x: margin,
@@ -443,7 +448,7 @@ class PdfService {
         colWidths: colWidths,
         rowH: headRowH,
         bgColor: PdfColors.grey200,
-        cells: [symbolHeader, 'DMC', 'Name', countHeader],
+        cells: ['', 'DMC', 'Name', countHeader],
         font: pdfFontBold,
         fontSize: tableFs,
         isHeader: true);
@@ -1033,7 +1038,7 @@ class PdfService {
 
   /// Strip characters outside printable ASCII — required by built-in PDF fonts.
   static String _ascii(String s) =>
-      s.replaceAll(RegExp(r'[^\x20-\x7E]'), '?');
+      s.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
 
   static PdfColor _pdfColor(Color c) =>
       PdfColor(c.r.toDouble(), c.g.toDouble(), c.b.toDouble());
