@@ -1,0 +1,23 @@
+lib/widgets/canvas_painter.dart
+  794232f7b9dde9fe 271-278,407-507
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.3",
+  "base_commit_sha": "5924c150e4e4cd6d1b7bab3e76f2e3ef52034227",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 112,
+      "total_deletions": 3,
+      "accepted_lines": 109,
+      "overriden_lines": 0
+    }
+  }
+}
