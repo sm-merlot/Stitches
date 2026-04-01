@@ -1688,10 +1688,16 @@ class PdfService {
         BackStitch() => 0,
       };
 
-  /// Returns [sym] font if [text] contains any non-ASCII character, else [base].
+  /// Returns [sym] font if [text] contains a character in the Unicode symbol /
+  /// geometric-shapes range (U+2000+), otherwise returns [base].
+  ///
+  /// NotoSans-Regular covers Basic Latin, Latin-1 Supplement (¼ Æ © etc.),
+  /// Latin Extended, and Greek — all of which are below U+2000. Routing those
+  /// characters to NotoSansSymbols2 caused glyphs to be substituted incorrectly
+  /// (e.g. ¼ rendering as Æ) because Symbols2 does not cover that range.
   static PdfFont _fontFor(String text, PdfFont base, PdfFont sym) {
     for (final rune in text.runes) {
-      if (rune > 0x7E) return sym;
+      if (rune >= 0x2000) return sym;
     }
     return base;
   }
