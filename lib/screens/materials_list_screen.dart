@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import '../data/aida_presets.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
@@ -173,26 +174,17 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
   ) {
     final p = widget.state.pattern;
     final s = _aidaSize;
-    final totalSkeins = sorted.fold<int>(
-        0, (sum, t) => sum + _skeins(t.dmcCode, crossEquiv, backCells));
 
     final buf = StringBuffer()
-      ..writeln('Materials List — ${p.name}')
-      ..writeln('$_aidaCount-count aida · $_strands strands')
-      ..writeln(
-          'Aida: at least ${s.widthCm.toStringAsFixed(1)} × ${s.heightCm.toStringAsFixed(1)} cm'
-          '  (${s.widthIn.toStringAsFixed(1)} × ${s.heightIn.toStringAsFixed(1)} in)')
-      ..writeln();
+      ..writeln('# ${p.name} Materials List')
+      ..writeln()
+      ..writeln('- [ ] ${aidaColorLabel(p.aidaColor)} $_aidaCount-count Aida min '
+          '${s.widthCm.toStringAsFixed(1)} x ${s.heightCm.toStringAsFixed(1)} cm '
+          '(${s.widthIn.toStringAsFixed(1)} x ${s.heightIn.toStringAsFixed(1)} in)');
     for (final t in sorted) {
       final n = _skeins(t.dmcCode, crossEquiv, backCells);
-      buf.writeln(
-          '☐ ${t.dmcCode}  ${_threadName(t)}  $n skein${n == 1 ? '' : 's'}');
+      buf.writeln('- [ ] DMC ${t.dmcCode} ${_threadName(t)} x $n skein${n == 1 ? '' : 's'}');
     }
-    buf
-      ..writeln()
-      ..write(
-          'Total: ${sorted.length} thread${sorted.length == 1 ? '' : 's'} · '
-          '$totalSkeins skein${totalSkeins == 1 ? '' : 's'}');
 
     final box = _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
