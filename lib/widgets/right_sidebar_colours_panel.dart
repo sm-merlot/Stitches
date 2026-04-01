@@ -506,10 +506,13 @@ class _ThreadList extends StatelessWidget {
     }
 
     final sorted = [...threads]..sort((a, b) {
-        // Threads without a visible symbol sort to the top.
+        // No-symbol threads first, then duplicates, then normal.
         final aNoSym = !symbolIsVisible(a.symbol);
         final bNoSym = !symbolIsVisible(b.symbol);
         if (aNoSym != bNoSym) return aNoSym ? -1 : 1;
+        final aDup = !aNoSym && (symbolCounts[a.symbol] ?? 0) > 1;
+        final bDup = !bNoSym && (symbolCounts[b.symbol] ?? 0) > 1;
+        if (aDup != bDup) return aDup ? -1 : 1;
         if (useDmc) {
           final ia = int.tryParse(a.dmcCode) ?? 999999;
           final ib = int.tryParse(b.dmcCode) ?? 999999;
