@@ -55,7 +55,7 @@ class _DesignColoursPanel extends ConsumerWidget {
 
     // Stitch counts for the current view (canvas or layer).
     final stitchCounts = state.showCompositeThreads
-        ? _countStitches(state.pattern.stitches)
+        ? _countStitchesComposite(state)
         : _countStitches(activeLayer.stitches);
 
     return Column(
@@ -106,7 +106,14 @@ class _DesignColoursPanel extends ConsumerWidget {
             useDmc: useDmc,
             stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
-            onSwatchTap: (t) => _showSymbolPicker(context, notifier, t),
+            onSwatchTap: (t) => _showSymbolPicker(
+              context, notifier, t,
+              state.pattern.threads
+                  .where((pt) => pt.dmcCode != t.dmcCode)
+                  .map((pt) => pt.symbol)
+                  .where(symbolIsVisible)
+                  .toSet(),
+            ),
           ),
         ),
       ],
@@ -129,6 +136,24 @@ class _DesignColoursPanel extends ConsumerWidget {
 Map<String, int> _countStitches(List<Stitch> stitches) {
   final counts = <String, int>{};
   for (final s in stitches) {
+    counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/// Counts stitches using the composite cache for FullStitches (deduplicates
+/// cells shared across layers) and raw threadId for non-FullStitch types.
+Map<String, int> _countStitchesComposite(EditorState state) {
+  final cache = state.compositeThreadCache;
+  if (cache == null || cache.isEmpty) {
+    return _countStitches(state.pattern.stitches);
+  }
+  final counts = <String, int>{};
+  for (final thread in cache.values) {
+    counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
+  }
+  for (final s in state.pattern.stitches) {
+    if (s is FullStitch) continue;
     counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
   }
   return counts;
@@ -244,26 +269,6 @@ class _StitchColoursPanel extends ConsumerWidget {
     return state.pattern.threads;
   }
 
-  /// Counts stitches using composite cache for FullStitches (so blended cells
-  /// are attributed to the composite DMC code, not the raw per-layer thread)
-  /// and raw threadId for non-FullStitch types.
-  Map<String, int> _countStitchesComposite(EditorState state) {
-    final cache = state.compositeThreadCache;
-    if (cache == null || cache.isEmpty) {
-      return _countStitches(state.pattern.stitches);
-    }
-    final counts = <String, int>{};
-    // FullStitch cells → composite result
-    for (final thread in cache.values) {
-      counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
-    }
-    // Non-FullStitch stitches → raw threadId
-    for (final s in state.pattern.stitches) {
-      if (s is FullStitch) continue;
-      counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
-    }
-    return counts;
-  }
 }
 
 class _FocusToggle extends StatelessWidget {
@@ -450,7 +455,14 @@ class _SnippetColoursPanel extends ConsumerWidget {
       useDmc: useDmc,
       stitchCounts: stitchCounts,
       onTap: (t) => notifier.setSelectedThread(t.dmcCode),
-      onSwatchTap: (t) => _showSymbolPicker(context, notifier, t),
+      onSwatchTap: (t) => _showSymbolPicker(
+        context, notifier, t,
+        state.pattern.threads
+            .where((pt) => pt.dmcCode != t.dmcCode)
+            .map((pt) => pt.symbol)
+            .where(symbolIsVisible)
+            .toSet(),
+      ),
     );
   }
 }
@@ -485,6 +497,14 @@ class _ThreadList extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 12)),
       );
     }
+    // Pre-compute duplicate symbols across the displayed list.
+    final symbolCounts = <String, int>{};
+    for (final t in threads) {
+      if (symbolIsVisible(t.symbol)) {
+        symbolCounts[t.symbol] = (symbolCounts[t.symbol] ?? 0) + 1;
+      }
+    }
+
     final sorted = [...threads]..sort((a, b) {
         // Threads without a visible symbol sort to the top.
         final aNoSym = !symbolIsVisible(a.symbol);
@@ -521,6 +541,14 @@ class _ThreadList extends StatelessWidget {
         final count = stitchCounts[t.dmcCode];
 
         final hasSymbol = symbolIsVisible(t.symbol);
+        final isDuplicate = hasSymbol && (symbolCounts[t.symbol] ?? 0) > 1;
+
+        final swatchBorderColor = !hasSymbol
+            ? Colors.orange.shade600
+            : isDuplicate
+                ? Colors.red.shade500
+                : Colors.grey.shade400;
+
         Widget swatch = Container(
           width: 28,
           height: 28,
@@ -528,8 +556,8 @@ class _ThreadList extends StatelessWidget {
             color: t.color,
             borderRadius: BorderRadius.circular(5),
             border: Border.all(
-              color: hasSymbol ? Colors.grey.shade400 : Colors.orange.shade600,
-              width: hasSymbol ? 1.0 : 1.5,
+              color: swatchBorderColor,
+              width: (!hasSymbol || isDuplicate) ? 1.5 : 1.0,
             ),
           ),
           alignment: Alignment.center,
@@ -547,9 +575,43 @@ class _ThreadList extends StatelessWidget {
                       color: textColor.withValues(alpha: 0.4),
                       height: 1.0)),
         );
+        if (isDuplicate) {
+          swatch = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              swatch,
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  width: 13,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade500,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text('!',
+                      style: TextStyle(
+                          fontSize: 7,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          height: 1.0)),
+                ),
+              ),
+            ],
+          );
+        }
         if (onSwatchTap != null) {
           swatch = Tooltip(
-            message: hasSymbol ? 'Tap to edit symbol' : 'No symbol — tap to assign',
+            message: !hasSymbol
+                ? 'No symbol — tap to assign'
+                : isDuplicate
+                    ? 'Duplicate symbol — tap to fix'
+                    : 'Tap to edit symbol',
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
@@ -641,11 +703,14 @@ Future<void> _showSymbolPicker(
   BuildContext context,
   EditorNotifier notifier,
   Thread thread,
+  Set<String> usedSymbols,
 ) async {
   final symbol = await showDialog<String>(
     context: context,
     builder: (_) => _SymbolPickerDialog(
-        current: symbolIsVisible(thread.symbol) ? thread.symbol : ''),
+      current: symbolIsVisible(thread.symbol) ? thread.symbol : '',
+      usedSymbols: usedSymbols,
+    ),
   );
   if (symbol != null) {
     notifier.setThreadSymbol(thread.dmcCode, symbol);
@@ -654,7 +719,11 @@ Future<void> _showSymbolPicker(
 
 class _SymbolPickerDialog extends StatefulWidget {
   final String current;
-  const _SymbolPickerDialog({required this.current});
+  final Set<String> usedSymbols;
+  const _SymbolPickerDialog({
+    required this.current,
+    this.usedSymbols = const {},
+  });
 
   @override
   State<_SymbolPickerDialog> createState() => _SymbolPickerDialogState();
@@ -677,6 +746,41 @@ class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
 
   void _pick(String symbol) {
     Navigator.of(context).pop(symbol);
+  }
+
+  Widget _symbolTile(String s, ThemeData theme, {bool disabled = false}) {
+    final isSelected = !disabled && _controller.text == s;
+    return GestureDetector(
+      onTap: disabled ? null : () => _pick(s),
+      child: Opacity(
+        opacity: disabled ? 0.3 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 80),
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: isSelected
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(s,
+              style: TextStyle(
+                fontSize: 14,
+                color: isSelected
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.colorScheme.onSurface,
+              )),
+        ),
+      ),
+    );
   }
 
   @override
@@ -717,44 +821,40 @@ class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
             const SizedBox(height: 6),
-            // Symbol grid
+            // Symbol grid — available symbols first, in-use greyed out below
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
+              constraints: const BoxConstraints(maxHeight: 300),
               child: SingleChildScrollView(
-                child: Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: kPatternSymbols.map((s) {
-                    final isSelected = _controller.text == s;
-                    return GestureDetector(
-                      onTap: () => _pick(s),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 80),
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? theme.colorScheme.primaryContainer
-                              : theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isSelected
-                                ? theme.colorScheme.primary
-                                : Colors.transparent,
-                            width: 1.5,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(s,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isSelected
-                                  ? theme.colorScheme.onPrimaryContainer
-                                  : theme.colorScheme.onSurface,
-                            )),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: kPatternSymbols
+                          .where((s) => !widget.usedSymbols.contains(s))
+                          .map((s) => _symbolTile(s, theme))
+                          .toList(),
+                    ),
+                    if (widget.usedSymbols
+                        .any((s) => kPatternSymbols.contains(s))) ...[
+                      const SizedBox(height: 10),
+                      Text('Already in use:',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.45))),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: kPatternSymbols
+                            .where((s) => widget.usedSymbols.contains(s))
+                            .map((s) => _symbolTile(s, theme, disabled: true))
+                            .toList(),
                       ),
-                    );
-                  }).toList(),
+                    ],
+                    const SizedBox(height: 4),
+                  ],
                 ),
               ),
             ),
