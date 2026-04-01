@@ -28,6 +28,7 @@ dependencies:
   pdfrx: ^2.2.24
   xml: ^6.6.1
   google_sign_in: ^6.2.2
+  share_plus: ^10.0.0
 
 dev_dependencies:
   flutter_test:

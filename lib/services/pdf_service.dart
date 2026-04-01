@@ -244,7 +244,7 @@ class PdfService {
 
     // ── Stitch fills (each stitch drawn individually, preserving partial shapes) ─
     for (final s in nonBack) {
-      final cx = _Stitches(s);
+      final cx = _stitches(s);
       final cy = _stitchY(s);
       if (cx < startX || cx >= endX || cy < startY || cy >= endY) continue;
       final thread = threadMap[s.threadId];
@@ -600,7 +600,7 @@ class PdfService {
     canvas.setLineWidth(lw);
 
     for (final s in nonBack) {
-      final cx = _Stitches(s);
+      final cx = _stitches(s);
       final cy = _stitchY(s);
       final thread = threadMap[s.threadId];
       if (thread == null) continue;
@@ -1013,7 +1013,7 @@ class PdfService {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  static int _Stitches(Stitch s) => switch (s) {
+  static int _stitches(Stitch s) => switch (s) {
         FullStitch(x: final x) => x,
         HalfStitch(x: final x) => x,
         QuarterStitch(x: final x) => x,
