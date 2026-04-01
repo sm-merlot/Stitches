@@ -486,6 +486,10 @@ class _ThreadList extends StatelessWidget {
       );
     }
     final sorted = [...threads]..sort((a, b) {
+        // Threads without a visible symbol sort to the top.
+        final aNoSym = !symbolIsVisible(a.symbol);
+        final bNoSym = !symbolIsVisible(b.symbol);
+        if (aNoSym != bNoSym) return aNoSym ? -1 : 1;
         if (useDmc) {
           final ia = int.tryParse(a.dmcCode) ?? 999999;
           final ib = int.tryParse(b.dmcCode) ?? 999999;
