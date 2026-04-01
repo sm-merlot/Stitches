@@ -385,7 +385,11 @@ class EditorNotifier extends Notifier<EditorState>
       } catch (_) {}
     }
 
-    final withSymbols = pattern.copyWith(threads: _assignSymbols(pattern.threads));
+    final withSymbols = pattern.copyWith(
+        threads: _assignSymbols(pattern.threads,
+            existingSymbols: pattern.compositeSymbols.values
+                .where(symbolIsVisible)
+                .toSet()));
 
     String? threadId = withSymbols.editorSelectedThreadId;
     if (threadId == null || withSymbols.threadByCode(threadId) == null) {
@@ -638,9 +642,12 @@ class EditorNotifier extends Notifier<EditorState>
     });
   }
 
-  /// Ensures every thread has a symbol, assigning from [kPatternSymbols] for any missing.
-  List<Thread> _assignSymbols(List<Thread> threads) {
-    final assigned = <String>{};
+  /// Ensures every thread has a symbol, assigning from [kPatternSymbols] for
+  /// any that are missing one. [existingSymbols] pre-populates the "taken"
+  /// set so composite symbols are not reused for layer threads on load.
+  List<Thread> _assignSymbols(List<Thread> threads,
+      {Set<String> existingSymbols = const {}}) {
+    final assigned = <String>{...existingSymbols};
     return threads.map((t) {
       if (symbolIsVisible(t.symbol)) {
         assigned.add(t.symbol);
