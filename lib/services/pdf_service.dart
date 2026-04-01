@@ -986,6 +986,13 @@ class PdfService {
     drawSkeinHeader(currentCanvas, y);
     y -= headRowH;
 
+    // Sub-header note clarifying the column values are skein counts
+    const noteFs = 6.5;
+    currentCanvas.setFillColor(PdfColors.grey600);
+    currentCanvas.drawString(
+        pdfFont, noteFs, 'Values are estimated skein quantities (8m/skein, 10% overlap assumed).', margin, y - noteFs - 1);
+    y -= noteFs + 8;
+
     for (final t in threads) {
       // Paginate when near the bottom
       if (y - rowH < margin + footerH + 4) {
