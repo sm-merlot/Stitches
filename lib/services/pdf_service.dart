@@ -954,10 +954,12 @@ class PdfService {
     y -= 8; // gap
 
     // ── Skeins sub-table ──────────────────────────────────────────────────
-    final codeColW = 44.0;
+    const skeinSwatchW = 18.0;
+    const codeColW = 44.0;
     final skeinColW = 46.0;
-    final nameColW = tableW - codeColW - skeinColW * suggestions.length;
+    final nameColW = tableW - skeinSwatchW - codeColW - skeinColW * suggestions.length;
     final skeinColWidths = [
+      skeinSwatchW,
       codeColW,
       nameColW,
       ...List.filled(suggestions.length, skeinColW),
@@ -965,6 +967,7 @@ class PdfService {
 
     final codeHeader = useDmc ? 'DMC' : 'Anchor';
     final skeinHeaders = [
+      '',
       codeHeader,
       'Name',
       ...suggestions.map((s) => '${s.aidaCount}ct/${s.strands}s'),
@@ -1039,12 +1042,11 @@ class PdfService {
           colWidths: skeinColWidths,
           rowH: rowH,
           bgColor: null,
-          cells: [_ascii(displayCode), _ascii(t.name), ...skeinCells],
+          cells: ['', _ascii(displayCode), _ascii(t.name), ...skeinCells],
           font: pdfFont,
           fontSize: tableFs,
           isHeader: false,
-          swatchColor: _pdfColor(t.color),
-          swatchSymbol: pdfSymbols[t.dmcCode]);
+          swatchColor: _pdfColor(t.color));
       y -= rowH;
     }
   }
