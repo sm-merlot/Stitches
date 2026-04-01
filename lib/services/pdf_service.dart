@@ -80,9 +80,25 @@ class PdfService {
     final pagesCols = (pattern.width / colsPerPage).ceil();
     final pagesRows = (pattern.height / rowsPerPage).ceil();
     final totalGridPages = pagesCols * pagesRows;
-    // Page 1 = title, page 2 = cross colour table,
-    // page 3 = backstitch table (optional), then chart pages.
-    final colourTablePages = 1 + (backThreads.isEmpty ? 0 : 1);
+
+    // ── Thread table pagination ─────────────────────────────────────────────
+    // How many rows fit in one column of a colour table page
+    const tableRowH = 14.0;
+    const tableHeadRowH = 16.0;
+    const tableSectionHeadH = 9.0 + 6.0; // sectionHeadFs + gap
+    final tableUsableH =
+        pageFormat.height - 2 * margin - headerH - footerH - tableSectionHeadH - tableHeadRowH;
+    final rowsPerCol = (tableUsableH / tableRowH).floor().clamp(1, 9999);
+
+    int tablePageCount(List<Thread> threads) {
+      if (threads.isEmpty) return 0;
+      if (threads.length <= rowsPerCol) return 1;
+      return (threads.length / (rowsPerCol * 2)).ceil();
+    }
+
+    final crossTablePageCount = tablePageCount(crossThreads).clamp(1, 9999);
+    final backTablePageCount = tablePageCount(backThreads);
+    final colourTablePages = crossTablePageCount + backTablePageCount;
     final totalPages = 1 + colourTablePages + totalGridPages;
 
     // ── Page 1: Title page ────────────────────────────────────────────────
@@ -103,40 +119,72 @@ class PdfService {
       pdfFontBold: pdfFontBold,
     );
 
-    // ── Page 2: Cross stitch colour table ─────────────────────────────────
+    // ── Cross stitch colour table pages ───────────────────────────────────
 
-    final crossTablePage = PdfPage(doc.document, pageFormat: pageFormat);
-    _drawColourTablePage(
-      crossTablePage.getGraphics(),
-      format: pageFormat,
-      pattern: pattern,
-      threads: crossThreads,
-      stitchEquiv: crossStitchEquiv,
-      isBackstitch: false,
-      margin: margin,
-      headerH: headerH,
-      footerH: footerH,
-      pageNum: 2,
-      totalPages: totalPages,
-      pdfFont: pdfFont,
-      pdfFontBold: pdfFontBold,
-    );
+    for (int i = 0; i < crossTablePageCount; i++) {
+      final pageNum = 2 + i;
+      final List<Thread> pageThreads;
+      final bool twoCol;
+      if (crossThreads.length <= rowsPerCol) {
+        pageThreads = crossThreads;
+        twoCol = false;
+      } else {
+        final threadsPerPage = rowsPerCol * 2;
+        final start = i * threadsPerPage;
+        final end = math.min(start + threadsPerPage, crossThreads.length);
+        pageThreads = crossThreads.sublist(start, end);
+        final remaining = crossThreads.length - start;
+        twoCol = remaining > rowsPerCol;
+      }
+      final crossTablePage = PdfPage(doc.document, pageFormat: pageFormat);
+      _drawColourTablePage(
+        crossTablePage.getGraphics(),
+        format: pageFormat,
+        pattern: pattern,
+        threads: pageThreads,
+        stitchEquiv: crossStitchEquiv,
+        isBackstitch: false,
+        twoColumn: twoCol,
+        margin: margin,
+        headerH: headerH,
+        footerH: footerH,
+        pageNum: pageNum,
+        totalPages: totalPages,
+        pdfFont: pdfFont,
+        pdfFontBold: pdfFontBold,
+      );
+    }
 
-    // ── Page 3 (optional): Backstitch colour table ────────────────────────
+    // ── Backstitch colour table pages (optional) ──────────────────────────
 
-    if (backThreads.isNotEmpty) {
+    for (int i = 0; i < backTablePageCount; i++) {
+      final pageNum = 2 + crossTablePageCount + i;
+      final List<Thread> pageThreads;
+      final bool twoCol;
+      if (backThreads.length <= rowsPerCol) {
+        pageThreads = backThreads;
+        twoCol = false;
+      } else {
+        final threadsPerPage = rowsPerCol * 2;
+        final start = i * threadsPerPage;
+        final end = math.min(start + threadsPerPage, backThreads.length);
+        pageThreads = backThreads.sublist(start, end);
+        final remaining = backThreads.length - start;
+        twoCol = remaining > rowsPerCol;
+      }
       final backTablePage = PdfPage(doc.document, pageFormat: pageFormat);
       _drawColourTablePage(
         backTablePage.getGraphics(),
         format: pageFormat,
         pattern: pattern,
-        threads: backThreads,
+        threads: pageThreads,
         stitchEquiv: backStitchEquiv,
         isBackstitch: true,
+        twoColumn: twoCol,
         margin: margin,
         headerH: headerH,
         footerH: footerH,
-        pageNum: 3,
+        pageNum: pageNum,
         totalPages: totalPages,
         pdfFont: pdfFont,
         pdfFontBold: pdfFontBold,
@@ -400,6 +448,7 @@ class PdfService {
     required List<Thread> threads,
     required Map<String, double> stitchEquiv,
     required bool isBackstitch,
+    required bool twoColumn,
     required double margin,
     required double headerH,
     required double footerH,
@@ -429,66 +478,92 @@ class PdfService {
     const sectionHeadFs = 9.0;
     const swatchW = 22.0;
     const dmcW = 44.0;
-    const countW = 72.0;
+    const countW = 60.0;
+    const gutterW = 12.0;
     final tableW = format.width - 2 * margin;
-    final nameW = tableW - swatchW - dmcW - countW;
-    final colWidths = [swatchW, dmcW, nameW, countW];
 
-    double y = format.height - margin - headerH;
+    final startY = format.height - margin - headerH;
 
+    // Section heading
     final sectionLabel = isBackstitch ? 'Backstitches' : 'Cross Stitches';
     canvas.setFillColor(PdfColors.black);
     canvas.drawString(
-        pdfFontBold, sectionHeadFs, sectionLabel, margin, y - sectionHeadFs);
-    y -= sectionHeadFs + 6;
+        pdfFontBold, sectionHeadFs, sectionLabel, margin, startY - sectionHeadFs);
 
+    final contentTopY = startY - sectionHeadFs - 6;
     final countHeader = isBackstitch ? 'Units (approx)' : 'Stitches (approx)';
-    _drawTableRow(canvas,
-        x: margin,
-        y: y,
-        colWidths: colWidths,
-        rowH: headRowH,
-        bgColor: PdfColors.grey200,
-        cells: ['', 'DMC', 'Name', countHeader],
-        font: pdfFontBold,
-        fontSize: tableFs,
-        isHeader: true);
-    y -= headRowH;
 
-    for (final t in threads) {
-      final equiv = stitchEquiv[t.dmcCode] ?? 0;
-      final equivStr = isBackstitch
-          ? equiv.toStringAsFixed(1)
-          : (equiv == equiv.truncateToDouble()
-              ? equiv.toInt().toString()
-              : equiv.toStringAsFixed(1));
-      if (isBackstitch) {
-        _drawTableRow(canvas,
+    if (!twoColumn) {
+      // ── Single column ───────────────────────────────────────────────────
+      final nameW = tableW - swatchW - dmcW - countW;
+      final colWidths = [swatchW, dmcW, nameW, countW];
+
+      _drawTableRow(canvas,
+          x: margin,
+          y: contentTopY,
+          colWidths: colWidths,
+          rowH: headRowH,
+          bgColor: PdfColors.grey200,
+          cells: ['', 'DMC', 'Name', countHeader],
+          font: pdfFontBold,
+          fontSize: tableFs,
+          isHeader: true);
+      double y = contentTopY - headRowH;
+
+      for (final t in threads) {
+        _drawThreadRow(canvas,
             x: margin,
             y: y,
             colWidths: colWidths,
             rowH: rowH,
-            bgColor: null,
-            cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
-            font: pdfFont,
-            fontSize: tableFs,
-            isHeader: false,
-            linePreviewColor: _pdfColor(t.color));
-      } else {
-        _drawTableRow(canvas,
-            x: margin,
-            y: y,
-            colWidths: colWidths,
-            rowH: rowH,
-            bgColor: null,
-            cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
-            font: pdfFont,
-            fontSize: tableFs,
-            isHeader: false,
-            swatchColor: _pdfColor(t.color),
-            swatchSymbol: _ascii(t.symbol));
+            t: t,
+            stitchEquiv: stitchEquiv,
+            isBackstitch: isBackstitch,
+            pdfFont: pdfFont,
+            tableFs: tableFs);
+        y -= rowH;
       }
-      y -= rowH;
+    } else {
+      // ── Two columns ─────────────────────────────────────────────────────
+      final colW = (tableW - gutterW) / 2;
+      final nameW = colW - swatchW - dmcW - countW;
+      final colWidths = [swatchW, dmcW, nameW, countW];
+
+      final mid = (threads.length / 2).ceil();
+      final leftThreads = threads.sublist(0, mid);
+      final rightThreads = threads.sublist(mid);
+
+      for (int col = 0; col < 2; col++) {
+        final colThreads = col == 0 ? leftThreads : rightThreads;
+        if (colThreads.isEmpty) continue;
+        final x = margin + col * (colW + gutterW);
+
+        _drawTableRow(canvas,
+            x: x,
+            y: contentTopY,
+            colWidths: colWidths,
+            rowH: headRowH,
+            bgColor: PdfColors.grey200,
+            cells: ['', 'DMC', 'Name', countHeader],
+            font: pdfFontBold,
+            fontSize: tableFs,
+            isHeader: true);
+        double y = contentTopY - headRowH;
+
+        for (final t in colThreads) {
+          _drawThreadRow(canvas,
+              x: x,
+              y: y,
+              colWidths: colWidths,
+              rowH: rowH,
+              t: t,
+              stitchEquiv: stitchEquiv,
+              isBackstitch: isBackstitch,
+              pdfFont: pdfFont,
+              tableFs: tableFs);
+          y -= rowH;
+        }
+      }
     }
 
     _drawPageFooter(canvas,
@@ -498,6 +573,54 @@ class PdfService {
         pageNum: pageNum,
         totalPages: totalPages,
         pdfFont: pdfFont);
+  }
+
+  // ── Draw a single thread data row ────────────────────────────────────────
+
+  static void _drawThreadRow(
+    PdfGraphics canvas, {
+    required double x,
+    required double y,
+    required List<double> colWidths,
+    required double rowH,
+    required Thread t,
+    required Map<String, double> stitchEquiv,
+    required bool isBackstitch,
+    required PdfFont pdfFont,
+    required double tableFs,
+  }) {
+    final equiv = stitchEquiv[t.dmcCode] ?? 0;
+    final equivStr = isBackstitch
+        ? equiv.toStringAsFixed(1)
+        : (equiv == equiv.truncateToDouble()
+            ? equiv.toInt().toString()
+            : equiv.toStringAsFixed(1));
+    if (isBackstitch) {
+      _drawTableRow(canvas,
+          x: x,
+          y: y,
+          colWidths: colWidths,
+          rowH: rowH,
+          bgColor: null,
+          cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
+          font: pdfFont,
+          fontSize: tableFs,
+          isHeader: false,
+          linePreviewColor: _pdfColor(t.color));
+    } else {
+      _drawTableRow(canvas,
+          x: x,
+          y: y,
+          colWidths: colWidths,
+          rowH: rowH,
+          bgColor: null,
+          cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
+          font: pdfFont,
+          fontSize: tableFs,
+          isHeader: false,
+          swatchColor: _pdfColor(t.color),
+          swatchSymbol: _ascii(t.symbol));
+    }
   }
 
   // ── Title page ────────────────────────────────────────────────────────────
