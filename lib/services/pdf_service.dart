@@ -744,8 +744,7 @@ class PdfService {
     canvas.drawString(pdfFontBold, titleFs, titleStr, titleX, titleY);
 
     // ── Subtitle (centred) ────────────────────────────────────────────────
-    final subtitleStr = _ascii(
-        '${pattern.width} x ${pattern.height} stitches  |  Page $pageNum of $totalPages');
+    final subtitleStr = _ascii('${pattern.width} \u00D7 ${pattern.height} stitches');
     final subtitleW = subtitleStr.length * subtitleFs * 0.55;
     final subtitleX = margin + (usableW - subtitleW) / 2;
     canvas.setFillColor(PdfColors.grey600);
