@@ -11,6 +11,7 @@ import '../widgets/editor_toolbar.dart';
 import '../widgets/right_sidebar.dart';
 import '../widgets/right_sidebar_colours_panel.dart';
 import '../widgets/pattern_canvas.dart';
+import 'materials_list_screen.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
@@ -387,8 +388,13 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Stitch mode actions — Block mode + Demo + Screen Lock
+            // Stitch mode actions — Block mode + Materials + Demo + Screen Lock
             if (state.stitchMode) ...[
+              IconButton(
+                tooltip: 'Materials list',
+                icon: const Icon(Icons.shopping_bag_outlined),
+                onPressed: () => showMaterialsList(context, state),
+              ),
               IconButton(
                 tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
                 isSelected: state.blockMode,
