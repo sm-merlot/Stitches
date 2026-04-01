@@ -1,0 +1,23 @@
+lib/widgets/right_sidebar_colours_panel.dart
+  69dc89aaccde6b35 58,109-116,144-161,458-465,500-507,544-551,559-560,578-607,610-614,706,711-713,722-726,751-785,824,826,828-853,855-857
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "0b8216b3fd9c858b4d2d9340699d497c445ae747",
+  "prompts": {
+    "69dc89aaccde6b35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ca4f087-b89e-4245-a1c4-8d37b16b2e7f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 163,
+      "total_deletions": 63,
+      "accepted_lines": 163,
+      "overriden_lines": 0
+    }
+  }
+}
