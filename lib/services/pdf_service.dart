@@ -846,9 +846,11 @@ class PdfService {
 
       if (pattern.copyright != null) {
         final year = DateTime.now().year;
-        final copyrightLine = 'Copyright \u00A9 ${pattern.copyright!} $year';
+        // © (0xA9) is in WinAnsiEncoding — apply _ascii() only to user text.
+        final copyrightLine =
+            'Copyright \u00A9 ${_ascii(pattern.copyright!)} $year';
         canvas.setFillColor(PdfColors.grey600);
-        canvas.drawString(pdfFont, 7.0, _ascii(copyrightLine), margin, my);
+        canvas.drawString(pdfFont, 7.0, copyrightLine, margin, my);
       }
     }
 
