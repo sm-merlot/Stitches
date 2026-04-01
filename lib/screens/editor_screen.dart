@@ -12,6 +12,7 @@ import '../widgets/right_sidebar.dart';
 import '../widgets/right_sidebar_colours_panel.dart';
 import '../widgets/pattern_canvas.dart';
 import 'materials_list_screen.dart';
+import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
@@ -323,7 +324,7 @@ class EditorScreen extends ConsumerWidget {
                     case _MenuAction.resize:
                       _showResizeDialog(context, ref, state);
                     case _MenuAction.patternInfo:
-                      _showPatternInfo(context, state);
+                      showPatternInfo(context, ref, state);
                     case _MenuAction.referenceImage:
                       showModalBottomSheet(
                         context: context,
@@ -482,40 +483,6 @@ class EditorScreen extends ConsumerWidget {
         );
   }
 
-  void _showPatternInfo(BuildContext context, EditorState state) {
-    final p = state.pattern;
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Pattern Info'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _InfoRow('Name', p.name),
-            _InfoRow('Size', '${p.width} × ${p.height} stitches'),
-            _InfoRow('Threads', '${p.threads.length}'),
-            _InfoRow('Stitches (canvas)',
-                '${p.canvasCellCount}'),
-            _InfoRow('Stitches (all layers)',
-                '${p.layers.fold(0, (sum, l) => sum + l.stitches.length)}'),
-            if (state.filePath != null)
-              _InfoRow(
-                'File',
-                state.driveParentFolderId != null
-                    ? '${p.name}.stitches  (Google Drive)'
-                    : state.filePath!.split('/').last,
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'))
-        ],
-      ),
-    );
-  }
 }
 
 // ─── Shared popup menu row ───────────────────────────────────────────────────
@@ -538,36 +505,6 @@ class _MenuRow extends StatelessWidget {
     );
   }
 }
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InfoRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(label,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13)),
-          ),
-          Expanded(
-              child:
-                  Text(value, style: const TextStyle(fontSize: 13))),
-        ],
-      ),
-    );
-  }
-}
-
-
 // ─── Screen lock toggle button ────────────────────────────────────────────────
 
 class _ScreenLockButton extends ConsumerWidget {

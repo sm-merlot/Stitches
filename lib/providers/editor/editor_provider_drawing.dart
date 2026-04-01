@@ -715,6 +715,32 @@ mixin DrawingMixin on Notifier<EditorState> {
       isDirty: true,
     );
   }
+
+  // ─── Pattern metadata ─────────────────────────────────────────────────────
+
+  void updatePatternMetadata({
+    String? name,
+    String? designer,
+    String? description,
+    String? difficulty,
+    String? estimatedHours,
+    String? copyright,
+    List<({int aidaCount, int strands})>? materialsSuggestions,
+  }) {
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(
+        name: name ?? state.pattern.name,
+        designer: designer,
+        description: description,
+        difficulty: difficulty,
+        estimatedHours: estimatedHours,
+        copyright: copyright,
+        materialsSuggestions:
+            materialsSuggestions ?? state.pattern.materialsSuggestions,
+      ),
+      isDirty: true,
+    );
+  }
 }
 
 // ─── _withThreadId ────────────────────────────────────────────────────────────

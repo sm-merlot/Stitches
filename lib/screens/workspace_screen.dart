@@ -37,6 +37,7 @@ import 'pattern_scan_cell_screen.dart';
 import 'pattern_scan_crop_screen.dart';
 import 'pattern_scan_preview.dart';
 import 'pattern_scan_review_screen.dart';
+import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
@@ -345,41 +346,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           result.anchorX,
           result.anchorY,
         );
-  }
-
-  void _showPatternInfo(BuildContext context, EditorState state) {
-    final p = state.pattern;
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Pattern Info'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _InfoRow('Name', p.name),
-            _InfoRow('Size', '${p.width} × ${p.height} stitches'),
-            _InfoRow('Threads', '${p.threads.length}'),
-            _InfoRow('Stitches (canvas)',
-                '${p.canvasCellCount}'),
-            _InfoRow('Stitches (all layers)',
-                '${p.layers.fold(0, (sum, l) => sum + l.stitches.length)}'),
-            if (state.filePath != null)
-              _InfoRow(
-                'File',
-                state.driveParentFolderId != null
-                    ? '${p.name}.stitches  (Google Drive)'
-                    : state.filePath!.split('/').last,
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'))
-        ],
-      ),
-    );
   }
 
   Future<void> _scanPage(
@@ -992,7 +958,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     case _MenuAction.resize:
                       _showResizeDialog(context, editorState);
                     case _MenuAction.patternInfo:
-                      _showPatternInfo(context, editorState);
+                      showPatternInfo(context, ref, editorState);
                     case _MenuAction.referenceImage:
                       showModalBottomSheet(
                         context: context,
