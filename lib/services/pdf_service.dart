@@ -224,24 +224,30 @@ class PdfService {
           return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
         });
 
-      final materialsCanvas =
-          (lastTableY - margin - footerH >= 120)
-              ? lastTableCanvas
-              : PdfPage(doc.document, pageFormat: pageFormat).getGraphics();
+      final enoughRoom = lastTableY - margin - footerH >= 120;
+      final materialsCanvas = enoughRoom
+          ? lastTableCanvas
+          : PdfPage(doc.document, pageFormat: pageFormat).getGraphics();
+      final materialsStartY = enoughRoom
+          ? lastTableY
+          : pageFormat.height - margin - headerH;
 
       _drawMaterialsSection(
-        materialsCanvas,
+        doc: doc.document,
+        canvas: materialsCanvas,
         format: pageFormat,
         pattern: pattern,
         threads: allThreads,
         crossEquiv: crossStitchEquiv,
         backCells: backStitchEquiv,
         useDmc: useDmc,
-        y: lastTableY - margin - footerH >= 120
-            ? lastTableY
-            : pageFormat.height - margin - headerH,
+        pdfSymbols: pdfSymbols,
+        y: materialsStartY,
         margin: margin,
+        headerH: headerH,
         footerH: footerH,
+        pageNum: 1 + colourTablePages + 1,
+        totalPages: totalPages,
         pdfFont: pdfFont,
         pdfFontBold: pdfFontBold,
       );
@@ -846,17 +852,22 @@ class PdfService {
 
   // ── Materials section ─────────────────────────────────────────────────────
 
-  static void _drawMaterialsSection(
-    PdfGraphics canvas, {
+  static void _drawMaterialsSection({
+    required PdfDocument doc,
+    required PdfGraphics canvas,
     required PdfPageFormat format,
     required CrossStitchPattern pattern,
     required List<Thread> threads,
     required Map<String, double> crossEquiv,
     required Map<String, double> backCells,
     required bool useDmc,
+    required Map<String, String> pdfSymbols,
     required double y,
     required double margin,
+    required double headerH,
     required double footerH,
+    required int pageNum,
+    required int totalPages,
     required PdfFont pdfFont,
     required PdfFont pdfFontBold,
   }) {
@@ -864,77 +875,74 @@ class PdfService {
     const tableFs = 7.5;
     const rowH = 14.0;
     const headRowH = 16.0;
-    const swatchSize = 12.0;
+    const swatchSize = 10.0;
+
+    var currentCanvas = canvas;
+    var currentPageNum = pageNum;
 
     final suggestions = pattern.materialsSuggestions;
     final tableW = format.width - 2 * margin;
 
     // ── Section heading ───────────────────────────────────────────────────
     y -= sectionHeadFs + 4;
-    canvas.setFillColor(PdfColors.black);
-    canvas.drawString(pdfFontBold, sectionHeadFs, 'Materials', margin, y);
+    currentCanvas.setFillColor(PdfColors.black);
+    currentCanvas.drawString(pdfFontBold, sectionHeadFs, 'Materials', margin, y);
     y -= 6;
 
-    // ── Aida size sub-table ───────────────────────────────────────────────
-    // Columns: [Aida Colour | <count1>-count | <count2>-count | ...]
+    // ── Aida size sub-table (header + single data row) ────────────────────
     final aidaColW = tableW / (1 + suggestions.length);
     final aidaColWidths =
         List.filled(1 + suggestions.length, aidaColW, growable: false);
 
-    // Header row
-    final aidaHeaders = [
-      'Aida',
-      ...suggestions.map((s) => '${s.aidaCount}-count'),
-    ];
-    _drawTableRow(canvas,
+    _drawTableRow(currentCanvas,
         x: margin,
         y: y,
         colWidths: aidaColWidths,
         rowH: headRowH,
         bgColor: PdfColors.grey200,
-        cells: aidaHeaders,
+        cells: ['Aida', ...suggestions.map((s) => '${s.aidaCount}-count')],
         font: pdfFontBold,
         fontSize: tableFs,
         isHeader: true);
     y -= headRowH;
 
-    // Data row: aida swatch + label, then size per suggestion
+    // Data row: use _drawTableRow for border + size cells; overlay swatch in col 0
     final aidaColor = _pdfColor(pattern.aidaColor);
     final aidaLabel = _ascii(aidaColorLabel(pattern.aidaColor));
-
-    // Manually draw first cell (swatch + label)
-    canvas.setFillColor(aidaColor);
-    canvas.drawRect(margin + 3, y - rowH + 3, swatchSize, swatchSize);
-    canvas.fillPath();
-    canvas.setStrokeColor(PdfColors.grey400);
-    canvas.setLineWidth(0.5);
-    canvas.drawRect(margin + 3, y - rowH + 3, swatchSize, swatchSize);
-    canvas.strokePath();
-    canvas.setFillColor(PdfColors.black);
-    canvas.drawString(
-        pdfFont, tableFs, aidaLabel, margin + swatchSize + 6, y - rowH + 4);
-
-    // Size cells
-    for (int i = 0; i < suggestions.length; i++) {
-      final s = suggestions[i];
+    final sizeCells = suggestions.map((s) {
       final wCm = (pattern.width / s.aidaCount) * 2.54 + 10;
       final hCm = (pattern.height / s.aidaCount) * 2.54 + 10;
-      final wIn = wCm / 2.54;
-      final hIn = hCm / 2.54;
-      final label =
-          '${wCm.toStringAsFixed(1)}x${hCm.toStringAsFixed(1)}cm\n'
-          '(${wIn.toStringAsFixed(1)}x${hIn.toStringAsFixed(1)}in)';
-      final cellX = margin + (i + 1) * aidaColW + 3;
-      canvas.setFillColor(PdfColors.black);
-      canvas.drawString(pdfFont, tableFs, _ascii(label), cellX, y - rowH + 8);
-    }
+      return '${wCm.toStringAsFixed(1)}\u00D7${hCm.toStringAsFixed(1)} cm';
+    }).toList();
+
+    _drawTableRow(currentCanvas,
+        x: margin,
+        y: y,
+        colWidths: aidaColWidths,
+        rowH: rowH,
+        bgColor: null,
+        cells: ['', ...sizeCells],
+        font: pdfFont,
+        fontSize: tableFs,
+        isHeader: false);
+    // Overlay swatch + label in first cell
+    currentCanvas.setFillColor(aidaColor);
+    currentCanvas.drawRect(
+        margin + 2, y - rowH + (rowH - swatchSize) / 2, swatchSize, swatchSize);
+    currentCanvas.fillPath();
+    currentCanvas.setStrokeColor(PdfColors.grey400);
+    currentCanvas.setLineWidth(0.4);
+    currentCanvas.drawRect(
+        margin + 2, y - rowH + (rowH - swatchSize) / 2, swatchSize, swatchSize);
+    currentCanvas.strokePath();
+    currentCanvas.setFillColor(PdfColors.black);
+    currentCanvas.drawString(pdfFont, tableFs, aidaLabel,
+        margin + swatchSize + 5, y - rowH + (rowH - tableFs) / 2 + 1);
     y -= rowH;
 
-    // ── Gap ───────────────────────────────────────────────────────────────
-    y -= 8;
+    y -= 8; // gap
 
     // ── Skeins sub-table ──────────────────────────────────────────────────
-    // Columns: [DMC/Anchor | Name | <count1>/<strands1> | ...]
     final codeColW = 44.0;
     final skeinColW = 46.0;
     final nameColW = tableW - codeColW - skeinColW * suggestions.length;
@@ -950,19 +958,49 @@ class PdfService {
       'Name',
       ...suggestions.map((s) => '${s.aidaCount}ct/${s.strands}s'),
     ];
-    _drawTableRow(canvas,
-        x: margin,
-        y: y,
-        colWidths: skeinColWidths,
-        rowH: headRowH,
-        bgColor: PdfColors.grey200,
-        cells: skeinHeaders,
-        font: pdfFontBold,
-        fontSize: tableFs,
-        isHeader: true);
+
+    void drawSkeinHeader(PdfGraphics cv, double headerY) {
+      _drawTableRow(cv,
+          x: margin,
+          y: headerY,
+          colWidths: skeinColWidths,
+          rowH: headRowH,
+          bgColor: PdfColors.grey200,
+          cells: skeinHeaders,
+          font: pdfFontBold,
+          fontSize: tableFs,
+          isHeader: true);
+    }
+
+    drawSkeinHeader(currentCanvas, y);
     y -= headRowH;
 
     for (final t in threads) {
+      // Paginate when near the bottom
+      if (y - rowH < margin + footerH + 4) {
+        _drawPageFooter(currentCanvas,
+            format: format,
+            margin: margin,
+            footerH: footerH,
+            pageNum: currentPageNum,
+            totalPages: totalPages,
+            pdfFont: pdfFont);
+        currentCanvas = PdfPage(doc, pageFormat: format).getGraphics();
+        currentPageNum++;
+        _drawPageHeader(currentCanvas,
+            format: format,
+            pattern: pattern,
+            margin: margin,
+            headerH: headerH,
+            subtitle:
+                'Materials (continued)  |  Page $currentPageNum of $totalPages',
+            pdfFont: pdfFont,
+            pdfFontBold: pdfFontBold);
+        y = format.height - margin - headerH;
+        drawSkeinHeader(currentCanvas, y);
+        y -= headRowH;
+      }
+
       final displayCode = useDmc
           ? t.dmcCode
           : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
@@ -977,7 +1015,7 @@ class PdfService {
         return '$n';
       }).toList();
 
-      _drawTableRow(canvas,
+      _drawTableRow(currentCanvas,
           x: margin,
           y: y,
           colWidths: skeinColWidths,
@@ -988,7 +1026,7 @@ class PdfService {
           fontSize: tableFs,
           isHeader: false,
           swatchColor: _pdfColor(t.color),
-          swatchSymbol: null);
+          swatchSymbol: pdfSymbols[t.dmcCode]);
       y -= rowH;
     }
   }
