@@ -1,0 +1,27 @@
+lib/screens/workspace_screen.dart
+  69dc89aaccde6b35 331-332
+lib/screens/editor_screen.dart
+  69dc89aaccde6b35 324-325
+lib/screens/export_dialog.dart
+  69dc89aaccde6b35 6-7,9-10,17-18,21,30-73,79,87-89,93-94,103-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "4c56775562093367ab7239fcafcf643c3331a814",
+  "prompts": {
+    "69dc89aaccde6b35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ca4f087-b89e-4245-a1c4-8d37b16b2e7f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 325,
+      "total_deletions": 34,
+      "accepted_lines": 325,
+      "overriden_lines": 0
+    }
+  }
+}
