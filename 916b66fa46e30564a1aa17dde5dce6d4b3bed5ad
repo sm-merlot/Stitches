@@ -1,0 +1,29 @@
+lib/screens/materials_list_screen.dart
+  9526872c18d46a09 4,179,181-183,186
+lib/data/aida_presets.dart
+  9526872c18d46a09 1-21
+lib/widgets/editor_toolbar.dart
+  9526872c18d46a09 7
+lib/widgets/editor_toolbar_color_controls.dart
+  9526872c18d46a09 165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "916b66fa46e30564a1aa17dde5dce6d4b3bed5ad",
+  "prompts": {
+    "9526872c18d46a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d80dea2-b05e-48d3-9538-e6e706afb638",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 53,
+      "total_deletions": 54,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
