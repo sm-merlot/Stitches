@@ -649,7 +649,7 @@ class EditorNotifier extends Notifier<EditorState>
       {Set<String> existingSymbols = const {}}) {
     final assigned = <String>{...existingSymbols};
     return threads.map((t) {
-      if (symbolIsVisible(t.symbol)) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
         assigned.add(t.symbol);
         return t;
       }

@@ -63,6 +63,24 @@ const kPatternSymbols = [
   '§', '¶', '°', '±', '×', '÷', '€', '£', '¥', '¢',
 ];
 
+/// Symbols that are visually valid in the app but absent from the bundled
+/// PDF fonts (NotoSans-Regular + NotoSansSymbols2-Regular).
+/// Patterns created before these were removed from [kPatternSymbols] may
+/// still have them assigned. They must be treated as "no symbol" everywhere
+/// a PDF-printable symbol is required.
+const kPdfUnsupportedSymbols = <String>{
+  // Arrows U+2190–21FF — in neither bundled font
+  '↑', '↓', '→', '←', '↗', '↘', '↙', '↖', '↔', '↕',
+  // Circled operators not covered by NotoSansSymbols2
+  '⊕', '⊖', '⊗', '⊚',
+  // U+271D — absent from both fonts
+  '✝',
+};
+
+/// Returns true when [symbol] cannot be rendered in exported PDFs.
+bool symbolIsPdfUnsupported(String symbol) =>
+    kPdfUnsupportedSymbols.contains(symbol);
+
 /// Groups of symbols that are visually similar at small cell sizes.
 /// If a pattern uses two symbols from the same group, a warning is shown in
 /// the colours panel.

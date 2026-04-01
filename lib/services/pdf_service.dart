@@ -62,7 +62,7 @@ class PdfService {
       final dmc = SpriteImporter.matchPixel(r, g, b, 255);
       if (dmc != null) {
         final sym = pattern.compositeSymbols[dmc.code] ?? '';
-        if (symbolIsVisible(sym) && !_kPdfUnsupportedSymbols.contains(sym)) {
+        if (symbolIsVisible(sym) && !kPdfUnsupportedSymbols.contains(sym)) {
           blendedCellSymbols[entry.key] = sym;
         }
       }
@@ -1810,17 +1810,7 @@ class PdfService {
   static double _textWidth(PdfFont font, double fontSize, String text) =>
       font.stringMetrics(text).advanceWidth * fontSize;
 
-  /// Symbols absent from both NotoSans-Regular and NotoSansSymbols2 as
-  /// bundled. Patterns created before these were removed from kPatternSymbols
-  /// may still have them assigned; PDF export must substitute them.
-  static const _kPdfUnsupportedSymbols = {
-    // Arrows U+2190–21FF — in neither bundled font
-    '↑', '↓', '→', '←', '↗', '↘', '↙', '↖', '↔', '↕',
-    // Math operators not covered by NotoSansSymbols2
-    '⊕', '⊖', '⊗', '⊚',
-    // U+271D — absent from both fonts
-    '✝',
-  };
+  // kPdfUnsupportedSymbols is the canonical source — defined in symbols.dart.
 
   /// Build a per-export symbol map: dmcCode → symbol char.
   /// Threads with symbols absent from the PDF fonts are omitted (treated as
@@ -1828,7 +1818,7 @@ class PdfService {
   static Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
     return {
       for (final t in threads)
-        if (symbolIsVisible(t.symbol) && !_kPdfUnsupportedSymbols.contains(t.symbol))
+        if (symbolIsVisible(t.symbol) && !kPdfUnsupportedSymbols.contains(t.symbol))
           t.dmcCode: t.symbol,
     };
   }

@@ -63,13 +63,13 @@ class _DesignColoursPanel extends ConsumerWidget {
     // what _ThreadList actually shows.
     final allSymbolCounts = <String, int>{};
     for (final t in threads) {
-      if (symbolIsVisible(t.symbol)) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
         allSymbolCounts[t.symbol] = (allSymbolCounts[t.symbol] ?? 0) + 1;
       }
     }
     final allGroupSymbols = <int, Set<String>>{};
     for (final t in threads) {
-      if (symbolIsVisible(t.symbol)) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
         final g = symbolSimilarityGroup(t.symbol);
         if (g >= 0) (allGroupSymbols[g] ??= {}).add(t.symbol);
       }
@@ -81,6 +81,7 @@ class _DesignColoursPanel extends ConsumerWidget {
     final issueCount = threads
         .where((t) {
           if (!symbolIsVisible(t.symbol)) return true;
+          if (symbolIsPdfUnsupported(t.symbol)) return true;
           if ((allSymbolCounts[t.symbol] ?? 0) > 1) return true;
           final g = symbolSimilarityGroup(t.symbol);
           return g >= 0 && allConflictingGroups.contains(g);
@@ -235,11 +236,12 @@ void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
       return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
     });
 
-  // Phase 1: collect kept symbols, flagging no-symbol and exact duplicates.
+  // Phase 1: collect kept symbols, flagging no-symbol, PDF-incompatible, and exact duplicates.
   final kept = <String>{};
   final toFix = <String>{};  // dmcCodes that need a new symbol
   for (final t in sorted) {
-    if (!symbolIsVisible(t.symbol) || kept.contains(t.symbol)) {
+    if (!symbolIsVisible(t.symbol) || symbolIsPdfUnsupported(t.symbol) ||
+        kept.contains(t.symbol)) {
       toFix.add(t.dmcCode);
     } else {
       kept.add(t.symbol);
@@ -643,14 +645,14 @@ class _ThreadList extends StatelessWidget {
     // Pre-compute duplicate symbols across the displayed list.
     final symbolCounts = <String, int>{};
     for (final t in threads) {
-      if (symbolIsVisible(t.symbol)) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
         symbolCounts[t.symbol] = (symbolCounts[t.symbol] ?? 0) + 1;
       }
     }
     // Pre-compute similar-symbol conflicts (different symbols from same group).
     final groupSymbols = <int, Set<String>>{};
     for (final t in threads) {
-      if (symbolIsVisible(t.symbol)) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
         final g = symbolSimilarityGroup(t.symbol);
         if (g >= 0) (groupSymbols[g] ??= {}).add(t.symbol);
       }
@@ -661,16 +663,16 @@ class _ThreadList extends StatelessWidget {
         .toSet();
 
     bool isSimilarOnly(Thread t) {
-      if (!symbolIsVisible(t.symbol)) return false;
+      if (!symbolIsVisible(t.symbol) || symbolIsPdfUnsupported(t.symbol)) return false;
       if ((symbolCounts[t.symbol] ?? 0) > 1) return false; // already a dup
       final g = symbolSimilarityGroup(t.symbol);
       return g >= 0 && conflictingGroups.contains(g);
     }
 
     final sorted = [...threads]..sort((a, b) {
-        // No-symbol threads first, then duplicates, then similar, then normal.
-        final aNoSym = !symbolIsVisible(a.symbol);
-        final bNoSym = !symbolIsVisible(b.symbol);
+        // No-symbol (incl. PDF-incompatible) first, then duplicates, then similar, then normal.
+        final aNoSym = !symbolIsVisible(a.symbol) || symbolIsPdfUnsupported(a.symbol);
+        final bNoSym = !symbolIsVisible(b.symbol) || symbolIsPdfUnsupported(b.symbol);
         if (aNoSym != bNoSym) return aNoSym ? -1 : 1;
         final aDup = !aNoSym && (symbolCounts[a.symbol] ?? 0) > 1;
         final bDup = !bNoSym && (symbolCounts[b.symbol] ?? 0) > 1;
@@ -709,10 +711,13 @@ class _ThreadList extends StatelessWidget {
         final count = stitchCounts[t.dmcCode];
 
         final hasSymbol = symbolIsVisible(t.symbol);
-        final isDuplicate = hasSymbol && (symbolCounts[t.symbol] ?? 0) > 1;
-        final isSimilar = isSimilarOnly(t);
+        final isPdfBad = hasSymbol && symbolIsPdfUnsupported(t.symbol);
+        final isDuplicate = hasSymbol && !isPdfBad && (symbolCounts[t.symbol] ?? 0) > 1;
+        final isSimilar = !isPdfBad && isSimilarOnly(t);
+        // PDF-incompatible symbols are treated as "no symbol" for display.
+        final effectivelyNoSymbol = !hasSymbol || isPdfBad;
 
-        final swatchBorderColor = !hasSymbol
+        final swatchBorderColor = effectivelyNoSymbol
             ? Colors.orange.shade600
             : isDuplicate
                 ? Colors.red.shade500
@@ -728,22 +733,22 @@ class _ThreadList extends StatelessWidget {
             borderRadius: BorderRadius.circular(5),
             border: Border.all(
               color: swatchBorderColor,
-              width: (!hasSymbol || isDuplicate || isSimilar) ? 1.5 : 1.0,
+              width: (effectivelyNoSymbol || isDuplicate || isSimilar) ? 1.5 : 1.0,
             ),
           ),
           alignment: Alignment.center,
-          child: hasSymbol
-              ? Text(t.symbol,
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                      height: 1.0))
-              : Text('?',
+          child: effectivelyNoSymbol
+              ? Text('?',
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: textColor.withValues(alpha: 0.4),
+                      height: 1.0))
+              : Text(t.symbol,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
                       height: 1.0)),
         );
         if (isDuplicate || isSimilar) {
@@ -780,13 +785,15 @@ class _ThreadList extends StatelessWidget {
         }
         if (onSwatchTap != null) {
           swatch = Tooltip(
-            message: !hasSymbol
-                ? 'No symbol — tap to assign'
-                : isDuplicate
-                    ? 'Duplicate symbol — tap to fix'
-                    : isSimilar
-                        ? 'Similar to another symbol — may be hard to distinguish'
-                        : 'Tap to edit symbol',
+            message: isPdfBad
+                ? "Symbol '${t.symbol}' won't render in PDF — tap to assign a compatible one"
+                : !hasSymbol
+                    ? 'No symbol — tap to assign'
+                    : isDuplicate
+                        ? 'Duplicate symbol — tap to fix'
+                        : isSimilar
+                            ? 'Similar to another symbol — may be hard to distinguish'
+                            : 'Tap to edit symbol',
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
