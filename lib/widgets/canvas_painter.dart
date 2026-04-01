@@ -268,6 +268,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
     }
 
+    // ── Focus region outline ────────────────────────────────────────────────
+    // When a thread is focused whose colour blends into the background, draw a
+    // perimeter outline around all connected groups of focused cells so the
+    // user can locate them in the grey fog of unfocused stitches.
+    if (stitchFocusThreadId != null) {
+      _drawFocusedRegionBorderIfNeeded(canvas, blendMap);
+    }
+
     // ── Pattern border ──────────────────────────────────────────────────────
     final borderBase = aidaColor.computeLuminance() > 0.4 ? Colors.black : Colors.white;
     canvas.drawRect(
@@ -394,6 +402,107 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
     _blendMapCache = result;
     return result;
+  }
+
+  // ── Focus region outline ────────────────────────────────────────────────────
+
+  // The opaque base of the unfocused-stitch grey used to detect low-contrast
+  // threads that would blend into the grey fog of dimmed stitches.
+  static const Color _unfocusedGreyOpaque = Color(0xFFB8B8B8);
+
+  /// Draws a perimeter outline around all connected groups of focused cells when
+  /// the focused thread colour is too close to either the aida background or the
+  /// unfocused-grey colour — either condition means even one cell is hard to
+  /// spot, so ALL focused cells are outlined.
+  ///
+  /// Only draws edges that border a non-focused (or empty) cell, so adjacent
+  /// focused cells share a single outline rather than having separate borders.
+  void _drawFocusedRegionBorderIfNeeded(
+      Canvas canvas, Map<String, Color> blendMap) {
+    final focusId = stitchFocusThreadId!;
+    final focusThread = _threadMap[focusId];
+    if (focusThread == null) return;
+
+    // Trigger: focused colour is hard to see against the aida background OR
+    // against the uniform grey that unfocused stitches are drawn as.
+    final needsOutline =
+        _contrastRatio(focusThread.color, aidaColor) < 3.0 ||
+        _contrastRatio(focusThread.color, _unfocusedGreyOpaque) < 3.0;
+    if (!needsOutline) return;
+
+    // Collect every focused cell as a 'x,y' key for O(1) neighbour lookup.
+    final focusedKeys = <String>{};
+    for (final layer in pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is BackStitch) continue;
+        final (cx, cy) = switch (stitch) {
+          FullStitch(:final x, :final y) => (x, y),
+          HalfStitch(:final x, :final y) => (x, y),
+          QuarterStitch(:final x, :final y) => (x, y),
+          HalfCrossStitch(:final x, :final y) => (x, y),
+          QuarterCrossStitch(:final x, :final y) => (x, y),
+          BackStitch() => (-1, -1),
+        };
+        if (cx < 0) continue;
+        final key = '$cx,$cy';
+        // Blended cells: focus is determined by the composited DMC code.
+        // Non-blended: focus is determined by the raw thread ID.
+        if (blendMap.containsKey(key)) {
+          if (_blendDmcCache[key] == focusId) focusedKeys.add(key);
+        } else if (stitch.threadId == focusId) {
+          focusedKeys.add(key);
+        }
+      }
+    }
+
+    if (focusedKeys.isEmpty) return;
+
+    // Build a path of all cell edges that border a non-focused cell.
+    // Drawing only outer edges makes adjacent cells share a single line.
+    final path = Path();
+    for (final key in focusedKeys) {
+      final parts = key.split(',');
+      final cx = int.parse(parts[0]);
+      final cy = int.parse(parts[1]);
+      final l = cx * cellSize;
+      final t = cy * cellSize;
+      final r = l + cellSize;
+      final b = t + cellSize;
+
+      // Left edge
+      if (!focusedKeys.contains('${cx - 1},$cy')) {
+        path.moveTo(l, t);
+        path.lineTo(l, b);
+      }
+      // Right edge
+      if (!focusedKeys.contains('${cx + 1},$cy')) {
+        path.moveTo(r, t);
+        path.lineTo(r, b);
+      }
+      // Top edge
+      if (!focusedKeys.contains('$cx,${cy - 1}')) {
+        path.moveTo(l, t);
+        path.lineTo(r, t);
+      }
+      // Bottom edge
+      if (!focusedKeys.contains('$cx,${cy + 1}')) {
+        path.moveTo(l, b);
+        path.lineTo(r, b);
+      }
+    }
+
+    // Bright orange — stands out against both grey unfocused stitches and
+    // most aida colours regardless of the focused thread's colour.
+    const outlineColor = Color(0xFFFF6B00);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = outlineColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0 / scale
+        ..strokeCap = StrokeCap.square,
+    );
   }
 
   // ── Block-mode stitch rendering ────────────────────────────────────────────
