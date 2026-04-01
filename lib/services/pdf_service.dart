@@ -997,26 +997,23 @@ class PdfService {
     canvas.drawRect(originX, originY, pw2, ph2);
     canvas.fillPath();
 
-    // Cross-type stitches as line-art (rounded caps for a thread-like look)
-    canvas.setLineCap(PdfLineCap.round);
-    final lw = math.max(0.35, cellSize * 0.18);
-    canvas.setLineWidth(lw);
-
+    // Cross-type stitches as opaque fills — correctly occludes lower layers.
     for (final s in nonBack) {
       final cx = _stitches(s);
       final cy = _stitchY(s);
       final thread = threadMap[s.threadId];
       if (thread == null) continue;
-      canvas.setStrokeColor(_pdfColor(thread.color));
+      canvas.setFillColor(_pdfColor(thread.color));
 
       // gx/gy = bottom-left of this cell in PDF coords
       final gx = originX + cx * cellSize;
       final gy = originY + (rows - cy - 1) * cellSize;
 
-      _drawRealisticStitch(canvas, s, gx, gy, cellSize);
+      _fillStitch(canvas, s, gx, gy, cellSize);
     }
 
     // Backstitches
+    canvas.setLineCap(PdfLineCap.round);
     canvas.setLineWidth(math.max(0.5, cellSize * 0.22));
     for (final bs in backstitches) {
       final thread = threadMap[bs.threadId];
@@ -1028,7 +1025,6 @@ class PdfService {
           originY + (rows - bs.y2) * cellSize);
       canvas.strokePath();
     }
-
     canvas.setLineCap(PdfLineCap.butt);
 
     // Outer border
@@ -1036,111 +1032,6 @@ class PdfService {
     canvas.setLineWidth(0.8);
     canvas.drawRect(originX, originY, pw2, ph2);
     canvas.strokePath();
-  }
-
-  /// Draws a single stitch as crossed diagonal lines (no fill, line-art only).
-  static void _drawRealisticStitch(
-      PdfGraphics canvas, Stitch s, double gx, double gy, double cs) {
-    // PDF: y increases up. gy = bottom, gy+cs = top of cell.
-    switch (s) {
-      case FullStitch():
-        // "\" line: top-left → bottom-right
-        canvas.moveTo(gx, gy + cs);
-        canvas.lineTo(gx + cs, gy);
-        canvas.strokePath();
-        // "/" line: top-right → bottom-left
-        canvas.moveTo(gx + cs, gy + cs);
-        canvas.lineTo(gx, gy);
-        canvas.strokePath();
-
-      case HalfStitch(isForward: true): // "/"
-        canvas.moveTo(gx + cs, gy + cs);
-        canvas.lineTo(gx, gy);
-        canvas.strokePath();
-
-      case HalfStitch(isForward: false): // "\"
-        canvas.moveTo(gx, gy + cs);
-        canvas.lineTo(gx + cs, gy);
-        canvas.strokePath();
-
-      case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-        canvas.moveTo(gx, gy + cs);
-        canvas.lineTo(gx + cs / 2, gy + cs / 2);
-        canvas.strokePath();
-      case QuarterStitch(quadrant: QuadrantPosition.topRight):
-        canvas.moveTo(gx + cs, gy + cs);
-        canvas.lineTo(gx + cs / 2, gy + cs / 2);
-        canvas.strokePath();
-      case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
-        canvas.moveTo(gx, gy);
-        canvas.lineTo(gx + cs / 2, gy + cs / 2);
-        canvas.strokePath();
-      case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
-        canvas.moveTo(gx + cs, gy);
-        canvas.lineTo(gx + cs / 2, gy + cs / 2);
-        canvas.strokePath();
-
-      case HalfCrossStitch(half: HalfOrientation.left): // X in left half
-        canvas.moveTo(gx, gy + cs);
-        canvas.lineTo(gx + cs / 2, gy);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs / 2, gy + cs);
-        canvas.lineTo(gx, gy);
-        canvas.strokePath();
-      case HalfCrossStitch(half: HalfOrientation.right): // X in right half
-        canvas.moveTo(gx + cs / 2, gy + cs);
-        canvas.lineTo(gx + cs, gy);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs, gy + cs);
-        canvas.lineTo(gx + cs / 2, gy);
-        canvas.strokePath();
-      case HalfCrossStitch(half: HalfOrientation.top): // X in top half
-        canvas.moveTo(gx, gy + cs);
-        canvas.lineTo(gx + cs, gy + cs / 2);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs, gy + cs);
-        canvas.lineTo(gx, gy + cs / 2);
-        canvas.strokePath();
-      case HalfCrossStitch(half: HalfOrientation.bottom): // X in bottom half
-        canvas.moveTo(gx, gy + cs / 2);
-        canvas.lineTo(gx + cs, gy);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs, gy + cs / 2);
-        canvas.lineTo(gx, gy);
-        canvas.strokePath();
-
-      case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-        canvas.moveTo(gx, gy + cs);
-        canvas.lineTo(gx + cs / 2, gy + cs / 2);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs / 2, gy + cs);
-        canvas.lineTo(gx, gy + cs / 2);
-        canvas.strokePath();
-      case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-        canvas.moveTo(gx + cs / 2, gy + cs);
-        canvas.lineTo(gx + cs, gy + cs / 2);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs, gy + cs);
-        canvas.lineTo(gx + cs / 2, gy + cs / 2);
-        canvas.strokePath();
-      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-        canvas.moveTo(gx, gy + cs / 2);
-        canvas.lineTo(gx + cs / 2, gy);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs / 2, gy + cs / 2);
-        canvas.lineTo(gx, gy);
-        canvas.strokePath();
-      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-        canvas.moveTo(gx + cs / 2, gy + cs / 2);
-        canvas.lineTo(gx + cs, gy);
-        canvas.strokePath();
-        canvas.moveTo(gx + cs, gy + cs / 2);
-        canvas.lineTo(gx + cs / 2, gy);
-        canvas.strokePath();
-
-      case BackStitch():
-        break;
-    }
   }
 
   // ── Shared page components ────────────────────────────────────────────────
