@@ -328,7 +328,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Future<void> _showExportDialog(
       BuildContext context, EditorState state) async {
     await showExportDialog(context, state.pattern,
-        useDmc: ref.read(settingsProvider).useDmc);
+        useDmc: ref.read(settingsProvider).useDmc,
+        notifier: ref.read(editorProvider.notifier));
   }
 
   Future<void> _showResizeDialog(

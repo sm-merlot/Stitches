@@ -321,7 +321,8 @@ class EditorScreen extends ConsumerWidget {
                       _saveAs(context, ref);
                     case _MenuAction.export:
                       showExportDialog(context, state.pattern,
-                          useDmc: ref.read(settingsProvider).useDmc);
+                          useDmc: ref.read(settingsProvider).useDmc,
+                          notifier: ref.read(editorProvider.notifier));
                     case _MenuAction.resize:
                       _showResizeDialog(context, ref, state);
                     case _MenuAction.patternInfo:
