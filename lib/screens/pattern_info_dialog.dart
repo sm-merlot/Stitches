@@ -12,7 +12,7 @@ void showPatternInfo(BuildContext context, WidgetRef ref, EditorState state) {
       builder: (_) => Dialog(
         child: SizedBox(
           width: 480,
-          child: _PatternInfoDialog(state: state, ref: ref),
+          child: _PatternInfoDialog(initialState: state),
         ),
       ),
     );
@@ -21,7 +21,7 @@ void showPatternInfo(BuildContext context, WidgetRef ref, EditorState state) {
       MaterialPageRoute<void>(
         fullscreenDialog: true,
         builder: (_) => Scaffold(
-          body: _PatternInfoDialog(state: state, ref: ref),
+          body: _PatternInfoDialog(initialState: state),
         ),
       ),
     );
@@ -30,16 +30,15 @@ void showPatternInfo(BuildContext context, WidgetRef ref, EditorState state) {
 
 // ─── Dialog widget ───────────────────────────────────────────────────────────
 
-class _PatternInfoDialog extends StatefulWidget {
-  final EditorState state;
-  final WidgetRef ref;
-  const _PatternInfoDialog({required this.state, required this.ref});
+class _PatternInfoDialog extends ConsumerStatefulWidget {
+  final EditorState initialState;
+  const _PatternInfoDialog({required this.initialState});
 
   @override
-  State<_PatternInfoDialog> createState() => _PatternInfoDialogState();
+  ConsumerState<_PatternInfoDialog> createState() => _PatternInfoDialogState();
 }
 
-class _PatternInfoDialogState extends State<_PatternInfoDialog> {
+class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
   bool _editing = false;
 
   // Form controllers
@@ -57,7 +56,7 @@ class _PatternInfoDialogState extends State<_PatternInfoDialog> {
   @override
   void initState() {
     super.initState();
-    final p = widget.state.pattern;
+    final p = widget.initialState.pattern;
     _nameCtrl = TextEditingController(text: p.name);
     _designerCtrl = TextEditingController(text: p.designer ?? '');
     _descriptionCtrl = TextEditingController(text: p.description ?? '');
@@ -81,7 +80,7 @@ class _PatternInfoDialogState extends State<_PatternInfoDialog> {
   void _enterEdit() => setState(() => _editing = true);
 
   void _cancelEdit() {
-    final p = widget.state.pattern;
+    final p = ref.read(editorProvider).pattern;
     setState(() {
       _editing = false;
       _nameCtrl.text = p.name;
@@ -97,7 +96,7 @@ class _PatternInfoDialogState extends State<_PatternInfoDialog> {
   void _save() {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
-    widget.ref.read(editorProvider.notifier).updatePatternMetadata(
+    ref.read(editorProvider.notifier).updatePatternMetadata(
           name: name,
           designer: _designerCtrl.text.trim().isEmpty
               ? null
@@ -121,8 +120,8 @@ class _PatternInfoDialogState extends State<_PatternInfoDialog> {
   // ─── View mode ──────────────────────────────────────────────────────────
 
   Widget _viewContent() {
-    final p = widget.state.pattern;
-    final state = widget.state;
+    final state = ref.watch(editorProvider);
+    final p = state.pattern;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
