@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Color;
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:markdown/markdown.dart' as md;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../data/aida_presets.dart';
@@ -13,6 +15,14 @@ import '../models/stitch.dart';
 import '../models/thread.dart';
 import 'skein_calculator.dart';
 
+typedef _PdfFonts = ({
+  PdfFont regular,
+  PdfFont bold,
+  PdfFont italic,
+  PdfFont symbol
+});
+typedef _TextRun = ({String text, bool bold, bool italic, bool sym});
+
 class PdfService {
   /// Generate PDF and save via file picker.
   static Future<void> exportPattern(
@@ -20,8 +30,16 @@ class PdfService {
     bool useDmc = true,
   }) async {
     final doc = pw.Document(title: pattern.name);
-    final pdfFont = PdfFont.helvetica(doc.document);
-    final pdfFontBold = PdfFont.helveticaBold(doc.document);
+    final fonts = (
+      regular: PdfTtfFont(doc.document,
+          await rootBundle.load('assets/fonts/NotoSans-Regular.ttf')),
+      bold: PdfTtfFont(doc.document,
+          await rootBundle.load('assets/fonts/NotoSans-Bold.ttf')),
+      italic: PdfTtfFont(doc.document,
+          await rootBundle.load('assets/fonts/NotoSans-Italic.ttf')),
+      symbol: PdfTtfFont(doc.document,
+          await rootBundle.load('assets/fonts/NotoSansSymbols2-Regular.ttf')),
+    ) as _PdfFonts;
 
     // ── Data prep ──────────────────────────────────────────────────────────
 
@@ -68,7 +86,7 @@ class PdfService {
         .where((t) => backStitchEquiv.containsKey(t.dmcCode))
         .toList();
 
-    // Build per-export symbol map (handles non-ASCII symbols with fallbacks)
+    // Build per-export symbol map
     final pdfSymbols = _buildPdfSymbolMap([
       ...crossThreads,
       ...backThreads.where((t) => !crossThreads.any((c) => c.dmcCode == t.dmcCode)),
@@ -131,8 +149,7 @@ class PdfService {
       footerH: footerH,
       pageNum: 1,
       totalPages: totalPages,
-      pdfFont: pdfFont,
-      pdfFontBold: pdfFontBold,
+      fonts: fonts,
     );
 
     // ── Cross stitch colour table pages ───────────────────────────────────
@@ -171,8 +188,7 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        pdfFont: pdfFont,
-        pdfFontBold: pdfFontBold,
+        fonts: fonts,
       );
       lastTableCanvas = crossCanvas;
     }
@@ -210,8 +226,7 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        pdfFont: pdfFont,
-        pdfFontBold: pdfFontBold,
+        fonts: fonts,
       );
       lastTableCanvas = backCanvas;
     }
@@ -253,8 +268,7 @@ class PdfService {
         footerH: footerH,
         pageNum: 1 + colourTablePages + 1,
         totalPages: totalPages,
-        pdfFont: pdfFont,
-        pdfFontBold: pdfFontBold,
+        fonts: fonts,
         drawInitialFooter: !enoughRoom,
       );
     }
@@ -294,8 +308,7 @@ class PdfService {
           footerH: footerH,
           pageNum: pageNum,
           totalPages: totalPages,
-          pdfFont: pdfFont,
-          pdfFontBold: pdfFontBold,
+          fonts: fonts,
         );
       }
     }
@@ -338,8 +351,7 @@ class PdfService {
     required double footerH,
     required int pageNum,
     required int totalPages,
-    required PdfFont pdfFont,
-    required PdfFont pdfFontBold,
+    required _PdfFonts fonts,
   }) {
     final cols = endX - startX;
     final rows = endY - startY;
@@ -360,8 +372,7 @@ class PdfService {
       headerH: headerH,
       subtitle:
           'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages',
-      pdfFont: pdfFont,
-      pdfFontBold: pdfFontBold,
+      fonts: fonts,
     );
 
     // ── Aida background ──────────────────────────────────────────────────
@@ -395,7 +406,8 @@ class PdfService {
           final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
           final fs = math.max(3.5, subSize * 0.44);
           canvas.setFillColor(textColor);
-          canvas.drawString(pdfFont, fs, sym, sx - fs * 0.55 / 2, sy - fs / 2 + 0.5);
+          final symFont = _fontFor(sym, fonts.regular, fonts.symbol);
+          canvas.drawString(symFont, fs, sym, sx - fs * 0.55 / 2, sy - fs / 2 + 0.5);
         }
       }
     }
@@ -476,7 +488,7 @@ class PdfService {
         final label = '$col';
         final lw = label.length * rulerFs * 0.55;
         canvas.drawString(
-            pdfFont, rulerFs, label, x - lw / 2, gridOriginY + gridH + 3.5);
+            fonts.regular, rulerFs, label, x - lw / 2, gridOriginY + gridH + 3.5);
         canvas.moveTo(x, gridOriginY + gridH);
         canvas.lineTo(x, gridOriginY + gridH + 3);
         canvas.strokePath();
@@ -492,7 +504,7 @@ class PdfService {
         final lw = label.length * rulerFs * 0.55;
         canvas.setFillColor(PdfColors.grey700);
         canvas.drawString(
-            pdfFont, rulerFs, label, gridOriginX - lw - 4, y - rulerFs / 2);
+            fonts.regular, rulerFs, label, gridOriginX - lw - 4, y - rulerFs / 2);
         canvas.setStrokeColor(PdfColors.grey600);
         canvas.setLineWidth(0.4);
         canvas.moveTo(gridOriginX - 3, y);
@@ -508,7 +520,7 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        pdfFont: pdfFont);
+        fonts: fonts);
   }
 
   // ── Colour table page ─────────────────────────────────────────────────────
@@ -527,8 +539,7 @@ class PdfService {
     required double footerH,
     required int pageNum,
     required int totalPages,
-    required PdfFont pdfFont,
-    required PdfFont pdfFontBold,
+    required _PdfFonts fonts,
   }) {
     final subtitle = isBackstitch
         ? 'Backstitch Colour Table  |  Page $pageNum of $totalPages'
@@ -541,8 +552,7 @@ class PdfService {
       margin: margin,
       headerH: headerH,
       subtitle: subtitle,
-      pdfFont: pdfFont,
-      pdfFontBold: pdfFontBold,
+      fonts: fonts,
     );
 
     const tableFs = 7.5;
@@ -561,7 +571,7 @@ class PdfService {
     final sectionLabel = isBackstitch ? 'Backstitches' : 'Cross Stitches';
     canvas.setFillColor(PdfColors.black);
     canvas.drawString(
-        pdfFontBold, sectionHeadFs, sectionLabel, margin, startY - sectionHeadFs);
+        fonts.bold, sectionHeadFs, sectionLabel, margin, startY - sectionHeadFs);
 
     final contentTopY = startY - sectionHeadFs - 6;
     final countHeader = isBackstitch ? 'Units' : 'Stitches';
@@ -580,7 +590,7 @@ class PdfService {
           rowH: headRowH,
           bgColor: PdfColors.grey200,
           cells: ['', 'DMC', 'Name', countHeader],
-          font: pdfFontBold,
+          fonts: fonts,
           fontSize: tableFs,
           isHeader: true);
       double y = contentTopY - headRowH;
@@ -595,7 +605,7 @@ class PdfService {
             stitchEquiv: stitchEquiv,
             isBackstitch: isBackstitch,
             pdfSymbols: pdfSymbols,
-            pdfFont: pdfFont,
+            fonts: fonts,
             tableFs: tableFs);
         y -= rowH;
       }
@@ -622,7 +632,7 @@ class PdfService {
             rowH: headRowH,
             bgColor: PdfColors.grey200,
             cells: ['', 'DMC', 'Name', countHeader],
-            font: pdfFontBold,
+            fonts: fonts,
             fontSize: tableFs,
             isHeader: true);
         double y = contentTopY - headRowH;
@@ -637,7 +647,7 @@ class PdfService {
               stitchEquiv: stitchEquiv,
               isBackstitch: isBackstitch,
               pdfSymbols: pdfSymbols,
-              pdfFont: pdfFont,
+              fonts: fonts,
               tableFs: tableFs);
           y -= rowH;
         }
@@ -652,7 +662,7 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        pdfFont: pdfFont);
+        fonts: fonts);
 
     return finalY;
   }
@@ -669,7 +679,7 @@ class PdfService {
     required Map<String, double> stitchEquiv,
     required bool isBackstitch,
     required Map<String, String> pdfSymbols,
-    required PdfFont pdfFont,
+    required _PdfFonts fonts,
     required double tableFs,
   }) {
     final equiv = stitchEquiv[t.dmcCode] ?? 0;
@@ -685,8 +695,8 @@ class PdfService {
           colWidths: colWidths,
           rowH: rowH,
           bgColor: null,
-          cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
-          font: pdfFont,
+          cells: ['', t.dmcCode, t.name, equivStr],
+          fonts: fonts,
           fontSize: tableFs,
           isHeader: false,
           linePreviewColor: _pdfColor(t.color));
@@ -697,8 +707,8 @@ class PdfService {
           colWidths: colWidths,
           rowH: rowH,
           bgColor: null,
-          cells: ['', _ascii(t.dmcCode), _ascii(t.name), equivStr],
-          font: pdfFont,
+          cells: ['', t.dmcCode, t.name, equivStr],
+          fonts: fonts,
           fontSize: tableFs,
           isHeader: false,
           swatchColor: _pdfColor(t.color),
@@ -720,8 +730,7 @@ class PdfService {
     required double footerH,
     required int pageNum,
     required int totalPages,
-    required PdfFont pdfFont,
-    required PdfFont pdfFontBold,
+    required _PdfFonts fonts,
   }) {
     const titleFs = 18.0;
     const subtitleFs = 9.0;
@@ -748,10 +757,7 @@ class PdfService {
       if (pattern.difficulty != null) metaBlockH += metaRowH;
       if (pattern.estimatedHours != null) metaBlockH += metaRowH;
       if (pattern.description != null) {
-        // Rough multi-line estimate: ~80 chars per line at 10pt
-        final chars = pattern.description!.length;
-        final lines = (chars / 80).ceil().clamp(1, 6);
-        metaBlockH += lines * 12.0 + 4;
+        metaBlockH += _parseMarkdownBlocks(pattern.description!, usableW, fonts).totalHeight + 4;
       }
       if (pattern.copyright != null) metaBlockH += 10.0;
       metaBlockH += metaGap; // top gap before metadata
@@ -765,19 +771,19 @@ class PdfService {
         .clamp(80.0, 600.0);
 
     // ── Title (centred) ───────────────────────────────────────────────────
-    final titleStr = _ascii(pattern.name);
+    final titleStr = pattern.name;
     final titleY = pageH - margin - titleFs;
-    final titleW = titleStr.length * titleFs * 0.55;
+    final titleW = _textWidth(fonts.bold, titleFs, titleStr);
     final titleX = margin + (usableW - titleW) / 2;
     canvas.setFillColor(PdfColors.black);
-    canvas.drawString(pdfFontBold, titleFs, titleStr, titleX, titleY);
+    canvas.drawString(fonts.bold, titleFs, titleStr, titleX, titleY);
 
     // ── Subtitle (centred) ────────────────────────────────────────────────
-    final subtitleStr = _ascii('${pattern.width} x ${pattern.height} stitches');
-    final subtitleW = subtitleStr.length * subtitleFs * 0.55;
+    final subtitleStr = '${pattern.width} x ${pattern.height} stitches';
+    final subtitleW = _textWidth(fonts.regular, subtitleFs, subtitleStr);
     final subtitleX = margin + (usableW - subtitleW) / 2;
     canvas.setFillColor(PdfColors.grey600);
-    canvas.drawString(pdfFont, subtitleFs, subtitleStr, subtitleX,
+    canvas.drawString(fonts.regular, subtitleFs, subtitleStr, subtitleX,
         titleY - titleFs - 5);
 
     // ── Pattern preview ───────────────────────────────────────────────────
@@ -815,17 +821,18 @@ class PdfService {
       canvas.setLineWidth(0.5);
       canvas.drawRect(margin, my - metaSwatchSize, metaSwatchSize, metaSwatchSize);
       canvas.strokePath();
-      final aidaLabel = _ascii(aidaColorLabel(pattern.aidaColor));
+      final aidaLabel = aidaColorLabel(pattern.aidaColor);
       canvas.setFillColor(PdfColors.grey700);
-      canvas.drawString(pdfFont, 9.0, aidaLabel,
+      canvas.drawString(fonts.regular, 9.0, aidaLabel,
           margin + metaSwatchSize + 5, my - metaSwatchSize + 2);
       my -= metaSwatchSize + metaGap;
 
       void metaRow(String label, String value) {
         canvas.setFillColor(PdfColors.black);
-        canvas.drawString(pdfFontBold, 9.0, _ascii('$label: '), margin, my);
-        final labelW = ('$label: ').length * 9.0 * 0.55;
-        canvas.drawString(pdfFont, 9.0, _ascii(value), margin + labelW, my);
+        final labelText = '$label: ';
+        canvas.drawString(fonts.bold, 9.0, labelText, margin, my);
+        final labelW = _textWidth(fonts.bold, 9.0, labelText);
+        canvas.drawString(fonts.regular, 9.0, value, margin + labelW, my);
         my -= metaRowH;
       }
 
@@ -839,18 +846,15 @@ class PdfService {
 
       if (pattern.description != null) {
         my -= 2;
-        canvas.setFillColor(PdfColors.grey800);
-        canvas.drawString(pdfFont, 10.0, _ascii(pattern.description!), margin, my);
-        my -= 12.0 * (pattern.description!.length / 80).ceil().clamp(1, 6) + 4;
+        my = _renderMarkdown(canvas, pattern.description!, my, usableW, margin, fonts);
+        my -= 4;
       }
 
       if (pattern.copyright != null) {
         final year = DateTime.now().year;
-        // © (0xA9) is in WinAnsiEncoding — apply _ascii() only to user text.
-        final copyrightLine =
-            'Copyright \u00A9 ${_ascii(pattern.copyright!)} $year';
+        final copyrightLine = 'Copyright \u00A9 ${pattern.copyright!} $year';
         canvas.setFillColor(PdfColors.grey600);
-        canvas.drawString(pdfFont, 7.0, copyrightLine, margin, my);
+        canvas.drawString(fonts.regular, 7.0, copyrightLine, margin, my);
       }
     }
 
@@ -861,7 +865,7 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
-        pdfFont: pdfFont);
+        fonts: fonts);
   }
 
   // ── Materials section ─────────────────────────────────────────────────────
@@ -882,8 +886,7 @@ class PdfService {
     required double footerH,
     required int pageNum,
     required int totalPages,
-    required PdfFont pdfFont,
-    required PdfFont pdfFontBold,
+    required _PdfFonts fonts,
     /// True when [canvas] is a fresh page with no footer yet drawn.
     /// False when [canvas] is a shared thread-table page whose footer was
     /// already drawn by [_drawColourTablePage].
@@ -905,7 +908,7 @@ class PdfService {
     // ── Section heading ───────────────────────────────────────────────────
     y -= sectionHeadFs + 4;
     currentCanvas.setFillColor(PdfColors.black);
-    currentCanvas.drawString(pdfFontBold, sectionHeadFs, 'Materials', margin, y);
+    currentCanvas.drawString(fonts.bold, sectionHeadFs, 'Materials', margin, y);
     y -= 6;
 
     // ── Aida size sub-table (header + single data row) ────────────────────
@@ -920,14 +923,14 @@ class PdfService {
         rowH: headRowH,
         bgColor: PdfColors.grey200,
         cells: ['Aida', ...suggestions.map((s) => '${s.aidaCount}-count')],
-        font: pdfFontBold,
+        fonts: fonts,
         fontSize: tableFs,
         isHeader: true);
     y -= headRowH;
 
     // Data row: use _drawTableRow for border + size cells; overlay swatch in col 0
     final aidaColor = _pdfColor(pattern.aidaColor);
-    final aidaLabel = _ascii(aidaColorLabel(pattern.aidaColor));
+    final aidaLabel = aidaColorLabel(pattern.aidaColor);
     final sizeCells = suggestions.map((s) {
       final wCm = (pattern.width / s.aidaCount) * 2.54 + 10;
       final hCm = (pattern.height / s.aidaCount) * 2.54 + 10;
@@ -941,7 +944,7 @@ class PdfService {
         rowH: rowH,
         bgColor: null,
         cells: ['', ...sizeCells],
-        font: pdfFont,
+        fonts: fonts,
         fontSize: tableFs,
         isHeader: false);
     // Overlay swatch + label in first cell
@@ -955,14 +958,14 @@ class PdfService {
         margin + 2, y - rowH + (rowH - swatchSize) / 2, swatchSize, swatchSize);
     currentCanvas.strokePath();
     currentCanvas.setFillColor(PdfColors.black);
-    currentCanvas.drawString(pdfFont, tableFs, aidaLabel,
+    currentCanvas.drawString(fonts.regular, tableFs, aidaLabel,
         margin + swatchSize + 5, y - rowH + (rowH - tableFs) / 2 + 1);
     y -= rowH;
 
     // Border note
     const borderNoteFs = 6.5;
     currentCanvas.setFillColor(PdfColors.grey600);
-    currentCanvas.drawString(pdfFont, borderNoteFs,
+    currentCanvas.drawString(fonts.regular, borderNoteFs,
         'Sizes include a 5cm border on each side for framing.', margin, y - borderNoteFs - 1);
     y -= borderNoteFs + 10;
 
@@ -994,7 +997,7 @@ class PdfService {
           rowH: headRowH,
           bgColor: PdfColors.grey200,
           cells: skeinHeaders,
-          font: pdfFontBold,
+          fonts: fonts,
           fontSize: tableFs,
           isHeader: true);
     }
@@ -1006,7 +1009,7 @@ class PdfService {
     const noteFs = 6.5;
     currentCanvas.setFillColor(PdfColors.grey600);
     currentCanvas.drawString(
-        pdfFont, noteFs, 'Values are estimated skein quantities (8m/skein, 10% overlap assumed).', margin, y - noteFs - 1);
+        fonts.regular, noteFs, 'Values are estimated skein quantities (8m/skein, 10% overlap assumed).', margin, y - noteFs - 1);
     y -= noteFs + 8;
 
     for (final t in threads) {
@@ -1018,7 +1021,7 @@ class PdfService {
             footerH: footerH,
             pageNum: currentPageNum,
             totalPages: totalPages,
-            pdfFont: pdfFont);
+            fonts: fonts);
         currentCanvas = PdfPage(doc, pageFormat: format).getGraphics();
         onOriginalCanvas = false;
         currentPageNum++;
@@ -1029,8 +1032,7 @@ class PdfService {
             headerH: headerH,
             subtitle:
                 'Materials (continued)  |  Page $currentPageNum of $totalPages',
-            pdfFont: pdfFont,
-            pdfFontBold: pdfFontBold);
+            fonts: fonts);
         y = format.height - margin - headerH;
         drawSkeinHeader(currentCanvas, y);
         y -= headRowH;
@@ -1056,8 +1058,8 @@ class PdfService {
           colWidths: skeinColWidths,
           rowH: rowH,
           bgColor: null,
-          cells: ['', _ascii(displayCode), _ascii(t.name), ...skeinCells],
-          font: pdfFont,
+          cells: ['', displayCode, t.name, ...skeinCells],
+          fonts: fonts,
           fontSize: tableFs,
           isHeader: false,
           swatchColor: _pdfColor(t.color));
@@ -1075,7 +1077,7 @@ class PdfService {
           footerH: footerH,
           pageNum: currentPageNum,
           totalPages: totalPages,
-          pdfFont: pdfFont);
+          fonts: fonts);
     }
   }
 
@@ -1148,21 +1150,20 @@ class PdfService {
     required double margin,
     required double headerH,
     required String subtitle,
-    required PdfFont pdfFont,
-    required PdfFont pdfFontBold,
+    required _PdfFonts fonts,
   }) {
     // Title
     const titleFs = 14.0;
     final titleY = format.height - margin - titleFs;
     canvas.setFillColor(PdfColors.black);
     canvas.drawString(
-        pdfFontBold, titleFs, _ascii(pattern.name), margin, titleY);
+        fonts.bold, titleFs, pattern.name, margin, titleY);
 
     // Subtitle
     const subtitleFs = 8.0;
     canvas.setFillColor(PdfColors.grey600);
     canvas.drawString(
-        pdfFont, subtitleFs, _ascii(subtitle), margin, titleY - titleFs - 4);
+        fonts.regular, subtitleFs, subtitle, margin, titleY - titleFs - 4);
 
     // Separator rule
     final ruleY = format.height - margin - headerH + 8;
@@ -1181,7 +1182,7 @@ class PdfService {
     required double footerH,
     required int pageNum,
     required int totalPages,
-    required PdfFont pdfFont,
+    required _PdfFonts fonts,
   }) {
     const footerFs = 7.5;
     final ruleY = margin + footerH - 4;
@@ -1195,7 +1196,7 @@ class PdfService {
     final lw = label.length * footerFs * 0.55;
     canvas.setFillColor(PdfColors.grey600);
     canvas.drawString(
-        pdfFont, footerFs, label, format.width / 2 - lw / 2, margin);
+        fonts.regular, footerFs, label, format.width / 2 - lw / 2, margin);
   }
 
   /// Draws a single table row.
@@ -1209,7 +1210,7 @@ class PdfService {
     required double rowH,
     required PdfColor? bgColor,
     required List<String> cells,
-    required PdfFont font,
+    required _PdfFonts fonts,
     required double fontSize,
     required bool isHeader,
     PdfColor? swatchColor,
@@ -1234,6 +1235,7 @@ class PdfService {
     canvas.strokePath();
 
     // Cells
+    final cellFont = isHeader ? fonts.bold : fonts.regular;
     for (int i = 0; i < cells.length; i++) {
       final cw = colWidths[i];
 
@@ -1272,18 +1274,274 @@ class PdfService {
           final sf = math.max(3.5, (rowH - 2 * pad) * 0.58);
           canvas.setFillColor(textColor);
           final tw = sf * 0.55;
-          canvas.drawString(font, sf, swatchSymbol,
+          final symFont = _fontFor(swatchSymbol, fonts.regular, fonts.symbol);
+          canvas.drawString(symFont, sf, swatchSymbol,
               cx + pad + (cw - 2 * pad - tw) / 2,
               y - rowH + pad + (rowH - 2 * pad - sf) / 2 + 1.0);
         }
       } else if (cells[i].isNotEmpty) {
         canvas.setFillColor(PdfColors.black);
         final ty = y - rowH + (rowH - fontSize) / 2 + 1.0;
-        canvas.drawString(font, fontSize, cells[i], cx + 3, ty);
+        canvas.drawString(cellFont, fontSize, cells[i], cx + 3, ty);
       }
 
       cx += cw;
     }
+  }
+
+  // ── Markdown renderer ─────────────────────────────────────────────────────
+
+  /// Parses markdown source into layout blocks for PDF rendering.
+  static ({
+    List<({
+      List<List<_TextRun>> lines,
+      double lineH,
+      double indent,
+      String? bulletPrefix,
+      double fontSize,
+      PdfColor color
+    })> blocks,
+    double totalHeight
+  }) _parseMarkdownBlocks(String source, double maxWidth, _PdfFonts fonts) {
+    final document = md.Document(encodeHtml: false);
+    final nodes = document.parseLines(source.split('\n'));
+
+    final blocks = <({
+      List<List<_TextRun>> lines,
+      double lineH,
+      double indent,
+      String? bulletPrefix,
+      double fontSize,
+      PdfColor color
+    })>[];
+
+    double totalHeight = 0;
+
+    for (final node in nodes) {
+      if (node is! md.Element) continue;
+      final tag = node.tag;
+
+      switch (tag) {
+        case 'h1':
+          const fs = 16.0;
+          const gap = 8.0;
+          const spacing = 1.3;
+          final runs = _collectRuns(node.children, bold: true);
+          final wrapped = _wrapRuns(runs, maxWidth, fonts, fs);
+          final blockH = wrapped.length * fs * spacing + gap;
+          totalHeight += blockH;
+          blocks.add((
+            lines: wrapped,
+            lineH: fs * spacing,
+            indent: 0,
+            bulletPrefix: null,
+            fontSize: fs,
+            color: PdfColors.black,
+          ));
+        case 'h2':
+          const fs = 13.0;
+          const gap = 6.0;
+          const spacing = 1.3;
+          final runs = _collectRuns(node.children, bold: true);
+          final wrapped = _wrapRuns(runs, maxWidth, fonts, fs);
+          final blockH = wrapped.length * fs * spacing + gap;
+          totalHeight += blockH;
+          blocks.add((
+            lines: wrapped,
+            lineH: fs * spacing,
+            indent: 0,
+            bulletPrefix: null,
+            fontSize: fs,
+            color: PdfColors.black,
+          ));
+        case 'h3':
+          const fs = 11.0;
+          const gap = 4.0;
+          const spacing = 1.3;
+          final runs = _collectRuns(node.children, bold: true);
+          final wrapped = _wrapRuns(runs, maxWidth, fonts, fs);
+          final blockH = wrapped.length * fs * spacing + gap;
+          totalHeight += blockH;
+          blocks.add((
+            lines: wrapped,
+            lineH: fs * spacing,
+            indent: 0,
+            bulletPrefix: null,
+            fontSize: fs,
+            color: PdfColors.black,
+          ));
+        case 'ul':
+          for (final child in node.children ?? <md.Node>[]) {
+            if (child is! md.Element || child.tag != 'li') continue;
+            const fs = 10.0;
+            const gap = 6.0;
+            const spacing = 1.3;
+            const indent = 14.0;
+            final runs = _collectRuns(child.children);
+            final wrapped = _wrapRuns(runs, maxWidth - indent, fonts, fs);
+            final blockH = wrapped.length * fs * spacing + gap;
+            totalHeight += blockH;
+            blocks.add((
+              lines: wrapped,
+              lineH: fs * spacing,
+              indent: indent,
+              bulletPrefix: '\u2022 ',
+              fontSize: fs,
+              color: PdfColors.grey800,
+            ));
+          }
+        case 'ol':
+          var idx = 1;
+          for (final child in node.children ?? <md.Node>[]) {
+            if (child is! md.Element || child.tag != 'li') continue;
+            const fs = 10.0;
+            const gap = 6.0;
+            const spacing = 1.3;
+            const indent = 18.0;
+            final runs = _collectRuns(child.children);
+            final wrapped = _wrapRuns(runs, maxWidth - indent, fonts, fs);
+            final blockH = wrapped.length * fs * spacing + gap;
+            totalHeight += blockH;
+            blocks.add((
+              lines: wrapped,
+              lineH: fs * spacing,
+              indent: indent,
+              bulletPrefix: '$idx. ',
+              fontSize: fs,
+              color: PdfColors.grey800,
+            ));
+            idx++;
+          }
+        default:
+          // 'p' and unknown tags: body text
+          const fs = 10.0;
+          const gap = 6.0;
+          const spacing = 1.3;
+          final runs = _collectRuns(node.children);
+          final wrapped = _wrapRuns(runs, maxWidth, fonts, fs);
+          final blockH = wrapped.length * fs * spacing + gap;
+          totalHeight += blockH;
+          blocks.add((
+            lines: wrapped,
+            lineH: fs * spacing,
+            indent: 0,
+            bulletPrefix: null,
+            fontSize: fs,
+            color: PdfColors.grey800,
+          ));
+      }
+    }
+
+    return (blocks: blocks, totalHeight: totalHeight);
+  }
+
+  /// Recursively collects text runs from a markdown node tree.
+  static List<_TextRun> _collectRuns(
+    List<md.Node>? nodes, {
+    bool bold = false,
+    bool italic = false,
+  }) {
+    final runs = <_TextRun>[];
+    for (final node in nodes ?? <md.Node>[]) {
+      if (node is md.Text) {
+        runs.add((text: node.text, bold: bold, italic: italic, sym: false));
+      } else if (node is md.Element) {
+        final b = bold || node.tag == 'strong';
+        final i = italic || node.tag == 'em';
+        runs.addAll(_collectRuns(node.children, bold: b, italic: i));
+      }
+    }
+    return runs;
+  }
+
+  /// Word-wraps a list of text runs to fit within [maxWidth].
+  static List<List<_TextRun>> _wrapRuns(
+      List<_TextRun> runs, double maxWidth, _PdfFonts fonts, double fontSize) {
+    final lines = <List<_TextRun>>[];
+    var currentLine = <_TextRun>[];
+    var currentWidth = 0.0;
+
+    for (final run in runs) {
+      final runFont = run.sym
+          ? fonts.symbol
+          : run.bold
+              ? fonts.bold
+              : run.italic
+                  ? fonts.italic
+                  : fonts.regular;
+      final words = run.text.split(' ');
+      for (int wi = 0; wi < words.length; wi++) {
+        final word = words[wi];
+        if (word.isEmpty && wi > 0) continue;
+        final wordWithSpace = (wi < words.length - 1) ? '$word ' : word;
+        final wordW = _textWidth(runFont, fontSize, wordWithSpace);
+        if (currentWidth + wordW > maxWidth && currentLine.isNotEmpty) {
+          lines.add(currentLine);
+          currentLine = [];
+          currentWidth = 0;
+        }
+        // Add word to current line (strip trailing space on wrapped word)
+        final wordRun = (
+          text: wordWithSpace,
+          bold: run.bold,
+          italic: run.italic,
+          sym: run.sym,
+        );
+        currentLine.add(wordRun);
+        currentWidth += wordW;
+      }
+    }
+    if (currentLine.isNotEmpty) lines.add(currentLine);
+    if (lines.isEmpty) lines.add([]);
+    return lines;
+  }
+
+  /// Renders markdown onto [canvas] starting at [startY] (PDF y, top of text).
+  /// Returns the y position after the last line.
+  static double _renderMarkdown(
+      PdfGraphics canvas,
+      String source,
+      double startY,
+      double maxWidth,
+      double leftX,
+      _PdfFonts fonts) {
+    final parsed = _parseMarkdownBlocks(source, maxWidth, fonts);
+    var y = startY;
+
+    for (final block in parsed.blocks) {
+      // For bullet lists, draw the prefix before the first line
+      var firstLine = true;
+      for (final line in block.lines) {
+        canvas.setFillColor(block.color);
+        var lineX = leftX + block.indent;
+
+        if (firstLine && block.bulletPrefix != null) {
+          final prefixFont = _fontFor(block.bulletPrefix!, fonts.regular, fonts.symbol);
+          canvas.drawString(
+              prefixFont, block.fontSize, block.bulletPrefix!, leftX, y - block.fontSize);
+          firstLine = false;
+        } else {
+          firstLine = false;
+        }
+
+        var runX = lineX;
+        for (final run in line) {
+          if (run.text.isEmpty) continue;
+          final runFont = run.sym
+              ? fonts.symbol
+              : run.bold
+                  ? fonts.bold
+                  : run.italic
+                      ? fonts.italic
+                      : fonts.regular;
+          canvas.drawString(runFont, block.fontSize, run.text, runX, y - block.fontSize);
+          runX += _textWidth(runFont, block.fontSize, run.text);
+        }
+        y -= block.lineH;
+      }
+    }
+
+    return y;
   }
 
   // ── Stitch fill helpers ─────────────────────────────────────────────────────
@@ -1429,51 +1687,21 @@ class PdfService {
         BackStitch() => 0,
       };
 
-  /// Strip characters outside printable ASCII range — required by built-in
-  /// PDF fonts (Type1/Helvetica reliably renders only 0x20–0x7E).
-  static String _ascii(String s) =>
-      s.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
+  /// Returns [sym] font if [text] contains any non-ASCII character, else [base].
+  static PdfFont _fontFor(String text, PdfFont base, PdfFont sym) {
+    for (final rune in text.runes) {
+      if (rune > 0x7E) return sym;
+    }
+    return base;
+  }
 
-  /// Fallback single-char ASCII symbols for threads whose kPatternSymbols
-  /// entry is non-ASCII (geometric shapes, Greek, etc.).
-  /// Characters removed: ' . , ; ` :  — too small, too similar to each other,
-  /// or easily confused with other thread symbols already in use.
-  static const _symbolFallbacks = [
-    'l', 'o', 't', '_', '(', ')', '[', ']', '{', '}', r'"', r'\',
-  ];
+  /// Returns the advance width of [text] rendered at [fontSize] with [font].
+  static double _textWidth(PdfFont font, double fontSize, String text) =>
+      font.stringMetrics(text).advanceWidth * fontSize;
 
-  /// Build a per-export symbol map: dmcCode → PDF-renderable char.
-  /// Non-ASCII symbols get a fallback that doesn't conflict with any
-  /// directly-assigned ASCII symbol already in the map.
+  /// Build a per-export symbol map: dmcCode → symbol char.
   static Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
-    final map = <String, String>{};
-    // First pass: assign all directly-renderable ASCII symbols.
-    final usedChars = <String>{};
-    for (final t in threads) {
-      if (t.symbol.isEmpty) { map[t.dmcCode] = ''; continue; }
-      final ascii = _ascii(t.symbol);
-      if (ascii.isNotEmpty) {
-        map[t.dmcCode] = ascii;
-        usedChars.add(ascii);
-      }
-    }
-    // Second pass: assign fallbacks for non-ASCII symbols, skipping any char
-    // already used by a direct assignment to avoid duplicate symbols.
-    var fallbackIdx = 0;
-    for (final t in threads) {
-      if (map.containsKey(t.dmcCode)) continue;
-      String fb = '?';
-      while (fallbackIdx < _symbolFallbacks.length) {
-        final candidate = _symbolFallbacks[fallbackIdx++];
-        if (!usedChars.contains(candidate)) {
-          fb = candidate;
-          usedChars.add(candidate);
-          break;
-        }
-      }
-      map[t.dmcCode] = fb;
-    }
-    return map;
+    return {for (final t in threads) t.dmcCode: t.symbol};
   }
 
   static PdfColor _pdfColor(Color c) =>
