@@ -1,0 +1,39 @@
+lib/providers/editor/editor_provider_drawing.dart
+  ef03d08eb321d4c8 227-228
+lib/widgets/right_sidebar_colours_panel.dart
+  69dc89aaccde6b35 61-63,65,71,81,150-157
+  ef03d08eb321d4c8 179-206,895-915
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "e6cadc38bced2902df223473d339180f5aeff445",
+  "prompts": {
+    "69dc89aaccde6b35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ca4f087-b89e-4245-a1c4-8d37b16b2e7f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 14,
+      "total_deletions": 6,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    },
+    "ef03d08eb321d4c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "79934946-a5f4-48fc-bb15-068b263b2d1d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 51,
+      "total_deletions": 8,
+      "accepted_lines": 51,
+      "overriden_lines": 0
+    }
+  }
+}
