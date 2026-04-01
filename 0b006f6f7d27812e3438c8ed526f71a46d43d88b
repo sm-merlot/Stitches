@@ -1,0 +1,23 @@
+docs/superpowers/specs/2026-04-01-pdf-export-improvements-design.md
+  9526872c18d46a09 1-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "0b006f6f7d27812e3438c8ed526f71a46d43d88b",
+  "prompts": {
+    "9526872c18d46a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d80dea2-b05e-48d3-9538-e6e706afb638",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 261,
+      "total_deletions": 0,
+      "accepted_lines": 261,
+      "overriden_lines": 0
+    }
+  }
+}
