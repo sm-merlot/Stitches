@@ -6,13 +6,18 @@ import 'package:flutter/material.dart' show Color;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../data/aida_presets.dart';
+import '../data/dmc_colors.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
+import 'skein_calculator.dart';
 
 class PdfService {
   /// Generate PDF and save via file picker.
-  static Future<void> exportPattern(CrossStitchPattern pattern) async {
+  static Future<void> exportPattern(
+    CrossStitchPattern pattern, {
+    bool useDmc = true,
+  }) async {
     final doc = pw.Document(title: pattern.name);
     final pdfFont = PdfFont.helvetica(doc.document);
     final pdfFontBold = PdfFont.helveticaBold(doc.document);
@@ -121,6 +126,9 @@ class PdfService {
 
     // ── Cross stitch colour table pages ───────────────────────────────────
 
+    PdfGraphics? lastTableCanvas;
+    double lastTableY = 0;
+
     for (int i = 0; i < crossTablePageCount; i++) {
       final pageNum = 2 + i;
       final List<Thread> pageThreads;
@@ -137,8 +145,9 @@ class PdfService {
         twoCol = remaining > rowsPerCol;
       }
       final crossTablePage = PdfPage(doc.document, pageFormat: pageFormat);
-      _drawColourTablePage(
-        crossTablePage.getGraphics(),
+      final crossCanvas = crossTablePage.getGraphics();
+      lastTableY = _drawColourTablePage(
+        crossCanvas,
         format: pageFormat,
         pattern: pattern,
         threads: pageThreads,
@@ -153,6 +162,7 @@ class PdfService {
         pdfFont: pdfFont,
         pdfFontBold: pdfFontBold,
       );
+      lastTableCanvas = crossCanvas;
     }
 
     // ── Backstitch colour table pages (optional) ──────────────────────────
@@ -173,8 +183,9 @@ class PdfService {
         twoCol = remaining > rowsPerCol;
       }
       final backTablePage = PdfPage(doc.document, pageFormat: pageFormat);
-      _drawColourTablePage(
-        backTablePage.getGraphics(),
+      final backCanvas = backTablePage.getGraphics();
+      lastTableY = _drawColourTablePage(
+        backCanvas,
         format: pageFormat,
         pattern: pattern,
         threads: pageThreads,
@@ -186,6 +197,43 @@ class PdfService {
         footerH: footerH,
         pageNum: pageNum,
         totalPages: totalPages,
+        pdfFont: pdfFont,
+        pdfFontBold: pdfFontBold,
+      );
+      lastTableCanvas = backCanvas;
+    }
+
+    // ── Materials section (optional) ──────────────────────────────────────
+
+    if (pattern.materialsSuggestions.isNotEmpty && lastTableCanvas != null) {
+      final allThreads = [...crossThreads, ...backThreads]
+          .fold<Map<String, Thread>>({}, (m, t) => m..[t.dmcCode] = t)
+          .values
+          .toList()
+        ..sort((a, b) {
+          final ia = int.tryParse(a.dmcCode) ?? 999999;
+          final ib = int.tryParse(b.dmcCode) ?? 999999;
+          return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
+        });
+
+      final materialsCanvas =
+          (lastTableY - margin - footerH >= 120)
+              ? lastTableCanvas
+              : PdfPage(doc.document, pageFormat: pageFormat).getGraphics();
+
+      _drawMaterialsSection(
+        materialsCanvas,
+        format: pageFormat,
+        pattern: pattern,
+        threads: allThreads,
+        crossEquiv: crossStitchEquiv,
+        backCells: backStitchEquiv,
+        useDmc: useDmc,
+        y: lastTableY - margin - footerH >= 120
+            ? lastTableY
+            : pageFormat.height - margin - headerH,
+        margin: margin,
+        footerH: footerH,
         pdfFont: pdfFont,
         pdfFontBold: pdfFontBold,
       );
@@ -441,7 +489,7 @@ class PdfService {
 
   // ── Colour table page ─────────────────────────────────────────────────────
 
-  static void _drawColourTablePage(
+  static double _drawColourTablePage(
     PdfGraphics canvas, {
     required PdfPageFormat format,
     required CrossStitchPattern pattern,
@@ -493,6 +541,8 @@ class PdfService {
     final contentTopY = startY - sectionHeadFs - 6;
     final countHeader = isBackstitch ? 'Units (approx)' : 'Stitches (approx)';
 
+    double finalY;
+
     if (!twoColumn) {
       // ── Single column ───────────────────────────────────────────────────
       final nameW = tableW - swatchW - dmcW - countW;
@@ -523,6 +573,7 @@ class PdfService {
             tableFs: tableFs);
         y -= rowH;
       }
+      finalY = y;
     } else {
       // ── Two columns ─────────────────────────────────────────────────────
       final colW = (tableW - gutterW) / 2;
@@ -564,6 +615,8 @@ class PdfService {
           y -= rowH;
         }
       }
+      // Final y = left column bottom (deepest column)
+      finalY = contentTopY - headRowH - leftThreads.length * rowH;
     }
 
     _drawPageFooter(canvas,
@@ -573,6 +626,8 @@ class PdfService {
         pageNum: pageNum,
         totalPages: totalPages,
         pdfFont: pdfFont);
+
+    return finalY;
   }
 
   // ── Draw a single thread data row ────────────────────────────────────────
@@ -770,6 +825,155 @@ class PdfService {
         pageNum: pageNum,
         totalPages: totalPages,
         pdfFont: pdfFont);
+  }
+
+  // ── Materials section ─────────────────────────────────────────────────────
+
+  static void _drawMaterialsSection(
+    PdfGraphics canvas, {
+    required PdfPageFormat format,
+    required CrossStitchPattern pattern,
+    required List<Thread> threads,
+    required Map<String, double> crossEquiv,
+    required Map<String, double> backCells,
+    required bool useDmc,
+    required double y,
+    required double margin,
+    required double footerH,
+    required PdfFont pdfFont,
+    required PdfFont pdfFontBold,
+  }) {
+    const sectionHeadFs = 9.0;
+    const tableFs = 7.5;
+    const rowH = 14.0;
+    const headRowH = 16.0;
+    const swatchSize = 12.0;
+
+    final suggestions = pattern.materialsSuggestions;
+    final tableW = format.width - 2 * margin;
+
+    // ── Section heading ───────────────────────────────────────────────────
+    y -= sectionHeadFs + 4;
+    canvas.setFillColor(PdfColors.black);
+    canvas.drawString(pdfFontBold, sectionHeadFs, 'Materials', margin, y);
+    y -= 6;
+
+    // ── Aida size sub-table ───────────────────────────────────────────────
+    // Columns: [Aida Colour | <count1>-count | <count2>-count | ...]
+    final aidaColW = tableW / (1 + suggestions.length);
+    final aidaColWidths =
+        List.filled(1 + suggestions.length, aidaColW, growable: false);
+
+    // Header row
+    final aidaHeaders = [
+      'Aida',
+      ...suggestions.map((s) => '${s.aidaCount}-count'),
+    ];
+    _drawTableRow(canvas,
+        x: margin,
+        y: y,
+        colWidths: aidaColWidths,
+        rowH: headRowH,
+        bgColor: PdfColors.grey200,
+        cells: aidaHeaders,
+        font: pdfFontBold,
+        fontSize: tableFs,
+        isHeader: true);
+    y -= headRowH;
+
+    // Data row: aida swatch + label, then size per suggestion
+    final aidaColor = _pdfColor(pattern.aidaColor);
+    final aidaLabel = _ascii(aidaColorLabel(pattern.aidaColor));
+
+    // Manually draw first cell (swatch + label)
+    canvas.setFillColor(aidaColor);
+    canvas.drawRect(margin + 3, y - rowH + 3, swatchSize, swatchSize);
+    canvas.fillPath();
+    canvas.setStrokeColor(PdfColors.grey400);
+    canvas.setLineWidth(0.5);
+    canvas.drawRect(margin + 3, y - rowH + 3, swatchSize, swatchSize);
+    canvas.strokePath();
+    canvas.setFillColor(PdfColors.black);
+    canvas.drawString(
+        pdfFont, tableFs, aidaLabel, margin + swatchSize + 6, y - rowH + 4);
+
+    // Size cells
+    for (int i = 0; i < suggestions.length; i++) {
+      final s = suggestions[i];
+      final wCm = (pattern.width / s.aidaCount) * 2.54 + 10;
+      final hCm = (pattern.height / s.aidaCount) * 2.54 + 10;
+      final wIn = wCm / 2.54;
+      final hIn = hCm / 2.54;
+      final label =
+          '${wCm.toStringAsFixed(1)}x${hCm.toStringAsFixed(1)}cm\n'
+          '(${wIn.toStringAsFixed(1)}x${hIn.toStringAsFixed(1)}in)';
+      final cellX = margin + (i + 1) * aidaColW + 3;
+      canvas.setFillColor(PdfColors.black);
+      canvas.drawString(pdfFont, tableFs, _ascii(label), cellX, y - rowH + 8);
+    }
+    y -= rowH;
+
+    // ── Gap ───────────────────────────────────────────────────────────────
+    y -= 8;
+
+    // ── Skeins sub-table ──────────────────────────────────────────────────
+    // Columns: [DMC/Anchor | Name | <count1>/<strands1> | ...]
+    final codeColW = 44.0;
+    final skeinColW = 46.0;
+    final nameColW = tableW - codeColW - skeinColW * suggestions.length;
+    final skeinColWidths = [
+      codeColW,
+      nameColW,
+      ...List.filled(suggestions.length, skeinColW),
+    ];
+
+    final codeHeader = useDmc ? 'DMC' : 'Anchor';
+    final skeinHeaders = [
+      codeHeader,
+      'Name',
+      ...suggestions.map((s) => '${s.aidaCount}ct/${s.strands}s'),
+    ];
+    _drawTableRow(canvas,
+        x: margin,
+        y: y,
+        colWidths: skeinColWidths,
+        rowH: headRowH,
+        bgColor: PdfColors.grey200,
+        cells: skeinHeaders,
+        font: pdfFontBold,
+        fontSize: tableFs,
+        isHeader: true);
+    y -= headRowH;
+
+    for (final t in threads) {
+      final displayCode = useDmc
+          ? t.dmcCode
+          : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
+      final skeinCells = suggestions.map((s) {
+        final n = calculateSkeins(
+          dmcCode: t.dmcCode,
+          crossEquiv: crossEquiv,
+          backCells: backCells,
+          aidaCount: s.aidaCount,
+          strands: s.strands,
+        );
+        return '$n';
+      }).toList();
+
+      _drawTableRow(canvas,
+          x: margin,
+          y: y,
+          colWidths: skeinColWidths,
+          rowH: rowH,
+          bgColor: null,
+          cells: [_ascii(displayCode), _ascii(t.name), ...skeinCells],
+          font: pdfFont,
+          fontSize: tableFs,
+          isHeader: false,
+          swatchColor: _pdfColor(t.color),
+          swatchSymbol: null);
+      y -= rowH;
+    }
   }
 
   // ── Stitch preview (realistic line-art, no symbols) ───────────────────────

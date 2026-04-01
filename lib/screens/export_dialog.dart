@@ -11,7 +11,8 @@ import '../utils/snackbars.dart';
 /// Shows a format-picker dialog then exports the pattern.
 /// Returns true if the export succeeded.
 Future<bool> showExportDialog(
-    BuildContext context, CrossStitchPattern pattern) async {
+    BuildContext context, CrossStitchPattern pattern,
+    {bool useDmc = true}) async {
   final choice = await showDialog<_ExportChoice>(
     context: context,
     builder: (_) => const _ExportPickerDialog(),
@@ -20,7 +21,7 @@ Future<bool> showExportDialog(
 
   try {
     if (choice == _ExportChoice.pdf) {
-      await PdfService.exportPattern(pattern);
+      await PdfService.exportPattern(pattern, useDmc: useDmc);
       return true;
     }
 
