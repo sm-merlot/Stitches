@@ -423,11 +423,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     final focusThread = _threadMap[focusId];
     if (focusThread == null) return;
 
-    // Trigger: focused colour is hard to see against the aida background OR
-    // against the uniform grey that unfocused stitches are drawn as.
+    // Trigger: focused colour is perceptually close to the aida background OR
+    // close to the uniform grey that unfocused stitches are drawn as.
+    // Using CIE Lab ΔE so chromatic colours (red, blue, etc.) at the same
+    // luminance as a grey are correctly excluded.
+    // Threshold 45 calibrated so DMC 413 (#4C4C50, ΔE≈42.5) just triggers;
+    // vivid hues are ΔE 70+ from the grey fog and are excluded.
+    // Aida check uses a tight threshold (15) — only near-identical colours.
     final needsOutline =
-        _contrastRatio(focusThread.color, aidaColor) < 3.0 ||
-        _contrastRatio(focusThread.color, _unfocusedGreyOpaque) < 3.0;
+        _labDeltaE(focusThread.color, aidaColor) < 15 ||
+        _labDeltaE(focusThread.color, _unfocusedGreyOpaque) < 45;
     if (!needsOutline) return;
 
     // Collect every focused cell as a 'x,y' key for O(1) neighbour lookup.
