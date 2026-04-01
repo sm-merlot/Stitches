@@ -1392,10 +1392,10 @@ class PdfService {
         BackStitch() => 0,
       };
 
-  /// Strip characters outside printable Latin-1 range — required by built-in
-  /// PDF fonts (Type1/Helvetica supports ISO 8859-1 = 0x20–0xFF).
+  /// Strip characters outside printable ASCII range — required by built-in
+  /// PDF fonts (Type1/Helvetica reliably renders only 0x20–0x7E).
   static String _ascii(String s) =>
-      s.replaceAll(RegExp(r'[^\x20-\xFF]'), '');
+      s.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
 
   /// Fallback single-char ASCII codes for non-ASCII symbols (not already in
   /// the kPatternSymbols ASCII pool). Used when a thread symbol strips to ''.
