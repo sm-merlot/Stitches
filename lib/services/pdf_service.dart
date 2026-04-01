@@ -51,8 +51,10 @@ class PdfService {
     // at the same cell using each layer's blend mode — matches 'stitch mode' canvas.
     final (:nonBack, :blendedColors) = _compositeNonBack(pattern, threadMap);
 
-    // For blended cells, compute the nearest-DMC composite symbol so the PDF
-    // grid matches the canvas composite view.
+    // For blended cells, snap to the nearest-DMC colour and symbol so the PDF
+    // grid matches the canvas composite view exactly. The raw blend colour
+    // (blendedColors) is kept as a fallback only when matchPixel fails.
+    final blendedCellColors = <String, Color>{};
     final blendedCellSymbols = <String, String>{};
     for (final entry in blendedColors.entries) {
       final c = entry.value;
@@ -61,6 +63,7 @@ class PdfService {
       final b = (c.b * 255).round();
       final dmc = SpriteImporter.matchPixel(r, g, b, 255);
       if (dmc != null) {
+        blendedCellColors[entry.key] = dmc.color; // exact DMC colour, not raw blend
         final sym = pattern.compositeSymbols[dmc.code] ?? '';
         if (symbolIsVisible(sym) && !kPdfUnsupportedSymbols.contains(sym)) {
           blendedCellSymbols[entry.key] = sym;
@@ -331,6 +334,7 @@ class PdfService {
           backstitches: backstitches,
           threadMap: threadMap,
           blendedColors: blendedColors,
+          blendedCellColors: blendedCellColors,
           blendedCellSymbols: blendedCellSymbols,
           pdfSymbols: pdfSymbols,
           cellSize: cellSize,
@@ -375,6 +379,7 @@ class PdfService {
     required List<BackStitch> backstitches,
     required Map<String, Thread> threadMap,
     required Map<String, Color> blendedColors,
+    required Map<String, Color> blendedCellColors,
     required Map<String, String> blendedCellSymbols,
     required Map<String, String> pdfSymbols,
     required double cellSize,
@@ -430,7 +435,10 @@ class PdfService {
       final gy = gridOriginY + (rows - (cy - startY) - 1) * cellSize;
 
       final cellKey = '$cx,$cy';
-      final effectiveColor = blendedColors[cellKey] ?? thread.color;
+      // Use nearest-DMC colour (matches canvas), falling back to raw blend or
+      // the source thread colour when no nearest-DMC match was found.
+      final effectiveColor =
+          blendedCellColors[cellKey] ?? blendedColors[cellKey] ?? thread.color;
       canvas.setFillColor(_pdfColor(effectiveColor));
       _fillStitch(canvas, s, gx, gy, cellSize);
 
