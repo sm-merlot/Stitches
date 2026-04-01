@@ -1,0 +1,29 @@
+lib/screens/workspace_screen.dart
+  1b4e555c113ce8c9 330-331
+lib/screens/export_dialog.dart
+  1b4e555c113ce8c9 14-15,24
+lib/screens/editor_screen.dart
+  1b4e555c113ce8c9 323-324
+lib/services/pdf_service.dart
+  1b4e555c113ce8c9 9,13,17-20,129-131,148-150,165,186-188,203-236,492,544-545,576,618-619,629-630,830-978
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "e8a38a2600613ae1c01a47ad1db8069b1614df89",
+  "prompts": {
+    "1b4e555c113ce8c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1e26622-ee4f-48bc-be91-07234e7903a6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 217,
+      "total_deletions": 10,
+      "accepted_lines": 217,
+      "overriden_lines": 0
+    }
+  }
+}
