@@ -539,7 +539,7 @@ class PdfService {
         pdfFontBold, sectionHeadFs, sectionLabel, margin, startY - sectionHeadFs);
 
     final contentTopY = startY - sectionHeadFs - 6;
-    final countHeader = isBackstitch ? 'Units (approx)' : 'Stitches (approx)';
+    final countHeader = isBackstitch ? 'Units' : 'Stitches';
 
     double finalY;
 
