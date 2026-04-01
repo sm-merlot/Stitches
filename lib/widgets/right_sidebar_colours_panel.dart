@@ -58,15 +58,17 @@ class _DesignColoursPanel extends ConsumerWidget {
         ? _countStitchesComposite(state)
         : _countStitches(activeLayer.stitches);
 
-    // Symbol issue count (no symbol, duplicate, or similar) across all pattern threads.
+    // Symbol issue count (no symbol, duplicate, or similar) across displayed threads.
+    // Uses `threads` (canvas composites or layer threads) so the banner matches
+    // what _ThreadList actually shows.
     final allSymbolCounts = <String, int>{};
-    for (final t in state.pattern.threads) {
+    for (final t in threads) {
       if (symbolIsVisible(t.symbol)) {
         allSymbolCounts[t.symbol] = (allSymbolCounts[t.symbol] ?? 0) + 1;
       }
     }
     final allGroupSymbols = <int, Set<String>>{};
-    for (final t in state.pattern.threads) {
+    for (final t in threads) {
       if (symbolIsVisible(t.symbol)) {
         final g = symbolSimilarityGroup(t.symbol);
         if (g >= 0) (allGroupSymbols[g] ??= {}).add(t.symbol);
@@ -76,7 +78,7 @@ class _DesignColoursPanel extends ConsumerWidget {
         .where((e) => e.value.length > 1)
         .map((e) => e.key)
         .toSet();
-    final issueCount = state.pattern.threads
+    final issueCount = threads
         .where((t) {
           if (!symbolIsVisible(t.symbol)) return true;
           if ((allSymbolCounts[t.symbol] ?? 0) > 1) return true;
@@ -145,8 +147,14 @@ class _DesignColoursPanel extends ConsumerWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () =>
-                      _autoFixSymbols(notifier, state.pattern.threads),
+                  onPressed: () {
+                    _autoFixSymbols(notifier, state.pattern.threads);
+                    // Rebuild composite cache so blended-thread symbols are
+                    // also reassigned using the fixed pattern-thread symbols.
+                    if (state.showCompositeThreads) {
+                      notifier.refreshCompositeCache();
+                    }
+                  },
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 6, vertical: 0),
@@ -168,14 +176,34 @@ class _DesignColoursPanel extends ConsumerWidget {
             useDmc: useDmc,
             stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
-            onSwatchTap: (t) => _showSymbolPicker(
-              context, notifier, t,
-              state.pattern.threads
-                  .where((pt) => pt.dmcCode != t.dmcCode)
-                  .map((pt) => pt.symbol)
-                  .where(symbolIsVisible)
-                  .toSet(),
-            ),
+            onSwatchTap: (t) {
+              final isLayerThread = state.pattern.threads
+                  .any((pt) => pt.dmcCode == t.dmcCode);
+              if (isLayerThread) {
+                _showSymbolPicker(
+                  context, notifier, t,
+                  state.pattern.threads
+                      .where((pt) => pt.dmcCode != t.dmcCode)
+                      .map((pt) => pt.symbol)
+                      .where(symbolIsVisible)
+                      .toSet(),
+                );
+              } else {
+                // Composite thread — use changeCompositeSymbol so the
+                // compositeSymbols registry (and PDF) is updated correctly.
+                final usedSymbols = <String>{
+                  ...state.pattern.threads
+                      .map((pt) => pt.symbol)
+                      .where(symbolIsVisible),
+                  ...state.pattern.compositeSymbols.entries
+                      .where((e) => e.key != t.dmcCode)
+                      .map((e) => e.value)
+                      .where(symbolIsVisible),
+                };
+                _showCompositeSymbolPicker(
+                    context, notifier, t, usedSymbols);
+              }
+            },
           ),
         ),
       ],
@@ -861,6 +889,27 @@ Future<void> _showSymbolPicker(
   );
   if (symbol != null) {
     notifier.setThreadSymbol(thread.dmcCode, symbol);
+  }
+}
+
+/// Symbol picker for composite (blended-layer) threads.
+/// Uses [changeCompositeSymbol] so the compositeSymbols registry is updated
+/// rather than the layer-thread list.
+Future<void> _showCompositeSymbolPicker(
+  BuildContext context,
+  EditorNotifier notifier,
+  Thread thread,
+  Set<String> usedSymbols,
+) async {
+  final symbol = await showDialog<String>(
+    context: context,
+    builder: (_) => _SymbolPickerDialog(
+      current: symbolIsVisible(thread.symbol) ? thread.symbol : '',
+      usedSymbols: usedSymbols,
+    ),
+  );
+  if (symbol != null) {
+    notifier.changeCompositeSymbol(thread.dmcCode, symbol);
   }
 }
 

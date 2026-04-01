@@ -224,6 +224,8 @@ mixin DrawingMixin on Notifier<EditorState> {
       compositeThreadCache: null,
       isDirty: true,
     );
+    // Rebuild immediately so composite panel doesn't fall back to layer threads.
+    if (state.showCompositeThreads) refreshCompositeCache();
   }
 
   /// Same as [replaceThread] but operates on a snippet.
