@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../data/aida_presets.dart';
 import '../data/dmc_colors.dart';
+import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -24,37 +25,40 @@ class PdfService {
 
     // ── Data prep ──────────────────────────────────────────────────────────
 
-    // Only export stitches from visible layers (respects group/layer visibility).
-    final visibleStitches = pattern.layers
+    final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
+
+    // Composite non-back stitches across visible layers: deduplicates FullStitches
+    // at the same cell using each layer's blend mode — matches 'stitch mode' canvas.
+    final (:nonBack, :blendedColors) = _compositeNonBack(pattern, threadMap);
+
+    // Backstitches: no deduplication needed (backstitches never fully occlude).
+    final backstitches = pattern.layers
         .where((l) => l.visible)
         .expand((l) => l.stitches)
+        .whereType<BackStitch>()
         .toList();
 
-    // Per-thread stitch equivalents split into cross-type and backstitch
+    // Stitch counts built from composited list — each occupied cell counts once.
     final crossStitchEquiv = <String, double>{};
     final backStitchEquiv = <String, double>{};
-    for (final s in visibleStitches) {
-      if (s is BackStitch) {
-        final v = math.sqrt(
-            math.pow(s.x2 - s.x1, 2) + math.pow(s.y2 - s.y1, 2));
-        backStitchEquiv[s.threadId] = (backStitchEquiv[s.threadId] ?? 0) + v;
-      } else {
-        final v = switch (s) {
-          FullStitch() => 1.0,
-          HalfStitch() => 0.5,
-          QuarterStitch() => 0.25,
-          HalfCrossStitch() => 0.5,
-          QuarterCrossStitch() => 0.25,
-          BackStitch() => 0.0,
-        };
-        crossStitchEquiv[s.threadId] =
-            (crossStitchEquiv[s.threadId] ?? 0) + v;
-      }
+    for (final s in nonBack) {
+      final v = switch (s) {
+        FullStitch() => 1.0,
+        HalfStitch() => 0.5,
+        QuarterStitch() => 0.25,
+        HalfCrossStitch() => 0.5,
+        QuarterCrossStitch() => 0.25,
+        BackStitch() => 0.0,
+      };
+      crossStitchEquiv[s.threadId] =
+          (crossStitchEquiv[s.threadId] ?? 0) + v;
     }
-
-    final backstitches = visibleStitches.whereType<BackStitch>().toList();
-    final nonBack = visibleStitches.where((s) => s is! BackStitch).toList();
-    final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
+    for (final bs in backstitches) {
+      final v = math.sqrt(
+          math.pow(bs.x2 - bs.x1, 2) + math.pow(bs.y2 - bs.y1, 2));
+      backStitchEquiv[bs.threadId] =
+          (backStitchEquiv[bs.threadId] ?? 0) + v;
+    }
 
     // Threads that have cross-type stitches / backstitches respectively
     final crossThreads = pattern.threads
@@ -122,6 +126,7 @@ class PdfService {
       nonBack: nonBack,
       backstitches: backstitches,
       threadMap: threadMap,
+      blendedColors: blendedColors,
       margin: margin,
       footerH: footerH,
       pageNum: 1,
@@ -274,6 +279,7 @@ class PdfService {
           nonBack: nonBack,
           backstitches: backstitches,
           threadMap: threadMap,
+          blendedColors: blendedColors,
           pdfSymbols: pdfSymbols,
           cellSize: cellSize,
           startX: startX,
@@ -317,6 +323,7 @@ class PdfService {
     required List<Stitch> nonBack,
     required List<BackStitch> backstitches,
     required Map<String, Thread> threadMap,
+    required Map<String, Color> blendedColors,
     required Map<String, String> pdfSymbols,
     required double cellSize,
     required int startX,
@@ -372,7 +379,9 @@ class PdfService {
       final gx = gridOriginX + (cx - startX) * cellSize;
       final gy = gridOriginY + (rows - (cy - startY) - 1) * cellSize;
 
-      canvas.setFillColor(_pdfColor(thread.color));
+      final cellKey = '$cx,$cy';
+      final effectiveColor = blendedColors[cellKey] ?? thread.color;
+      canvas.setFillColor(_pdfColor(effectiveColor));
       _fillStitch(canvas, s, gx, gy, cellSize);
 
       // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt)
@@ -705,6 +714,7 @@ class PdfService {
     required List<Stitch> nonBack,
     required List<BackStitch> backstitches,
     required Map<String, Thread> threadMap,
+    required Map<String, Color> blendedColors,
     required double margin,
     required double footerH,
     required int pageNum,
@@ -788,6 +798,7 @@ class PdfService {
       nonBack: nonBack,
       backstitches: backstitches,
       threadMap: threadMap,
+      blendedColors: blendedColors,
       cellSize: previewCellSize,
     );
 
@@ -1031,7 +1042,7 @@ class PdfService {
     }
   }
 
-  // ── Stitch preview (realistic line-art, no symbols) ───────────────────────
+  // ── Stitch preview (line-art X shapes, no symbols) ───────────────────────
 
   static void _drawStitchPreview(
     PdfGraphics canvas, {
@@ -1041,6 +1052,7 @@ class PdfService {
     required List<Stitch> nonBack,
     required List<BackStitch> backstitches,
     required Map<String, Thread> threadMap,
+    required Map<String, Color> blendedColors,
     required double cellSize,
   }) {
     final pw2 = pattern.width * cellSize;
@@ -1052,23 +1064,23 @@ class PdfService {
     canvas.drawRect(originX, originY, pw2, ph2);
     canvas.fillPath();
 
-    // Cross-type stitches as opaque fills — correctly occludes lower layers.
+    // Cross-type stitches as line-art using composited (deduplicated) stitches.
+    canvas.setLineCap(PdfLineCap.round);
+    canvas.setLineWidth(math.max(0.3, cellSize * 0.12));
     for (final s in nonBack) {
       final cx = _stitches(s);
       final cy = _stitchY(s);
       final thread = threadMap[s.threadId];
       if (thread == null) continue;
-      canvas.setFillColor(_pdfColor(thread.color));
-
-      // gx/gy = bottom-left of this cell in PDF coords
+      // Use blended color for cells where multiple layers overlap.
+      final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+      canvas.setStrokeColor(_pdfColor(effectiveColor));
       final gx = originX + cx * cellSize;
       final gy = originY + (rows - cy - 1) * cellSize;
-
-      _fillStitch(canvas, s, gx, gy, cellSize);
+      _drawRealisticStitch(canvas, s, gx, gy, cellSize);
     }
 
     // Backstitches
-    canvas.setLineCap(PdfLineCap.round);
     canvas.setLineWidth(math.max(0.5, cellSize * 0.22));
     for (final bs in backstitches) {
       final thread = threadMap[bs.threadId];
@@ -1416,4 +1428,156 @@ class PdfService {
 
   static PdfColor _pdfColor(Color c) =>
       PdfColor(c.r.toDouble(), c.g.toDouble(), c.b.toDouble());
+
+  // ── Layer compositing ─────────────────────────────────────────────────────
+
+  /// Composites non-BackStitch stitches from all visible layers, matching the
+  /// 'stitch mode' canvas. FullStitches at the same cell are deduplicated
+  /// (topmost layer wins for symbol/threadId) and their colours are blended
+  /// using each layer's blend mode. All other stitch types pass through as-is.
+  static ({List<Stitch> nonBack, Map<String, Color> blendedColors})
+      _compositeNonBack(
+          CrossStitchPattern pattern, Map<String, Thread> threadMap) {
+    final cellStack = <String,
+        List<({
+          Stitch stitch,
+          Color color,
+          double opacity,
+          LayerBlendMode blendMode
+        })>>{};
+    final otherNonBack = <Stitch>[];
+
+    for (final layer in pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is BackStitch) continue;
+        if (stitch is FullStitch) {
+          final thread = threadMap[stitch.threadId];
+          if (thread == null) continue;
+          final key = '${stitch.x},${stitch.y}';
+          (cellStack[key] ??= []).add((
+            stitch: stitch,
+            color: thread.color,
+            opacity: layer.opacity,
+            blendMode: layer.blendMode,
+          ));
+        } else {
+          otherNonBack.add(stitch);
+        }
+      }
+    }
+
+    final deduped = <Stitch>[];
+    final blendedColors = <String, Color>{};
+
+    for (final entry in cellStack.entries) {
+      final stack = entry.value;
+      deduped.add(stack.last.stitch); // topmost layer wins for symbol/threadId
+      if (stack.length > 1) {
+        var blended = stack.first.color;
+        for (int i = 1; i < stack.length; i++) {
+          blended = stack[i]
+              .blendMode
+              .apply(blended, stack[i].color, stack[i].opacity);
+        }
+        blendedColors[entry.key] = blended;
+      }
+    }
+
+    return (nonBack: [...deduped, ...otherNonBack], blendedColors: blendedColors);
+  }
+
+  // ── Realistic stitch line-art ─────────────────────────────────────────────
+
+  /// Draws stitch shapes as diagonal line-art (X, half-X, etc.).
+  /// gx/gy = bottom-left of the cell in PDF coords (y increases up).
+  /// Stroke colour and width must be set by the caller.
+  static void _drawRealisticStitch(
+      PdfGraphics canvas, Stitch s, double gx, double gy, double cs) {
+    switch (s) {
+      case FullStitch():
+        canvas.moveTo(gx, gy);
+        canvas.lineTo(gx + cs, gy + cs);
+        canvas.strokePath();
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+
+      case HalfStitch(isForward: true): // "/"
+        canvas.moveTo(gx, gy);
+        canvas.lineTo(gx + cs, gy + cs);
+        canvas.strokePath();
+
+      case HalfStitch(isForward: false): // "\"
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+
+      case QuarterStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs / 2, gy + cs);
+        canvas.strokePath();
+      case QuarterStitch(quadrant: QuadrantPosition.topRight):
+        canvas.moveTo(gx + cs / 2, gy + cs);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+      case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs / 2, gy);
+        canvas.strokePath();
+      case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.moveTo(gx + cs / 2, gy);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+
+      case HalfCrossStitch(half: HalfOrientation.left):
+        canvas.moveTo(gx, gy);
+        canvas.lineTo(gx + cs / 2, gy + cs);
+        canvas.strokePath();
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs / 2, gy);
+        canvas.strokePath();
+      case HalfCrossStitch(half: HalfOrientation.right):
+        canvas.moveTo(gx + cs / 2, gy);
+        canvas.lineTo(gx + cs, gy + cs);
+        canvas.strokePath();
+        canvas.moveTo(gx + cs / 2, gy + cs);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+      case HalfCrossStitch(half: HalfOrientation.top):
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs, gy + cs);
+        canvas.strokePath();
+        canvas.moveTo(gx, gy + cs);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+      case HalfCrossStitch(half: HalfOrientation.bottom):
+        canvas.moveTo(gx, gy);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs, gy);
+        canvas.strokePath();
+
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs / 2, gy + cs);
+        canvas.strokePath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
+        canvas.moveTo(gx + cs / 2, gy + cs);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.moveTo(gx, gy + cs / 2);
+        canvas.lineTo(gx + cs / 2, gy);
+        canvas.strokePath();
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.moveTo(gx + cs / 2, gy);
+        canvas.lineTo(gx + cs, gy + cs / 2);
+        canvas.strokePath();
+
+      case BackStitch():
+        break;
+    }
+  }
 }
