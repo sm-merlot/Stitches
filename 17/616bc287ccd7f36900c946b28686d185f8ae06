@@ -1,0 +1,25 @@
+test/pdf_logic_test.dart
+  794232f7b9dde9fe 1-227
+lib/services/pdf_service.dart
+  794232f7b9dde9fe 4,1826-1829,1847-1852
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "17616bc287ccd7f36900c946b28686d185f8ae06",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 238,
+      "total_deletions": 1,
+      "accepted_lines": 238,
+      "overriden_lines": 0
+    }
+  }
+}
