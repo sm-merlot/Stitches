@@ -15,6 +15,7 @@ import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import 'skein_calculator.dart';
+import 'sprite_importer.dart';
 
 typedef _PdfFonts = ({
   PdfFont regular,
@@ -49,6 +50,23 @@ class PdfService {
     // Composite non-back stitches across visible layers: deduplicates FullStitches
     // at the same cell using each layer's blend mode — matches 'stitch mode' canvas.
     final (:nonBack, :blendedColors) = _compositeNonBack(pattern, threadMap);
+
+    // For blended cells, compute the nearest-DMC composite symbol so the PDF
+    // grid matches the canvas composite view.
+    final blendedCellSymbols = <String, String>{};
+    for (final entry in blendedColors.entries) {
+      final c = entry.value;
+      final r = (c.r * 255).round();
+      final g = (c.g * 255).round();
+      final b = (c.b * 255).round();
+      final dmc = SpriteImporter.matchPixel(r, g, b, 255);
+      if (dmc != null) {
+        final sym = pattern.compositeSymbols[dmc.code] ?? '';
+        if (symbolIsVisible(sym) && !_kPdfUnsupportedSymbols.contains(sym)) {
+          blendedCellSymbols[entry.key] = sym;
+        }
+      }
+    }
 
     // Backstitches: no deduplication needed (backstitches never fully occlude).
     final backstitches = pattern.layers
@@ -313,6 +331,7 @@ class PdfService {
           backstitches: backstitches,
           threadMap: threadMap,
           blendedColors: blendedColors,
+          blendedCellSymbols: blendedCellSymbols,
           pdfSymbols: pdfSymbols,
           cellSize: cellSize,
           startX: startX,
@@ -356,6 +375,7 @@ class PdfService {
     required List<BackStitch> backstitches,
     required Map<String, Thread> threadMap,
     required Map<String, Color> blendedColors,
+    required Map<String, String> blendedCellSymbols,
     required Map<String, String> pdfSymbols,
     required double cellSize,
     required int startX,
@@ -414,8 +434,9 @@ class PdfService {
       canvas.setFillColor(_pdfColor(effectiveColor));
       _fillStitch(canvas, s, gx, gy, cellSize);
 
-      // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt)
-      final sym = pdfSymbols[thread.dmcCode] ?? '';
+      // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt).
+      // Blended cells use the composite symbol so the PDF grid matches the canvas.
+      final sym = blendedCellSymbols[cellKey] ?? pdfSymbols[thread.dmcCode] ?? '';
       if (symbolIsVisible(sym)) {
         final subSize = _stitchSubRegionSize(s, cellSize);
         if (subSize >= 4) {
