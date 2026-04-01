@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Color;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../data/aida_presets.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -517,44 +518,71 @@ class PdfService {
   }) {
     const titleFs = 18.0;
     const subtitleFs = 9.0;
-    const ruleGap = 12.0;
-    const titleBlockH = titleFs + 5 + subtitleFs + 8 + 1 + ruleGap;
+    const titleBlockH = titleFs + 5 + subtitleFs + 12;
+    const metaRowH = 13.0;
+    const metaSwatchSize = 14.0;
+    const metaGap = 8.0;
 
-    // Use all available height below the title block for the preview
-    final previewBudgetH =
-        (format.height - 2 * margin - footerH - titleBlockH).clamp(80.0, 600.0);
+    final pageW = format.width;
+    final pageH = format.height;
+    final usableW = pageW - 2 * margin;
 
-    // ── Title + subtitle ─────────────────────────────────────────────────
-    final titleY = format.height - margin - titleFs;
+    // ── Estimate metadata block height ───────────────────────────────────
+    final hasMetadata = pattern.designer != null ||
+        pattern.difficulty != null ||
+        pattern.estimatedHours != null ||
+        pattern.description != null ||
+        pattern.copyright != null;
+
+    double metaBlockH = 0;
+    if (hasMetadata) {
+      metaBlockH += metaSwatchSize + metaGap; // aida swatch row
+      if (pattern.designer != null) metaBlockH += metaRowH;
+      if (pattern.difficulty != null) metaBlockH += metaRowH;
+      if (pattern.estimatedHours != null) metaBlockH += metaRowH;
+      if (pattern.description != null) {
+        // Rough multi-line estimate: ~80 chars per line at 10pt
+        final chars = pattern.description!.length;
+        final lines = (chars / 80).ceil().clamp(1, 6);
+        metaBlockH += lines * 12.0 + 4;
+      }
+      if (pattern.copyright != null) metaBlockH += 10.0;
+      metaBlockH += metaGap; // top gap before metadata
+    }
+
+    // ── Layout geometry ───────────────────────────────────────────────────
+    // previewBudget = space between title block and footer, minus metadata
+    final previewBudgetH = (pageH - 2 * margin - footerH -
+            titleBlockH -
+            metaBlockH)
+        .clamp(80.0, 600.0);
+
+    // ── Title (centred) ───────────────────────────────────────────────────
+    final titleStr = _ascii(pattern.name);
+    final titleY = pageH - margin - titleFs;
+    final titleW = titleStr.length * titleFs * 0.55;
+    final titleX = margin + (usableW - titleW) / 2;
     canvas.setFillColor(PdfColors.black);
-    canvas.drawString(pdfFontBold, titleFs, _ascii(pattern.name), margin, titleY);
+    canvas.drawString(pdfFontBold, titleFs, titleStr, titleX, titleY);
 
+    // ── Subtitle (centred) ────────────────────────────────────────────────
+    final subtitleStr = _ascii(
+        '${pattern.width} x ${pattern.height} stitches  |  Page $pageNum of $totalPages');
+    final subtitleW = subtitleStr.length * subtitleFs * 0.55;
+    final subtitleX = margin + (usableW - subtitleW) / 2;
     canvas.setFillColor(PdfColors.grey600);
-    final subtitle =
-        '${pattern.width} x ${pattern.height} stitches  |  Page $pageNum of $totalPages';
-    canvas.drawString(pdfFont, subtitleFs, _ascii(subtitle), margin,
+    canvas.drawString(pdfFont, subtitleFs, subtitleStr, subtitleX,
         titleY - titleFs - 5);
 
-    // Separator rule
-    final ruleY = titleY - titleFs - subtitleFs - 8 - 1;
-    canvas.setStrokeColor(PdfColors.grey400);
-    canvas.setLineWidth(0.75);
-    canvas.moveTo(margin, ruleY);
-    canvas.lineTo(format.width - margin, ruleY);
-    canvas.strokePath();
-
     // ── Pattern preview ───────────────────────────────────────────────────
-    final previewTopY = ruleY - ruleGap;
-    final previewMaxW = format.width - 2 * margin;
-
-    final scaleByW = previewMaxW / pattern.width;
+    final previewTopY = titleY - titleBlockH;
+    final scaleByW = usableW / pattern.width;
     final scaleByH = previewBudgetH / pattern.height;
     final previewCellSize = math.min(scaleByW, scaleByH);
 
     final actualPreviewW = previewCellSize * pattern.width;
     final actualPreviewH = previewCellSize * pattern.height;
-
-    final previewOriginX = margin + (previewMaxW - actualPreviewW) / 2;
+    final previewOriginX = margin + (usableW - actualPreviewW) / 2;
     final previewOriginY = previewTopY - actualPreviewH;
 
     _drawStitchPreview(
@@ -567,6 +595,49 @@ class PdfService {
       threadMap: threadMap,
       cellSize: previewCellSize,
     );
+
+    // ── Metadata block ────────────────────────────────────────────────────
+    if (hasMetadata) {
+      var my = previewOriginY - metaGap;
+
+      // Aida swatch + label
+      canvas.setFillColor(_pdfColor(pattern.aidaColor));
+      canvas.drawRect(margin, my - metaSwatchSize, metaSwatchSize, metaSwatchSize);
+      canvas.fillPath();
+      canvas.setStrokeColor(PdfColors.grey400);
+      canvas.setLineWidth(0.5);
+      canvas.drawRect(margin, my - metaSwatchSize, metaSwatchSize, metaSwatchSize);
+      canvas.strokePath();
+      final aidaLabel = _ascii(aidaColorLabel(pattern.aidaColor));
+      canvas.setFillColor(PdfColors.grey700);
+      canvas.drawString(pdfFont, 9.0, aidaLabel,
+          margin + metaSwatchSize + 5, my - metaSwatchSize + 2);
+      my -= metaSwatchSize + metaGap;
+
+      void metaRow(String label, String value) {
+        canvas.setFillColor(PdfColors.black);
+        canvas.drawString(pdfFontBold, 9.0, _ascii('$label: '), margin, my);
+        final labelW = ('$label: ').length * 9.0 * 0.55;
+        canvas.drawString(pdfFont, 9.0, _ascii(value), margin + labelW, my);
+        my -= metaRowH;
+      }
+
+      if (pattern.designer != null) metaRow('Designer', pattern.designer!);
+      if (pattern.difficulty != null) metaRow('Difficulty', pattern.difficulty!);
+      if (pattern.estimatedHours != null) metaRow('Est. time', pattern.estimatedHours!);
+
+      if (pattern.description != null) {
+        my -= 2;
+        canvas.setFillColor(PdfColors.grey800);
+        canvas.drawString(pdfFont, 10.0, _ascii(pattern.description!), margin, my);
+        my -= 12.0 * (pattern.description!.length / 80).ceil().clamp(1, 6) + 4;
+      }
+
+      if (pattern.copyright != null) {
+        canvas.setFillColor(PdfColors.grey600);
+        canvas.drawString(pdfFont, 7.0, _ascii(pattern.copyright!), margin, my);
+      }
+    }
 
     // ── Footer ────────────────────────────────────────────────────────────
     _drawPageFooter(canvas,
