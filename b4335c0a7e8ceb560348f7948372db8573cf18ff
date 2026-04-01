@@ -1,0 +1,33 @@
+lib/screens/export_dialog.dart
+  69dc89aaccde6b35 113
+lib/data/symbols.dart
+  69dc89aaccde6b35 1-26,46-47
+lib/widgets/right_sidebar_colours_panel.dart
+  69dc89aaccde6b35 519,643-644
+lib/widgets/canvas_painter.dart
+  69dc89aaccde6b35 9,257
+lib/providers/editor/editor_provider.dart
+  69dc89aaccde6b35 621-622,624,645
+lib/services/pdf_service.dart
+  69dc89aaccde6b35 12,402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "b4335c0a7e8ceb560348f7948372db8573cf18ff",
+  "prompts": {
+    "69dc89aaccde6b35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ca4f087-b89e-4245-a1c4-8d37b16b2e7f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 11,
+      "accepted_lines": 40,
+      "overriden_lines": 0
+    }
+  }
+}
