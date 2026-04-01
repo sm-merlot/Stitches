@@ -101,3 +101,4 @@ Requires Flutter 3.41.4+.
 
 ### Engineering
 - Better test coverage (unit tests exist for models, stitch logic, and layer behaviour; integration and widget tests not yet written)
+- Grid detector tests — `test/grid_detector_test.dart` was removed because the fixture PNGs (`grid_test_lighthouse.png`, `grid_test_anchor.png`) were never committed. To restore: add the fixture images to `test/fixtures/`, restore the test file from git history (`git show HEAD~1:test/grid_detector_test.dart`), and set `_lighthouseExpectedKnown` / `_anchorExpectedKnown` to `true` once expected values are confirmed.
