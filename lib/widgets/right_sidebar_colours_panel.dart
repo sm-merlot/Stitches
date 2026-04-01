@@ -58,6 +58,19 @@ class _DesignColoursPanel extends ConsumerWidget {
         ? _countStitchesComposite(state)
         : _countStitches(activeLayer.stitches);
 
+    // Symbol issue count (no symbol or duplicate) across all pattern threads.
+    final allSymbolCounts = <String, int>{};
+    for (final t in state.pattern.threads) {
+      if (symbolIsVisible(t.symbol)) {
+        allSymbolCounts[t.symbol] = (allSymbolCounts[t.symbol] ?? 0) + 1;
+      }
+    }
+    final issueCount = state.pattern.threads
+        .where((t) =>
+            !symbolIsVisible(t.symbol) ||
+            (allSymbolCounts[t.symbol] ?? 0) > 1)
+        .length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -99,6 +112,41 @@ class _DesignColoursPanel extends ConsumerWidget {
           ),
         ),
         const Divider(height: 1),
+        if (issueCount > 0) ...[
+          Container(
+            color: theme.colorScheme.errorContainer.withValues(alpha: 0.25),
+            padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: 13, color: Colors.orange.shade700),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '$issueCount symbol ${issueCount == 1 ? 'issue' : 'issues'}',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.7)),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      _autoFixSymbols(notifier, state.pattern.threads),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 0),
+                    minimumSize: const Size(0, 24),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: const TextStyle(fontSize: 11),
+                  ),
+                  child: const Text('Auto-fix'),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+        ],
         Expanded(
           child: _ThreadList(
             threads: threads,
@@ -130,6 +178,39 @@ class _DesignColoursPanel extends ConsumerWidget {
       return unique.values.toList();
     }
     return state.pattern.threads;
+  }
+}
+
+/// Assigns new symbols to every thread that has no visible symbol or shares
+/// its symbol with another thread. Lowest DMC number keeps its symbol when
+/// resolving duplicates.
+void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
+  final sorted = [...allThreads]..sort((a, b) {
+      final ia = int.tryParse(a.dmcCode) ?? 999999;
+      final ib = int.tryParse(b.dmcCode) ?? 999999;
+      return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
+    });
+
+  final kept = <String>{};
+  final toFix = <Thread>[];
+  for (final t in sorted) {
+    if (!symbolIsVisible(t.symbol)) {
+      toFix.add(t);
+    } else if (kept.contains(t.symbol)) {
+      toFix.add(t); // duplicate — will get a new symbol
+    } else {
+      kept.add(t.symbol);
+    }
+  }
+
+  for (final t in toFix) {
+    for (final s in kPatternSymbols) {
+      if (!kept.contains(s)) {
+        kept.add(s);
+        notifier.setThreadSymbol(t.dmcCode, s);
+        break;
+      }
+    }
   }
 }
 
