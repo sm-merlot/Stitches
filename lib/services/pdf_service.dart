@@ -1789,9 +1789,46 @@ class PdfService {
   static double _textWidth(PdfFont font, double fontSize, String text) =>
       font.stringMetrics(text).advanceWidth * fontSize;
 
+  /// Symbols absent from both NotoSans-Regular and NotoSansSymbols2 as
+  /// bundled. Patterns created before these were removed from kPatternSymbols
+  /// may still have them assigned; PDF export must substitute them.
+  static const _kPdfUnsupportedSymbols = {
+    // Arrows U+2190–21FF — in neither bundled font
+    '↑', '↓', '→', '←', '↗', '↘', '↙', '↖', '↔', '↕',
+    // Math operators not covered by NotoSansSymbols2
+    '⊕', '⊖', '⊗', '⊚',
+    // U+271D — absent from both fonts
+    '✝',
+  };
+
   /// Build a per-export symbol map: dmcCode → symbol char.
+  /// Any thread whose assigned symbol is absent from the PDF fonts gets an
+  /// auto-assigned fallback from kPatternSymbols for this export only.
   static Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
-    return {for (final t in threads) t.dmcCode: t.symbol};
+    final result = <String, String>{};
+    final used = <String>{};
+
+    // First pass: keep all symbols that ARE renderable.
+    for (final t in threads) {
+      if (symbolIsVisible(t.symbol) && !_kPdfUnsupportedSymbols.contains(t.symbol)) {
+        result[t.dmcCode] = t.symbol;
+        used.add(t.symbol);
+      }
+    }
+
+    // Second pass: assign fallback symbols to threads with unsupported symbols.
+    for (final t in threads) {
+      if (result.containsKey(t.dmcCode)) continue;
+      for (final s in kPatternSymbols) {
+        if (!used.contains(s) && !_kPdfUnsupportedSymbols.contains(s)) {
+          result[t.dmcCode] = s;
+          used.add(s);
+          break;
+        }
+      }
+    }
+
+    return result;
   }
 
   static PdfColor _pdfColor(Color c) =>
