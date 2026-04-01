@@ -255,6 +255,7 @@ class PdfService {
         totalPages: totalPages,
         pdfFont: pdfFont,
         pdfFontBold: pdfFontBold,
+        drawInitialFooter: !enoughRoom,
       );
     }
 
@@ -881,6 +882,10 @@ class PdfService {
     required int totalPages,
     required PdfFont pdfFont,
     required PdfFont pdfFontBold,
+    /// True when [canvas] is a fresh page with no footer yet drawn.
+    /// False when [canvas] is a shared thread-table page whose footer was
+    /// already drawn by [_drawColourTablePage].
+    bool drawInitialFooter = false,
   }) {
     const sectionHeadFs = 9.0;
     const tableFs = 7.5;
@@ -890,6 +895,7 @@ class PdfService {
 
     var currentCanvas = canvas;
     var currentPageNum = pageNum;
+    var onOriginalCanvas = true;
 
     final suggestions = pattern.materialsSuggestions;
     final tableW = format.width - 2 * margin;
@@ -1012,6 +1018,7 @@ class PdfService {
             totalPages: totalPages,
             pdfFont: pdfFont);
         currentCanvas = PdfPage(doc, pageFormat: format).getGraphics();
+        onOriginalCanvas = false;
         currentPageNum++;
         _drawPageHeader(currentCanvas,
             format: format,
@@ -1053,6 +1060,20 @@ class PdfService {
           isHeader: false,
           swatchColor: _pdfColor(t.color));
       y -= rowH;
+    }
+
+    // Draw footer on the last materials page.
+    // Skip if we're still on the original shared table-page (its footer was
+    // already drawn by _drawColourTablePage), unless the caller flagged that
+    // the initial canvas is a fresh page that still needs one.
+    if (!onOriginalCanvas || drawInitialFooter) {
+      _drawPageFooter(currentCanvas,
+          format: format,
+          margin: margin,
+          footerH: footerH,
+          pageNum: currentPageNum,
+          totalPages: totalPages,
+          pdfFont: pdfFont);
     }
   }
 
