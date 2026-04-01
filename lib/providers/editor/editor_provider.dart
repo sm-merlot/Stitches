@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -385,7 +386,11 @@ class EditorNotifier extends Notifier<EditorState>
       } catch (_) {}
     }
 
-    final withSymbols = pattern.copyWith(threads: _assignSymbols(pattern.threads));
+    final withSymbols = pattern.copyWith(
+        threads: _assignSymbols(pattern.threads,
+            existingSymbols: pattern.compositeSymbols.values
+                .where(symbolIsVisible)
+                .toSet()));
 
     String? threadId = withSymbols.editorSelectedThreadId;
     if (threadId == null || withSymbols.threadByCode(threadId) == null) {
@@ -618,10 +623,10 @@ class EditorNotifier extends Notifier<EditorState>
   @override
   Thread _resolveThreadSymbol(Thread thread, List<Thread> existingThreads) {
     final usedSymbols = {
-      ...existingThreads.map((t) => t.symbol).where((s) => s.isNotEmpty),
-      ...state.pattern.compositeSymbols.values.where((s) => s.isNotEmpty),
+      ...existingThreads.map((t) => t.symbol).where(symbolIsVisible),
+      ...state.pattern.compositeSymbols.values.where(symbolIsVisible),
     };
-    if (thread.symbol.isEmpty || usedSymbols.contains(thread.symbol)) {
+    if (!symbolIsVisible(thread.symbol) || usedSymbols.contains(thread.symbol)) {
       return thread.copyWith(symbol: _nextSymbol(usedSymbols));
     }
     return thread;
@@ -638,11 +643,19 @@ class EditorNotifier extends Notifier<EditorState>
     });
   }
 
-  /// Ensures every thread has a symbol, assigning from [kPatternSymbols] for any missing.
-  List<Thread> _assignSymbols(List<Thread> threads) {
-    final assigned = <String>{};
+  /// Ensures every thread has a symbol, assigning from [kPatternSymbols] for
+  /// any that are missing one. [existingSymbols] pre-populates the "taken"
+  /// set so composite symbols are not reused for layer threads on load.
+  @visibleForTesting
+  List<Thread> assignSymbolsForTest(List<Thread> threads,
+          {Set<String> existingSymbols = const {}}) =>
+      _assignSymbols(threads, existingSymbols: existingSymbols);
+
+  List<Thread> _assignSymbols(List<Thread> threads,
+      {Set<String> existingSymbols = const {}}) {
+    final assigned = <String>{...existingSymbols};
     return threads.map((t) {
-      if (t.symbol.isNotEmpty) {
+      if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
         assigned.add(t.symbol);
         return t;
       }

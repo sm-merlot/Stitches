@@ -213,14 +213,19 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   /// Changes the symbol displayed on a thread's swatch.
+  /// Clears the composite cache so the colours panel immediately reflects the
+  /// updated symbol rather than serving stale Thread objects from the cache.
   void setThreadSymbol(String dmcCode, String symbol) {
     final threads = state.pattern.threads
         .map((t) => t.dmcCode == dmcCode ? t.copyWith(symbol: symbol) : t)
         .toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(threads: threads),
+      compositeThreadCache: null,
       isDirty: true,
     );
+    // Rebuild immediately so composite panel doesn't fall back to layer threads.
+    if (state.showCompositeThreads) refreshCompositeCache();
   }
 
   /// Same as [replaceThread] but operates on a snippet.
@@ -712,6 +717,32 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
+      isDirty: true,
+    );
+  }
+
+  // ─── Pattern metadata ─────────────────────────────────────────────────────
+
+  void updatePatternMetadata({
+    String? name,
+    String? designer,
+    String? description,
+    String? difficulty,
+    String? estimatedHours,
+    String? copyright,
+    List<({int aidaCount, int strands})>? materialsSuggestions,
+  }) {
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(
+        name: name ?? state.pattern.name,
+        designer: designer,
+        description: description,
+        difficulty: difficulty,
+        estimatedHours: estimatedHours,
+        copyright: copyright,
+        materialsSuggestions:
+            materialsSuggestions ?? state.pattern.materialsSuggestions,
+      ),
       isDirty: true,
     );
   }
