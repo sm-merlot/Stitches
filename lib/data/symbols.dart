@@ -13,14 +13,20 @@ bool _isVisibleRune(int rune) {
   if (rune <= 0x20) return false;           // C0 controls + space
   if (rune == 0x7F) return false;           // DEL
   if (rune >= 0x80 && rune <= 0x9F) return false;  // C1 controls
+  if (rune == 0x00A0) return false;         // no-break space (NBSP)
   if (rune == 0x00AD) return false;         // soft hyphen
+  if (rune == 0x1680) return false;         // Ogham space mark
+  if (rune >= 0x2000 && rune <= 0x200A) return false;  // Unicode Zs spaces (en/em/thin/hair…)
   if (rune == 0x200B) return false;         // zero-width space
   if (rune == 0x200C) return false;         // zero-width non-joiner
   if (rune == 0x200D) return false;         // zero-width joiner
   if (rune >= 0x200E && rune <= 0x200F) return false;  // LRM / RLM
-  if (rune == 0xFEFF) return false;         // BOM / zero-width no-break space
   if (rune >= 0x202A && rune <= 0x202E) return false;  // directional formatting
+  if (rune == 0x202F) return false;         // narrow no-break space
+  if (rune == 0x205F) return false;         // medium mathematical space
   if (rune >= 0x2060 && rune <= 0x2064) return false;  // invisible operators
+  if (rune == 0x3000) return false;         // ideographic space
+  if (rune == 0xFEFF) return false;         // BOM / zero-width no-break space
   return true;
 }
 
