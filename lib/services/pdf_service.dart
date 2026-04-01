@@ -1802,33 +1802,14 @@ class PdfService {
   };
 
   /// Build a per-export symbol map: dmcCode → symbol char.
-  /// Any thread whose assigned symbol is absent from the PDF fonts gets an
-  /// auto-assigned fallback from kPatternSymbols for this export only.
+  /// Threads with symbols absent from the PDF fonts are omitted (treated as
+  /// no symbol — blank cells in the chart).
   static Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
-    final result = <String, String>{};
-    final used = <String>{};
-
-    // First pass: keep all symbols that ARE renderable.
-    for (final t in threads) {
-      if (symbolIsVisible(t.symbol) && !_kPdfUnsupportedSymbols.contains(t.symbol)) {
-        result[t.dmcCode] = t.symbol;
-        used.add(t.symbol);
-      }
-    }
-
-    // Second pass: assign fallback symbols to threads with unsupported symbols.
-    for (final t in threads) {
-      if (result.containsKey(t.dmcCode)) continue;
-      for (final s in kPatternSymbols) {
-        if (!used.contains(s) && !_kPdfUnsupportedSymbols.contains(s)) {
-          result[t.dmcCode] = s;
-          used.add(s);
-          break;
-        }
-      }
-    }
-
-    return result;
+    return {
+      for (final t in threads)
+        if (symbolIsVisible(t.symbol) && !_kPdfUnsupportedSymbols.contains(t.symbol))
+          t.dmcCode: t.symbol,
+    };
   }
 
   static PdfColor _pdfColor(Color c) =>
