@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -645,6 +646,11 @@ class EditorNotifier extends Notifier<EditorState>
   /// Ensures every thread has a symbol, assigning from [kPatternSymbols] for
   /// any that are missing one. [existingSymbols] pre-populates the "taken"
   /// set so composite symbols are not reused for layer threads on load.
+  @visibleForTesting
+  List<Thread> assignSymbolsForTest(List<Thread> threads,
+          {Set<String> existingSymbols = const {}}) =>
+      _assignSymbols(threads, existingSymbols: existingSymbols);
+
   List<Thread> _assignSymbols(List<Thread> threads,
       {Set<String> existingSymbols = const {}}) {
     final assigned = <String>{...existingSymbols};
