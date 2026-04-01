@@ -1,0 +1,25 @@
+lib/services/pdf_service.dart
+  69dc89aaccde6b35 6-7,18-25,33-42,89,152,191,229,271,311,354,375,409-410,491,507,523,542,555,574,593,608,635,650,665,682,698-699,710-711,733,760,774,776,779,782-783,786,824,826,832-835,849-850,855,857,868,889,911,926,933,947,961,968,1000,1012,1024,1035,1061-1062,1080,1153,1160,1166,1185,1199,1213,1238,1277-1278,1285,1292-1541,1543-1544,1690-1693,1695-1704
+pubspec.yaml
+  69dc89aaccde6b35 32,42-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "e779f57107905cbc0ab053bd3ed5a103ffdb982c",
+  "prompts": {
+    "69dc89aaccde6b35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ca4f087-b89e-4245-a1c4-8d37b16b2e7f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>",
+      "messages": [],
+      "total_additions": 369,
+      "total_deletions": 134,
+      "accepted_lines": 365,
+      "overriden_lines": 0
+    }
+  }
+}
