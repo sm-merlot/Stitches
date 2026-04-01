@@ -1432,31 +1432,44 @@ class PdfService {
   static String _ascii(String s) =>
       s.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
 
-  /// Fallback single-char ASCII codes for non-ASCII symbols (not already in
-  /// the kPatternSymbols ASCII pool). Used when a thread symbol strips to ''.
+  /// Fallback single-char ASCII symbols for threads whose kPatternSymbols
+  /// entry is non-ASCII (geometric shapes, Greek, etc.).
+  /// Characters removed: ' . , ; ` :  — too small, too similar to each other,
+  /// or easily confused with other thread symbols already in use.
   static const _symbolFallbacks = [
-    'l', 'o', 't', '_', '(', ')', '[', ']', '{', '}',
-    ',', '.', ':', ';', "'", r'"', '`', r'\',
+    'l', 'o', 't', '_', '(', ')', '[', ']', '{', '}', r'"', r'\',
   ];
 
   /// Build a per-export symbol map: dmcCode → PDF-renderable char.
-  /// Non-ASCII symbols (geometric shapes, Greek, etc.) get a unique fallback.
+  /// Non-ASCII symbols get a fallback that doesn't conflict with any
+  /// directly-assigned ASCII symbol already in the map.
   static Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
     final map = <String, String>{};
-    var fallbackIdx = 0;
+    // First pass: assign all directly-renderable ASCII symbols.
+    final usedChars = <String>{};
     for (final t in threads) {
-      if (t.symbol.isEmpty) {
-        map[t.dmcCode] = '';
-        continue;
-      }
+      if (t.symbol.isEmpty) { map[t.dmcCode] = ''; continue; }
       final ascii = _ascii(t.symbol);
       if (ascii.isNotEmpty) {
         map[t.dmcCode] = ascii;
-      } else {
-        map[t.dmcCode] = fallbackIdx < _symbolFallbacks.length
-            ? _symbolFallbacks[fallbackIdx++]
-            : '?';
+        usedChars.add(ascii);
       }
+    }
+    // Second pass: assign fallbacks for non-ASCII symbols, skipping any char
+    // already used by a direct assignment to avoid duplicate symbols.
+    var fallbackIdx = 0;
+    for (final t in threads) {
+      if (map.containsKey(t.dmcCode)) continue;
+      String fb = '?';
+      while (fallbackIdx < _symbolFallbacks.length) {
+        final candidate = _symbolFallbacks[fallbackIdx++];
+        if (!usedChars.contains(candidate)) {
+          fb = candidate;
+          usedChars.add(candidate);
+          break;
+        }
+      }
+      map[t.dmcCode] = fb;
     }
     return map;
   }
