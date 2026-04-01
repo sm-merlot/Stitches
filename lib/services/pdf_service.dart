@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart' show Color;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:markdown/markdown.dart' as md;
@@ -1823,6 +1823,10 @@ class PdfService {
   /// Build a per-export symbol map: dmcCode → symbol char.
   /// Threads with symbols absent from the PDF fonts are omitted (treated as
   /// no symbol — blank cells in the chart).
+  @visibleForTesting
+  static Map<String, String> buildPdfSymbolMapForTest(List<Thread> threads) =>
+      _buildPdfSymbolMap(threads);
+
   static Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
     return {
       for (final t in threads)
@@ -1840,6 +1844,12 @@ class PdfService {
   /// 'stitch mode' canvas. FullStitches at the same cell are deduplicated
   /// (topmost layer wins for symbol/threadId) and their colours are blended
   /// using each layer's blend mode. All other stitch types pass through as-is.
+  @visibleForTesting
+  static ({List<Stitch> nonBack, Map<String, Color> blendedColors})
+      compositeNonBackForTest(
+              CrossStitchPattern pattern, Map<String, Thread> threadMap) =>
+          _compositeNonBack(pattern, threadMap);
+
   static ({List<Stitch> nonBack, Map<String, Color> blendedColors})
       _compositeNonBack(
           CrossStitchPattern pattern, Map<String, Thread> threadMap) {
