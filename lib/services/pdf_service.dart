@@ -951,7 +951,12 @@ class PdfService {
         margin + swatchSize + 5, y - rowH + (rowH - tableFs) / 2 + 1);
     y -= rowH;
 
-    y -= 8; // gap
+    // Border note
+    const borderNoteFs = 6.5;
+    currentCanvas.setFillColor(PdfColors.grey600);
+    currentCanvas.drawString(pdfFont, borderNoteFs,
+        'Sizes include a 5cm border on each side for framing.', margin, y - borderNoteFs - 1);
+    y -= borderNoteFs + 10;
 
     // ── Skeins sub-table ──────────────────────────────────────────────────
     const skeinSwatchW = 18.0;
