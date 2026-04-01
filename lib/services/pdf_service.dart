@@ -402,7 +402,7 @@ class PdfService {
         final subSize = _stitchSubRegionSize(s, cellSize);
         if (subSize >= 4) {
           final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
-          final lum = thread.color.computeLuminance();
+          final lum = effectiveColor.computeLuminance();
           final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
           final fs = math.max(3.5, subSize * 0.44);
           canvas.setFillColor(textColor);
