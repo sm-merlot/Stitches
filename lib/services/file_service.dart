@@ -142,6 +142,18 @@ class FileService {
     buf.writeln('width: ${pattern.width}');
     buf.writeln('height: ${pattern.height}');
     buf.writeln('aidaColor: ${_yamlStr(pattern.aidaColorHex)}');
+    if (pattern.designer != null) buf.writeln('designer: ${_yamlStr(pattern.designer!)}');
+    if (pattern.description != null) buf.writeln('description: ${_yamlStr(pattern.description!)}');
+    if (pattern.difficulty != null) buf.writeln('difficulty: ${_yamlStr(pattern.difficulty!)}');
+    if (pattern.estimatedHours != null) buf.writeln('estimatedHours: ${_yamlStr(pattern.estimatedHours!)}');
+    if (pattern.copyright != null) buf.writeln('copyright: ${_yamlStr(pattern.copyright!)}');
+    if (pattern.materialsSuggestions.isNotEmpty) {
+      buf.writeln('materialsSuggestions:');
+      for (final s in pattern.materialsSuggestions) {
+        buf.writeln('  - aidaCount: ${s.aidaCount}');
+        buf.writeln('    strands: ${s.strands}');
+      }
+    }
 
     if (pattern.editorSelectedThreadId != null ||
         pattern.editorTool != null ||
