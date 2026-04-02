@@ -251,26 +251,12 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Stitch mode actions — Block mode + Materials + Demo + Screen Lock
+            // Stitch mode actions — Materials + Demo + Screen Lock
             if (state.stitchMode) ...[
               IconButton(
                 tooltip: 'Materials list',
                 icon: const Icon(Icons.shopping_bag_outlined),
                 onPressed: () => showMaterialsList(context, state),
-              ),
-              IconButton(
-                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
-                isSelected: state.blockMode,
-                icon: const Icon(Icons.grid_view_outlined),
-                selectedIcon: const Icon(Icons.grid_view),
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).toggleBlockMode(),
-                style: state.blockMode
-                    ? IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                      )
-                    : null,
               ),
               StitchDemoButton(state: state),
               const EditorScreenLockButton(),
