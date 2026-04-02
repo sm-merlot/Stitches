@@ -34,15 +34,15 @@ class EditorScreenLockButton extends ConsumerWidget {
     final theme = Theme.of(context);
     final keepOn = ref.watch(settingsProvider).keepScreenOn;
     return Tooltip(
-      message: keepOn ? 'Screen lock: off' : 'Screen lock: on',
+      message: keepOn ? 'Keep screen on: on' : 'Keep screen on: off',
       child: IconButton(
         isSelected: keepOn,
-        icon: const Icon(Icons.screen_lock_portrait_outlined),
-        selectedIcon: const Icon(Icons.screen_lock_portrait),
+        icon: const Icon(Icons.lock_open_outlined),
+        selectedIcon: const Icon(Icons.lock),
         style: keepOn
             ? IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.secondaryContainer,
-                foregroundColor: theme.colorScheme.onSecondaryContainer,
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
               )
             : null,
         onPressed: () =>
