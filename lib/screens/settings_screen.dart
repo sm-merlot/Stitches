@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 
@@ -136,6 +137,21 @@ class SettingsScreen extends ConsumerWidget {
               onChanged: (v) => notifier.setPencilPasteConfirm(v),
             ),
           ],
+          const Divider(),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snap) {
+              final version = snap.data == null
+                  ? '…'
+                  : 'v${snap.data!.version} (${snap.data!.buildNumber})';
+              return ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Version'),
+                trailing: Text(version,
+                    style: const TextStyle(fontSize: 13)),
+              );
+            },
+          ),
         ],
       ),
     );
