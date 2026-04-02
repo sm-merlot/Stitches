@@ -1,34 +1,5 @@
 part of 'workspace_screen.dart';
 
-// ─── Screen lock toggle button ────────────────────────────────────────────────
-
-class _WorkspaceScreenLockButton extends ConsumerWidget {
-  const _WorkspaceScreenLockButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final keepOn = ref.watch(settingsProvider).keepScreenOn;
-    return Tooltip(
-      message: keepOn ? 'Screen lock: off' : 'Screen lock: on',
-      child: IconButton(
-        isSelected: keepOn,
-        icon: const Icon(Icons.screen_lock_portrait_outlined),
-        selectedIcon: const Icon(Icons.screen_lock_portrait),
-        style: keepOn
-            ? IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.primaryContainer,
-                foregroundColor: theme.colorScheme.onPrimaryContainer,
-              )
-            : null,
-        onPressed: () => ref
-            .read(settingsProvider.notifier)
-            .setKeepScreenOn(!keepOn),
-      ),
-    );
-  }
-}
-
 // ─── Resize divider ───────────────────────────────────────────────────────────
 
 class _ResizeDivider extends StatelessWidget {
@@ -114,27 +85,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─── Shared popup menu row ────────────────────────────────────────────────────
-
-class _MenuRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Widget? trailing;
-  const _MenuRow({required this.icon, required this.label, this.trailing});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20),
-        const SizedBox(width: 12),
-        Text(label),
-        if (trailing != null) ...[const Spacer(), trailing!],
-      ],
-    );
-  }
-}
-
 // ─── Keyboard shortcuts reference ─────────────────────────────────────────────
 
 class _ShortcutsDialog extends StatelessWidget {
@@ -146,7 +96,6 @@ class _ShortcutsDialog extends StatelessWidget {
       [
         ('D', 'Draw mode'),
         ('E', 'Erase mode'),
-        ('P  or  Space', 'Pan / navigate'),
         ('C', 'Colour picker'),
         ('S', 'Select mode'),
       ]
@@ -191,7 +140,6 @@ class _ShortcutsDialog extends StatelessWidget {
     (
       'Stitch mode',
       [
-        ('P  or  Space', 'Pan'),
         ('S', 'Select'),
         ('Esc', 'Exit stitch mode'),
       ]
@@ -259,53 +207,3 @@ class _ShortcutsDialog extends StatelessWidget {
   }
 }
 
-// ─── Import format banner ────────────────────────────────────────────────────
-
-class _ImportBanner extends StatelessWidget {
-  final String filePath;
-  final VoidCallback onSaveAs;
-
-  const _ImportBanner({required this.filePath, required this.onSaveAs});
-
-  String get _ext {
-    final dot = filePath.lastIndexOf('.');
-    return dot >= 0 ? filePath.substring(dot + 1).toUpperCase() : '?';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.tertiaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline,
-                size: 16, color: cs.onTertiaryContainer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Imported $_ext file — snippets and Drive sync require .stitches format.',
-                style: TextStyle(
-                    fontSize: 12, color: cs.onTertiaryContainer),
-              ),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: cs.onTertiaryContainer,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: onSaveAs,
-              child: const Text('Save As .stitches',
-                  style: TextStyle(fontSize: 12)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

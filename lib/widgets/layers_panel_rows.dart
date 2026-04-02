@@ -25,17 +25,24 @@ class _GroupRow extends StatefulWidget {
 class _GroupRowState extends State<_GroupRow> {
   bool _renaming = false;
   late final TextEditingController _renameCtrl;
+  late final FocusNode _renameFocus;
 
   @override
   void initState() {
     super.initState();
     _renameCtrl = TextEditingController(text: widget.group.name);
+    _renameFocus = FocusNode()..addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
+    _renameFocus.dispose();
     _renameCtrl.dispose();
     super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_renameFocus.hasFocus && _renaming) _commitRename();
   }
 
   void _startRename() {
@@ -44,6 +51,7 @@ class _GroupRowState extends State<_GroupRow> {
   }
 
   void _commitRename() {
+    if (!_renaming) return;
     final name = _renameCtrl.text.trim();
     if (name.isNotEmpty) widget.notifier.renameGroup(widget.group.id, name);
     setState(() => _renaming = false);
@@ -136,11 +144,12 @@ class _GroupRowState extends State<_GroupRow> {
             ),
           ),
           const SizedBox(width: 4),
-          // Group name (double-tap to rename)
+          // Group name (tap to expand/collapse, double-tap to rename)
           Expanded(
             child: _renaming
                 ? TextField(
                     controller: _renameCtrl,
+                    focusNode: _renameFocus,
                     autofocus: true,
                     style: const TextStyle(fontSize: 12),
                     decoration: const InputDecoration(
@@ -153,6 +162,7 @@ class _GroupRowState extends State<_GroupRow> {
                     onEditingComplete: _commitRename,
                   )
                 : GestureDetector(
+                    onTap: () => notifier.toggleGroupCollapsed(group.id),
                     onDoubleTap: _startRename,
                     child: Text(
                       group.name,
@@ -278,17 +288,24 @@ class _LayerRow extends StatefulWidget {
 class _LayerRowState extends State<_LayerRow> {
   bool _renaming = false;
   late final TextEditingController _renameCtrl;
+  late final FocusNode _renameFocus;
 
   @override
   void initState() {
     super.initState();
     _renameCtrl = TextEditingController(text: widget.layer.name);
+    _renameFocus = FocusNode()..addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
+    _renameFocus.dispose();
     _renameCtrl.dispose();
     super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_renameFocus.hasFocus && _renaming) _commitRename();
   }
 
   void _startRename() {
@@ -297,6 +314,7 @@ class _LayerRowState extends State<_LayerRow> {
   }
 
   void _commitRename() {
+    if (!_renaming) return;
     final name = _renameCtrl.text.trim();
     if (name.isNotEmpty) widget.onRename(name);
     setState(() => _renaming = false);
@@ -391,6 +409,7 @@ class _LayerRowState extends State<_LayerRow> {
                   child: _renaming
                       ? TextField(
                           controller: _renameCtrl,
+                          focusNode: _renameFocus,
                           autofocus: true,
                           style: const TextStyle(fontSize: 12),
                           decoration: const InputDecoration(

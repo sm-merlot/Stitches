@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/file_service.dart';
+import '../utils/editor_key_handler.dart';
 import '../utils/snackbars.dart';
+import '../widgets/editor_canvas_area.dart';
+import '../widgets/editor_shared_widgets.dart';
 import 'export_dialog.dart';
-import '../widgets/editor_toolbar.dart';
 import '../widgets/right_sidebar.dart';
 import '../widgets/right_sidebar_colours_panel.dart';
-import '../widgets/pattern_canvas.dart';
 import 'materials_list_screen.dart';
 import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
@@ -114,152 +114,12 @@ class EditorScreen extends ConsumerWidget {
 
     // All keyboard shortcuts handled here — single Focus, no competing nodes.
     KeyEventResult handleKeys(FocusNode node, KeyEvent event) {
-      if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-        return KeyEventResult.ignored;
-      }
-
-      final notifier = ref.read(editorProvider.notifier);
-      final keys = HardwareKeyboard.instance.logicalKeysPressed;
-      final meta = keys.contains(LogicalKeyboardKey.metaLeft) ||
-          keys.contains(LogicalKeyboardKey.metaRight);
-      final ctrl = keys.contains(LogicalKeyboardKey.controlLeft) ||
-          keys.contains(LogicalKeyboardKey.controlRight);
-      final shift = keys.contains(LogicalKeyboardKey.shiftLeft) ||
-          keys.contains(LogicalKeyboardKey.shiftRight);
-
-      final key = event.logicalKey;
-
-      // In stitch mode: allow save, pan/select mode toggle, and Escape.
-      if (state.stitchMode) {
-        if ((meta || ctrl) && key == LogicalKeyboardKey.keyS) {
-          _save(context, ref);
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyS) {
-          notifier.setDrawingMode(DrawingMode.select);
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.escape) {
-          // Clear selection first; if nothing to clear, exit stitch mode.
-          if (state.selectionRect != null) {
-            notifier.cancelSelection();
-          } else {
-            notifier.toggleStitchMode();
-          }
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      }
-
-      // Modifier shortcuts
-      if (meta || ctrl) {
-        if (key == LogicalKeyboardKey.keyZ && !shift) {
-          notifier.undo();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyZ && shift) {
-          notifier.redo();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyY) {
-          notifier.redo();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyS) {
-          _save(context, ref);
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyA) {
-          notifier.selectAll();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyC) {
-          notifier.copySelection();
-          return KeyEventResult.handled;
-        }
-        if (!shift && key == LogicalKeyboardKey.keyV) {
-          notifier.enterPasteMode();
-          return KeyEventResult.handled;
-        }
-        if (shift && key == LogicalKeyboardKey.keyH) {
-          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-            notifier.flipSelectionH();
-          } else if (state.drawingMode == DrawingMode.paste) {
-            notifier.flipClipboardH();
-          }
-          return KeyEventResult.handled;
-        }
-        if (shift && key == LogicalKeyboardKey.keyV) {
-          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-            notifier.flipSelectionV();
-          } else if (state.drawingMode == DrawingMode.paste) {
-            notifier.flipClipboardV();
-          }
-          return KeyEventResult.handled;
-        }
-        if (shift && key == LogicalKeyboardKey.bracketRight) {
-          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-            notifier.rotateSelectionCW();
-          } else if (state.drawingMode == DrawingMode.paste) {
-            notifier.rotateClipboardCW();
-          }
-          return KeyEventResult.handled;
-        }
-        if (shift && key == LogicalKeyboardKey.bracketLeft) {
-          if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-            notifier.rotateSelectionCW();
-            notifier.rotateSelectionCW();
-            notifier.rotateSelectionCW();
-          } else if (state.drawingMode == DrawingMode.paste) {
-            notifier.rotateClipboardCW();
-            notifier.rotateClipboardCW();
-            notifier.rotateClipboardCW();
-          }
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      }
-
-      // Single-key shortcuts
-      switch (key) {
-        case LogicalKeyboardKey.keyD:
-          notifier.setDrawingMode(DrawingMode.draw);
-        case LogicalKeyboardKey.keyE:
-          notifier.setDrawingMode(DrawingMode.erase);
-        case LogicalKeyboardKey.space:
-          notifier.setDrawingMode(DrawingMode.pan);
-        case LogicalKeyboardKey.digit1:
-          notifier.setTool(DrawingTool.fullStitch);
-        case LogicalKeyboardKey.digit2:
-          notifier.setTool(DrawingTool.halfForward);
-        case LogicalKeyboardKey.digit3:
-          notifier.setTool(DrawingTool.halfBackward);
-        case LogicalKeyboardKey.digit4:
-          notifier.setTool(DrawingTool.halfCross);
-        case LogicalKeyboardKey.digit5:
-          notifier.setTool(DrawingTool.quarterDiag);
-        case LogicalKeyboardKey.digit6:
-          notifier.setTool(DrawingTool.quarterCross);
-        case LogicalKeyboardKey.digit7:
-          notifier.setTool(DrawingTool.backstitch);
-        case LogicalKeyboardKey.digit8:
-          notifier.setTool(DrawingTool.fill);
-        case LogicalKeyboardKey.digit9:
-          notifier.setDrawingMode(DrawingMode.erase);
-          if (!state.fillEraseActive) notifier.toggleFillErase();
-        case LogicalKeyboardKey.keyC:
-          notifier.setDrawingMode(DrawingMode.colorPicker);
-        case LogicalKeyboardKey.keyS:
-          notifier.setDrawingMode(DrawingMode.select);
-        case LogicalKeyboardKey.escape:
-          notifier.cancelSelection();
-        case LogicalKeyboardKey.delete:
-        case LogicalKeyboardKey.backspace:
-          notifier.deleteSelection();
-        default:
-          return KeyEventResult.ignored;
-      }
-      return KeyEventResult.handled;
+      return handleEditorKeys(
+        event,
+        state,
+        ref.read(editorProvider.notifier),
+        onSave: () => _save(context, ref),
+      );
     }
 
     return PopScope(
@@ -340,7 +200,7 @@ class EditorScreen extends ConsumerWidget {
                 itemBuilder: (ctx) => [
                   PopupMenuItem(
                     value: _MenuAction.referenceImage,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                       icon: Icons.image_outlined,
                       label: 'Reference Image',
                       trailing: state.referenceImage != null &&
@@ -353,30 +213,30 @@ class EditorScreen extends ConsumerWidget {
                   ),
                   const PopupMenuItem(
                     value: _MenuAction.resize,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                         icon: Icons.aspect_ratio, label: 'Resize Aida'),
                   ),
                   const PopupMenuItem(
                     value: _MenuAction.patternInfo,
-                    child:
-                        _MenuRow(icon: Icons.info_outline, label: 'Pattern Info'),
+                    child: EditorMenuRow(
+                        icon: Icons.info_outline, label: 'Pattern Info'),
                   ),
                   const PopupMenuDivider(),
                   const PopupMenuItem(
                     value: _MenuAction.saveAs,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                         icon: Icons.save_as_outlined, label: 'Save As…'),
                   ),
                   const PopupMenuItem(
                     value: _MenuAction.export,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
                   if (state.isNativeFormat)
                     PopupMenuItem(
                       value: _MenuAction.toggleCompress,
-                      child: _MenuRow(
+                      child: EditorMenuRow(
                         icon: Icons.folder_zip_outlined,
                         label: state.compressOnSave
                             ? 'File Compressed'
@@ -391,29 +251,15 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Stitch mode actions — Block mode + Materials + Demo + Screen Lock
+            // Stitch mode actions — Materials + Demo + Screen Lock
             if (state.stitchMode) ...[
               IconButton(
                 tooltip: 'Materials list',
                 icon: const Icon(Icons.shopping_bag_outlined),
                 onPressed: () => showMaterialsList(context, state),
               ),
-              IconButton(
-                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
-                isSelected: state.blockMode,
-                icon: const Icon(Icons.grid_view_outlined),
-                selectedIcon: const Icon(Icons.grid_view),
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).toggleBlockMode(),
-                style: state.blockMode
-                    ? IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                      )
-                    : null,
-              ),
               StitchDemoButton(state: state),
-              _ScreenLockButton(ref: ref),
+              const EditorScreenLockButton(),
               const SizedBox(width: 4),
             ],
           ],
@@ -425,43 +271,18 @@ class EditorScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: Column(
-                  children: [
-                    if (!state.isNativeFormat)
-                      _ImportBanner(
-                        filePath: state.filePath!,
-                        onSaveAs: () => _saveAs(context, ref),
-                      ),
-                    const Expanded(child: PatternCanvas()),
-                    const SafeArea(top: false, child: EditorToolbar()),
-                  ],
+                child: EditorCanvasArea(
+                  importFilePath:
+                      state.isNativeFormat ? null : state.filePath,
+                  onSaveAs: state.isNativeFormat
+                      ? null
+                      : () => _saveAs(context, ref),
                 ),
               ),
               const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
             ],
           ),
         ),
-        floatingActionButton: state.isFileOpen
-            ? Padding(
-                padding: EdgeInsets.only(bottom: state.stitchMode ? 16 : 58),
-                child: FloatingActionButton.extended(
-                  onPressed: () =>
-                      ref.read(editorProvider.notifier).toggleStitchMode(),
-                  icon: Icon(state.stitchMode
-                      ? Icons.edit_outlined
-                      : Icons.auto_stories_outlined),
-                  label: Text(
-                      state.stitchMode ? 'Exit Stitch Mode' : 'Stitch Mode'),
-                  backgroundColor: state.stitchMode
-                      ? Theme.of(context).colorScheme.secondaryContainer
-                      : null,
-                  foregroundColor: state.stitchMode
-                      ? Theme.of(context).colorScheme.onSecondaryContainer
-                      : null,
-                ),
-              )
-            : null,
-        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       ),
     );
   }
@@ -487,99 +308,3 @@ class EditorScreen extends ConsumerWidget {
 
 }
 
-// ─── Shared popup menu row ───────────────────────────────────────────────────
-
-class _MenuRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Widget? trailing;
-  const _MenuRow({required this.icon, required this.label, this.trailing});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20),
-        const SizedBox(width: 12),
-        Text(label),
-        if (trailing != null) ...[const Spacer(), trailing!],
-      ],
-    );
-  }
-}
-// ─── Screen lock toggle button ────────────────────────────────────────────────
-
-class _ScreenLockButton extends ConsumerWidget {
-  final WidgetRef ref;
-  const _ScreenLockButton({required this.ref});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final keepOn = ref.watch(settingsProvider).keepScreenOn;
-    return Tooltip(
-      message: keepOn ? 'Screen lock: off' : 'Screen lock: on',
-      child: IconButton(
-        isSelected: keepOn,
-        icon: const Icon(Icons.screen_lock_portrait_outlined),
-        selectedIcon: const Icon(Icons.screen_lock_portrait),
-        style: keepOn
-            ? IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.primaryContainer,
-                foregroundColor: theme.colorScheme.onPrimaryContainer,
-              )
-            : null,
-        onPressed: () => ref
-            .read(settingsProvider.notifier)
-            .setKeepScreenOn(!keepOn),
-      ),
-    );
-  }
-}
-
-// ─── Import format banner ─────────────────────────────────────────────────────
-
-class _ImportBanner extends StatelessWidget {
-  final String filePath;
-  final VoidCallback onSaveAs;
-
-  const _ImportBanner({required this.filePath, required this.onSaveAs});
-
-  String get _ext {
-    final dot = filePath.lastIndexOf('.');
-    return dot >= 0 ? filePath.substring(dot + 1).toUpperCase() : '?';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.tertiaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, size: 16, color: cs.onTertiaryContainer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Imported $_ext file — snippets require .stitches format.',
-                style: TextStyle(fontSize: 12, color: cs.onTertiaryContainer),
-              ),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: cs.onTertiaryContainer,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: onSaveAs,
-              child: const Text('Save As .stitches', style: TextStyle(fontSize: 12)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

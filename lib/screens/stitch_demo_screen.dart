@@ -186,15 +186,22 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
       final bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
       final suggestedName =
           _aida.title.replaceAll(RegExp(r'[^\w\s-]'), '_');
-      final path = await FilePicker.platform.saveFile(
-        fileName: isMobile ? '$suggestedName.gif' : suggestedName,
-        type: isMobile ? FileType.any : FileType.custom,
-        allowedExtensions: isMobile ? null : ['gif'],
-      );
-
-      if (path == null) return;
-      final finalPath = path.endsWith('.gif') ? path : '$path.gif';
-      await File(finalPath).writeAsBytes(gifBytes);
+      if (isMobile) {
+        await FilePicker.platform.saveFile(
+          fileName: '$suggestedName.gif',
+          type: FileType.any,
+          bytes: Uint8List.fromList(gifBytes),
+        );
+      } else {
+        final path = await FilePicker.platform.saveFile(
+          fileName: suggestedName,
+          type: FileType.custom,
+          allowedExtensions: ['gif'],
+        );
+        if (path == null) return;
+        final finalPath = path.endsWith('.gif') ? path : '$path.gif';
+        await File(finalPath).writeAsBytes(gifBytes);
+      }
 
       if (mounted) showSuccess(context, 'GIF saved');
     } catch (e) {

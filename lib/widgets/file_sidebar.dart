@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor/editor_provider.dart';
+import '../services/editor_session_service.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
@@ -14,6 +15,7 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/drive_cache.dart';
 import '../services/file_service.dart';
+import '../services/pattern_cache.dart';
 import '../services/format_service.dart';
 import '../utils/snackbars.dart';
 import '../providers/image_viewer_provider.dart';
@@ -361,13 +363,18 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     }
 
     if (file is LocalPatternFile) {
+      ref.read(fileLoadingProvider.notifier).set(true);
       try {
         final (pattern, path, wasCompressed) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
+        final session = await EditorSessionService.load('local:${file.path}');
+        if (!context.mounted) return;
         _switchToEditor();
-        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed);
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed, session: session);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not open file: $e');
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
     } else if (file is DrivePatternFile) {
       try {
@@ -380,16 +387,24 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
         if (await cached.exists()) {
           // Load from cache immediately, then refresh from Drive in background.
-          final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
-          if (!context.mounted) return;
-          _switchToEditor();
-          ref.read(editorProvider.notifier).loadPattern(
-            pattern,
-            filePath: path,
-            driveFileId: file.fileId,
-            driveParentFolderId: file.parentFolder.folderId,
-            compressOnSave: wasCompressed,
-          );
+          ref.read(fileLoadingProvider.notifier).set(true);
+          try {
+            final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
+            if (!context.mounted) return;
+            final session = await EditorSessionService.load('drive:${file.fileId}');
+            if (!context.mounted) return;
+            _switchToEditor();
+            ref.read(editorProvider.notifier).loadPattern(
+              pattern,
+              filePath: path,
+              driveFileId: file.fileId,
+              driveParentFolderId: file.parentFolder.folderId,
+              compressOnSave: wasCompressed,
+              session: session,
+            );
+          } finally {
+            if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
+          }
           unawaited(_refreshFromDrive(file, tempPath));
         } else {
           // No cache — download first, showing a blocking overlay.
@@ -408,6 +423,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
             if (!context.mounted) return;
             final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
             if (!context.mounted) return;
+            final session = await EditorSessionService.load('drive:${file.fileId}');
+            if (!context.mounted) return;
             _switchToEditor();
             ref.read(editorProvider.notifier).loadPattern(
               pattern,
@@ -415,6 +432,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
               driveFileId: file.fileId,
               driveParentFolderId: file.parentFolder.folderId,
               compressOnSave: wasCompressed,
+              session: session,
             );
           } finally {
             if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
@@ -446,6 +464,13 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
   /// Downloads the Drive version and silently refreshes the cached file,
   /// but only if the user has not edited the pattern since it was opened.
+  ///
+  /// Parses the downloaded bytes in a background isolate BEFORE writing to
+  /// disk so that the PatternCache can be updated atomically with the file
+  /// write.  Without this, there is a window between the writeAsBytes call
+  /// (which changes the file's mtime, evicting the cache entry) and the
+  /// re-parse completing (which would re-populate it) during which any file
+  /// switch lands on a cache miss and triggers a full slow re-parse.
   Future<void> _refreshFromDrive(DrivePatternFile file, String tempPath) async {
     try {
       final service = await ref.read(googleDriveProvider.notifier).getService();
@@ -455,19 +480,28 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       // Don't clobber any edits the user has made since opening.
       final state = ref.read(editorProvider);
       if (state.driveFileId != file.fileId || state.isDirty) return;
+      // Parse in background BEFORE touching disk.
+      final (pattern, wasCompressed) = await FileService.parseBytesToPattern(bytes);
+      if (!mounted) return;
+      final stateAfterParse = ref.read(editorProvider);
+      if (stateAfterParse.driveFileId != file.fileId || stateAfterParse.isDirty) return;
+      // Write + cache update are now atomic: no window where mtime is new but
+      // cache still holds the old entry.
       await File(tempPath).writeAsBytes(bytes);
       if (!mounted) return;
-      final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
-      if (!mounted) return;
+      final stat = await File(tempPath).stat();
+      PatternCache.put(tempPath, pattern, wasCompressed, stat.modified);
       // Re-check: still the same file and still unedited?
       final current = ref.read(editorProvider);
       if (current.driveFileId == file.fileId && !current.isDirty) {
+        final session = await EditorSessionService.load('drive:${file.fileId}');
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
-          filePath: path,
+          filePath: tempPath,
           driveFileId: file.fileId,
           driveParentFolderId: file.parentFolder.folderId,
           compressOnSave: wasCompressed,
+          session: session,
         );
       }
     } catch (_) {

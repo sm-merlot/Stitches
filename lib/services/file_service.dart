@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/layer.dart';
+import 'pattern_cache.dart';
 import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
 import '../models/pattern.dart';
@@ -34,6 +37,10 @@ class FileService {
   /// Load a pattern directly from a known file path.
   /// Supports both .stitches (YAML) and .oxs (XML) formats.
   /// Returns (pattern, filePath, wasCompressed).
+  ///
+  /// Checks [PatternCache] first; if the file is unchanged since it was last
+  /// cached the parse is skipped entirely.  Otherwise the decompression and
+  /// YAML parsing run in a background isolate so the UI thread stays free.
   static Future<(CrossStitchPattern, String, bool)> openFileFromPath(
       String path) async {
     final file = File(path);
@@ -42,12 +49,37 @@ class FileService {
       final pattern = await FormatService.importFile(path);
       return (pattern, path, false);
     }
+
+    // Cache hit — skip disk read and parse entirely.
+    final cached = await PatternCache.get(path);
+    if (cached != null) {
+      final (pattern, wasCompressed) = cached;
+      return (pattern, path, wasCompressed);
+    }
+
     final bytes = await file.readAsBytes();
+    final (pattern, wasCompressed) =
+        await Isolate.run(() => _parseBytesToPattern(bytes));
+
+    // Populate cache; stat is cheap after readAsBytes.
+    final stat = await file.stat();
+    PatternCache.put(path, pattern, wasCompressed, stat.modified);
+
+    return (pattern, path, wasCompressed);
+  }
+
+  /// Parse raw bytes (possibly gzip-compressed) into a pattern in a background
+  /// isolate.  Used by Drive refresh logic to avoid a cache-miss window between
+  /// the file write and the subsequent re-parse.
+  static Future<(CrossStitchPattern, bool)> parseBytesToPattern(Uint8List bytes) =>
+      Isolate.run(() => _parseBytesToPattern(bytes));
+
+  /// Runs in a background isolate: decompress + decode + parse the raw bytes.
+  static (CrossStitchPattern, bool) _parseBytesToPattern(Uint8List bytes) {
     final wasCompressed =
         bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
     final content = _decodeBytes(_maybeDecompress(bytes));
-    final pattern = parseYamlString(content);
-    return (pattern, path, wasCompressed);
+    return (parseYamlString(content), wasCompressed);
   }
 
   /// Decompress gzip bytes if the gzip magic bytes (1f 8b) are present.
@@ -104,12 +136,17 @@ class FileService {
 
   /// Save pattern to an existing file path.
   /// Pass [compress] = true (default) for gzip compression, false for plain UTF-8 text.
+  ///
+  /// Updates [PatternCache] after a successful write so the next workspace
+  /// file-switch is served from cache without re-reading the file.
   static Future<void> saveFile(CrossStitchPattern pattern, String path,
       {bool compress = true}) async {
     final yaml = toYamlString(pattern);
     final bytes =
         compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
     await File(path).writeAsBytes(bytes, flush: true);
+    final stat = await File(path).stat();
+    PatternCache.put(path, pattern, compress, stat.modified);
   }
 
   /// Prompt the user for a save location; returns the chosen path or null.
@@ -117,10 +154,22 @@ class FileService {
   static Future<String?> saveFileAs(CrossStitchPattern pattern,
       {bool compress = true}) async {
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+    if (_isMobile) {
+      // On iOS/Android the platform manages writing; bytes must be provided.
+      final yaml = toYamlString(pattern);
+      final bytes =
+          compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
+      final path = await FilePicker.platform.saveFile(
+        fileName: '$suggestedName.$_ext',
+        type: FileType.any,
+        bytes: Uint8List.fromList(bytes),
+      );
+      return path; // null if user cancelled; path if platform returns one
+    }
     final path = await FilePicker.platform.saveFile(
-      fileName: _isMobile ? '$suggestedName.$_ext' : suggestedName,
-      type: _isMobile ? FileType.any : FileType.custom,
-      allowedExtensions: _isMobile ? null : [_ext],
+      fileName: suggestedName,
+      type: FileType.custom,
+      allowedExtensions: [_ext],
     );
     if (path == null) return null;
     final finalPath = path.endsWith('.$_ext') ? path : '$path.$_ext';
@@ -155,35 +204,8 @@ class FileService {
       }
     }
 
-    if (pattern.editorSelectedThreadId != null ||
-        pattern.editorTool != null ||
-        pattern.editorStitchMode ||
-        pattern.editorActiveLayerId != null ||
-        pattern.editorBlockMode ||
-        pattern.editorViewScale > 0) {
-      buf.writeln('editor:');
-      if (pattern.editorSelectedThreadId != null) {
-        buf.writeln(
-            '  selectedThread: ${_yamlStr(pattern.editorSelectedThreadId!)}');
-      }
-      if (pattern.editorTool != null) {
-        buf.writeln('  tool: ${pattern.editorTool!}');
-      }
-      if (pattern.editorStitchMode) {
-        buf.writeln('  stitchMode: true');
-      }
-      if (pattern.editorActiveLayerId != null) {
-        buf.writeln('  activeLayer: ${_yamlStr(pattern.editorActiveLayerId!)}');
-      }
-      if (pattern.editorBlockMode) {
-        buf.writeln('  blockMode: true');
-      }
-      if (pattern.editorViewScale > 0) {
-        buf.writeln('  panX: ${pattern.editorViewPanX.toStringAsFixed(1)}');
-        buf.writeln('  panY: ${pattern.editorViewPanY.toStringAsFixed(1)}');
-        buf.writeln('  scale: ${pattern.editorViewScale.toStringAsFixed(4)}');
-      }
-    }
+    // editor: section intentionally omitted — view position, tool, mode, and
+    // active layer are now stored per-device in EditorSessionService.
 
     if (pattern.referenceImagePath != null) {
       buf.writeln('overlay:');

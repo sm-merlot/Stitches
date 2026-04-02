@@ -140,20 +140,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Lone stitches are NOT in the map — they render at full source color.
     final blendMap = _buildBlendMap();
 
-    // ── Pre-compute occlusion sets for symbol rendering (Bug 2) ─────────────
-    // For each layer index i, the set of cell keys covered by FullStitches in
-    // any HIGHER visible layer (j > i). Symbols at those cells are skipped.
-    final upperFullStitchCells = <int, Set<String>>{};
-    for (int i = 0; i < pattern.layers.length; i++) {
-      final covered = <String>{};
-      for (int j = i + 1; j < pattern.layers.length; j++) {
-        if (!pattern.layers[j].visible) continue;
-        for (final s in pattern.layers[j].stitches) {
-          if (s is FullStitch) covered.add('${s.x},${s.y}');
-        }
-      }
-      upperFullStitchCells[i] = covered;
-    }
+    // ── Pre-compute occlusion sets for symbol rendering ──────────────────────
+    // For each layer index i, the set of cells (encoded as (x<<16)|y) covered
+    // by FullStitches in any HIGHER visible layer. Cached — free during pan/zoom.
+    final upperFullStitchCells = _getOcclusionSets();
 
     // ── Stitches — iterate layers bottom to top ──────────────────────────────
     for (final layer in pattern.layers) {
@@ -239,7 +229,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (stitch is BackStitch) continue;
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
           // Skip symbol if a higher visible layer has a FullStitch at this cell
-          if (stitch is FullStitch && occluded.contains('${stitch.x},${stitch.y}')) continue;
+          if (stitch is FullStitch && occluded.contains((stitch.x << 16) | stitch.y)) continue;
 
           // For blended cells, use the composite cache (stable symbol
           // assignments) when available; fall back to nearest-thread lookup
@@ -359,10 +349,29 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // to the same focus decision (preventing semi-transparent bleed-through).
   static Map<String, String> _blendDmcCache = {};
 
+  // ── Static cache for the per-layer-index occlusion sets ──────────────────
+  // Maps layer index → set of cell keys (encoded as (x<<16)|y) covered by a
+  // FullStitch in any HIGHER visible layer. Rebuilt when pattern identity
+  // changes; otherwise reused across every pan/zoom frame.
+  static Map<int, Set<int>>? _occlusionCache;
+
+  // ── Static cache for block-mode Color→Rects per layer ────────────────────
+  // Rects are in canvas/pattern space and depend only on stitch content and
+  // display mode, NOT on pan or zoom. Rebuilt only when pattern or mode changes.
+  static CrossStitchPattern? _blockCachePattern;
+  static String? _blockCacheFocusId;
+  static bool _blockCacheStitchMode = false;
+  static bool _blockCacheBackMode = false;
+  static bool _blockCacheCrossMode = false;
+  static Map<String, Color>? _blockCachePaletteOverride;
+  // Key is the Layer object itself (identity-compared via map lookup).
+  static final Map<Layer, Map<Color, List<Rect>>> _blockRectsByLayer = {};
+
   Map<String, Color> _buildBlendMap() {
     if (identical(_blendMapPattern, pattern)) return _blendMapCache;
     _blendMapPattern = pattern;
     _blendDmcCache = {};
+    _occlusionCache = null; // invalidate — rebuilt lazily by _getOcclusionSets()
 
     final threadMap = _threadMap;
     final cellStack =
@@ -404,6 +413,26 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     return result;
   }
 
+  // ── Occlusion sets: per-layer-index set of cells covered by higher layers ──
+  // Keyed by (x<<16)|y integer to avoid string allocations in the hot path.
+  // Cache is invalidated inside _buildBlendMap() whenever pattern changes.
+  Map<int, Set<int>> _getOcclusionSets() {
+    if (_occlusionCache != null) return _occlusionCache!;
+    final result = <int, Set<int>>{};
+    for (int i = 0; i < pattern.layers.length; i++) {
+      final covered = <int>{};
+      for (int j = i + 1; j < pattern.layers.length; j++) {
+        if (!pattern.layers[j].visible) continue;
+        for (final s in pattern.layers[j].stitches) {
+          if (s is FullStitch) covered.add((s.x << 16) | s.y);
+        }
+      }
+      result[i] = covered;
+    }
+    _occlusionCache = result;
+    return result;
+  }
+
   // ── Focus region outline ────────────────────────────────────────────────────
 
   // The opaque base of the unfocused-stitch grey used to detect low-contrast
@@ -435,8 +464,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         _labDeltaE(focusThread.color, _unfocusedGreyOpaque) < 45;
     if (!needsOutline) return;
 
-    // Collect every focused cell as a 'x,y' key for O(1) neighbour lookup.
-    final focusedKeys = <String>{};
+    // Collect every focused cell encoded as (x<<16)|y for O(1) neighbour lookup
+    // without string allocations in this hot path.
+    final focusedKeys = <int>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -450,13 +480,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           BackStitch() => (-1, -1),
         };
         if (cx < 0) continue;
-        final key = '$cx,$cy';
+        final strKey = '$cx,$cy'; // still needed for blendMap / _blendDmcCache lookup
+        final intKey = (cx << 16) | cy;
         // Blended cells: focus is determined by the composited DMC code.
         // Non-blended: focus is determined by the raw thread ID.
-        if (blendMap.containsKey(key)) {
-          if (_blendDmcCache[key] == focusId) focusedKeys.add(key);
+        if (blendMap.containsKey(strKey)) {
+          if (_blendDmcCache[strKey] == focusId) focusedKeys.add(intKey);
         } else if (stitch.threadId == focusId) {
-          focusedKeys.add(key);
+          focusedKeys.add(intKey);
         }
       }
     }
@@ -467,31 +498,30 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Drawing only outer edges makes adjacent cells share a single line.
     final path = Path();
     for (final key in focusedKeys) {
-      final parts = key.split(',');
-      final cx = int.parse(parts[0]);
-      final cy = int.parse(parts[1]);
+      final cx = key >> 16;
+      final cy = key & 0xFFFF;
       final l = cx * cellSize;
       final t = cy * cellSize;
       final r = l + cellSize;
       final b = t + cellSize;
 
       // Left edge
-      if (!focusedKeys.contains('${cx - 1},$cy')) {
+      if (!focusedKeys.contains(((cx - 1) << 16) | cy)) {
         path.moveTo(l, t);
         path.lineTo(l, b);
       }
       // Right edge
-      if (!focusedKeys.contains('${cx + 1},$cy')) {
+      if (!focusedKeys.contains(((cx + 1) << 16) | cy)) {
         path.moveTo(r, t);
         path.lineTo(r, b);
       }
       // Top edge
-      if (!focusedKeys.contains('$cx,${cy - 1}')) {
+      if (!focusedKeys.contains((cx << 16) | (cy - 1))) {
         path.moveTo(l, t);
         path.lineTo(r, t);
       }
       // Bottom edge
-      if (!focusedKeys.contains('$cx,${cy + 1}')) {
+      if (!focusedKeys.contains((cx << 16) | (cy + 1))) {
         path.moveTo(l, b);
         path.lineTo(r, b);
       }
@@ -515,18 +545,40 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // far enough that stitch shapes are sub-pixel and too small to be meaningful.
   // Cells with multiple stitch layers use the topmost stitch's colour.
 
-  void _drawLayerStitchesAsBlocks(Canvas canvas, Layer layer,
-      Map<String, Color> blendMap,
-      int minX, int minY, int maxX, int maxY) {
-    final halfCell    = cellSize * 0.5;
-    final quarterCell = cellSize * 0.5; // same value; named for clarity below
+  // Returns (and caches) the Color→List<Rect> batch for [layer] in block mode.
+  // Rects are in canvas/pattern space and are independent of pan/zoom, so they
+  // can be reused across frames as long as the pattern and display modes are
+  // unchanged.
+  Map<Color, List<Rect>> _getOrBuildBlockRects(
+      Layer layer, Map<String, Color> blendMap) {
+    // Invalidate if pattern or any display-mode flag that affects colours changed.
+    final modeChanged = !identical(_blockCachePattern, pattern) ||
+        _blockCacheFocusId != stitchFocusThreadId ||
+        _blockCacheStitchMode != stitchMode ||
+        _blockCacheBackMode != stitchBackMode ||
+        _blockCacheCrossMode != stitchCrossMode ||
+        !identical(_blockCachePaletteOverride, paletteOverride);
+    if (modeChanged) {
+      _blockRectsByLayer.clear();
+      _blockCachePattern = pattern;
+      _blockCacheFocusId = stitchFocusThreadId;
+      _blockCacheStitchMode = stitchMode;
+      _blockCacheBackMode = stitchBackMode;
+      _blockCacheCrossMode = stitchCrossMode;
+      _blockCachePaletteOverride = paletteOverride;
+    }
 
-    // Collect (rect, color) for each visible stitch.
-    // Full stitches → full cell; halves → half cell; quarters → quarter cell.
-    final List<(Rect, Color)> rects = [];
+    final cached = _blockRectsByLayer[layer];
+    if (cached != null) return cached;
+
+    // Build rects for the entire layer (no viewport culling here — the caller
+    // still culls so only visible rects reach canvas.drawRect).
+    final halfCell    = cellSize * 0.5;
+    final quarterCell = cellSize * 0.5;
+    final byColor = <Color, List<Rect>>{};
+
     for (final stitch in layer.stitches) {
       if (stitch is BackStitch) continue;
-      if (!_inCellRange(stitch, minX, minY, maxX, maxY)) continue;
       final thread = _threadMap[stitch.threadId];
       if (thread == null) continue;
       final c = _resolveStitchColor(stitch.threadId,
@@ -534,8 +586,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           isCrossStitch: true);
       if (c == null) continue;
 
-      // For FullStitch, use the blended color if available (overlapping layers).
-      // For all other stitch types, use the source thread color.
       Color effectiveColor = c;
       Rect? rect;
       switch (stitch) {
@@ -550,13 +600,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           }
           rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
 
-        // HalfStitch (diagonal): isForward=true → `/` → right half of cell.
         case HalfStitch(:final x, :final y, isForward: true):
           rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
         case HalfStitch(:final x, :final y, isForward: false):
           rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
 
-        // HalfCrossStitch: occupies one explicit half of the cell.
         case HalfCrossStitch(:final x, :final y, half: HalfOrientation.left):
           rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
         case HalfCrossStitch(:final x, :final y, half: HalfOrientation.right):
@@ -566,7 +614,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         case HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom):
           rect = Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell);
 
-        // QuarterStitch / QuarterCrossStitch: one quarter of the cell.
         case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
         case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
           rect = Rect.fromLTWH(x * cellSize, y * cellSize, quarterCell, quarterCell);
@@ -583,17 +630,30 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         default:
           rect = null;
       }
-      if (rect != null) rects.add((rect, effectiveColor));
+      if (rect != null) (byColor[effectiveColor] ??= []).add(rect);
     }
 
+    _blockRectsByLayer[layer] = byColor;
+    return byColor;
+  }
+
+  void _drawLayerStitchesAsBlocks(Canvas canvas, Layer layer,
+      Map<String, Color> blendMap,
+      int minX, int minY, int maxX, int maxY) {
+    final byColor = _getOrBuildBlockRects(layer, blendMap);
+
+    // Viewport bounds in canvas/pattern space for culling.
+    final minPx = minX * cellSize;
+    final minPy = minY * cellSize;
+    final maxPx = maxX * cellSize;
+    final maxPy = maxY * cellSize;
+
     // Batch rects by colour to minimise Paint object churn.
-    final Map<Color, List<Rect>> byColor = {};
-    for (final (rect, color) in rects) {
-      (byColor[color] ??= []).add(rect);
-    }
     for (final entry in byColor.entries) {
       final paint = Paint()..color = entry.key;
       for (final rect in entry.value) {
+        if (rect.right <= minPx || rect.left >= maxPx ||
+            rect.bottom <= minPy || rect.top >= maxPy) { continue; }
         canvas.drawRect(rect, paint);
       }
     }

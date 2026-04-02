@@ -10,7 +10,7 @@ import '../secrets.dart';
 /// Singleton service for Google OAuth2 authentication.
 ///
 /// macOS/Windows: loopback redirect via googleapis_auth (Desktop OAuth client).
-/// iOS/Android:   google_sign_in v6 — traditional GoogleSignInClient, no Credential Manager.
+/// iOS/Android:   google_sign_in v7 — singleton with separate auth/authorization.
 class GoogleAuthService {
   GoogleAuthService._();
   static final GoogleAuthService instance = GoogleAuthService._();
@@ -24,24 +24,42 @@ class GoogleAuthService {
       defaultTargetPlatform == TargetPlatform.iOS;
 
   // ---------------------------------------------------------------------------
-  // Mobile — google_sign_in v6
+  // Mobile — google_sign_in v7
   // ---------------------------------------------------------------------------
 
-  GoogleSignIn? _googleSignIn;
+  bool _mobileInitialized = false;
+  GoogleSignInAccount? _currentMobileUser;
 
-  GoogleSignIn get _signIn {
-    _googleSignIn ??= GoogleSignIn(
-      scopes: [_driveScope],
+  /// Initialize the v7 singleton and attempt a silent sign-in.
+  /// Safe to call multiple times — only runs once.
+  Future<void> _ensureMobileInitialized() async {
+    if (_mobileInitialized) return;
+    _mobileInitialized = true;
+    await GoogleSignIn.instance.initialize(
       clientId: defaultTargetPlatform == TargetPlatform.iOS
           ? kGoogleIosClientId
           : null,
-      // Android: web client ID required so play-services-auth can issue tokens
-      // without google-services.json. Not needed on iOS (clientId covers it).
       serverClientId: defaultTargetPlatform == TargetPlatform.android
           ? kGoogleWebClientId
           : null,
     );
-    return _googleSignIn!;
+    // Track auth state changes going forward.
+    GoogleSignIn.instance.authenticationEvents.listen((event) {
+      switch (event) {
+        case GoogleSignInAuthenticationEventSignIn():
+          _currentMobileUser = event.user;
+        case GoogleSignInAuthenticationEventSignOut():
+          _currentMobileUser = null;
+      }
+    });
+    // Attempt a silent sign-in for the existing account; update state directly
+    // from the return value so callers immediately following this can read it.
+    try {
+      _currentMobileUser =
+          await GoogleSignIn.instance.attemptLightweightAuthentication();
+    } catch (_) {
+      _currentMobileUser = null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -66,7 +84,10 @@ class GoogleAuthService {
   }
 
   Future<bool> isSignedIn() async {
-    if (_isMobile) return _signIn.isSignedIn();
+    if (_isMobile) {
+      await _ensureMobileInitialized();
+      return _currentMobileUser != null;
+    }
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_keyRefreshToken);
     return token != null && token.isNotEmpty;
@@ -74,9 +95,8 @@ class GoogleAuthService {
 
   Future<String?> accountEmail() async {
     if (_isMobile) {
-      final account =
-          _signIn.currentUser ?? await _signIn.signInSilently();
-      return account?.email;
+      await _ensureMobileInitialized();
+      return _currentMobileUser?.email;
     }
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyEmail);
@@ -91,8 +111,21 @@ class GoogleAuthService {
       );
     }
     if (_isMobile) {
-      final account = await _signIn.signIn();
-      if (account == null) throw Exception('Sign-in cancelled.');
+      await _ensureMobileInitialized();
+      late final GoogleSignInAccount account;
+      try {
+        // Use the return value directly — don't rely on the stream event,
+        // which is delivered asynchronously and may not have fired yet.
+        account = await GoogleSignIn.instance.authenticate();
+        _currentMobileUser = account;
+      } on GoogleSignInException catch (e) {
+        if (e.code == GoogleSignInExceptionCode.canceled) {
+          throw Exception('Sign-in cancelled.');
+        }
+        rethrow;
+      }
+      // Authorize Drive scope after authentication.
+      await account.authorizationClient.authorizeScopes([_driveScope]);
     } else {
       await _signInDesktop();
     }
@@ -100,7 +133,8 @@ class GoogleAuthService {
 
   Future<void> signOut() async {
     if (_isMobile) {
-      await _signIn.signOut();
+      await _ensureMobileInitialized();
+      await GoogleSignIn.instance.signOut();
     } else {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_keyRefreshToken);
@@ -110,10 +144,10 @@ class GoogleAuthService {
 
   Future<http.Client?> authClient() async {
     if (_isMobile) {
-      final account =
-          _signIn.currentUser ?? await _signIn.signInSilently();
+      await _ensureMobileInitialized();
+      final account = _currentMobileUser;
       if (account == null) return null;
-      return _GoogleSignInV6Client(account);
+      return _GoogleSignInV7Client(account, [_driveScope]);
     }
     return _desktopAuthClient();
   }
@@ -186,19 +220,22 @@ class GoogleAuthService {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP client for mobile — delegates to google_sign_in v6 authHeaders
+// HTTP client for mobile — delegates to google_sign_in v7 authorizationHeaders
 // ---------------------------------------------------------------------------
 
-class _GoogleSignInV6Client extends http.BaseClient {
+class _GoogleSignInV7Client extends http.BaseClient {
   final GoogleSignInAccount _account;
+  final List<String> _scopes;
   final http.Client _inner = http.Client();
 
-  _GoogleSignInV6Client(this._account);
+  _GoogleSignInV7Client(this._account, this._scopes);
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final headers = await _account.authHeaders;
-    request.headers.addAll(headers);
+    // promptIfNecessary: false — never show UI from within an HTTP call.
+    final headers = await _account.authorizationClient
+        .authorizationHeaders(_scopes, promptIfNecessary: false);
+    if (headers != null) request.headers.addAll(headers);
     return _inner.send(request);
   }
 

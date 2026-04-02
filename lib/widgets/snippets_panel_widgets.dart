@@ -62,9 +62,18 @@ class _SnippetCard extends StatelessWidget {
                         color: Colors.black45,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      padding: const EdgeInsets.all(1),
-                      child: const Icon(Icons.more_vert,
-                          size: 14, color: Colors.white),
+                      padding: EdgeInsets.all(
+                        defaultTargetPlatform == TargetPlatform.iOS ||
+                                defaultTargetPlatform == TargetPlatform.android
+                            ? 4
+                            : 1,
+                      ),
+                      child: Icon(Icons.more_vert,
+                          size: defaultTargetPlatform == TargetPlatform.iOS ||
+                                  defaultTargetPlatform == TargetPlatform.android
+                              ? 18
+                              : 14,
+                          color: Colors.white),
                     ),
                   ),
                 ),
@@ -258,6 +267,10 @@ class _PaletteChevrons extends StatelessWidget {
     final active = snippet.activePaletteIndex.clamp(0, count - 1);
     final palette = snippet.palettes[active];
     final name = palette.name.isNotEmpty ? palette.name : 'Palette ${active + 1}';
+    final isTouch = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
+    final chevronBox = isTouch ? 36.0 : 28.0;
+    final chevronIcon = isTouch ? 18.0 : 14.0;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -265,10 +278,10 @@ class _PaletteChevrons extends StatelessWidget {
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => onSwitch((active - 1 + count) % count),
-          child: const SizedBox(
-            width: 28,
-            height: 28,
-            child: Icon(Icons.chevron_left, size: 14),
+          child: SizedBox(
+            width: chevronBox,
+            height: chevronBox,
+            child: Icon(Icons.chevron_left, size: chevronIcon),
           ),
         ),
         Flexible(
@@ -286,10 +299,10 @@ class _PaletteChevrons extends StatelessWidget {
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => onSwitch((active + 1) % count),
-          child: const SizedBox(
-            width: 28,
-            height: 28,
-            child: Icon(Icons.chevron_right, size: 14),
+          child: SizedBox(
+            width: chevronBox,
+            height: chevronBox,
+            child: Icon(Icons.chevron_right, size: chevronIcon),
           ),
         ),
       ],

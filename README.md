@@ -43,7 +43,7 @@ A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows)
 - **File format** — patterns saved as `.stitches` files (YAML internally, gzip-compressed; backwards-compatible with older uncompressed files)
 - **Folder workspace** — open a local folder as a workspace with a file tree sidebar
 - **Google Drive sync** — connect a Google Drive account; patterns auto-save and sync in the background
-- **Recent files** — quick access to recently opened files and folders, including Drive items
+- **Recent files** — quick access to recently opened files and folders, including Drive items; Drive items show a warning and are unclickable when not signed in or signed in as a different account
 
 ### PDF pattern scanner *(beta)*
 Convert a printed cross-stitch chart PDF into an editable pattern without any AI or internet connection required.
@@ -69,7 +69,7 @@ The resulting pattern is saved automatically as a `.stitches` file next to the s
 > The stitch demonstration is in beta. Some pattern shapes may produce incorrect or suboptimal stitch paths.
 
 ### View options
-- **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle button in the AppBar (highlighted when active) on all canvases; on by default for new patterns. In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean. Block mode state is persisted to the `.stitches` file.
+- **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle button in the AppBar (highlighted when active) on all canvases; defaults to off per session. In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean. Block mode state is session-only (not saved to file).
 - **Zoom-adaptive rendering** — below a zoom threshold, stitches automatically switch to block rendering; backstitches and grid lines fade out at very low zoom
 
 ### Platform & input

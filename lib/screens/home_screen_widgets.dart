@@ -163,7 +163,7 @@ class _RecentSectionState extends State<_RecentSection> {
 
 // ─── Recent item tile ─────────────────────────────────────────────────────────
 
-class _RecentItemTile extends StatelessWidget {
+class _RecentItemTile extends ConsumerWidget {
   final RecentItem item;
   final VoidCallback? onTap;
   final VoidCallback onRemove;
@@ -174,67 +174,105 @@ class _RecentItemTile extends StatelessWidget {
     required this.onRemove,
   });
 
+  String? _driveWarning(DriveState driveState) {
+    if (!item.isDrive) return null;
+    if (driveState.status != DriveStatus.connected) {
+      return 'Not signed in to Google Drive';
+    }
+    if (item.driveEmail != null &&
+        driveState.email != null &&
+        item.driveEmail != driveState.email) {
+      return 'Not available — saved to ${item.driveEmail}';
+    }
+    return null;
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              item.isFolder
-                  ? Icons.folder_outlined
-                  : Icons.insert_drive_file_outlined,
-              size: 20,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-            if (item.isDrive)
-              Positioned(
-                right: 4,
-                bottom: 4,
-                child: Icon(Icons.cloud, size: 10,
-                    color: theme.colorScheme.primary),
+    final driveWarning = _driveWarning(ref.watch(googleDriveProvider));
+    final effectiveOnTap = driveWarning != null ? null : onTap;
+
+    return Opacity(
+      opacity: driveWarning != null ? 0.55 : 1.0,
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                item.isFolder
+                    ? Icons.folder_outlined
+                    : Icons.insert_drive_file_outlined,
+                size: 20,
+                color: theme.colorScheme.onPrimaryContainer,
               ),
+              if (item.isDrive)
+                Positioned(
+                  right: 4,
+                  bottom: 4,
+                  child: Icon(Icons.cloud,
+                      size: 10, color: theme.colorScheme.primary),
+                ),
+            ],
+          ),
+        ),
+        title: Text(
+          item.displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        ),
+        subtitle: driveWarning != null
+            ? Row(
+                children: [
+                  Icon(Icons.warning_amber_outlined,
+                      size: 11, color: Colors.orange.shade700),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      driveWarning,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.orange.shade700),
+                    ),
+                  ),
+                ],
+              )
+            : Text(
+                item.displayPath,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(item.relativeTime,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: onRemove,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child:
+                    Icon(Icons.close, size: 14, color: Colors.grey.shade400),
+              ),
+            ),
           ],
         ),
+        onTap: effectiveOnTap,
       ),
-      title: Text(
-        item.displayName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-      ),
-      subtitle: Text(
-        item.displayPath,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(item.relativeTime,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
-          const SizedBox(width: 4),
-          InkWell(
-            onTap: onRemove,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(Icons.close, size: 14, color: Colors.grey.shade400),
-            ),
-          ),
-        ],
-      ),
-      onTap: onTap,
     );
   }
 }
