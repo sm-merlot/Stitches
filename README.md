@@ -23,10 +23,18 @@ _Built with the assistance of [Claude Code](https://claude.ai/claude-code)_
 
 ---
 
-| | | |
-|:---|:---|:---|
-| 🪡 **Full stitch toolkit** — full, half, quarter, backstitch, fill | 🎨 **~300 DMC colours** — with Anchor cross-reference | ☁️ **Google Drive sync** — auto-save across devices |
-| ✂️ **Snippets & sprite importer** — reusable motifs from pixel art | ✏️ **Apple Pencil** — hover preview, double-tap erase | 📄 **PDF scanner** *(beta)* — convert printed charts to patterns |
+<table>
+<tr>
+<td>🪡 <strong>Full stitch toolkit</strong> — full, half, quarter, backstitch, fill</td>
+<td>🎨 <strong>~300 DMC colours</strong> — with Anchor cross-reference</td>
+<td>☁️ <strong>Google Drive sync</strong> — auto-save across devices</td>
+</tr>
+<tr>
+<td>✂️ <strong>Snippets &amp; sprite importer</strong> — reusable motifs from pixel art</td>
+<td>✏️ <strong>Apple Pencil</strong> — hover preview, double-tap erase</td>
+<td>📄 <strong>PDF scanner</strong> <em>(beta)</em> — convert printed charts to patterns</td>
+</tr>
+</table>
 
 ## 📺 See it in action
 
