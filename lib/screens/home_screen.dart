@@ -12,6 +12,7 @@ import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../services/pattern_cache.dart';
 import '../utils/snackbars.dart';
 import 'drive_file_picker_dialog.dart';
 import 'drive_folder_picker_dialog.dart';
@@ -177,14 +178,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final bytes = await service.downloadFile(fileId);
       final state = ref.read(editorProvider);
       if (state.driveFileId != fileId || state.isDirty) return;
+      // Parse before writing so cache is updated atomically with the file write
+      // (no window where mtime is new but cache still holds the old entry).
+      final (pattern, wasCompressed) = await FileService.parseBytesToPattern(bytes);
+      final stateAfterParse = ref.read(editorProvider);
+      if (stateAfterParse.driveFileId != fileId || stateAfterParse.isDirty) return;
       await File(tempPath).writeAsBytes(bytes);
-      final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
+      final stat = await File(tempPath).stat();
+      PatternCache.put(tempPath, pattern, wasCompressed, stat.modified);
       final current = ref.read(editorProvider);
       if (current.driveFileId == fileId && !current.isDirty) {
         final session = await EditorSessionService.load('drive:$fileId');
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
-          filePath: path,
+          filePath: tempPath,
           driveFileId: fileId,
           driveParentFolderId: parentFolderId,
           compressOnSave: wasCompressed,

@@ -15,6 +15,7 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/drive_cache.dart';
 import '../services/file_service.dart';
+import '../services/pattern_cache.dart';
 import '../services/format_service.dart';
 import '../utils/snackbars.dart';
 import '../providers/image_viewer_provider.dart';
@@ -463,6 +464,13 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
   /// Downloads the Drive version and silently refreshes the cached file,
   /// but only if the user has not edited the pattern since it was opened.
+  ///
+  /// Parses the downloaded bytes in a background isolate BEFORE writing to
+  /// disk so that the PatternCache can be updated atomically with the file
+  /// write.  Without this, there is a window between the writeAsBytes call
+  /// (which changes the file's mtime, evicting the cache entry) and the
+  /// re-parse completing (which would re-populate it) during which any file
+  /// switch lands on a cache miss and triggers a full slow re-parse.
   Future<void> _refreshFromDrive(DrivePatternFile file, String tempPath) async {
     try {
       final service = await ref.read(googleDriveProvider.notifier).getService();
@@ -472,17 +480,24 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       // Don't clobber any edits the user has made since opening.
       final state = ref.read(editorProvider);
       if (state.driveFileId != file.fileId || state.isDirty) return;
+      // Parse in background BEFORE touching disk.
+      final (pattern, wasCompressed) = await FileService.parseBytesToPattern(bytes);
+      if (!mounted) return;
+      final stateAfterParse = ref.read(editorProvider);
+      if (stateAfterParse.driveFileId != file.fileId || stateAfterParse.isDirty) return;
+      // Write + cache update are now atomic: no window where mtime is new but
+      // cache still holds the old entry.
       await File(tempPath).writeAsBytes(bytes);
       if (!mounted) return;
-      final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
-      if (!mounted) return;
+      final stat = await File(tempPath).stat();
+      PatternCache.put(tempPath, pattern, wasCompressed, stat.modified);
       // Re-check: still the same file and still unedited?
       final current = ref.read(editorProvider);
       if (current.driveFileId == file.fileId && !current.isDirty) {
         final session = await EditorSessionService.load('drive:${file.fileId}');
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
-          filePath: path,
+          filePath: tempPath,
           driveFileId: file.fileId,
           driveParentFolderId: file.parentFolder.folderId,
           compressOnSave: wasCompressed,

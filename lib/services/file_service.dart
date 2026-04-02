@@ -68,6 +68,12 @@ class FileService {
     return (pattern, path, wasCompressed);
   }
 
+  /// Parse raw bytes (possibly gzip-compressed) into a pattern in a background
+  /// isolate.  Used by Drive refresh logic to avoid a cache-miss window between
+  /// the file write and the subsequent re-parse.
+  static Future<(CrossStitchPattern, bool)> parseBytesToPattern(Uint8List bytes) =>
+      Isolate.run(() => _parseBytesToPattern(bytes));
+
   /// Runs in a background isolate: decompress + decode + parse the raw bytes.
   static (CrossStitchPattern, bool) _parseBytesToPattern(Uint8List bytes) {
     final wasCompressed =
