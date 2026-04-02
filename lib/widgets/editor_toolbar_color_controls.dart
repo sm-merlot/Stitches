@@ -49,24 +49,35 @@ class _ColorSwatch extends ConsumerWidget {
 
 class _QuickSwatches extends ConsumerWidget {
   final EditorState state;
-  const _QuickSwatches({required this.state});
+
+  /// If set, limits how many swatches are shown (used on phones to fit
+  /// only as many as the available width allows).
+  final int? maxCount;
+
+  const _QuickSwatches({required this.state, this.maxCount});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Exclude the currently selected thread; most recent rightmost (left-to-right order).
-    final displayIds = state.recentThreadIds
+    var displayIds = state.recentThreadIds
         .where((id) => id != state.selectedThreadId)
         .toList()
         .reversed
         .toList();
+    if (maxCount != null && displayIds.length > maxCount!) {
+      displayIds = displayIds.sublist(displayIds.length - maxCount!);
+    }
     if (displayIds.isEmpty) return const SizedBox.shrink();
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(width: 4),
         ...displayIds.map((id) {
-          final thread = state.pattern.threadByCode(id);
+          final dmc = dmcColorByCode(id);
+          final thread = state.pattern.threadByCode(id) ??
+              (dmc != null
+                  ? Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name)
+                  : null);
           if (thread == null) return const SizedBox.shrink();
           return Padding(
             padding: const EdgeInsets.only(right: 4),
@@ -75,7 +86,7 @@ class _QuickSwatches extends ConsumerWidget {
               child: GestureDetector(
                 onTap: () =>
                     ref.read(editorProvider.notifier).setSelectedThread(id),
-                child: _ThreadSwatch(thread: thread, size: 28),
+                child: _ThreadSwatch(thread: thread, size: 24),
               ),
             ),
           );

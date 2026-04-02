@@ -584,9 +584,8 @@ class EditorToolbar extends ConsumerWidget {
               ),
             ); // end toolsRowContent
 
-    // ── Colour row content ────────────────────────────────────────────────
-    // Shared between single-row (tablet/desktop) and bottom row (phone).
-    Widget colourRowContent() => Padding(
+    // ── Colour row — tablet/desktop ───────────────────────────────────────
+    Widget tabletColourRowContent() => Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -619,9 +618,62 @@ class EditorToolbar extends ConsumerWidget {
                 const _AidaButton(),
                 const SizedBox(width: 4),
               ],
-              // Snippet button moves here on phones.
-              if (isPhone && (showSnippetsButton || onPasteFromSnippet != null))
+            ],
+          ),
+        );
+
+    // ── Colour row — phone ────────────────────────────────────────────────
+    // Snippet icon left-aligned; quick swatches fill the gap (LayoutBuilder
+    // limits count to only what fits); selected colour + undo/redo right-aligned.
+    Widget phoneColourRowContent() => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              // Snippet button — left
+              if (showSnippetsButton || onPasteFromSnippet != null)
                 snippetButtonWidget,
+              // Swatches — fill available space, capped to what fits
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const swatchStride = 28.0; // 24px swatch + 4px gap
+                    final maxCount =
+                        (constraints.maxWidth / swatchStride).floor();
+                    return Align(
+                      alignment: Alignment.centerRight,
+                      child: _QuickSwatches(
+                          state: state, maxCount: maxCount.clamp(0, 999)),
+                    );
+                  },
+                ),
+              ),
+              // Selected colour + undo/redo — right
+              _ColorSwatch(state: state),
+              const SizedBox(width: 2),
+              Tooltip(
+                message: 'Undo',
+                child: IconButton(
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.undo),
+                  onPressed: state.canUndo ? () => notifier.undo() : null,
+                ),
+              ),
+              Tooltip(
+                message: 'Redo',
+                child: IconButton(
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.redo),
+                  onPressed: state.canRedo ? () => notifier.redo() : null,
+                ),
+              ),
+              if (showAidaButton) ...[
+                vDivider,
+                const SizedBox(width: 4),
+                const _AidaButton(),
+                const SizedBox(width: 4),
+              ],
             ],
           ),
         );
@@ -638,19 +690,20 @@ class EditorToolbar extends ConsumerWidget {
           ),
         ],
       ),
-      height: isPhone ? 121 : (_isTouchPlatform ? 60 : 56),
+      height: isPhone ? null : (_isTouchPlatform ? 60 : 56),
       child: isPhone
           ? Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(height: 60, child: toolsRowContent()),
-                Divider(height: 1, color: theme.dividerColor),
-                SizedBox(height: 60, child: colourRowContent()),
+                toolsRowContent(),
+                Divider(height: 1, thickness: 1, color: theme.dividerColor),
+                phoneColourRowContent(),
               ],
             )
           : Row(
               children: [
                 Expanded(child: toolsRowContent()),
-                colourRowContent(),
+                tabletColourRowContent(),
               ],
             ),
     );
