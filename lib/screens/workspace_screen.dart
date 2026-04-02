@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor/editor_provider.dart';
+import '../services/pattern_cache.dart';
 import '../providers/file_loading_provider.dart';
 import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
@@ -228,6 +229,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (state.isDirty && state.isFileOpen) {
       await _save(context, quiet: true);
     }
+    PatternCache.clear();
     ref.read(editorProvider.notifier).closeFile();
     ref.read(pdfViewerProvider.notifier).set(null);
     ref.read(imageViewerProvider.notifier).set(null);

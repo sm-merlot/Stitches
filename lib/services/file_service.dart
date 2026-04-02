@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/layer.dart';
+import 'pattern_cache.dart';
 import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
 import '../models/pattern.dart';
@@ -37,8 +38,9 @@ class FileService {
   /// Supports both .stitches (YAML) and .oxs (XML) formats.
   /// Returns (pattern, filePath, wasCompressed).
   ///
-  /// Decompression and YAML parsing run in a background isolate so the UI
-  /// thread stays free (and any loading spinner can animate) during the parse.
+  /// Checks [PatternCache] first; if the file is unchanged since it was last
+  /// cached the parse is skipped entirely.  Otherwise the decompression and
+  /// YAML parsing run in a background isolate so the UI thread stays free.
   static Future<(CrossStitchPattern, String, bool)> openFileFromPath(
       String path) async {
     final file = File(path);
@@ -47,9 +49,22 @@ class FileService {
       final pattern = await FormatService.importFile(path);
       return (pattern, path, false);
     }
+
+    // Cache hit — skip disk read and parse entirely.
+    final cached = await PatternCache.get(path);
+    if (cached != null) {
+      final (pattern, wasCompressed) = cached;
+      return (pattern, path, wasCompressed);
+    }
+
     final bytes = await file.readAsBytes();
     final (pattern, wasCompressed) =
         await Isolate.run(() => _parseBytesToPattern(bytes));
+
+    // Populate cache; stat is cheap after readAsBytes.
+    final stat = await file.stat();
+    PatternCache.put(path, pattern, wasCompressed, stat.modified);
+
     return (pattern, path, wasCompressed);
   }
 
@@ -115,12 +130,17 @@ class FileService {
 
   /// Save pattern to an existing file path.
   /// Pass [compress] = true (default) for gzip compression, false for plain UTF-8 text.
+  ///
+  /// Updates [PatternCache] after a successful write so the next workspace
+  /// file-switch is served from cache without re-reading the file.
   static Future<void> saveFile(CrossStitchPattern pattern, String path,
       {bool compress = true}) async {
     final yaml = toYamlString(pattern);
     final bytes =
         compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
     await File(path).writeAsBytes(bytes, flush: true);
+    final stat = await File(path).stat();
+    PatternCache.put(path, pattern, compress, stat.modified);
   }
 
   /// Prompt the user for a save location; returns the chosen path or null.
