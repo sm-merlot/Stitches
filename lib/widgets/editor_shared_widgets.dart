@@ -1,6 +1,9 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/settings_provider.dart';
+import '../utils/snackbars.dart';
 
 // ─── Shared popup menu row ────────────────────────────────────────────────────
 
@@ -45,8 +48,15 @@ class EditorScreenLockButton extends ConsumerWidget {
                 foregroundColor: theme.colorScheme.onPrimary,
               )
             : null,
-        onPressed: () =>
-            ref.read(settingsProvider.notifier).setKeepScreenOn(!keepOn),
+        onPressed: () {
+          final next = !keepOn;
+          ref.read(settingsProvider.notifier).setKeepScreenOn(next);
+          if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
+            showSuccess(context,
+                next ? 'Screen will stay on' : 'Screen can now sleep',
+                duration: const Duration(seconds: 2));
+          }
+        },
       ),
     );
   }
