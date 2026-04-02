@@ -68,38 +68,22 @@ class EditorToolbar extends ConsumerWidget {
     final notifier = ref.read(editorProvider.notifier);
     final theme = Theme.of(context);
     final surface = theme.colorScheme.surface;
+    final shortestSide = MediaQuery.sizeOf(context).shortestSide;
+    final isPhone = _isTouchPlatform && shortestSide < 600;
 
     final vDivider = Container(width: 1, height: 32, color: theme.dividerColor);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: surface,
-        border: Border(top: BorderSide(color: theme.dividerColor, width: 1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      height: _isTouchPlatform ? 60 : 56,
+    // ── Scrollable tools row content ──────────────────────────────────────
+    // Shared between single-row (tablet/desktop) and top row (phone).
+    Widget toolsRowContent() => SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      // On iPad the toolbar is wide enough that scrolling is never needed.
+      // NeverScrollableScrollPhysics removes the horizontal drag recogniser
+      // from the gesture arena, preventing it from stealing button taps.
+      physics: shortestSide >= 600 ? const NeverScrollableScrollPhysics() : null,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // ── LEFT (scrollable): Cursor modes + context-sensitive tools ─────
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              // On iPad the toolbar is wide enough that scrolling is never
-              // needed.  NeverScrollableScrollPhysics removes the horizontal
-              // drag recogniser from the gesture arena, preventing it from
-              // competing with (and occasionally stealing) button taps.
-              physics: MediaQuery.sizeOf(context).shortestSide >= 600
-                  ? const NeverScrollableScrollPhysics()
-                  : null,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
                   // Cursor modes
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
@@ -594,48 +578,74 @@ class EditorToolbar extends ConsumerWidget {
                     ),
                 ],
               ),
-            ),
-          ),
+            ); // end toolsRowContent
 
-          // ── RIGHT (fixed): Colour + swatches + palette + undo/redo ────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _QuickSwatches(state: state),
-                _ColorSwatch(state: state),
+    // ── Colour row content ────────────────────────────────────────────────
+    // Shared between single-row (tablet/desktop) and bottom row (phone).
+    Widget colourRowContent() => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _QuickSwatches(state: state),
+              _ColorSwatch(state: state),
+              vDivider,
+              const SizedBox(width: 2),
+              Tooltip(
+                message: _tt('Undo  [Cmd+Z]'),
+                child: IconButton(
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.undo),
+                  onPressed: state.canUndo ? () => notifier.undo() : null,
+                ),
+              ),
+              Tooltip(
+                message: _tt('Redo  [Cmd+Shift+Z]'),
+                child: IconButton(
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.redo),
+                  onPressed: state.canRedo ? () => notifier.redo() : null,
+                ),
+              ),
+              if (showAidaButton) ...[
                 vDivider,
-                const SizedBox(width: 2),
-                Tooltip(
-                  message: _tt('Undo  [Cmd+Z]'),
-                  child: IconButton(
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.undo),
-                    onPressed: state.canUndo ? () => notifier.undo() : null,
-                  ),
-                ),
-                Tooltip(
-                  message: _tt('Redo  [Cmd+Shift+Z]'),
-                  child: IconButton(
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.redo),
-                    onPressed: state.canRedo ? () => notifier.redo() : null,
-                  ),
-                ),
-                if (showAidaButton) ...[
-                  vDivider,
-                  const SizedBox(width: 4),
-                  const _AidaButton(),
-                  const SizedBox(width: 4),
-                ],
+                const SizedBox(width: 4),
+                const _AidaButton(),
+                const SizedBox(width: 4),
               ],
-            ),
+            ],
+          ),
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(top: BorderSide(color: theme.dividerColor, width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
+      height: isPhone ? 120 : (_isTouchPlatform ? 60 : 56),
+      child: isPhone
+          ? Column(
+              children: [
+                SizedBox(height: 60, child: toolsRowContent()),
+                Divider(height: 1, color: theme.dividerColor),
+                SizedBox(height: 59, child: colourRowContent()),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: toolsRowContent()),
+                colourRowContent(),
+              ],
+            ),
     );
   }
 }
