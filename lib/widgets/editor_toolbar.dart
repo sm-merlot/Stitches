@@ -73,6 +73,38 @@ class EditorToolbar extends ConsumerWidget {
 
     final vDivider = Container(width: 1, height: 32, color: theme.dividerColor);
 
+    // ── Snippet button (shared between tools row and colour row) ──────────
+    final snippetButtonWidget = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      child: onPasteFromSnippet != null
+          ? Tooltip(
+              message: 'Paste from snippet',
+              child: IconButton(
+                iconSize: 20,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.library_add_outlined),
+                onPressed: onPasteFromSnippet,
+              ),
+            )
+          : Tooltip(
+              message: state.isNativeFormat
+                  ? 'Snippets'
+                  : 'Snippets require .stitches format — Save As to convert',
+              child: IconButton(
+                iconSize: 20,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.collections_bookmark_outlined),
+                onPressed: state.isFileOpen && state.isNativeFormat
+                    ? () => showModalBottomSheet<void>(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => const SnippetsPanel(),
+                        )
+                    : null,
+              ),
+            ),
+    );
+
     // ── Scrollable tools row content ──────────────────────────────────────
     // Shared between single-row (tablet/desktop) and top row (phone).
     Widget toolsRowContent() => SingleChildScrollView(
@@ -544,38 +576,10 @@ class EditorToolbar extends ConsumerWidget {
                         ),
                       ),
                     ),
-                  // Snippets / paste-from-snippet button
-                  if (showSnippetsButton || onPasteFromSnippet != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                      child: onPasteFromSnippet != null
-                          ? Tooltip(
-                              message: 'Paste from snippet',
-                              child: IconButton(
-                                iconSize: 20,
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.library_add_outlined),
-                                onPressed: onPasteFromSnippet,
-                              ),
-                            )
-                          : Tooltip(
-                              message: state.isNativeFormat
-                                  ? 'Snippets'
-                                  : 'Snippets require .stitches format — Save As to convert',
-                              child: IconButton(
-                                iconSize: 20,
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.collections_bookmark_outlined),
-                                onPressed: state.isFileOpen && state.isNativeFormat
-                                    ? () => showModalBottomSheet<void>(
-                                          context: context,
-                                          isScrollControlled: true,
-                                          builder: (_) => const SnippetsPanel(),
-                                        )
-                                    : null,
-                              ),
-                            ),
-                    ),
+                  // Snippets / paste-from-snippet button (tablet/desktop only;
+                  // on phones it moves to the colour row below).
+                  if (!isPhone && (showSnippetsButton || onPasteFromSnippet != null))
+                    snippetButtonWidget,
                 ],
               ),
             ); // end toolsRowContent
@@ -615,6 +619,9 @@ class EditorToolbar extends ConsumerWidget {
                 const _AidaButton(),
                 const SizedBox(width: 4),
               ],
+              // Snippet button moves here on phones.
+              if (isPhone && (showSnippetsButton || onPasteFromSnippet != null))
+                snippetButtonWidget,
             ],
           ),
         );
