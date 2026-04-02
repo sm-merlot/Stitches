@@ -520,7 +520,7 @@ class PdfService {
     }
     for (int r = 0; r <= rows; r++) {
       if ((startY + r) % 10 == 0) {
-        final y = gridOriginY + r * cellSize;
+        final y = gridOriginY + gridH - r * cellSize; // mirrors row ruler formula
         canvas.moveTo(gridOriginX, y);
         canvas.lineTo(gridOriginX + gridW, y);
         canvas.strokePath();
