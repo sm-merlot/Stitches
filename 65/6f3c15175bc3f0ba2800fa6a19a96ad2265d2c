@@ -1,0 +1,23 @@
+lib/services/pdf_service.dart
+  8137f0c4ab12f695 523
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "656f3c15175bc3f0ba2800fa6a19a96ad2265d2c",
+  "prompts": {
+    "8137f0c4ab12f695": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c70dbce-f3c2-44ea-b8b7-360a0cfcf005",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
