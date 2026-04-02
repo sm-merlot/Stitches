@@ -141,9 +141,11 @@ class SettingsScreen extends ConsumerWidget {
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (context, snap) {
+              const gitHash = String.fromEnvironment('GIT_HASH');
               final version = snap.data == null
                   ? '…'
-                  : 'v${snap.data!.version} (${snap.data!.buildNumber})';
+                  : 'v${snap.data!.version} (${snap.data!.buildNumber})'
+                      '${gitHash.isNotEmpty ? ' · $gitHash' : ''}';
               return ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('Version'),
