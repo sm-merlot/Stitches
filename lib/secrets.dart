@@ -11,11 +11,6 @@ const String kGoogleDesktopClientSecret =
 const String kGoogleIosClientId =
     String.fromEnvironment('GOOGLE_IOS_CLIENT_ID', defaultValue: '');
 
-// Android OAuth client (SHA-1 + package name verified by Google).
-// Used for PKCE browser flow — no client secret required.
-const String kGoogleAndroidClientId =
-    String.fromEnvironment('GOOGLE_ANDROID_CLIENT_ID', defaultValue: '');
-
 // Web OAuth client — used as serverClientId for google_sign_in on iOS.
 const String kGoogleWebClientId =
     String.fromEnvironment('GOOGLE_WEB_CLIENT_ID', defaultValue: '');
