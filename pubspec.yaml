@@ -27,7 +27,7 @@ dependencies:
   font_awesome_flutter: ^11.0.0
   pdfrx: ^2.2.24
   xml: ^6.6.1
-  google_sign_in: ^6.2.2
+  google_sign_in: ^7.2.0
   share_plus: ^12.0.2
   markdown: ^7.2.2
   package_info_plus: ^9.0.1
