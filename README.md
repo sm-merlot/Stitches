@@ -1,10 +1,27 @@
-# Stitches
-> [!NOTE]
-> Built with the assistance of AI tools (Claude Code).
+<div align="center">
 
-A free* and open source cross-stitch pattern editor for Desktop (macOS, Windows), Mobile, and Tablet (iOS, Android). Stitches lets you design and edit counted cross-stitch patterns using DMC (or Anchor) thread colors, with a touch- and Apple Pencil-friendly canvas.
-> [!NOTE]
-> *may not be free on Apple App Store (when it's eventually published there) to offset the Apple Developer Program fees (99USD/year).
+<img src="assets/icon/stitches_icon.png" width="90" style="border-radius:18px" alt="Stitches icon">
+
+# Stitches
+
+_A free, open-source cross-stitch pattern editor for macOS, Windows, iOS and Android_
+
+[![CI](https://img.shields.io/github/actions/workflow/status/scme0/Stitches/ci.yml?label=CI&logo=github)](https://github.com/scme0/Stitches/actions/workflows/ci.yml)
+[![version](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fscme0%2FStitches%2Fmain%2Fpubspec.yaml&query=%24.version&label=version&color=6366f1)](CHANGELOG.md)
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.4-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![MIT](https://img.shields.io/badge/licence-MIT-22c55e)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/scme0/Stitches?style=social)](https://github.com/scme0/Stitches/stargazers)
+
+![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-0078D4?logo=windows11&logoColor=white)
+![iOS](https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white)
+![Android](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white)
+
+_\*Free on all platforms. May not be free on the Apple App Store to offset the $99/year Apple Developer Program fee._
+
+_Built with the assistance of [Claude Code](https://claude.ai/claude-code)_
+
+</div>
 
 ## Features
 
