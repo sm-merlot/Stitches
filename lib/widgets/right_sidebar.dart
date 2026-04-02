@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -100,6 +101,8 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
   }
 
   Widget _buildCollapsedStrip(ThemeData theme) {
+    final isTouch = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
     return Container(
       width: _kCollapsedWidth,
       decoration: BoxDecoration(
@@ -110,9 +113,9 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
         children: [
           IconButton(
             tooltip: 'Expand sidebar',
-            icon: const Icon(Icons.chevron_left, size: 18),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.chevron_left, size: isTouch ? 22 : 18),
+            padding: isTouch ? const EdgeInsets.all(6) : EdgeInsets.zero,
+            visualDensity: isTouch ? VisualDensity.standard : VisualDensity.compact,
             onPressed: () => _setCollapsed(false),
           ),
         ],
@@ -122,6 +125,8 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
 
   /// Stitch mode: no tabs — just the Colours panel with a simple header.
   Widget _buildStitchLayout(ThemeData theme) {
+    final isTouch = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -135,9 +140,9 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
               const Spacer(),
               IconButton(
                 tooltip: 'Collapse sidebar',
-                icon: const Icon(Icons.chevron_right, size: 18),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.chevron_right, size: isTouch ? 22 : 18),
+                padding: isTouch ? const EdgeInsets.all(6) : EdgeInsets.zero,
+                visualDensity: isTouch ? VisualDensity.standard : VisualDensity.compact,
                 onPressed: () => _setCollapsed(true),
               ),
             ],
@@ -152,6 +157,8 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
   /// Design mode (main editor or snippet editor): two tabs sharing one controller.
   /// [DefaultTabController] is already an ancestor in [build].
   Widget _buildTabbedLayout(ThemeData theme, bool isSnippet) {
+    final isTouch = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -174,9 +181,9 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
               ),
               IconButton(
                 tooltip: 'Collapse sidebar',
-                icon: const Icon(Icons.chevron_right, size: 18),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.chevron_right, size: isTouch ? 22 : 18),
+                padding: isTouch ? const EdgeInsets.all(6) : EdgeInsets.zero,
+                visualDensity: isTouch ? VisualDensity.standard : VisualDensity.compact,
                 onPressed: () => _setCollapsed(true),
               ),
             ],
