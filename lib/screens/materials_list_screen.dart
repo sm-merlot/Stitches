@@ -212,7 +212,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
 
     final box = _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
-    Share.share(text, sharePositionOrigin: origin);
+    Share.share(text, subject: '${p.name} - Materials List', sharePositionOrigin: origin);
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
