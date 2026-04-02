@@ -1,0 +1,23 @@
+lib/widgets/editor_toolbar.dart
+  794232f7b9dde9fe 71-72,76-83,85,581,583-600,602-609,611-616,618,620-630,634-648
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "c2d0d60677cc6ba002c5c84c0c7aa9ffffee14f4",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 72,
+      "total_deletions": 62,
+      "accepted_lines": 72,
+      "overriden_lines": 0
+    }
+  }
+}
