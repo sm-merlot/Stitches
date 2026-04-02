@@ -211,6 +211,9 @@ Shot list:
 
 </details>
 
+<details>
+<summary>📖 Full feature reference</summary>
+
 ## Features
 
 ### Pattern editing
@@ -289,13 +292,25 @@ The resulting pattern is saved automatically as a `.stitches` file next to the s
 - **Resizable file sidebar** — drag the sidebar edge to any width between 160–480 px; width is remembered between sessions
 - **Sidebar type filters** — toggle PDF and image visibility in the folder tree independently; settings are persisted; switching a filter off only deselects the currently open item if it is of the filtered type — patterns, PDFs, and images remain open independently
 
-## Getting Started
+</details>
+
+## 🚀 Getting Started
+
+Requires [Flutter 3.41.4+](https://flutter.dev/docs/get-started/install).
 
 ```bash
-flutter run -d macos
+git clone https://github.com/scme0/Stitches.git
+cd Stitches
+flutter pub get
+./run        # macOS / Linux (or Git Bash on Windows)
+./run.ps1    # Windows PowerShell
 ```
 
-Requires Flutter 3.41.4+.
+For device-specific targets (`ios`, `android`, `windows`, …) run `./run help`.
+
+## 📋 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) — generated automatically from [changesets](https://github.com/changesets/changesets).
 
 ## Backlog
 
