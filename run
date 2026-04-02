@@ -7,6 +7,8 @@
 #   macos            Run the Flutter app on macOS (debug)
 #   ios              Run on iOS device/simulator (debug)
 #   android          Run on Android device/emulator (debug)
+#   android-phone    Run on Pixel 8 emulator (emulator-5556)
+#   android-tablet   Run on Pixel Tablet emulator (emulator-5554)
 #   cli              Run the CLI via dart run (interpreted); pass args after --
 #                      e.g.  ./run cli -- -p "╳ ▞\n▚ ╳" -o out.gif
 #   build            Build the macOS release app
@@ -50,6 +52,14 @@ case "$cmd" in
 
   android)
     exec $FLUTTER run -d 19181FDF600G2R --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
+    ;;
+
+  android-phone)
+    exec $FLUTTER run -d emulator-5556 --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
+    ;;
+
+  android-tablet)
+    exec $FLUTTER run -d emulator-5554 --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
     ;;
 
   cli)

@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "1010470926805-migk6d3gck923jm4i33hlifmbebv4c8s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.scme0.stitches",
+            "certificate_hash": "40ea11d6d9aec02d364cfa39ff7fb49474f06423"
+          }
+        },
+        {
+          "client_id": "1010470926805-uhkf0d29tk8nfsnflikvmebdcj1068um.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.scme0.stitches",
+            "certificate_hash": "c78daab6c81d93b8e6162d2d9410937137af7db0"
+          }
+        },
+        {
           "client_id": "1010470926805-7loom4dq1v6jgm7d4j6vbr2ohmblr41i.apps.googleusercontent.com",
           "client_type": 3
         }
