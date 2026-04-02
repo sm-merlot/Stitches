@@ -1,0 +1,25 @@
+.changeset/drive-auth-fixes-and-ux-polish.md
+  4a777f206dc07a56 1-13
+README.md
+  4a777f206dc07a56 46,72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "1c080f0d9a60805d8eac7397d62f55351cf1bcbf",
+  "prompts": {
+    "4a777f206dc07a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb18ea63-2c1f-45b7-8869-9279a9d454a2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 15,
+      "total_deletions": 2,
+      "accepted_lines": 15,
+      "overriden_lines": 0
+    }
+  }
+}
