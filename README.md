@@ -30,6 +30,187 @@ _Built with the assistance of [Claude Code](https://claude.ai/claude-code)_
 | 🪡 **Full stitch toolkit** — full, half, quarter, backstitch, fill | 🎨 **~300 DMC colours** — with Anchor cross-reference | ☁️ **Google Drive sync** — auto-save across devices |
 | ✂️ **Snippets & sprite importer** — reusable motifs from pixel art | ✏️ **Apple Pencil** — hover preview, double-tap erase | 📄 **PDF scanner** *(beta)* — convert printed charts to patterns |
 
+## 📺 See it in action
+
+> Videos coming soon — recordings in progress. Each `▶` block below will contain an MP4 demo.
+>
+> **To add a video:** record an MP4, drag it into any GitHub issue/PR comment box to get a CDN URL, then replace `VIDEO_URL_HERE` in the relevant block below.
+
+<details>
+<summary>▶ Core drawing loop (~20s)</summary>
+
+<!--
+Shot list:
+1. Start on a blank new pattern (30×30)
+2. Draw a row of full stitches in one colour
+3. Switch to a second colour, draw half stitches / and \
+4. Add a backstitch outline — tap two grid intersections
+5. Undo twice, redo once
+6. Pinch/scroll to zoom in so stitches fill the frame
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Layers & blend modes (~25s)</summary>
+
+<!--
+Shot list:
+1. Open a pattern with a base layer already drawn
+2. Add a new layer, rename it "glow"
+3. Draw some stitches on top in a bright colour
+4. Toggle layer visibility on/off
+5. Change blend mode to Add — show the glow composite
+6. Reduce layer opacity to ~60%
+7. Switch to stitch mode briefly to show the composite palette
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Select, copy & transform (~20s)</summary>
+
+<!--
+Shot list:
+1. Rubber-band select a distinct motif region
+2. Tap Copy
+3. Paste — ghost follows cursor
+4. Flip horizontal
+5. Rotate 90° CW
+6. Stamp onto a new area of the canvas
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Snippets (~30s)</summary>
+
+<!--
+Shot list:
+1. Select a small motif, tap "Save as snippet", name it
+2. Open the snippets panel (slide-up sheet)
+3. Tap the snippet — enters paste mode
+4. Stamp it 3–4 times across the canvas
+5. Long-press the snippet → Edit → open snippet editor
+6. Draw one extra stitch in the editor, close
+7. Back on main canvas — stamp the updated snippet
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Sprite sheet importer (~30s)</summary>
+
+<!--
+Shot list:
+1. Open a pixel-art sprite sheet (retro game characters work well)
+2. Crop mode: drag a rectangle around one character
+3. Watch the DMC colour-matching conversion
+4. Drag the palette simplification slider — show colours merging
+5. Tap "Add to Snippets"
+6. Switch back to main canvas, open snippets panel, stamp it
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Stitch mode (~20s)</summary>
+
+<!--
+Shot list:
+1. Open a colourful finished pattern in design mode
+2. Tap the "Stitch Mode" FAB — UI simplifies
+3. Tap one colour in the palette — all other stitches dim to grey
+4. Tap a different colour — focus switches
+5. Show the keep-screen-on toggle
+6. Tap "Exit Stitch Mode" to return
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Apple Pencil on iPad (~20s)</summary>
+
+<!--
+Shot list:
+1. Hover pencil over canvas — preview cell highlights before touching
+2. Draw a row of stitches with the pencil
+3. Double-tap pencil barrel — switches to erase mode (show indicator change)
+4. Double-tap again — back to draw
+5. In paste mode: hover pencil to position ghost, tap finger to stamp
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Google Drive sync (~15s)</summary>
+
+<!--
+Shot list:
+1. Show Drive connected state in the toolbar (sync indicator)
+2. Make a small edit — watch the auto-save indicator pulse
+3. Open the Drive folder picker briefly
+4. Show the same file listed in the home screen Drive section
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ PDF scanner — <em>beta</em> (~35s)</summary>
+
+<!--
+Shot list:
+1. Open a cross-stitch chart PDF
+2. Select the page containing the grid
+3. Crop the grid bounds (auto-detect, tweak handles)
+4. Enter stitch count dimensions
+5. Tap a few cells for each symbol type, assign DMC codes
+6. Tap "Scan" — watch cells fill in
+7. Review a flagged cell, reassign it
+8. Show the finished pattern
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+> ⚠️ *Works best on clean, high-contrast charts. Full-stitch extraction only in this release.*
+
+</details>
+
+<details>
+<summary>▶ Stitch demonstration — <em>beta</em> (~25s)</summary>
+
+<!--
+Shot list:
+1. Open a small finished pattern
+2. Tap the stitch demo button
+3. Animation plays — needle traces the stitch order thread by thread
+4. Show colour-coded passes (front/back)
+5. Tap a different start cell — animation re-plans
+6. Export GIF button briefly visible
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+> ⚠️ *Beta — some complex patterns may produce suboptimal stitch paths.*
+
+</details>
+
 ## Features
 
 ### Pattern editing
