@@ -1,0 +1,35 @@
+docs/superpowers/plans/2026-04-01-editor-screen-deduplication.md.tasks.json
+  794232f7b9dde9fe 1-26
+lib/utils/editor_key_handler.dart
+  794232f7b9dde9fe 1-195
+lib/widgets/editor_shared_widgets.dart
+  794232f7b9dde9fe 1-111
+lib/screens/workspace_screen.dart
+  794232f7b9dde9fe 20,22,29,725,727-741,870,883,888,894,899,906,922,937,974-981
+lib/screens/editor_screen.dart
+  794232f7b9dde9fe 7,9-10,117-122,203,216,221-222,227,232,239,276,288-293
+docs/superpowers/plans/2026-04-01-editor-screen-deduplication.md
+  794232f7b9dde9fe 1-729
+lib/widgets/editor_canvas_area.dart
+  794232f7b9dde9fe 1-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "1b47c6e3751dc76c41e1f7f543c35722a9f082fb",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 1193,
+      "total_deletions": 584,
+      "accepted_lines": 1190,
+      "overriden_lines": 0
+    }
+  }
+}
