@@ -1,0 +1,23 @@
+run
+  4a777f206dc07a56 136-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "f5e32b99ea778abca4ebc2a67f82ea42d265261c",
+  "prompts": {
+    "4a777f206dc07a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb18ea63-2c1f-45b7-8869-9279a9d454a2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
