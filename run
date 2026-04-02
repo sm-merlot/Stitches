@@ -57,18 +57,18 @@ case "$cmd" in
     ;;
 
   build)
-    $FLUTTER build macos --release --dart-define-from-file=secrets.json "$@"
+    $FLUTTER build macos --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     echo "Built: build/macos/Build/Products/Release/stitches.app"
     ;;
 
   build-ipad)
-    $FLUTTER build ios --release --dart-define-from-file=secrets.json "$@"
+    $FLUTTER build ios --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     $FLUTTER install --release
     echo "Installed on iPad. You can now disconnect the Mac."
     ;;
 
   build-android)
-    $FLUTTER build apk --release --dart-define-from-file=secrets.json "$@"
+    $FLUTTER build apk --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     $FLUTTER install --release
     echo "Installed on Android. You can now disconnect the Mac."
     ;;
