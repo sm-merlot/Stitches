@@ -1,0 +1,23 @@
+lib/screens/materials_list_screen.dart
+  794232f7b9dde9fe 215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "6f25aff61f9fa29a4177f52ccdf24e0d8ed6c6ac",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
