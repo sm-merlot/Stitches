@@ -627,10 +627,16 @@ mixin LayersMixin on Notifier<EditorState> {
       return MapEntry(cell, thread.copyWith(symbol: sym));
     });
 
+    // Only mark dirty if the composite symbol registry actually changed;
+    // entering stitch mode (which always calls this) must not trigger an
+    // auto-save when nothing has been edited.
+    final registryChanged = newRegistry.length != oldRegistry.length ||
+        newRegistry.entries.any((e) => oldRegistry[e.key] != e.value);
+
     state = state.copyWith(
       compositeThreadCache: resolved,
       pattern: state.pattern.copyWith(compositeSymbols: newRegistry),
-      isDirty: true,
+      isDirty: registryChanged || state.isDirty,
     );
   }
 

@@ -391,6 +391,11 @@ class EditorNotifier extends Notifier<EditorState>
     double viewPanY = 0;
     double viewScale = 0;
 
+    // True when the parsed YAML contained a legacy `editor:` section that
+    // is no longer written by toYamlString.  We mark the file dirty so the
+    // next auto-save rewrites it cleanly without those fields.
+    bool hasLegacyEditorSection = false;
+
     if (session != null) {
       try { tool = DrawingTool.values.byName(session.tool); } catch (_) {}
       stitchMode      = session.stitchMode;
@@ -402,6 +407,15 @@ class EditorNotifier extends Notifier<EditorState>
       viewScale = session.viewScale;
     } else {
       // First open after migration: read legacy YAML fields as a one-time seed.
+      hasLegacyEditorSection =
+          pattern.editorTool != null ||
+          pattern.editorSelectedThreadId != null ||
+          pattern.editorStitchMode ||
+          pattern.editorBlockMode ||
+          pattern.editorActiveLayerId != null ||
+          pattern.editorViewPanX != 0 ||
+          pattern.editorViewPanY != 0 ||
+          pattern.editorViewScale != 0;
       if (pattern.editorTool != null) {
         try { tool = DrawingTool.values.byName(pattern.editorTool!); } catch (_) {}
       }
@@ -462,6 +476,7 @@ class EditorNotifier extends Notifier<EditorState>
       viewPanY: viewPanY,
       viewScale: viewScale,
       compressOnSave: compressOnSave,
+      isDirty: hasLegacyEditorSection,
     );
 
     // Migrate legacy session fields to app data on first open.
