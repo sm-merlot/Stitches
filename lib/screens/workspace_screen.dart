@@ -796,19 +796,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 tooltip: 'Zoom in',
                 onPressed: () => _pdfPanelKey.currentState?.zoomIn(),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Checkbox(
-                    value: ref.watch(settingsProvider).keepScreenOn,
-                    onChanged: (v) => ref
-                        .read(settingsProvider.notifier)
-                        .setKeepScreenOn(v ?? false),
-                  ),
-                  const Text('Keep screen on', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 8),
-                ],
-              ),
+              const EditorScreenLockButton(),
             ],
             if (editorState.isFileOpen && !editorState.stitchMode && openPdf == null) ...[
               // Drive sync indicator — shown as soon as the file has a Drive
