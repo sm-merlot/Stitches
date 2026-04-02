@@ -1,0 +1,40 @@
+lib/widgets/editor_toolbar_color_controls.dart
+  9ad30f6d44f6bbe5 53-57,62,67,69
+  1dbb22e7e426b413 68,76-80,89
+lib/widgets/editor_toolbar.dart
+  1dbb22e7e426b413 639,642-646,696,698,700
+  9ad30f6d44f6bbe5 587-588,621-633,635-638,640-641,647-676,693,699,706
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "619e2030a6221718ee95c9341673bf82c341824b",
+  "prompts": {
+    "1dbb22e7e426b413": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33cef555-6d29-43e1-8237-78a3b862cd77",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 19,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    },
+    "9ad30f6d44f6bbe5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10198e4c-99f2-4de5-b849-38498f7cfb47",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 69,
+      "total_deletions": 12,
+      "accepted_lines": 63,
+      "overriden_lines": 0
+    }
+  }
+}
