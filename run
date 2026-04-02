@@ -21,6 +21,7 @@
 #   test             Run all Dart/Flutter tests
 #   test-planner     Run only the stitch planner tests
 #   clean            Delete build artefacts
+#   dev              Auto-detect desktop platform and run (default)
 #   help             Show this message
 
 set -euo pipefail
@@ -33,17 +34,30 @@ CLI_ENTRY=bin/stitches_cli.dart
 CLI_BIN=build/cli/macos_arm64/bundle/bin/stitches_cli
 GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo '')
 
-cmd=${1:-help}
+# Optional secrets file — skip silently if not present (e.g. fresh clone)
+SECRETS_ARG=""
+[[ -f secrets.json ]] && SECRETS_ARG="$SECRETS_ARG"
+
+cmd=${1:-dev}
 shift || true   # remaining args forwarded where needed
 
 case "$cmd" in
 
+  dev)
+    # Auto-detect desktop platform and run in debug mode
+    case "$(uname -s)" in
+      Darwin)             exec $FLUTTER run -d macos   $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" ;;
+      MINGW*|MSYS*|CYGWIN*) exec $FLUTTER run -d windows $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" ;;
+      *) echo "Unknown platform — run  ./run help  to pick a target manually."; exit 1 ;;
+    esac
+    ;;
+
   macos)
-    exec $FLUTTER run -d macos --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
+    exec $FLUTTER run -d macos $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" "$@"
     ;;
 
   ipad)
-    exec $FLUTTER run -d "00008112-0014785E0168A01E" --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
+    exec $FLUTTER run -d "00008112-0014785E0168A01E" $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" "$@"
     ;;
 
   ios)
@@ -51,15 +65,15 @@ case "$cmd" in
     ;;
 
   android)
-    exec $FLUTTER run -d 19181FDF600G2R --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
+    exec $FLUTTER run -d 19181FDF600G2R $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
     ;;
 
   android-phone)
-    exec $FLUTTER run -d emulator-5556 --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
+    exec $FLUTTER run -d emulator-5556 $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
     ;;
 
   android-tablet)
-    exec $FLUTTER run -d emulator-5554 --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
+    exec $FLUTTER run -d emulator-5554 $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
     ;;
 
   cli)
@@ -67,19 +81,19 @@ case "$cmd" in
     ;;
 
   build)
-    $FLUTTER build macos --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
+    $FLUTTER build macos --release $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" "$@"
     echo "Built: build/macos/Build/Products/Release/stitches.app"
     ;;
 
   build-ipad)
-    $FLUTTER build ios --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
+    $FLUTTER build ios --release $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" "$@"
     $FLUTTER install --release
     echo "Installed on iPad. You can now disconnect the Mac."
     ;;
 
   build-android)
     $FLUTTER pub get
-    $FLUTTER build apk --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
+    $FLUTTER build apk --release $SECRETS_ARG --dart-define=GIT_HASH="$GIT_HASH" "$@"
     $FLUTTER install --release
     echo "Installed on Android. You can now disconnect the Mac."
     ;;
