@@ -57,13 +57,11 @@ case "$cmd" in
     ;;
 
   build)
-    rm -rf "${HOME}/.cocoapods/repos/trunk"
     $FLUTTER build macos --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     echo "Built: build/macos/Build/Products/Release/stitches.app"
     ;;
 
   build-ipad)
-    rm -rf "${HOME}/.cocoapods/repos/trunk"
     $FLUTTER build ios --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     $FLUTTER install --release
     echo "Installed on iPad. You can now disconnect the Mac."
