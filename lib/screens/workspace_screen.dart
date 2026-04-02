@@ -166,6 +166,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   Future<void> _save(BuildContext context, {bool quiet = false}) async {
     final state = ref.read(editorProvider);
+    if (!state.isDirty) return;
     try {
       if (state.filePath != null) {
         // If the open file is in a foreign format, write back in that format.
@@ -720,6 +721,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
     // ── Auto-save listener ────────────────────────────────────────────────
     ref.listen<EditorState>(editorProvider, (prev, next) {
+      // Cancel a pending timer whenever the active file changes — the stale
+      // timer was for the previous file and must not fire against the new one.
+      if (prev != null && prev.filePath != next.filePath) {
+        _autoSaveTimer?.cancel();
+        _autoSaveTimer = null;
+      }
       if (!next.isDirty || !next.isFileOpen) return;
       _scheduleAutoSave();
     });
