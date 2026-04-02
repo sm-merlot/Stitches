@@ -8,6 +8,7 @@ mixin LayersMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
   List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
+  void _saveSession();
 
   Timer? _opacityDebounce;
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
@@ -253,6 +254,7 @@ mixin LayersMixin on Notifier<EditorState> {
   void setActiveLayer(String id) {
     if (state.pattern.layers.any((l) => l.id == id)) {
       state = state.copyWith(activeLayerId: id);
+      _saveSession();
     }
   }
 

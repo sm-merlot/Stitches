@@ -16,7 +16,7 @@ import '../../models/snippet_palette.dart';
 import '../../models/snippet_palette_resolver.dart';
 import '../../models/stitch.dart';
 import '../../models/thread.dart';
-import '../../services/file_service.dart';
+import '../../services/editor_session_service.dart';
 import '../../services/reference_image_service.dart';
 import '../../services/sprite_importer.dart';
 import '../settings_provider.dart';
@@ -173,16 +173,10 @@ class EditorState {
 
   Iterable<Layer> get visibleLayers => pattern.layers.where((l) => l.visible);
 
-  CrossStitchPattern get patternForSave => pattern.copyWith(
-    editorTool: currentTool.name,
-    editorSelectedThreadId: selectedThreadId,
-    editorStitchMode: stitchMode,
-    editorActiveLayerId: activeLayerId.isEmpty ? null : activeLayerId,
-    editorBlockMode: blockMode,
-    editorViewPanX: viewPanX,
-    editorViewPanY: viewPanY,
-    editorViewScale: viewScale,
-  );
+  /// The pattern as it should be written to disk.  Editor session state
+  /// (tool, mode, view position, active layer) is stored separately in
+  /// EditorSessionService, not in the file.
+  CrossStitchPattern get patternForSave => pattern;
 
   Thread? get selectedThread {
     if (selectedThreadId == null) return null;
@@ -372,30 +366,73 @@ class EditorNotifier extends Notifier<EditorState>
 
   // ─── File lifecycle ─────────────────────────────────────────────────────────
 
+  /// Load [pattern] into the editor, restoring the per-device session state
+  /// from [session] if provided.
+  ///
+  /// When [session] is null the editor falls back to any `editor:` fields
+  /// present in the pattern YAML (backwards compatibility for files saved
+  /// before this change), then migrates them into [EditorSessionService] so
+  /// the next open uses app data instead.
   void loadPattern(
     CrossStitchPattern pattern, {
     String? filePath,
     String? driveFileId,
     String? driveParentFolderId,
     bool compressOnSave = true,
+    EditorSession? session,
   }) {
+    // ── Resolve session state ────────────────────────────────────────────────
     DrawingTool tool = DrawingTool.fullStitch;
-    if (pattern.editorTool != null) {
-      try {
-        tool = DrawingTool.values.byName(pattern.editorTool!);
-      } catch (_) {}
+    bool stitchMode = false;
+    bool blockMode = false;
+    String? selectedThreadId;
+    String? rawActiveLayerId;
+    double viewPanX = 0;
+    double viewPanY = 0;
+    double viewScale = 0;
+
+    if (session != null) {
+      try { tool = DrawingTool.values.byName(session.tool); } catch (_) {}
+      stitchMode      = session.stitchMode;
+      blockMode       = session.blockMode;
+      selectedThreadId = session.selectedThreadId;
+      rawActiveLayerId = session.activeLayerId;
+      viewPanX = session.viewPanX;
+      viewPanY = session.viewPanY;
+      viewScale = session.viewScale;
+    } else {
+      // First open after migration: read legacy YAML fields as a one-time seed.
+      if (pattern.editorTool != null) {
+        try { tool = DrawingTool.values.byName(pattern.editorTool!); } catch (_) {}
+      }
+      stitchMode       = pattern.editorStitchMode;
+      blockMode        = pattern.editorBlockMode;
+      selectedThreadId = pattern.editorSelectedThreadId;
+      rawActiveLayerId = pattern.editorActiveLayerId;
+      viewPanX = pattern.editorViewPanX;
+      viewPanY = pattern.editorViewPanY;
+      viewScale = pattern.editorViewScale;
     }
 
+    // ── Assign symbols and validate palette ──────────────────────────────────
     final withSymbols = pattern.copyWith(
         threads: _assignSymbols(pattern.threads,
             existingSymbols: pattern.compositeSymbols.values
                 .where(symbolIsVisible)
                 .toSet()));
 
-    String? threadId = withSymbols.editorSelectedThreadId;
+    String? threadId = selectedThreadId;
     if (threadId == null || withSymbols.threadByCode(threadId) == null) {
-      threadId = withSymbols.threads.isNotEmpty ? withSymbols.threads.first.dmcCode : null;
+      threadId = withSymbols.threads.isNotEmpty
+          ? withSymbols.threads.first.dmcCode
+          : null;
     }
+
+    // Validate active layer (may have been deleted since session was saved).
+    final resolvedLayerId = (rawActiveLayerId != null &&
+            withSymbols.layers.any((l) => l.id == rawActiveLayerId))
+        ? rawActiveLayerId
+        : (withSymbols.layers.isNotEmpty ? withSymbols.layers.first.id : '');
 
     final prevClipboard = state.clipboard;
     final prevClipboardThreads = state.clipboardThreads;
@@ -408,11 +445,11 @@ class EditorNotifier extends Notifier<EditorState>
       currentTool: tool,
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
-      stitchMode: pattern.editorStitchMode,
-      blockMode: pattern.editorBlockMode,
+      stitchMode: stitchMode,
+      blockMode: blockMode,
       drawingMode: hasClipboard
           ? DrawingMode.paste
-          : (pattern.editorStitchMode ? DrawingMode.pan : DrawingMode.draw),
+          : (stitchMode ? DrawingMode.select : DrawingMode.draw),
       clipboard: hasClipboard ? prevClipboard : null,
       clipboardThreads: hasClipboard ? prevClipboardThreads : null,
       clipboardFromSnippet: hasClipboard && prevClipboardFromSnippet,
@@ -420,16 +457,38 @@ class EditorNotifier extends Notifier<EditorState>
       driveFileId: driveFileId,
       driveParentFolderId: driveParentFolderId,
       isFileOpen: true,
-      activeLayerId: withSymbols.editorActiveLayerId ??
-          (withSymbols.layers.isNotEmpty ? withSymbols.layers.first.id : ''),
-      viewPanX: withSymbols.editorViewPanX,
-      viewPanY: withSymbols.editorViewPanY,
-      viewScale: withSymbols.editorViewScale,
+      activeLayerId: resolvedLayerId,
+      viewPanX: viewPanX,
+      viewPanY: viewPanY,
+      viewScale: viewScale,
       compressOnSave: compressOnSave,
     );
 
-    // Rebuild composite cache when restoring a file that was saved in stitch mode.
-    if (pattern.editorStitchMode) refreshCompositeCache();
+    // Migrate legacy session fields to app data on first open.
+    if (session == null) {
+      final key = driveFileId != null
+          ? 'drive:$driveFileId'
+          : filePath != null
+              ? 'local:$filePath'
+              : null;
+      if (key != null) {
+        unawaited(EditorSessionService.save(
+          key,
+          EditorSession(
+            tool: tool.name,
+            selectedThreadId: threadId,
+            stitchMode: stitchMode,
+            blockMode: blockMode,
+            activeLayerId: resolvedLayerId.isEmpty ? null : resolvedLayerId,
+            viewPanX: viewPanX,
+            viewPanY: viewPanY,
+            viewScale: viewScale,
+          ),
+        ));
+      }
+    }
+
+    if (stitchMode) refreshCompositeCache();
 
     if (withSymbols.referenceImagePath != null) {
       ReferenceImageService.decodeFromPath(withSymbols.referenceImagePath!)
@@ -442,10 +501,38 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   /// Called by PatternCanvas on gesture end to persist the current view
-  /// position. Does NOT mark the file dirty — this is saved on the next
-  /// explicit save rather than triggering an auto-save.
+  /// position. Does NOT mark the file dirty — view state is session-only.
   void updateViewPosition(double panX, double panY, double scale) {
     state = state.copyWith(viewPanX: panX, viewPanY: panY, viewScale: scale);
+    _saveSession();
+  }
+
+  // ─── Session helpers ─────────────────────────────────────────────────────────
+
+  String? get _sessionKey {
+    if (state.driveFileId != null) return 'drive:${state.driveFileId}';
+    if (state.filePath != null) return 'local:${state.filePath}';
+    return null;
+  }
+
+  /// Persist the current editor session to app data (fire-and-forget).
+  @override
+  void _saveSession() {
+    final key = _sessionKey;
+    if (key == null) return;
+    unawaited(EditorSessionService.save(
+      key,
+      EditorSession(
+        tool: state.currentTool.name,
+        selectedThreadId: state.selectedThreadId,
+        stitchMode: state.stitchMode,
+        blockMode: state.blockMode,
+        activeLayerId: state.activeLayerId.isEmpty ? null : state.activeLayerId,
+        viewPanX: state.viewPanX,
+        viewPanY: state.viewPanY,
+        viewScale: state.viewScale,
+      ),
+    ));
   }
 
   void setDriveFileId(String? id) {
@@ -490,6 +577,7 @@ class EditorNotifier extends Notifier<EditorState>
 
   void setTool(DrawingTool tool) {
     state = state.copyWith(currentTool: tool, backstitchStartPoint: null);
+    _saveSession();
   }
 
   void setDrawingMode(DrawingMode mode) {

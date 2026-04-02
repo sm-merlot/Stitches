@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor/editor_provider.dart';
+import '../services/editor_session_service.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -50,7 +51,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final result = await FileService.openFile();
       if (result == null || !mounted) return;
       final (pattern, path, wasCompressed) = result;
-      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed);
+      final session = await EditorSessionService.load('local:$path');
+      if (!mounted) return;
+      ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed, session: session);
       ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const EditorScreen()),
@@ -101,12 +104,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Load from cache immediately, navigate, then refresh in background.
         final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
         if (!mounted) return;
+        final session = await EditorSessionService.load('drive:${selection.fileId}');
+        if (!mounted) return;
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
           filePath: path,
           driveFileId: selection.fileId,
           driveParentFolderId: selection.parentFolderId,
           compressOnSave: wasCompressed,
+          session: session,
         );
         unawaited(addToRecents());
         Navigator.of(context).push(
@@ -132,12 +138,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final (pattern, path, wasCompressed) =
               await FileService.openFileFromPath(tempPath);
           if (!mounted) return;
+          final session = await EditorSessionService.load('drive:${selection.fileId}');
+          if (!mounted) return;
           ref.read(editorProvider.notifier).loadPattern(
             pattern,
             filePath: path,
             driveFileId: selection.fileId,
             driveParentFolderId: selection.parentFolderId,
             compressOnSave: wasCompressed,
+            session: session,
           );
           unawaited(addToRecents());
           Navigator.of(context).push(
@@ -172,12 +181,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
       final current = ref.read(editorProvider);
       if (current.driveFileId == fileId && !current.isDirty) {
+        final session = await EditorSessionService.load('drive:$fileId');
         ref.read(editorProvider.notifier).loadPattern(
           pattern,
           filePath: path,
           driveFileId: fileId,
           driveParentFolderId: parentFolderId,
           compressOnSave: wasCompressed,
+          session: session,
         );
       }
     } catch (_) {
@@ -218,12 +229,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final (pattern, path, wasCompressed) =
               await FileService.openFileFromPath(tempPath);
           if (!mounted) return;
+          final session = await EditorSessionService.load('drive:${item.id}');
+          if (!mounted) return;
           ref.read(editorProvider.notifier).loadPattern(
             pattern,
             filePath: path,
             driveFileId: item.id,
             driveParentFolderId: null,
             compressOnSave: wasCompressed,
+            session: session,
           );
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const EditorScreen()),
@@ -247,11 +261,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             final (pattern, path, wasCompressed) =
                 await FileService.openFileFromPath(tempPath);
             if (!mounted) return;
+            final session = await EditorSessionService.load('drive:${item.id}');
+            if (!mounted) return;
             ref.read(editorProvider.notifier).loadPattern(
               pattern,
               filePath: path,
               driveFileId: item.id,
               compressOnSave: wasCompressed,
+              session: session,
             );
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const EditorScreen()),
@@ -263,7 +280,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       } else {
         final (pattern, path, wasCompressed) = await FileService.openFileFromPath(item.id);
         if (!mounted) return;
-        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed);
+        final session = await EditorSessionService.load('local:${item.id}');
+        if (!mounted) return;
+        ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed, session: session);
         ref.read(recentItemsProvider.notifier).add(path, isFolder: false);
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const EditorScreen()),

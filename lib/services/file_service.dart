@@ -178,35 +178,8 @@ class FileService {
       }
     }
 
-    if (pattern.editorSelectedThreadId != null ||
-        pattern.editorTool != null ||
-        pattern.editorStitchMode ||
-        pattern.editorActiveLayerId != null ||
-        pattern.editorBlockMode ||
-        pattern.editorViewScale > 0) {
-      buf.writeln('editor:');
-      if (pattern.editorSelectedThreadId != null) {
-        buf.writeln(
-            '  selectedThread: ${_yamlStr(pattern.editorSelectedThreadId!)}');
-      }
-      if (pattern.editorTool != null) {
-        buf.writeln('  tool: ${pattern.editorTool!}');
-      }
-      if (pattern.editorStitchMode) {
-        buf.writeln('  stitchMode: true');
-      }
-      if (pattern.editorActiveLayerId != null) {
-        buf.writeln('  activeLayer: ${_yamlStr(pattern.editorActiveLayerId!)}');
-      }
-      if (pattern.editorBlockMode) {
-        buf.writeln('  blockMode: true');
-      }
-      if (pattern.editorViewScale > 0) {
-        buf.writeln('  panX: ${pattern.editorViewPanX.toStringAsFixed(1)}');
-        buf.writeln('  panY: ${pattern.editorViewPanY.toStringAsFixed(1)}');
-        buf.writeln('  scale: ${pattern.editorViewScale.toStringAsFixed(4)}');
-      }
-    }
+    // editor: section intentionally omitted — view position, tool, mode, and
+    // active layer are now stored per-device in EditorSessionService.
 
     if (pattern.referenceImagePath != null) {
       buf.writeln('overlay:');
