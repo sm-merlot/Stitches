@@ -17,18 +17,19 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import '../services/format_service.dart';
+import '../utils/editor_key_handler.dart';
 import '../utils/snackbars.dart';
+import '../widgets/editor_shared_widgets.dart';
 import 'export_dialog.dart';
 import 'materials_list_screen.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
 import '../services/pdf_scanner.dart';
 import 'pattern_scan_symbol_screen.dart';
-import '../widgets/editor_toolbar.dart';
+import '../widgets/editor_canvas_area.dart';
 import '../widgets/file_sidebar.dart';
 import '../widgets/right_sidebar.dart';
 import '../widgets/right_sidebar_colours_panel.dart';
-import '../widgets/pattern_canvas.dart';
 import '../widgets/pdf_page_picker.dart';
 import '../widgets/image_viewer_panel.dart';
 import '../widgets/pdf_viewer_panel.dart';
@@ -721,136 +722,23 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       _scheduleAutoSave();
     });
 
-    // ── Keyboard handler (identical to EditorScreen) ─────────────────────
+    // ── Keyboard handler ──────────────────────────────────────────────────
     KeyEventResult handleKeys(FocusNode node, KeyEvent event) {
-      if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-        return KeyEventResult.ignored;
-      }
-
-      final notifier = ref.read(editorProvider.notifier);
-      final keys = HardwareKeyboard.instance.logicalKeysPressed;
-      final meta = keys.contains(LogicalKeyboardKey.metaLeft) ||
-          keys.contains(LogicalKeyboardKey.metaRight);
-      final ctrl = keys.contains(LogicalKeyboardKey.controlLeft) ||
-          keys.contains(LogicalKeyboardKey.controlRight);
-      final shift = keys.contains(LogicalKeyboardKey.shiftLeft) ||
-          keys.contains(LogicalKeyboardKey.shiftRight);
-
-      final key = event.logicalKey;
-
-      // In stitch mode: allow pan/select mode toggle and Escape.
-      if (editorState.stitchMode) {
-        if (key == LogicalKeyboardKey.keyS) {
-          notifier.setDrawingMode(DrawingMode.select);
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyP ||
-            key == LogicalKeyboardKey.space) {
-          notifier.setDrawingMode(DrawingMode.pan);
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.escape) {
-          if (editorState.selectionRect != null) {
-            notifier.cancelSelection();
-          } else {
-            notifier.toggleStitchMode();
-          }
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      }
-
-      // PDF zoom shortcuts (Cmd+= / Cmd+-)
-      if (openPdf != null && (meta || ctrl)) {
-        if (key == LogicalKeyboardKey.equal) {
-          _pdfPanelKey.currentState?.zoomIn();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.minus) {
-          _pdfPanelKey.currentState?.zoomOut();
-          return KeyEventResult.handled;
-        }
-      }
-
-      // Modifier shortcuts
-      if (meta || ctrl) {
-        if (key == LogicalKeyboardKey.keyZ && !shift) {
-          notifier.undo();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyZ && shift) {
-          notifier.redo();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyY) {
-          notifier.redo();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyA) {
-          notifier.selectAll();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyC) {
-          notifier.copySelection();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.keyV) {
-          notifier.enterPasteMode();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      }
-
-      // Single-key shortcuts
-      switch (key) {
-        case LogicalKeyboardKey.keyD:
-          notifier.setDrawingMode(DrawingMode.draw);
-        case LogicalKeyboardKey.keyE:
-          notifier.setDrawingMode(DrawingMode.erase);
-        case LogicalKeyboardKey.keyP:
-          notifier.setDrawingMode(DrawingMode.pan);
-        case LogicalKeyboardKey.space:
-          notifier.setDrawingMode(DrawingMode.pan);
-        case LogicalKeyboardKey.digit1:
-          notifier.setTool(DrawingTool.fullStitch);
-        case LogicalKeyboardKey.digit2:
-          notifier.setTool(DrawingTool.halfForward);
-        case LogicalKeyboardKey.digit3:
-          notifier.setTool(DrawingTool.halfBackward);
-        case LogicalKeyboardKey.digit4:
-          notifier.setTool(DrawingTool.halfCross);
-        case LogicalKeyboardKey.digit5:
-          notifier.setTool(DrawingTool.quarterDiag);
-        case LogicalKeyboardKey.digit6:
-          notifier.setTool(DrawingTool.quarterCross);
-        case LogicalKeyboardKey.digit7:
-          notifier.setTool(DrawingTool.backstitch);
-        case LogicalKeyboardKey.digit8:
-          notifier.setTool(DrawingTool.fill);
-        case LogicalKeyboardKey.digit9:
-          notifier.setDrawingMode(DrawingMode.erase);
-          if (!editorState.fillEraseActive) notifier.toggleFillErase();
-        case LogicalKeyboardKey.keyC:
-          notifier.setDrawingMode(DrawingMode.colorPicker);
-        case LogicalKeyboardKey.keyS:
-          notifier.setDrawingMode(DrawingMode.select);
-        case LogicalKeyboardKey.escape:
-          notifier.cancelSelection();
-        case LogicalKeyboardKey.delete:
-        case LogicalKeyboardKey.backspace:
-          notifier.deleteSelection();
-        case LogicalKeyboardKey.slash:
-          if (shift) {
-            showDialog(
-                context: context,
-                builder: (_) => const _ShortcutsDialog());
-          } else {
-            return KeyEventResult.ignored;
-          }
-        default:
-          return KeyEventResult.ignored;
-      }
-      return KeyEventResult.handled;
+      return handleEditorKeys(
+        event,
+        editorState,
+        ref.read(editorProvider.notifier),
+        // No onSave — workspace uses auto-save.
+        onShowShortcuts: () => showDialog(
+          context: context,
+          builder: (_) => const _ShortcutsDialog(),
+        ),
+        onPdfZoomIn:
+            openPdf != null ? () => _pdfPanelKey.currentState?.zoomIn() : null,
+        onPdfZoomOut: openPdf != null
+            ? () => _pdfPanelKey.currentState?.zoomOut()
+            : null,
+      );
     }
 
     return PopScope(
@@ -979,7 +867,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 itemBuilder: (ctx) => [
                   PopupMenuItem(
                     value: _MenuAction.referenceImage,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                       icon: Icons.image_outlined,
                       label: 'Reference Image',
                       trailing: editorState.referenceImage != null &&
@@ -992,30 +880,30 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   ),
                   const PopupMenuItem(
                     value: _MenuAction.resize,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                         icon: Icons.aspect_ratio, label: 'Resize Aida'),
                   ),
                   const PopupMenuItem(
                     value: _MenuAction.patternInfo,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                         icon: Icons.info_outline, label: 'Pattern Info'),
                   ),
                   const PopupMenuDivider(),
                   const PopupMenuItem(
                     value: _MenuAction.saveAs,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                         icon: Icons.save_as_outlined, label: 'Save As…'),
                   ),
                   const PopupMenuItem(
                     value: _MenuAction.export,
-                    child: _MenuRow(
+                    child: EditorMenuRow(
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
                   if (editorState.isNativeFormat)
                     PopupMenuItem(
                       value: _MenuAction.toggleCompress,
-                      child: _MenuRow(
+                      child: EditorMenuRow(
                         icon: Icons.folder_zip_outlined,
                         label: editorState.compressOnSave
                             ? 'File Compressed'
@@ -1031,7 +919,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       defaultTargetPlatform != TargetPlatform.android)
                     const PopupMenuItem(
                       value: _MenuAction.shortcuts,
-                      child: _MenuRow(
+                      child: EditorMenuRow(
                           icon: Icons.keyboard_outlined,
                           label: 'Keyboard Shortcuts'),
                     ),
@@ -1046,7 +934,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 onPressed: () => showMaterialsList(context, editorState),
               ),
               StitchDemoButton(state: editorState),
-              _WorkspaceScreenLockButton(),
+              const EditorScreenLockButton(),
               const SizedBox(width: 4),
             ],
           ],
@@ -1083,53 +971,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                               ? Focus(
                                   autofocus: true,
                                   onKeyEvent: handleKeys,
-                                  child: Column(
-                                    children: [
-                                      if (!editorState.isNativeFormat)
-                                        _ImportBanner(
-                                          filePath: editorState.filePath!,
-                                          onSaveAs: () => _saveAs(context),
-                                        ),
-                                      // FAB lives inside a Stack scoped to the
-                                      // canvas area so it can never overlap the
-                                      // toolbar below.
-                                      Expanded(
-                                        child: Stack(
-                                          children: [
-                                            const PatternCanvas(),
-                                            Positioned(
-                                              left: 12,
-                                              bottom: 16,
-                                              child: FloatingActionButton.extended(
-                                                onPressed: () => ref
-                                                    .read(editorProvider.notifier)
-                                                    .toggleStitchMode(),
-                                                icon: Icon(editorState.stitchMode
-                                                    ? Icons.edit_outlined
-                                                    : Icons.auto_stories_outlined),
-                                                label: Text(editorState.stitchMode
-                                                    ? 'Exit Stitch Mode'
-                                                    : 'Stitch Mode'),
-                                                backgroundColor: editorState.stitchMode
-                                                    ? Theme.of(context)
-                                                        .colorScheme
-                                                        .secondaryContainer
-                                                    : null,
-                                                foregroundColor: editorState.stitchMode
-                                                    ? Theme.of(context)
-                                                        .colorScheme
-                                                        .onSecondaryContainer
-                                                    : null,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SafeArea(
-                                        top: false,
-                                        child: EditorToolbar(),
-                                      ),
-                                    ],
+                                  child: EditorCanvasArea(
+                                    importFilePath: editorState.isNativeFormat
+                                        ? null
+                                        : editorState.filePath,
+                                    onSaveAs: editorState.isNativeFormat
+                                        ? null
+                                        : () => _saveAs(context),
+                                    showDriveNoteInBanner: true,
                                   ),
                                 )
                               : _EmptyState(
