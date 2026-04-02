@@ -17,8 +17,6 @@ _A free, open-source cross-stitch pattern editor for macOS, Windows, iOS and And
 ![iOS](https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white)
 ![Android](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white)
 
-_\*Free on all platforms. May not be free on the Apple App Store to offset the $99/year Apple Developer Program fee._
-
 _Built with the assistance of [Claude Code](https://claude.ai/claude-code)_
 
 </div>
