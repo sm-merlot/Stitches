@@ -1083,48 +1083,51 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                               ? Focus(
                                   autofocus: true,
                                   onKeyEvent: handleKeys,
-                                  child: Stack(
+                                  child: Column(
                                     children: [
-                                      Column(
-                                        children: [
-                                          if (!editorState.isNativeFormat)
-                                            _ImportBanner(
-                                              filePath: editorState.filePath!,
-                                              onSaveAs: () => _saveAs(context),
-                                            ),
-                                          const Expanded(child: PatternCanvas()),
-                                          const SafeArea(
-                                            top: false,
-                                            child: EditorToolbar(),
-                                          ),
-                                        ],
-                                      ),
-                                      // FAB anchored to canvas column so it
-                                      // never overlaps the left file sidebar.
-                                      Positioned(
-                                        left: 12,
-                                        bottom: editorState.stitchMode ? 16 : 64,
-                                        child: FloatingActionButton.extended(
-                                          onPressed: () => ref
-                                              .read(editorProvider.notifier)
-                                              .toggleStitchMode(),
-                                          icon: Icon(editorState.stitchMode
-                                              ? Icons.edit_outlined
-                                              : Icons.auto_stories_outlined),
-                                          label: Text(editorState.stitchMode
-                                              ? 'Exit Stitch Mode'
-                                              : 'Stitch Mode'),
-                                          backgroundColor: editorState.stitchMode
-                                              ? Theme.of(context)
-                                                  .colorScheme
-                                                  .secondaryContainer
-                                              : null,
-                                          foregroundColor: editorState.stitchMode
-                                              ? Theme.of(context)
-                                                  .colorScheme
-                                                  .onSecondaryContainer
-                                              : null,
+                                      if (!editorState.isNativeFormat)
+                                        _ImportBanner(
+                                          filePath: editorState.filePath!,
+                                          onSaveAs: () => _saveAs(context),
                                         ),
+                                      // FAB lives inside a Stack scoped to the
+                                      // canvas area so it can never overlap the
+                                      // toolbar below.
+                                      Expanded(
+                                        child: Stack(
+                                          children: [
+                                            const PatternCanvas(),
+                                            Positioned(
+                                              left: 12,
+                                              bottom: 16,
+                                              child: FloatingActionButton.extended(
+                                                onPressed: () => ref
+                                                    .read(editorProvider.notifier)
+                                                    .toggleStitchMode(),
+                                                icon: Icon(editorState.stitchMode
+                                                    ? Icons.edit_outlined
+                                                    : Icons.auto_stories_outlined),
+                                                label: Text(editorState.stitchMode
+                                                    ? 'Exit Stitch Mode'
+                                                    : 'Stitch Mode'),
+                                                backgroundColor: editorState.stitchMode
+                                                    ? Theme.of(context)
+                                                        .colorScheme
+                                                        .secondaryContainer
+                                                    : null,
+                                                foregroundColor: editorState.stitchMode
+                                                    ? Theme.of(context)
+                                                        .colorScheme
+                                                        .onSecondaryContainer
+                                                    : null,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SafeArea(
+                                        top: false,
+                                        child: EditorToolbar(),
                                       ),
                                     ],
                                   ),
