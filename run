@@ -68,6 +68,7 @@ case "$cmd" in
     ;;
 
   build-android)
+    $FLUTTER pub get
     $FLUTTER build apk --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     $FLUTTER install --release
     echo "Installed on Android. You can now disconnect the Mac."
