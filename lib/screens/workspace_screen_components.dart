@@ -96,7 +96,6 @@ class _ShortcutsDialog extends StatelessWidget {
       [
         ('D', 'Draw mode'),
         ('E', 'Erase mode'),
-        ('P  or  Space', 'Pan / navigate'),
         ('C', 'Colour picker'),
         ('S', 'Select mode'),
       ]
@@ -141,7 +140,6 @@ class _ShortcutsDialog extends StatelessWidget {
     (
       'Stitch mode',
       [
-        ('P  or  Space', 'Pan'),
         ('S', 'Select'),
         ('Esc', 'Exit stitch mode'),
       ]

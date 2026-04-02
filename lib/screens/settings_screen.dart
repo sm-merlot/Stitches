@@ -94,7 +94,6 @@ class SettingsScreen extends ConsumerWidget {
             const _ShortcutTile('Redo', 'Cmd/Ctrl + Shift + Z  or  Cmd/Ctrl + Y'),
             const _ShortcutTile('Draw mode', 'D'),
             const _ShortcutTile('Erase mode', 'E'),
-            const _ShortcutTile('Pan mode', 'P  or  Space'),
             const _ShortcutTile('Full cross stitch', '1'),
             const _ShortcutTile('Half diagonal /', '2'),
             const _ShortcutTile('Half diagonal \\', '3'),

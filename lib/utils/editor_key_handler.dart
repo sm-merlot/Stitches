@@ -43,7 +43,7 @@ KeyEventResult handleEditorKeys(
       notifier.setDrawingMode(DrawingMode.select);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.keyP || key == LogicalKeyboardKey.space) {
+    if (key == LogicalKeyboardKey.space) {
       notifier.setDrawingMode(DrawingMode.pan);
       return KeyEventResult.handled;
     }
@@ -150,8 +150,6 @@ KeyEventResult handleEditorKeys(
       notifier.setDrawingMode(DrawingMode.draw);
     case LogicalKeyboardKey.keyE:
       notifier.setDrawingMode(DrawingMode.erase);
-    case LogicalKeyboardKey.keyP:
-      notifier.setDrawingMode(DrawingMode.pan);
     case LogicalKeyboardKey.space:
       notifier.setDrawingMode(DrawingMode.pan);
     case LogicalKeyboardKey.digit1:
