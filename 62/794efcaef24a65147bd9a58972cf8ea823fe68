@@ -1,0 +1,23 @@
+run
+  9ad30f6d44f6bbe5 10-11,57-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "62794efcaef24a65147bd9a58972cf8ea823fe68",
+  "prompts": {
+    "9ad30f6d44f6bbe5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10198e4c-99f2-4de5-b849-38498f7cfb47",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
