@@ -66,6 +66,12 @@ case "$cmd" in
     echo "Installed on iPad. You can now disconnect the Mac."
     ;;
 
+  build-android)
+    $FLUTTER build apk --release --dart-define-from-file=secrets.json "$@"
+    $FLUTTER install --release
+    echo "Installed on Android. You can now disconnect the Mac."
+    ;;
+
   build-cli)
     mkdir -p "$(dirname "$CLI_BIN")"
     $DART compile exe "$CLI_ENTRY" -o "$CLI_BIN"
