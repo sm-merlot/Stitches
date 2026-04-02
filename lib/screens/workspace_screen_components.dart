@@ -68,16 +68,31 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            FilledButton.icon(
-              onPressed: onNewFile,
-              icon: const Icon(Icons.add),
-              label: const Text('New Pattern'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 32, vertical: 16),
-                textStyle: theme.textTheme.titleSmall,
-              ),
-            ),
+            Builder(builder: (context) {
+              final isPhone =
+                  MediaQuery.of(context).size.shortestSide < 600;
+              if (isPhone) {
+                return FilledButton(
+                  onPressed: onNewFile,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    textStyle: theme.textTheme.titleSmall,
+                  ),
+                  child: const Text('+'),
+                );
+              }
+              return FilledButton.icon(
+                onPressed: onNewFile,
+                icon: const Icon(Icons.add),
+                label: const Text('New Pattern'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 32, vertical: 16),
+                  textStyle: theme.textTheme.titleSmall,
+                ),
+              );
+            }),
           ],
         ),
       ),

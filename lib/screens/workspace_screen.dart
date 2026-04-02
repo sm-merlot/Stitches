@@ -59,6 +59,27 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Timer? _autoSaveTimer;
   final _pdfPanelKey = GlobalKey<PdfViewerPanelState>();
 
+  // Phone-only: right sidebar starts collapsed; coordinates with folder sidebar.
+  bool _rightSidebarCollapsed = true;
+
+  bool _isPhone(BuildContext context) =>
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) &&
+      MediaQuery.of(context).size.shortestSide < 600;
+
+  void _openFolderSidebar() {
+    ref.read(workspaceProvider.notifier).setSidebarVisible(true);
+    setState(() => _rightSidebarCollapsed = true);
+  }
+
+  void _onRightSidebarCollapsedChanged(bool collapsed) {
+    setState(() => _rightSidebarCollapsed = collapsed);
+    if (!collapsed) {
+      // Right sidebar expanding — close folder sidebar on phones.
+      ref.read(workspaceProvider.notifier).setSidebarVisible(false);
+    }
+  }
+
   // PDF scan overlay — full-screen Overlay entry so AppBar is also blocked.
   final _scanStatus = ValueNotifier<String?>(null);
   final _scanSubtitle = ValueNotifier<String?>(null);
@@ -731,6 +752,18 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       _scheduleAutoSave();
     });
 
+    // ── Phone sidebar coordination ────────────────────────────────────────
+    // When a file is opened on a phone, close the folder sidebar so the canvas
+    // gets the full width.
+    final isPhone = _isPhone(context);
+    if (isPhone) {
+      ref.listen<EditorState>(editorProvider, (prev, next) {
+        if (prev != null && !prev.isFileOpen && next.isFileOpen) {
+          ref.read(workspaceProvider.notifier).setSidebarVisible(false);
+        }
+      });
+    }
+
     // ── Keyboard handler ──────────────────────────────────────────────────
     KeyEventResult handleKeys(FocusNode node, KeyEvent event) {
       return handleEditorKeys(
@@ -984,7 +1017,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                                       context, wsState.workspace),
                                 ),
                 ),
-                const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
+                RightSidebar(
+                  sidebarContext: RightSidebarContext.mainEditor,
+                  collapsedOverride: isPhone ? _rightSidebarCollapsed : null,
+                  onCollapsedChanged:
+                      isPhone ? _onRightSidebarCollapsedChanged : null,
+                ),
               ],
             ),
             // Blocking loading overlay (Drive download in progress)
@@ -1015,8 +1053,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       topRight: Radius.circular(6),
                       bottomRight: Radius.circular(6),
                     ),
-                    onTap: () =>
-                        ref.read(workspaceProvider.notifier).toggleSidebar(),
+                    onTap: () => isPhone
+                        ? _openFolderSidebar()
+                        : ref
+                            .read(workspaceProvider.notifier)
+                            .toggleSidebar(),
                     child: const Padding(
                       padding:
                           EdgeInsets.symmetric(vertical: 12, horizontal: 4),

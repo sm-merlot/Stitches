@@ -51,8 +51,12 @@ mixin DrawingMixin on Notifier<EditorState> {
         ? state.recentThreadIds
         : [
             threadId,
-            ...state.recentThreadIds.where((id) => id != threadId),
-          ].take(5).toList();
+            if (state.selectedThreadId != null &&
+                state.selectedThreadId != threadId)
+              state.selectedThreadId!,
+            ...state.recentThreadIds.where(
+                (id) => id != threadId && id != state.selectedThreadId),
+          ].take(10).toList();
     state = state.copyWith(selectedThreadId: threadId, recentThreadIds: recents);
     _saveSession();
   }
@@ -87,8 +91,11 @@ mixin DrawingMixin on Notifier<EditorState> {
     void select(String threadId, [CrossStitchPattern? updatedPattern]) {
       final recents = [
         threadId,
-        ...s.recentThreadIds.where((id) => id != threadId),
-      ].take(5).toList();
+        if (s.selectedThreadId != null && s.selectedThreadId != threadId)
+          s.selectedThreadId!,
+        ...s.recentThreadIds.where(
+            (id) => id != threadId && id != s.selectedThreadId),
+      ].take(10).toList();
       state = s.copyWith(
         pattern: updatedPattern ?? s.pattern,
         selectedThreadId: threadId,
