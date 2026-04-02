@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -35,6 +36,9 @@ class FileService {
   /// Load a pattern directly from a known file path.
   /// Supports both .stitches (YAML) and .oxs (XML) formats.
   /// Returns (pattern, filePath, wasCompressed).
+  ///
+  /// Decompression and YAML parsing run in a background isolate so the UI
+  /// thread stays free (and any loading spinner can animate) during the parse.
   static Future<(CrossStitchPattern, String, bool)> openFileFromPath(
       String path) async {
     final file = File(path);
@@ -44,11 +48,17 @@ class FileService {
       return (pattern, path, false);
     }
     final bytes = await file.readAsBytes();
+    final (pattern, wasCompressed) =
+        await Isolate.run(() => _parseBytesToPattern(bytes));
+    return (pattern, path, wasCompressed);
+  }
+
+  /// Runs in a background isolate: decompress + decode + parse the raw bytes.
+  static (CrossStitchPattern, bool) _parseBytesToPattern(Uint8List bytes) {
     final wasCompressed =
         bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b;
     final content = _decodeBytes(_maybeDecompress(bytes));
-    final pattern = parseYamlString(content);
-    return (pattern, path, wasCompressed);
+    return (parseYamlString(content), wasCompressed);
   }
 
   /// Decompress gzip bytes if the gzip magic bytes (1f 8b) are present.

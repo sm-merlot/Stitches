@@ -361,6 +361,7 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
     }
 
     if (file is LocalPatternFile) {
+      ref.read(fileLoadingProvider.notifier).set(true);
       try {
         final (pattern, path, wasCompressed) = await FileService.openFileFromPath(file.path);
         if (!context.mounted) return;
@@ -368,6 +369,8 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed);
       } catch (e) {
         if (context.mounted) showError(context, 'Could not open file: $e');
+      } finally {
+        if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
       }
     } else if (file is DrivePatternFile) {
       try {
@@ -380,16 +383,21 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
         if (await cached.exists()) {
           // Load from cache immediately, then refresh from Drive in background.
-          final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
-          if (!context.mounted) return;
-          _switchToEditor();
-          ref.read(editorProvider.notifier).loadPattern(
-            pattern,
-            filePath: path,
-            driveFileId: file.fileId,
-            driveParentFolderId: file.parentFolder.folderId,
-            compressOnSave: wasCompressed,
-          );
+          ref.read(fileLoadingProvider.notifier).set(true);
+          try {
+            final (pattern, path, wasCompressed) = await FileService.openFileFromPath(tempPath);
+            if (!context.mounted) return;
+            _switchToEditor();
+            ref.read(editorProvider.notifier).loadPattern(
+              pattern,
+              filePath: path,
+              driveFileId: file.fileId,
+              driveParentFolderId: file.parentFolder.folderId,
+              compressOnSave: wasCompressed,
+            );
+          } finally {
+            if (mounted) ref.read(fileLoadingProvider.notifier).set(false);
+          }
           unawaited(_refreshFromDrive(file, tempPath));
         } else {
           // No cache — download first, showing a blocking overlay.
