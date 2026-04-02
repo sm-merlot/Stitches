@@ -1,0 +1,23 @@
+lib/services/google_auth_service.dart
+  9ad30f6d44f6bbe5 42-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "264db771d4b895d8083ae6d48b26a2d2e2122f93",
+  "prompts": {
+    "9ad30f6d44f6bbe5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10198e4c-99f2-4de5-b849-38498f7cfb47",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 49,
+      "total_deletions": 18,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
