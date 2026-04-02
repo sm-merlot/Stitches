@@ -39,9 +39,8 @@ class GoogleAuthService {
       clientId: defaultTargetPlatform == TargetPlatform.iOS
           ? kGoogleIosClientId
           : null,
-      serverClientId: defaultTargetPlatform == TargetPlatform.android
-          ? kGoogleWebClientId
-          : null,
+      // Android: serverClientId is read automatically from google-services.json
+      // (the client_type:3 web OAuth entry). Passing it explicitly can conflict.
     );
     // Track auth state changes going forward.
     GoogleSignIn.instance.authenticationEvents.listen((event) {
