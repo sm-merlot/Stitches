@@ -1,0 +1,23 @@
+lib/screens/drive_folder_picker_dialog.dart
+  9ad30f6d44f6bbe5 194-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "3e754dbc3acfe775d819c3606916364b85ebc03b",
+  "prompts": {
+    "9ad30f6d44f6bbe5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10198e4c-99f2-4de5-b849-38498f7cfb47",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 1,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
