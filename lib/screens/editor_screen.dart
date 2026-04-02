@@ -432,7 +432,39 @@ class EditorScreen extends ConsumerWidget {
                         filePath: state.filePath!,
                         onSaveAs: () => _saveAs(context, ref),
                       ),
-                    const Expanded(child: PatternCanvas()),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          const PatternCanvas(),
+                          if (state.isFileOpen)
+                            Positioned(
+                              left: 16,
+                              bottom: 16,
+                              child: FloatingActionButton.extended(
+                                onPressed: () => ref
+                                    .read(editorProvider.notifier)
+                                    .toggleStitchMode(),
+                                icon: Icon(state.stitchMode
+                                    ? Icons.edit_outlined
+                                    : Icons.auto_stories_outlined),
+                                label: Text(state.stitchMode
+                                    ? 'Exit Stitch Mode'
+                                    : 'Stitch Mode'),
+                                backgroundColor: state.stitchMode
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .secondaryContainer
+                                    : null,
+                                foregroundColor: state.stitchMode
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .onSecondaryContainer
+                                    : null,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                     const SafeArea(top: false, child: EditorToolbar()),
                   ],
                 ),
@@ -441,27 +473,6 @@ class EditorScreen extends ConsumerWidget {
             ],
           ),
         ),
-        floatingActionButton: state.isFileOpen
-            ? Padding(
-                padding: EdgeInsets.only(bottom: state.stitchMode ? 16 : 58),
-                child: FloatingActionButton.extended(
-                  onPressed: () =>
-                      ref.read(editorProvider.notifier).toggleStitchMode(),
-                  icon: Icon(state.stitchMode
-                      ? Icons.edit_outlined
-                      : Icons.auto_stories_outlined),
-                  label: Text(
-                      state.stitchMode ? 'Exit Stitch Mode' : 'Stitch Mode'),
-                  backgroundColor: state.stitchMode
-                      ? Theme.of(context).colorScheme.secondaryContainer
-                      : null,
-                  foregroundColor: state.stitchMode
-                      ? Theme.of(context).colorScheme.onSecondaryContainer
-                      : null,
-                ),
-              )
-            : null,
-        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       ),
     );
   }
