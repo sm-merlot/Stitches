@@ -1,0 +1,23 @@
+lib/widgets/editor_shared_widgets.dart
+  4a777f206dc07a56 1-2,6,51-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "f1ce0921396981d8bdce3e56efd0502aecd9ba3a",
+  "prompts": {
+    "4a777f206dc07a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb18ea63-2c1f-45b7-8869-9279a9d454a2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 2,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
