@@ -23,6 +23,13 @@ _Built with the assistance of [Claude Code](https://claude.ai/claude-code)_
 
 </div>
 
+---
+
+| | | |
+|:---|:---|:---|
+| 🪡 **Full stitch toolkit** — full, half, quarter, backstitch, fill | 🎨 **~300 DMC colours** — with Anchor cross-reference | ☁️ **Google Drive sync** — auto-save across devices |
+| ✂️ **Snippets & sprite importer** — reusable motifs from pixel art | ✏️ **Apple Pencil** — hover preview, double-tap erase | 📄 **PDF scanner** *(beta)* — convert printed charts to patterns |
+
 ## Features
 
 ### Pattern editing
