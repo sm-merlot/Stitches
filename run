@@ -133,6 +133,7 @@ case "$cmd" in
   clean)
     $FLUTTER clean
     rm -rf build/cli
+    pod repo update 2>/dev/null || true
     echo "Cleaned."
     ;;
 
