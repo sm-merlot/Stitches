@@ -133,6 +133,8 @@ case "$cmd" in
   clean)
     $FLUTTER clean
     rm -rf build/cli
+    rm -rf macos/Pods macos/.symlinks
+    rm -rf ios/Pods ios/.symlinks
     rm -rf "${HOME}/.cocoapods/repos/trunk"
     echo "Cleaned."
     ;;
