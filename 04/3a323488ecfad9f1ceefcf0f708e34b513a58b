@@ -1,0 +1,25 @@
+lib/widgets/canvas_painter.dart
+  8137f0c4ab12f695 143-146,232,352-369,374,416-435,467-469,483-484,487-488,490,501-502,509,514,519,524,548-575,577-578,633,636-650,655-656
+lib/widgets/canvas_painter_drawing_methods.dart
+  8137f0c4ab12f695 59-72,82-85,88-91,102-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "043a323488ecfad9f1ceefcf0f708e34b513a58b",
+  "prompts": {
+    "8137f0c4ab12f695": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c70dbce-f3c2-44ea-b8b7-360a0cfcf005",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 134,
+      "total_deletions": 72,
+      "accepted_lines": 133,
+      "overriden_lines": 0
+    }
+  }
+}
