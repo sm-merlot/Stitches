@@ -41,8 +41,8 @@ class EditorScreenLockButton extends ConsumerWidget {
         selectedIcon: const Icon(Icons.screen_lock_portrait),
         style: keepOn
             ? IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.primaryContainer,
-                foregroundColor: theme.colorScheme.onPrimaryContainer,
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                foregroundColor: theme.colorScheme.onSecondaryContainer,
               )
             : null,
         onPressed: () =>
