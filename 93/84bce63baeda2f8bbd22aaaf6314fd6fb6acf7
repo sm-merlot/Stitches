@@ -1,0 +1,25 @@
+lib/widgets/file_sidebar.dart
+  8137f0c4ab12f695 364,372-373,386-400
+lib/services/file_service.dart
+  8137f0c4ab12f695 3,39-41,51-57,61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "9384bce63baeda2f8bbd22aaaf6314fd6fb6acf7",
+  "prompts": {
+    "8137f0c4ab12f695": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c70dbce-f3c2-44ea-b8b7-360a0cfcf005",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 12,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
