@@ -1,7 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/storage_location.dart';
 import '../providers/folder_contents_provider.dart';
+
+bool get _isTouch =>
+    defaultTargetPlatform == TargetPlatform.iOS ||
+    defaultTargetPlatform == TargetPlatform.android;
 
 class FolderTreeNode extends ConsumerStatefulWidget {
   final StorageLocation folder;
@@ -70,6 +75,13 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
             const [])
         : const <PatternFile>[];
 
+    final isTouch = _isTouch;
+    final rowV = isTouch ? 6.0 : 2.0;
+    final iconSize = isTouch ? 20.0 : 16.0;
+    final textStyle = isTouch
+        ? theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)
+        : theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -84,29 +96,27 @@ class _FolderTreeNodeState extends ConsumerState<FolderTreeNode> {
           child: InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: EdgeInsets.only(left: indent, top: 2, bottom: 2, right: 4),
+              padding: EdgeInsets.only(left: indent, top: rowV, bottom: rowV, right: 4),
               child: Row(
                 children: [
                   Icon(
                     _expanded
                         ? Icons.keyboard_arrow_down
                         : Icons.keyboard_arrow_right,
-                    size: 16,
+                    size: iconSize,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                   const SizedBox(width: 2),
                   Icon(
                     _expanded ? Icons.folder_open : Icons.folder,
-                    size: 16,
+                    size: iconSize,
                     color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       widget.folder.displayName,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: textStyle,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -265,6 +275,19 @@ class _FileTile extends StatelessWidget {
     final indent = depth * 12.0;
     final selected = _isSelected;
 
+    final isTouch = _isTouch;
+    final tileV = isTouch ? 7.0 : 3.0;
+    final fileIconSize = isTouch ? 18.0 : 14.0;
+    final fileTextStyle = isTouch
+        ? theme.textTheme.bodyMedium?.copyWith(
+            color: selected ? theme.colorScheme.primary : null,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          )
+        : theme.textTheme.bodySmall?.copyWith(
+            color: selected ? theme.colorScheme.primary : null,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          );
+
     return GestureDetector(
       onSecondaryTapDown: (details) => onContextMenu(details.globalPosition),
       onLongPressStart: (details) => onContextMenu(details.globalPosition),
@@ -274,7 +297,7 @@ class _FileTile extends StatelessWidget {
           color: selected
               ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
               : null,
-          padding: EdgeInsets.only(left: indent + 20, right: 4, top: 3, bottom: 3),
+          padding: EdgeInsets.only(left: indent + 20, right: 4, top: tileV, bottom: tileV),
           child: Row(
             children: [
               Icon(
@@ -285,7 +308,7 @@ class _FileTile extends StatelessWidget {
                         : _isImportable
                             ? Icons.swap_horiz
                             : Icons.grid_4x4,
-                size: 14,
+                size: fileIconSize,
                 color: selected
                     ? theme.colorScheme.primary
                     : theme.colorScheme.onSurface.withValues(alpha: 0.55),
@@ -294,11 +317,7 @@ class _FileTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   file.displayName,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: selected ? theme.colorScheme.primary : null,
-                    fontWeight:
-                        selected ? FontWeight.w600 : FontWeight.normal,
-                  ),
+                  style: fileTextStyle,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

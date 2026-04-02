@@ -29,6 +29,7 @@ FLUTTER=flutter
 DART=dart
 CLI_ENTRY=bin/stitches_cli.dart
 CLI_BIN=build/cli/macos_arm64/bundle/bin/stitches_cli
+GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo '')
 
 cmd=${1:-help}
 shift || true   # remaining args forwarded where needed
@@ -36,19 +37,19 @@ shift || true   # remaining args forwarded where needed
 case "$cmd" in
 
   macos)
-    exec $FLUTTER run -d macos --dart-define-from-file=secrets.json "$@"
+    exec $FLUTTER run -d macos --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     ;;
 
   ipad)
-    exec $FLUTTER run -d "00008112-0014785E0168A01E" --dart-define-from-file=secrets.json "$@"
+    exec $FLUTTER run -d "00008112-0014785E0168A01E" --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     ;;
 
   ios)
-    exec $FLUTTER run -d ios "$@"
+    exec $FLUTTER run -d ios --dart-define=GIT_HASH="$GIT_HASH" "$@"
     ;;
 
   android)
-    exec $FLUTTER run -d 19181FDF600G2R --dart-define-from-file=secrets.json --debug "$@"
+    exec $FLUTTER run -d 19181FDF600G2R --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" --debug "$@"
     ;;
 
   cli)
@@ -56,14 +57,21 @@ case "$cmd" in
     ;;
 
   build)
-    $FLUTTER build macos --release --dart-define-from-file=secrets.json "$@"
+    $FLUTTER build macos --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     echo "Built: build/macos/Build/Products/Release/stitches.app"
     ;;
 
   build-ipad)
-    $FLUTTER build ios --release --dart-define-from-file=secrets.json "$@"
+    $FLUTTER build ios --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     $FLUTTER install --release
     echo "Installed on iPad. You can now disconnect the Mac."
+    ;;
+
+  build-android)
+    $FLUTTER pub get
+    $FLUTTER build apk --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
+    $FLUTTER install --release
+    echo "Installed on Android. You can now disconnect the Mac."
     ;;
 
   build-cli)
@@ -125,6 +133,9 @@ case "$cmd" in
   clean)
     $FLUTTER clean
     rm -rf build/cli
+    rm -rf macos/Pods macos/.symlinks macos/Podfile.lock
+    rm -rf ios/Pods ios/.symlinks ios/Podfile.lock
+    rm -rf "${HOME}/.cocoapods/repos/trunk"
     echo "Cleaned."
     ;;
 

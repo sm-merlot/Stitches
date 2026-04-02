@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 
@@ -93,7 +94,6 @@ class SettingsScreen extends ConsumerWidget {
             const _ShortcutTile('Redo', 'Cmd/Ctrl + Shift + Z  or  Cmd/Ctrl + Y'),
             const _ShortcutTile('Draw mode', 'D'),
             const _ShortcutTile('Erase mode', 'E'),
-            const _ShortcutTile('Pan mode', 'P  or  Space'),
             const _ShortcutTile('Full cross stitch', '1'),
             const _ShortcutTile('Half diagonal /', '2'),
             const _ShortcutTile('Half diagonal \\', '3'),
@@ -136,6 +136,23 @@ class SettingsScreen extends ConsumerWidget {
               onChanged: (v) => notifier.setPencilPasteConfirm(v),
             ),
           ],
+          const Divider(),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snap) {
+              const gitHash = String.fromEnvironment('GIT_HASH');
+              final version = snap.data == null
+                  ? '…'
+                  : 'v${snap.data!.version} (${snap.data!.buildNumber})'
+                      '${gitHash.isNotEmpty ? ' · $gitHash' : ''}';
+              return ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Version'),
+                trailing: Text(version,
+                    style: const TextStyle(fontSize: 13)),
+              );
+            },
+          ),
         ],
       ),
     );

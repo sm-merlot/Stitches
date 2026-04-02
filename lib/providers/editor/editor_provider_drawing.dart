@@ -14,6 +14,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   CrossStitchPattern _pruneUnusedThreads(CrossStitchPattern pattern);
   String _nextSymbol(Set<String> used);
   void refreshCompositeCache(); // provided by LayersMixin
+  void _saveSession();          // provided by EditorNotifier
 
   // ─── Private helpers (unique to this mixin) ───────────────────────────────
 
@@ -43,11 +44,6 @@ mixin DrawingMixin on Notifier<EditorState> {
     };
   }
 
-  Future<void> _autoSaveStitchMode() async {
-    if (state.filePath == null) return;
-    await FileService.saveFile(state.patternForSave, state.filePath!);
-  }
-
   // ─── Thread management ────────────────────────────────────────────────────
 
   void setSelectedThread(String? threadId) {
@@ -58,6 +54,7 @@ mixin DrawingMixin on Notifier<EditorState> {
             ...state.recentThreadIds.where((id) => id != threadId),
           ].take(5).toList();
     state = state.copyWith(selectedThreadId: threadId, recentThreadIds: recents);
+    _saveSession();
   }
 
   /// Picks the visually displayed (composite/blended) colour at [x],[y] and
@@ -594,7 +591,8 @@ mixin DrawingMixin on Notifier<EditorState> {
   // ─── Stitch / block mode ──────────────────────────────────────────────────
 
   void toggleBlockMode() {
-    state = state.copyWith(blockMode: !state.blockMode, isDirty: true);
+    state = state.copyWith(blockMode: !state.blockMode);
+    _saveSession();
   }
 
   void toggleCanvasSelectionMode() {
@@ -613,7 +611,7 @@ mixin DrawingMixin on Notifier<EditorState> {
       stitchBackMode: false,
     );
     if (entering) refreshCompositeCache();
-    _autoSaveStitchMode();
+    _saveSession();
   }
 
   /// Cross: hides backstitches. Activating clears Back.

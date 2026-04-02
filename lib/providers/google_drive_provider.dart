@@ -104,13 +104,9 @@ class DriveNotifier extends Notifier<DriveState> {
     try {
       await _auth.signIn();
       if (!ref.mounted) return;
-      final email = await _auth.accountEmail();
-      if (!ref.mounted) return;
-      state = state.copyWith(
-        status: DriveStatus.connected,
-        email: email,
-        error: null,
-      );
+      // Re-check connection so all state (email, status, isConfigured) is
+      // refreshed from the auth service after a successful sign-in.
+      await checkConnection();
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(
@@ -127,7 +123,8 @@ class DriveNotifier extends Notifier<DriveState> {
     } catch (_) {
       // Sign-out failed (e.g. network error) — clear local state regardless.
     }
-    state = const DriveState();
+    // Preserve isConfigured so the sign-in button remains visible.
+    state = DriveState(isConfigured: _auth.isConfigured);
   }
 
   /// Returns a [GoogleDriveService] if connected, null otherwise.

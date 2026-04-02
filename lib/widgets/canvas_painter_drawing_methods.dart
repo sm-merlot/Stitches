@@ -56,6 +56,20 @@ mixin _DrawingMethods {
 
   // ─── Thread line with highlight ─────────────────────────────────────────────
 
+  // Reusable Paint instances for _drawThreadLine — mutated in place per call.
+  // Safe because canvas.drawLine() records the paint state immediately and does
+  // not retain a reference to the Paint object after the call returns.
+  // All three share the same immutable base properties (stroke, round cap).
+  static final _tlOutlinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final _tlMainPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final _tlHighlightPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
   void _drawThreadLine(Canvas canvas, Offset from, Offset to, Color color,
       {double widthFactor = 0.12, double minWidth = 1.2}) {
     final width = math.max(minWidth, cellSize * widthFactor);
@@ -65,24 +79,16 @@ mixin _DrawingMethods {
       final outlineBase =
           aidaColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
       final alpha = ((3.5 - contrast.clamp(1.0, 3.5)) / 2.5) * 0.7;
-      canvas.drawLine(
-          from,
-          to,
-          Paint()
-            ..color = outlineBase.withValues(alpha: alpha)
-            ..strokeWidth = width * 1.8
-            ..strokeCap = StrokeCap.round
-            ..style = PaintingStyle.stroke);
+      _tlOutlinePaint
+        ..color = outlineBase.withValues(alpha: alpha)
+        ..strokeWidth = width * 1.8;
+      canvas.drawLine(from, to, _tlOutlinePaint);
     }
 
-    canvas.drawLine(
-        from,
-        to,
-        Paint()
-          ..color = color
-          ..strokeWidth = width
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke);
+    _tlMainPaint
+      ..color = color
+      ..strokeWidth = width;
+    canvas.drawLine(from, to, _tlMainPaint);
 
     final dx = to.dx - from.dx;
     final dy = to.dy - from.dy;
@@ -93,14 +99,10 @@ mixin _DrawingMethods {
     final py = dx / dist;
     final offset = Offset(px, py) * (width * 0.22);
 
-    canvas.drawLine(
-        from + offset,
-        to + offset,
-        Paint()
-          ..color = Color.lerp(color, Colors.white, 0.45)!.withValues(alpha: 0.65)
-          ..strokeWidth = width * 0.38
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke);
+    _tlHighlightPaint
+      ..color = Color.lerp(color, Colors.white, 0.45)!.withValues(alpha: 0.65)
+      ..strokeWidth = width * 0.38;
+    canvas.drawLine(from + offset, to + offset, _tlHighlightPaint);
   }
 
   // ─── Stitch draw methods ────────────────────────────────────────────────────
