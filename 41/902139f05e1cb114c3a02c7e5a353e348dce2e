@@ -1,0 +1,29 @@
+lib/services/pdf_service.dart
+  794232f7b9dde9fe 362-378
+lib/screens/stitch_demo_screen.dart
+  794232f7b9dde9fe 189-204
+lib/services/format_service.dart
+  794232f7b9dde9fe 53-59,63
+lib/screens/export_dialog.dart
+  794232f7b9dde9fe 1,3,6,83-101,103-106,108-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "41902139f05e1cb114c3a02c7e5a353e348dce2e",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 75,
+      "total_deletions": 38,
+      "accepted_lines": 71,
+      "overriden_lines": 0
+    }
+  }
+}
