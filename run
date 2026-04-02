@@ -36,7 +36,7 @@ GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo '')
 
 # Optional secrets file — skip silently if not present (e.g. fresh clone)
 SECRETS_ARG=""
-[[ -f secrets.json ]] && SECRETS_ARG="$SECRETS_ARG"
+[[ -f secrets.json ]] && SECRETS_ARG="--dart-define-from-file=secrets.json"
 
 cmd=${1:-dev}
 shift || true   # remaining args forwarded where needed
