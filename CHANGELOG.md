@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- f8c365e: Google Drive auth overhaul and UX polish
+
+  - Migrate Google Sign-In to v7 SDK on iOS/Android; fix auth state bugs where sign-in button disappeared after sign-out, first sign-in attempt failed, and UI did not update after signing in via Settings
+  - Drive recent files now show a warning and are unclickable when not signed in or signed in as a different account
+  - Screen lock button in stitch mode redesigned as a visual toggle with lock/unlock icons and primary-colour fill when active; shows a brief toast on touch devices when toggled
+  - Fix spurious Google Drive uploads triggered by toggling stitch mode
+  - Fix legacy `.stitches` files with `editor:` YAML fields being re-saved unnecessarily on first open
+  - Remove block mode toggle from stitch mode AppBar on Android (was appearing on Android only, inconsistent with other platforms)
+  - Bump `share_plus` to v12, `google_sign_in` to v7, `font_awesome_flutter` to v11, `wakelock_plus` to v1.5, `package_info_plus` to v9; update Android AGP to 8.12.1 to match share_plus v12 requirements
+
+### Patch Changes
+
+- e51689f: Fix Google Sign-In on Android
+
+  - Register the correct debug keystore SHA-1 (used by Flutter builds via `~/.config/.android`) as an Android OAuth client in GCP; the previously registered SHA-1 was never used by any Flutter build
+  - Remove explicit `serverClientId` from `GoogleSignIn.instance.initialize()` on Android — the SDK reads it automatically from `google-services.json`
+  - Restore silent sign-in (`attemptLightweightAuthentication`) on app startup
+
+- 17e5799: Fix Windows app icon and confirm Google Drive support on Windows
+
+  - Regenerate Windows app icon as a proper multi-size ICO (16, 24, 32, 48, 64, 128, 256 px) from the source PNG; previously the icon was incorrect
+  - Add Windows to `flutter_launcher_icons` config so future icon updates are applied automatically
+  - Google Drive sync confirmed working on Windows
+
+- 97fd766: Phone layout polish and quick swatch improvements
+
+  - Compact toolbar buttons and labels on phones (short Drive button, "+" new pattern, etc.)
+  - Sidebar mutual exclusion on phones — only one panel open at a time
+  - Phone editor toolbar splits into two rows: drawing tools on top, colour controls on bottom
+  - Bottom colour row: snippet button left, quick swatches fill right-to-left flush against selected colour, undo/redo right
+  - Quick swatch size unified with selected colour swatch (24 px)
+  - Fix quick swatch count silently decreasing when switching threads — outgoing thread is now always preserved in history
+  - Increase recent thread history cap from 5 to 10
+  - Threads not yet added to the pattern now remain visible in quick swatches via DMC database fallback
+
 ## 0.3.0
 
 ### Minor Changes
