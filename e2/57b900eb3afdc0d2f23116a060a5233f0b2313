@@ -1,0 +1,23 @@
+lib/screens/editor_screen.dart
+  794232f7b9dde9fe 435-467
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "e257b900eb3afdc0d2f23116a060a5233f0b2313",
+  "prompts": {
+    "794232f7b9dde9fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683dd3dc-5c30-482b-ae50-84973c47e5c1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 22,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    }
+  }
+}
