@@ -631,13 +631,13 @@ class EditorToolbar extends ConsumerWidget {
           ),
         ],
       ),
-      height: isPhone ? 120 : (_isTouchPlatform ? 60 : 56),
+      height: isPhone ? 121 : (_isTouchPlatform ? 60 : 56),
       child: isPhone
           ? Column(
               children: [
                 SizedBox(height: 60, child: toolsRowContent()),
                 Divider(height: 1, color: theme.dividerColor),
-                SizedBox(height: 59, child: colourRowContent()),
+                SizedBox(height: 60, child: colourRowContent()),
               ],
             )
           : Row(
