@@ -1,0 +1,25 @@
+pubspec.yaml
+  4a777f206dc07a56 30
+lib/services/google_auth_service.dart
+  4a777f206dc07a56 13,27,30-31,33-38,46-62,87-90,98-99,114-126,134-135,145-146,148,221,224,226,229,233-236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "3739edad9fa19b728503b807c3980aafcbbc9b3b",
+  "prompts": {
+    "4a777f206dc07a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb18ea63-2c1f-45b7-8869-9279a9d454a2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 60,
+      "total_deletions": 25,
+      "accepted_lines": 60,
+      "overriden_lines": 0
+    }
+  }
+}
