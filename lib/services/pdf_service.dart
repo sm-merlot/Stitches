@@ -359,14 +359,23 @@ class PdfService {
     final bytes = await doc.save();
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-    final path = await FilePicker.platform.saveFile(
-      fileName: isMobile ? '$suggestedName.pdf' : suggestedName,
-      type: isMobile ? FileType.any : FileType.custom,
-      allowedExtensions: isMobile ? null : ['pdf'],
-    );
-    if (path == null) return;
-    final finalPath = path.endsWith('.pdf') ? path : '$path.pdf';
-    await File(finalPath).writeAsBytes(bytes);
+    if (isMobile) {
+      // On iOS/Android the platform manages writing; bytes must be provided.
+      await FilePicker.platform.saveFile(
+        fileName: '$suggestedName.pdf',
+        type: FileType.any,
+        bytes: bytes,
+      );
+    } else {
+      final path = await FilePicker.platform.saveFile(
+        fileName: suggestedName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+      if (path == null) return;
+      final finalPath = path.endsWith('.pdf') ? path : '$path.pdf';
+      await File(finalPath).writeAsBytes(bytes);
+    }
   }
 
   // ── Chart page ────────────────────────────────────────────────────────────

@@ -50,13 +50,17 @@ class FormatService {
     };
   }
 
+  /// Encodes [pattern] to a string in [format] without writing to disk.
+  static String encodeFile(CrossStitchPattern pattern, CrossStitchFormat format) {
+    return switch (format) {
+      CrossStitchFormat.oxs => _writeOxs(pattern),
+    };
+  }
+
   /// Exports [pattern] to [path] in [format].
   static Future<void> exportFile(
       CrossStitchPattern pattern, String path, CrossStitchFormat format) async {
-    final content = switch (format) {
-      CrossStitchFormat.oxs => _writeOxs(pattern),
-    };
-    await File(path).writeAsString(content);
+    await File(path).writeAsString(encodeFile(pattern, format));
   }
 
   // ─── OXS ───────────────────────────────────────────────────────────────────

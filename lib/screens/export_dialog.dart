@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../data/dmc_colors.dart';
@@ -77,21 +80,35 @@ Future<bool> showExportDialog(
     // For cross-stitch formats, ask the user for a save path.
     final format = choice.format!;
     final suggested = pattern.name.replaceAll(RegExp(r'[^\w\s\-]'), '_');
-    final path = await FilePicker.platform.saveFile(
-      fileName: '$suggested.${format.extension}',
-      type: FileType.custom,
-      allowedExtensions: [format.extension],
-    );
-    if (path == null) return false;
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    if (isMobile) {
+      final bytes =
+          Uint8List.fromList(utf8.encode(FormatService.encodeFile(pattern, format)));
+      await FilePicker.platform.saveFile(
+        fileName: '$suggested.${format.extension}',
+        type: FileType.any,
+        bytes: bytes,
+      );
+      if (context.mounted) {
+        showSuccess(context, 'Exported as $suggested.${format.extension}');
+      }
+    } else {
+      final path = await FilePicker.platform.saveFile(
+        fileName: suggested,
+        type: FileType.custom,
+        allowedExtensions: [format.extension],
+      );
+      if (path == null) return false;
 
-    final finalPath = path.endsWith('.${format.extension}')
-        ? path
-        : '$path.${format.extension}';
-    await FormatService.exportFile(pattern, finalPath, format);
+      final finalPath = path.endsWith('.${format.extension}')
+          ? path
+          : '$path.${format.extension}';
+      await FormatService.exportFile(pattern, finalPath, format);
 
-    if (context.mounted) {
-      showSuccess(
-          context, 'Exported as ${finalPath.split(Platform.pathSeparator).last}');
+      if (context.mounted) {
+        showSuccess(
+            context, 'Exported as ${finalPath.split(Platform.pathSeparator).last}');
+      }
     }
     return true;
   } catch (e) {
