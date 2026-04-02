@@ -1,0 +1,25 @@
+lib/providers/google_drive_provider.dart
+  4a777f206dc07a56 107-109,126-127
+lib/services/google_auth_service.dart
+  4a777f206dc07a56 115,117-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "c9beb988d04b0b21c8ca46715a58a94174bf93d6",
+  "prompts": {
+    "4a777f206dc07a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb18ea63-2c1f-45b7-8869-9279a9d454a2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 11,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
