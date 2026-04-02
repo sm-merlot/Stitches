@@ -112,8 +112,12 @@ class GoogleAuthService {
     }
     if (_isMobile) {
       await _ensureMobileInitialized();
+      late final GoogleSignInAccount account;
       try {
-        await GoogleSignIn.instance.authenticate();
+        // Use the return value directly — don't rely on the stream event,
+        // which is delivered asynchronously and may not have fired yet.
+        account = await GoogleSignIn.instance.authenticate();
+        _currentMobileUser = account;
       } on GoogleSignInException catch (e) {
         if (e.code == GoogleSignInExceptionCode.canceled) {
           throw Exception('Sign-in cancelled.');
@@ -121,8 +125,6 @@ class GoogleAuthService {
         rethrow;
       }
       // Authorize Drive scope after authentication.
-      final account = _currentMobileUser;
-      if (account == null) throw Exception('Sign-in failed.');
       await account.authorizationClient.authorizeScopes([_driveScope]);
     } else {
       await _signInDesktop();
