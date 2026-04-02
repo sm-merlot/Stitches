@@ -1,0 +1,25 @@
+lib/providers/editor/editor_provider.dart
+  4a777f206dc07a56 394-398,410-418,479
+lib/providers/editor/editor_provider_layers.dart
+  4a777f206dc07a56 630-635,639
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "781e7393e1e4907754d8f71c397a6d3f4b9f161e",
+  "prompts": {
+    "4a777f206dc07a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb18ea63-2c1f-45b7-8869-9279a9d454a2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 22,
+      "total_deletions": 1,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    }
+  }
+}
