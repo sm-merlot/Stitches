@@ -17,7 +17,21 @@ const _kMaxWidth = 350.0;
 
 class RightSidebar extends ConsumerStatefulWidget {
   final RightSidebarContext sidebarContext;
-  const RightSidebar({super.key, required this.sidebarContext});
+
+  /// When non-null, overrides local collapsed state (used by WorkspaceScreen
+  /// on phones to coordinate with the folder sidebar).
+  final bool? collapsedOverride;
+
+  /// Called when the user toggles collapsed state while [collapsedOverride] is
+  /// in use. The caller is responsible for updating [collapsedOverride].
+  final ValueChanged<bool>? onCollapsedChanged;
+
+  const RightSidebar({
+    super.key,
+    required this.sidebarContext,
+    this.collapsedOverride,
+    this.onCollapsedChanged,
+  });
 
   @override
   ConsumerState<RightSidebar> createState() => _RightSidebarState();
@@ -41,6 +55,10 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
   }
 
   Future<void> _setCollapsed(bool value) async {
+    if (widget.onCollapsedChanged != null) {
+      widget.onCollapsedChanged!(value);
+      return;
+    }
     setState(() => _collapsed = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kCollapsedKey, value);
@@ -55,7 +73,8 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
 
     if (!state.isFileOpen && !isSnippet) return const SizedBox.shrink();
 
-    if (_collapsed) {
+    final collapsed = widget.collapsedOverride ?? _collapsed;
+    if (collapsed) {
       return _buildCollapsedStrip(theme);
     }
 

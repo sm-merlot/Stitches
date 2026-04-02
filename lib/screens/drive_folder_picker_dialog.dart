@@ -191,7 +191,11 @@ class _DriveFolderPickerDialogState
                                       .map((b) => b.displayName)
                                       .join(' › '),
                                 )),
-                        child: const Text('Select This Folder'),
+                        child: Text(
+                          MediaQuery.of(context).size.shortestSide < 600
+                              ? 'Select'
+                              : 'Select This Folder',
+                        ),
                       ),
                     ],
                   ),
