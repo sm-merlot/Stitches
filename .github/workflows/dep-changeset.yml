@@ -1,0 +1,92 @@
+name: Add changeset to Dependabot PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+jobs:
+  add-changeset:
+    # Only run for Dependabot PRs. github.actor cannot be spoofed by
+    # external contributors, and pull_request events from forks always
+    # receive a read-only GITHUB_TOKEN regardless of the permissions block
+    # below, so there is no meaningful attack surface here.
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Dependabot pub titles: "Bump PACKAGE from X.Y.Z to A.B.C"
+      - name: Parse PR title
+        id: parse
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          if [[ "$TITLE" =~ [Bb]ump[[:space:]]+([^[:space:]]+)[[:space:]]+from[[:space:]]+([^[:space:]]+)[[:space:]]+to[[:space:]]+([^[:space:]]+) ]]; then
+            PACKAGE="${BASH_REMATCH[1]}"
+            OLD_VERSION="${BASH_REMATCH[2]}"
+            NEW_VERSION="${BASH_REMATCH[3]}"
+          else
+            echo "Title doesn't match expected Dependabot format — skipping"
+            echo "package=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # A major dep version bump warrants a minor app version bump;
+          # everything else is a patch.
+          OLD_MAJOR=$(echo "$OLD_VERSION" | cut -d. -f1)
+          NEW_MAJOR=$(echo "$NEW_VERSION" | cut -d. -f1)
+          if [ "$OLD_MAJOR" != "$NEW_MAJOR" ]; then
+            BUMP_TYPE="minor"
+          else
+            BUMP_TYPE="patch"
+          fi
+
+          echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+          echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Fetch description from pub.dev
+        id: pubdev
+        if: steps.parse.outputs.package != ''
+        run: |
+          PACKAGE="${{ steps.parse.outputs.package }}"
+          DESCRIPTION=$(curl -sf "https://pub.dev/api/packages/$PACKAGE" \
+            | jq -r '.latest.pubspec.description // ""' 2>/dev/null || echo '')
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+
+      - name: Write and commit changeset
+        if: steps.parse.outputs.package != ''
+        env:
+          PACKAGE: ${{ steps.parse.outputs.package }}
+          OLD_VERSION: ${{ steps.parse.outputs.old_version }}
+          NEW_VERSION: ${{ steps.parse.outputs.new_version }}
+          BUMP_TYPE: ${{ steps.parse.outputs.bump_type }}
+          DESCRIPTION: ${{ steps.pubdev.outputs.description }}
+        run: |
+          SLUG=$(echo "$PACKAGE" | tr '_' '-')
+          FILE=".changeset/dep-${SLUG}-update.md"
+
+          # If Dependabot rebases the branch the changeset commit will have
+          # been wiped; this check re-adds it automatically in that case.
+          if [ -f "$FILE" ]; then
+            echo "Changeset already present — nothing to do"
+            exit 0
+          fi
+
+          BODY="${DESCRIPTION:-Dependency update.}"
+
+          printf -- '---\n"stitches": %s\n---\n\nBump `%s` from %s to %s\n\n%s\n' \
+            "$BUMP_TYPE" "$PACKAGE" "$OLD_VERSION" "$NEW_VERSION" "$BODY" > "$FILE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "chore: add changeset for ${PACKAGE} update"
+          git push
