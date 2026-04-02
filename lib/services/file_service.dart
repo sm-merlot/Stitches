@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:yaml/yaml.dart';
@@ -117,10 +118,22 @@ class FileService {
   static Future<String?> saveFileAs(CrossStitchPattern pattern,
       {bool compress = true}) async {
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+    if (_isMobile) {
+      // On iOS/Android the platform manages writing; bytes must be provided.
+      final yaml = toYamlString(pattern);
+      final bytes =
+          compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
+      final path = await FilePicker.platform.saveFile(
+        fileName: '$suggestedName.$_ext',
+        type: FileType.any,
+        bytes: Uint8List.fromList(bytes),
+      );
+      return path; // null if user cancelled; path if platform returns one
+    }
     final path = await FilePicker.platform.saveFile(
-      fileName: _isMobile ? '$suggestedName.$_ext' : suggestedName,
-      type: _isMobile ? FileType.any : FileType.custom,
-      allowedExtensions: _isMobile ? null : [_ext],
+      fileName: suggestedName,
+      type: FileType.custom,
+      allowedExtensions: [_ext],
     );
     if (path == null) return null;
     final finalPath = path.endsWith('.$_ext') ? path : '$path.$_ext';
