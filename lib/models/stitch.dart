@@ -12,6 +12,22 @@ sealed class Stitch {
 
   Map<String, dynamic> toYaml();
 
+  /// Returns a copy of this stitch with [threadId] replaced by [id].
+  Stitch withThreadId(String id) => switch (this) {
+        FullStitch(:final x, :final y) =>
+          FullStitch(x: x, y: y, threadId: id),
+        HalfStitch(:final x, :final y, :final isForward) =>
+          HalfStitch(x: x, y: y, isForward: isForward, threadId: id),
+        QuarterStitch(:final x, :final y, :final quadrant) =>
+          QuarterStitch(x: x, y: y, quadrant: quadrant, threadId: id),
+        HalfCrossStitch(:final x, :final y, :final half) =>
+          HalfCrossStitch(x: x, y: y, half: half, threadId: id),
+        QuarterCrossStitch(:final x, :final y, :final quadrant) =>
+          QuarterCrossStitch(x: x, y: y, quadrant: quadrant, threadId: id),
+        BackStitch(:final x1, :final y1, :final x2, :final y2) =>
+          BackStitch(x1: x1, y1: y1, x2: x2, y2: y2, threadId: id),
+      };
+
   static Stitch fromYaml(Map<String, dynamic> yaml) {
     final type = yaml['type'] as String;
     return switch (type) {

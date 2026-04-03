@@ -12,6 +12,23 @@ class DmcColor {
 DmcColor? dmcColorByCode(String code) =>
     dmcColors.where((c) => c.code == code).firstOrNull;
 
+/// Maps discontinued DMC codes to their replacements.
+///
+/// Used at pattern load time to automatically migrate old patterns.
+/// Values must be valid codes in [dmcColors]. An empty string means the
+/// replacement hasn't been confirmed yet — auto-migration is skipped for those
+/// entries until a real replacement code is filled in.
+const Map<String, String> dmcReplacements = {
+  '504': '3813', // Blue Green Very Light         → Blue Green Very Light
+  '731': '732',  // Olive Green Dark              → Olive Green
+  '776': '3326', // Pink Medium                   → Rose Very Light
+  '781': '782',  // Topaz Very Dark               → Topaz Dark
+  '806': '3760', // Peacock Blue Dark             → Wedgwood Med Very Dark
+  '971': '740',  // Pumpkin                       → Tangerine
+  '3745': '3047',// Yellow Beige Very Light       → Yellow Beige Light
+  '3773': '407', // Desert Sand Medium            → Sportsman Flesh Ultra Dk
+};
+
 const List<DmcColor> dmcColors = [
   DmcColor('White', 'White', Color(0xFFFFFFFF), '2'),
   DmcColor('Ecru', 'Ecru', Color(0xFFF0EADA), '387'),
@@ -109,7 +126,6 @@ const List<DmcColor> dmcColors = [
   DmcColor('501', 'Blue Green Dark', Color(0xFF307850), '878'),
   DmcColor('502', 'Blue Green', Color(0xFF589870), '877'),
   DmcColor('503', 'Blue Green Medium', Color(0xFF88B898), '876'),
-  DmcColor('504', 'Blue Green Very Light', Color(0xFFBCD8C8), '875'),
   DmcColor('517', 'Wedgwood Dark', Color(0xFF28708C), '168'),
   DmcColor('518', 'Wedgwood Light', Color(0xFF4898A8), '1039'),
   DmcColor('519', 'Sky Blue', Color(0xFF78B8C8), '1038'),
@@ -172,7 +188,6 @@ const List<DmcColor> dmcColors = [
   DmcColor('728', 'Golden Yellow', Color(0xFFE8A820), '306'),
   DmcColor('729', 'Old Gold Medium', Color(0xFFC89828), '890'),
   DmcColor('730', 'Olive Green Very Dark', Color(0xFF686010), '845'),
-  DmcColor('731', 'Olive Green Dark', Color(0xFF807818), '281'),
   DmcColor('732', 'Olive Green', Color(0xFF909020), '281'),
   DmcColor('733', 'Olive Green Medium', Color(0xFFB0A840), '280'),
   DmcColor('734', 'Olive Green Light', Color(0xFFC8C068), '279'),
@@ -193,10 +208,8 @@ const List<DmcColor> dmcColors = [
   DmcColor('762', 'Pearl Gray Very Light', Color(0xFFECECEC), '234'),
   DmcColor('772', 'Yellow Green Very Light', Color(0xFFD8ECC0), '259'),
   DmcColor('775', 'Baby Blue Very Light', Color(0xFFD8ECF8), '128'),
-  DmcColor('776', 'Pink Medium', Color(0xFFF898A8), '24'),
   DmcColor('778', 'Antique Mauve Very Lt', Color(0xFFD8A8B0), '968'),
   DmcColor('780', 'Topaz Ultra Very Dark', Color(0xFF8C5C08), '309'),
-  DmcColor('781', 'Topaz Very Dark', Color(0xFFA06C10), '308'),
   DmcColor('782', 'Topaz Dark', Color(0xFFB47C18), '307'),
   DmcColor('783', 'Topaz Medium', Color(0xFFC89030), '306'),
   DmcColor('791', 'Cornflower Bl Vy Dk', Color(0xFF303870), '178'),
@@ -209,7 +222,6 @@ const List<DmcColor> dmcColors = [
   DmcColor('799', 'Delft Blue Medium', Color(0xFF5888C0), '130'),
   DmcColor('800', 'Delft Blue Pale', Color(0xFF98B8D8), '144'),
   DmcColor('801', 'Coffee Brown Dark', Color(0xFF6C3808), '359'),
-  DmcColor('806', 'Peacock Blue Dark', Color(0xFF1888A8), '169'),
   DmcColor('807', 'Peacock Blue', Color(0xFF40A0B8), '168'),
   DmcColor('809', 'Delft Blue', Color(0xFF7898C0), '130'),
   DmcColor('813', 'Blue Light', Color(0xFF98B8D0), '161'),
@@ -299,7 +311,6 @@ const List<DmcColor> dmcColors = [
   DmcColor('966', 'Baby Green Medium', Color(0xFFA8C898), '240'),
   DmcColor('967', 'Apricot Very Light', Color(0xFFFCD8C4), '4146'),
   DmcColor('970', 'Pumpkin Light', Color(0xFFF88020), '925'),
-  DmcColor('971', 'Pumpkin', Color(0xFFF87000), '316'),
   DmcColor('972', 'Canary Deep', Color(0xFFFFB000), '298'),
   DmcColor('973', 'Canary Bright', Color(0xFFFFD800), '297'),
   DmcColor('975', 'Golden Brown Dark', Color(0xFF8C4C08), '355'),
@@ -372,7 +383,6 @@ const List<DmcColor> dmcColors = [
   DmcColor('3733', 'Dusty Rose', Color(0xFFE87890), '75'),
   DmcColor('3740', 'Antique Violet Dark', Color(0xFF685870), '872'),
   DmcColor('3743', 'Antique Violet Very Lt', Color(0xFFD0C4D0), '869'),
-  DmcColor('3745', 'Yellow Beige Very Light', Color(0xFFFCF0C0), '300'),
   DmcColor('3746', 'Blue Violet Dark', Color(0xFF6860A0), '1030'),
   DmcColor('3747', 'Blue Violet Very Light', Color(0xFFD0D4F0), '117'),
   DmcColor('3750', 'Antique Blue Very Dark', Color(0xFF284058), '1036'),
@@ -388,7 +398,6 @@ const List<DmcColor> dmcColors = [
   DmcColor('3770', 'Tawny Very Light', Color(0xFFFCECDC), '1009'),
   DmcColor('3771', 'Terra Cotta Ultra Lt', Color(0xFFF4C0A8), '1008'),
   DmcColor('3772', 'Desert Sand Very Dark', Color(0xFF9C6848), '1007'),
-  DmcColor('3773', 'Desert Sand Medium', Color(0xFFB88060), '1006'),
   DmcColor('3774', 'Desert Sand Very Light', Color(0xFFF0D8C0), '778'),
   DmcColor('3776', 'Mahogany Light', Color(0xFFD07030), '1048'),
   DmcColor('3777', 'Terra Cotta Very Dark', Color(0xFF7C2818), '20'),
