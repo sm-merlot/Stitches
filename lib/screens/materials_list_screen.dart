@@ -19,7 +19,7 @@ String buildMaterialsListMarkdown({
   required double heightCm,
   required double widthIn,
   required double heightIn,
-  required List<({String dmcCode, String name, int skeins})> threads,
+  required List<({String dmcCode, String name, double skeins})> threads,
 }) {
   final buf = StringBuffer()
     ..writeln('# $patternName Materials List')
@@ -28,8 +28,9 @@ String buildMaterialsListMarkdown({
         '${widthCm.toStringAsFixed(1)} x ${heightCm.toStringAsFixed(1)} cm '
         '(${widthIn.toStringAsFixed(1)} x ${heightIn.toStringAsFixed(1)} in)');
   for (final t in threads) {
+    final label = skeinLabel(t.skeins);
     buf.writeln(
-        '- [ ] DMC ${t.dmcCode} ${t.name} x ${t.skeins} skein${t.skeins == 1 ? '' : 's'}');
+        '- [ ] DMC ${t.dmcCode} ${t.name} x $label skein${t.skeins > 1 ? 's' : ''}');
   }
   return buf.toString();
 }
@@ -133,7 +134,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
 
   // ─── Skein calculation ────────────────────────────────────────────────────
 
-  int _skeins(
+  double _skeins(
     String dmcCode,
     Map<String, double> crossEquiv,
     Map<String, double> backCells,
@@ -226,7 +227,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
     final backCells = _backCells();
     final size = _aidaSize;
     final totalSkeins = sorted.fold<int>(
-        0, (sum, t) => sum + _skeins(t.dmcCode, crossEquiv, backCells));
+        0, (sum, t) => sum + _skeins(t.dmcCode, crossEquiv, backCells).ceil());
 
     // ── Controls ──────────────────────────────────────────────────────────────
     final controls = Padding(
@@ -334,6 +335,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
       itemBuilder: (_, i) {
         final t = sorted[i];
         final n = _skeins(t.dmcCode, crossEquiv, backCells);
+        final nLabel = skeinLabel(n);
         final textColor =
             t.color.computeLuminance() > 0.35 ? Colors.black : Colors.white;
         return Padding(
@@ -377,9 +379,9 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
               ),
               // Skeins
               SizedBox(
-                width: 52,
+                width: 60,
                 child: Text(
-                  '$n',
+                  '$nLabel sk',
                   textAlign: TextAlign.right,
                   style: TextStyle(
                       fontSize: 13,

@@ -1,20 +1,21 @@
 // Unit tests for the skein calculator.
 //
 // Coverage:
-//   • Minimum of 1 skein enforced for any thread
-//   • Large stitch counts produce correct ceil'd multi-skein results
+//   • Minimum of ¼ skein enforced for any thread
+//   • Large stitch counts produce correct quarter-ceil'd results
 //   • Backstitch-only threads calculated from Euclidean cell-unit length
 //   • Mixed cross + backstitch usage is additive
 //   • Higher aida count → smaller cells → less thread → fewer skeins
 //   • More strands per needle → more thread used → more skeins
-//   • Thread absent from both maps → minimum 1 skein
+//   • Thread absent from both maps → minimum ¼ skein
+//   • skeinLabel formats quarter-precision values correctly
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/services/skein_calculator.dart';
 
 void main() {
   group('calculateSkeins', () {
-    test('single full stitch always returns minimum 1 skein', () {
+    test('single full stitch returns minimum ¼ skein', () {
       final result = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'310': 1.0},
@@ -22,10 +23,10 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(1));
+      expect(result, equals(0.25));
     });
 
-    test('zero stitches returns minimum 1 skein', () {
+    test('zero stitches returns minimum ¼ skein', () {
       final result = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {},
@@ -33,11 +34,11 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(1));
+      expect(result, equals(0.25));
     });
 
-    test('1000 full stitches, 14-count, 2 strands → 2 skeins', () {
-      // hand-calculated: 1000 * 0.02668m = 26.68m; usable = 24m; ceil(26.68/24) = 2
+    test('1000 full stitches, 14-count, 2 strands → 1¼ skeins', () {
+      // 1000 * 0.02668m = 26.68m; usable = 24m; ceil(26.68/24 * 4)/4 = 5/4 = 1.25
       final result = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'310': 1000.0},
@@ -45,11 +46,11 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(2));
+      expect(result, equals(1.25));
     });
 
-    test('backstitch-only thread, 1000 cell-units, 14-count, 2 strands → 1 skein', () {
-      // hand-calculated: 1000 * 0.009434m = 9.43m; usable = 24m; ceil(9.43/24) = 1
+    test('backstitch-only thread, 1000 cell-units, 14-count, 2 strands → ½ skein', () {
+      // 1000 * 0.009434m = 9.43m; usable = 24m; ceil(9.43/24 * 4)/4 = 2/4 = 0.5
       final result = calculateSkeins(
         dmcCode: '815',
         crossEquiv: {},
@@ -57,11 +58,11 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(1));
+      expect(result, equals(0.5));
     });
 
     test('mixed cross + backstitch usage is additive', () {
-      // 1000 full (26.68m) + 1000 back (9.43m) = 36.11m; ceil(36.11/24) = 2
+      // 1000 full (26.68m) + 1000 back (9.43m) = 36.11m; ceil(36.11/24 * 4)/4 = 7/4 = 1.75
       final result = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'310': 1000.0},
@@ -69,11 +70,10 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(2));
+      expect(result, equals(1.75));
     });
 
     test('higher aida count (18) needs less thread than 14-count for same stitches', () {
-      // 1000 full, 14ct: 2 skeins; 18ct: smaller cells, less thread per stitch
       final skeins14 = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'310': 1000.0},
@@ -92,7 +92,6 @@ void main() {
     });
 
     test('more strands (3 vs 2) uses more thread → more skeins for same stitch count', () {
-      // 500 full, 14ct: 2str→1 skein, 3str→2 skeins
       final skeins2 = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'310': 500.0},
@@ -110,7 +109,7 @@ void main() {
       expect(skeins3, greaterThan(skeins2));
     });
 
-    test('thread absent from both maps → 1 skein', () {
+    test('thread absent from both maps → minimum ¼ skein', () {
       final result = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'321': 100.0}, // different thread
@@ -118,7 +117,33 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(1));
+      expect(result, equals(0.25));
     });
+
+    test('result is always a multiple of 0.25', () {
+      for (final equiv in [1.0, 50.0, 200.0, 999.0]) {
+        final result = calculateSkeins(
+          dmcCode: '310',
+          crossEquiv: {'310': equiv},
+          backCells: {},
+          aidaCount: 14,
+          strands: 2,
+        );
+        expect((result * 4).roundToDouble(), equals(result * 4),
+            reason: '$result is not a quarter-skein multiple');
+      }
+    });
+  });
+
+  group('skeinLabel', () {
+    test('0.25 → ¼', () => expect(skeinLabel(0.25), '¼'));
+    test('0.5  → ½', () => expect(skeinLabel(0.5), '½'));
+    test('0.75 → ¾', () => expect(skeinLabel(0.75), '¾'));
+    test('1.0  → 1', () => expect(skeinLabel(1.0), '1'));
+    test('1.25 → 1¼', () => expect(skeinLabel(1.25), '1¼'));
+    test('1.5  → 1½', () => expect(skeinLabel(1.5), '1½'));
+    test('1.75 → 1¾', () => expect(skeinLabel(1.75), '1¾'));
+    test('2.0  → 2', () => expect(skeinLabel(2.0), '2'));
+    test('3.5  → 3½', () => expect(skeinLabel(3.5), '3½'));
   });
 }
