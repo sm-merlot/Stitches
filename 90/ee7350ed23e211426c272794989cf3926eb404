@@ -1,0 +1,42 @@
+test/materials_list_test.dart
+  20e809cb7893ad5c 17,62,64,71,76-96,99-101
+lib/screens/materials_list_screen.dart
+  20e809cb7893ad5c 22,31,33,137,230,338,382,384
+test/skein_calculator_test.dart
+  20e809cb7893ad5c 4-5,10-11,18,26,29,37,40-41,49,52-53,61,65,73,112,120,122-147
+lib/services/skein_calculator.dart
+  20e809cb7893ad5c 11-12,17,33-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "90ee7350ed23e211426c272794989cf3926eb404",
+  "prompts": {
+    "20e809cb7893ad5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59a0ba94-3f15-4dcf-ad46-aa21b5f6e64d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 97,
+      "total_deletions": 36,
+      "accepted_lines": 96,
+      "overriden_lines": 0
+    },
+    "d94158e370348870": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a0d5454-d9d2-4b99-89bb-76d325dd2140",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
