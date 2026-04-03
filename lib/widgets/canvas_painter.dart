@@ -2,12 +2,11 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/layer.dart';
-import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../data/symbols.dart';
-import '../services/sprite_importer.dart';
+import '../services/stitch_compositor.dart';
 
 part 'canvas_painter_drawing_methods.dart';
 part 'canvas_painter_overlay.dart';
@@ -29,10 +28,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   final ui.Image? referenceImage;
   final double referenceOpacity;
   final bool referenceVisible;
-  /// Composite thread cache keyed by 'x,y' cell key. When present, the symbol
-  /// and colour for blended cells are taken from this map (stable assignments)
-  /// rather than from nearest-thread heuristics.
-  final Map<String, Thread>? compositeThreadCache;
+  /// Composite result from StitchCompositor. When present, blended colours and
+  /// symbol thread assignments are taken from this (stable, pre-computed)
+  /// rather than from the painter's own independent blend map.
+  final CompositeResult? compositeResult;
   /// Optional palette override for snippet editor: maps dmcCode → display Color.
   /// When set, stitch colours are replaced with the active palette's colours
   /// using positional slot mapping (palette[N][i] replaces palette[0][i]).
@@ -55,7 +54,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
-    this.compositeThreadCache,
+    this.compositeResult,
     this.paletteOverride,
   });
 
@@ -135,10 +134,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // 3.5 = the point where labels would thin to every-20 — hide everything instead.
     const kNoGrid          = 3.5;
 
-    // ── Pre-compute blend map for overlapping FullStitches ──────────────────
+    // ── Blended-colour map from shared CompositeResult ──────────────────────
     // Only cells where multiple visible layers have a FullStitch are included.
     // Lone stitches are NOT in the map — they render at full source color.
-    final blendMap = _buildBlendMap();
+    final blendedColors = compositeResult?.blendedColors ?? const {};
 
     // ── Pre-compute occlusion sets for symbol rendering ──────────────────────
     // For each layer index i, the set of cells (encoded as (x<<16)|y) covered
@@ -149,7 +148,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       if (blockMode || effectivePx < kBlockThreshold) {
-        _drawLayerStitchesAsBlocks(canvas, layer, blendMap, minCX, minCY, maxCX, maxCY);
+        _drawLayerStitchesAsBlocks(canvas, layer, blendedColors, minCX, minCY, maxCX, maxCY);
       } else {
         for (final stitch in layer.stitches) {
           if (stitch is BackStitch) continue;
@@ -163,13 +162,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           switch (stitch) {
             case FullStitch(:final x, :final y):
               final key = '$x,$y';
-              final blended = blendMap[key];
+              final blended = blendedColors[key];
               if (blended != null && stitchFocusThreadId != null) {
                 // Blended cell + focus: all contributing stitches at this cell
                 // resolve to the same colour using the final blended DMC code.
                 // This prevents semi-transparent grey from one layer bleeding
                 // through the focused colour of another.
-                final isFocused = _blendDmcCache[key] == stitchFocusThreadId;
+                final compositeThread = compositeResult?.compositeThreads[key];
+                final isFocused = compositeThread?.dmcCode == stitchFocusThreadId;
                 _drawFullStitch(canvas, x, y, isFocused ? blended : _greyColor(blended));
               } else {
                 _drawFullStitch(canvas, x, y, blended ?? c);
@@ -237,9 +237,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           Thread? compositeThread;
           if (stitch is FullStitch) {
             final cellKey = '${stitch.x},${stitch.y}';
-            compositeThread = compositeThreadCache?[cellKey];
+            compositeThread = compositeResult?.compositeThreads[cellKey];
             if (compositeThread == null) {
-              final blended = blendMap[cellKey];
+              final blended = blendedColors[cellKey];
               if (blended != null) compositeThread = _nearestThread(blended);
             }
           }
@@ -263,7 +263,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // perimeter outline around all connected groups of focused cells so the
     // user can locate them in the grey fog of unfocused stitches.
     if (stitchFocusThreadId != null) {
-      _drawFocusedRegionBorderIfNeeded(canvas, blendMap);
+      _drawFocusedRegionBorderIfNeeded(canvas, blendedColors);
     }
 
     // ── Pattern border ──────────────────────────────────────────────────────
@@ -333,27 +333,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     canvas.drawPath(majorPath, majorPaint);
   }
 
-  // ── Blend map for overlapping FullStitches across layers ──────────────────
-  // For cells where multiple visible layers have a FullStitch, blends their
-  // colours bottom-to-top using each layer's opacity value.
-  // Lone-stitch cells are NOT included — callers fall back to source color.
-
-  // ── Static cache for the blend map ──────────────────────────────────────────
-  // The blend map is keyed by pattern object identity so it is only recomputed
-  // when the pattern actually changes (stitches, opacity, visibility) — NOT on
-  // every pan/zoom frame, which would make CIE Lab matching too expensive.
-  static CrossStitchPattern? _blendMapPattern;
-  static Map<String, Color> _blendMapCache = {};
-  // Maps cell key → blended DMC code for cells with overlapping layers.
-  // Used during focus mode so all contributing stitches in a cell resolve
-  // to the same focus decision (preventing semi-transparent bleed-through).
-  static Map<String, String> _blendDmcCache = {};
-
   // ── Static cache for the per-layer-index occlusion sets ──────────────────
   // Maps layer index → set of cell keys (encoded as (x<<16)|y) covered by a
   // FullStitch in any HIGHER visible layer. Rebuilt when pattern identity
   // changes; otherwise reused across every pan/zoom frame.
   static Map<int, Set<int>>? _occlusionCache;
+  static CrossStitchPattern? _occlusionPatternRef;
 
   // ── Static cache for block-mode Color→Rects per layer ────────────────────
   // Rects are in canvas/pattern space and depend only on stitch content and
@@ -367,57 +352,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // Key is the Layer object itself (identity-compared via map lookup).
   static final Map<Layer, Map<Color, List<Rect>>> _blockRectsByLayer = {};
 
-  Map<String, Color> _buildBlendMap() {
-    if (identical(_blendMapPattern, pattern)) return _blendMapCache;
-    _blendMapPattern = pattern;
-    _blendDmcCache = {};
-    _occlusionCache = null; // invalidate — rebuilt lazily by _getOcclusionSets()
-
-    final threadMap = _threadMap;
-    final cellStack =
-        <String, List<({Color color, double opacity, LayerBlendMode blendMode})>>{};
-    for (final layer in pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is! FullStitch) continue;
-        final thread = threadMap[stitch.threadId];
-        if (thread == null) continue;
-        final key = '${stitch.x},${stitch.y}';
-        (cellStack[key] ??= []).add((
-          color: thread.color,
-          opacity: layer.opacity,
-          blendMode: layer.blendMode,
-        ));
-      }
-    }
-
-    final result = <String, Color>{};
-    for (final entry in cellStack.entries) {
-      final stack = entry.value;
-      if (stack.length < 2) continue; // lone stitches excluded
-      var blended = stack.first.color;
-      for (int i = 1; i < stack.length; i++) {
-        blended = stack[i].blendMode.apply(blended, stack[i].color, stack[i].opacity);
-      }
-      // Snap to nearest DMC thread so the displayed colour is always a real
-      // thread colour — opacity produces discrete jumps, not a smooth gradient.
-      final r = (blended.r * 255).round();
-      final g = (blended.g * 255).round();
-      final b = (blended.b * 255).round();
-      final dmc = SpriteImporter.matchPixel(r, g, b, 255);
-      result[entry.key] = dmc?.color ?? blended;
-      if (dmc != null) _blendDmcCache[entry.key] = dmc.code;
-    }
-
-    _blendMapCache = result;
-    return result;
-  }
-
   // ── Occlusion sets: per-layer-index set of cells covered by higher layers ──
   // Keyed by (x<<16)|y integer to avoid string allocations in the hot path.
-  // Cache is invalidated inside _buildBlendMap() whenever pattern changes.
+  // Cache is invalidated by pattern identity check below.
   Map<int, Set<int>> _getOcclusionSets() {
-    if (_occlusionCache != null) return _occlusionCache!;
+    if (_occlusionCache != null && identical(_occlusionPatternRef, pattern)) {
+      return _occlusionCache!;
+    }
+    _occlusionPatternRef = pattern;
     final result = <int, Set<int>>{};
     for (int i = 0; i < pattern.layers.length; i++) {
       final covered = <int>{};
@@ -480,12 +422,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           BackStitch() => (-1, -1),
         };
         if (cx < 0) continue;
-        final strKey = '$cx,$cy'; // still needed for blendMap / _blendDmcCache lookup
+        final strKey = '$cx,$cy'; // still needed for blendedColors lookup
         final intKey = (cx << 16) | cy;
         // Blended cells: focus is determined by the composited DMC code.
         // Non-blended: focus is determined by the raw thread ID.
         if (blendMap.containsKey(strKey)) {
-          if (_blendDmcCache[strKey] == focusId) focusedKeys.add(intKey);
+          if (compositeResult?.compositeThreads[strKey]?.dmcCode == focusId) focusedKeys.add(intKey);
         } else if (stitch.threadId == focusId) {
           focusedKeys.add(intKey);
         }
@@ -593,7 +535,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           final key = '$x,$y';
           final blended = blendMap[key];
           if (blended != null && stitchFocusThreadId != null) {
-            final isFocused = _blendDmcCache[key] == stitchFocusThreadId;
+            final compositeThread = compositeResult?.compositeThreads[key];
+            final isFocused = compositeThread?.dmcCode == stitchFocusThreadId;
             effectiveColor = isFocused ? blended : _greyColor(blended);
           } else {
             effectiveColor = blended ?? c;
@@ -861,7 +804,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||
       old.referenceVisible != referenceVisible ||
-      old.compositeThreadCache != compositeThreadCache ||
+      old.compositeResult != compositeResult ||
       old.paletteOverride != paletteOverride;
 }
 
