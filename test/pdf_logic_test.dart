@@ -200,5 +200,35 @@ void main() {
       final total = r.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
       expect(total, closeTo(1.0, 0.001));
     });
+
+    test('BackStitch is excluded from dedupedNonBack (goes to backstitches)', () {
+      final t = _thread('310', 'X');
+      final bs = BackStitch(x1: 0, y1: 0, x2: 1, y2: 0, threadId: '310');
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [bs])],
+      );
+      final r = StitchCompositor.compute(pattern);
+      expect(r.dedupedNonBack, isEmpty);
+      expect(r.backstitches, hasLength(1));
+    });
+
+    test('Normal blend, top layer at full opacity → top stitch identity wins', () {
+      final t1 = _thread('310', 'X');
+      final t2 = _thread('321', 'O');
+      final pattern = _pattern(
+        threads: [t1, t2],
+        layers: [
+          _layer(stitches: [const FullStitch(x: 0, y: 0, threadId: '310')]),
+          _layer(
+            stitches: [const FullStitch(x: 0, y: 0, threadId: '321')],
+            blendMode: LayerBlendMode.normal,
+          ),
+        ],
+      );
+      final r = StitchCompositor.compute(pattern);
+      final winner = r.dedupedNonBack.whereType<FullStitch>().first;
+      expect(winner.threadId, '321');
+    });
   });
 }
