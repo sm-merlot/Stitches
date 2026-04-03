@@ -1,0 +1,37 @@
+android/app/src/main/kotlin/com/stitches/stitches/MainActivity.kt
+  20e809cb7893ad5c 6-7,17-21,25-27,33-36,45-46,55-59,61-67,70-82,84-111,113-114,118
+lib/services/incoming_file_service.dart
+  20e809cb7893ad5c 4-6,10-11,14-15,18,20-21,27-33,38-41
+ios/Runner/Info.plist
+  20e809cb7893ad5c 118-127
+ios/Runner/SceneDelegate.swift
+  20e809cb7893ad5c 7-9,20,23-26,30,32-34,38,42-43,45,54-68
+android/app/src/main/AndroidManifest.xml
+  20e809cb7893ad5c 45-56
+macos/Runner/AppDelegate.swift
+  20e809cb7893ad5c 26,30,38,44,78-86,88-90,92,94
+macos/Runner/Info.plist
+  20e809cb7893ad5c 64-73
+lib/screens/home_screen.dart
+  20e809cb7893ad5c 37,42-43,45-51,58,122-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "ece27f3f98ac4a871031cb5173131d703c46cb2a",
+  "prompts": {
+    "20e809cb7893ad5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59a0ba94-3f15-4dcf-ad46-aa21b5f6e64d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 199,
+      "total_deletions": 61,
+      "accepted_lines": 198,
+      "overriden_lines": 0
+    }
+  }
+}
