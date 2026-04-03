@@ -1,0 +1,38 @@
+test/stitch_compositor_test.dart
+  20e809cb7893ad5c 1-224
+lib/services/stitch_compositor.dart
+  20e809cb7893ad5c 1-174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "21ca061c6f61833ca354fdae590e7f124e9ba1f2",
+  "prompts": {
+    "20e809cb7893ad5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59a0ba94-3f15-4dcf-ad46-aa21b5f6e64d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 398,
+      "total_deletions": 0,
+      "accepted_lines": 398,
+      "overriden_lines": 0
+    },
+    "d94158e370348870": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a0d5454-d9d2-4b99-89bb-76d325dd2140",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 1380,
+      "total_deletions": 0,
+      "accepted_lines": 1380,
+      "overriden_lines": 0
+    }
+  }
+}
