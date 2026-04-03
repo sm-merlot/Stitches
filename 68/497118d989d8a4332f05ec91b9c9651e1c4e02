@@ -1,0 +1,43 @@
+lib/models/page_layout.dart
+  20e809cb7893ad5c 1-234
+lib/widgets/pattern_canvas.dart
+  20e809cb7893ad5c 10,101-103,114-142,1106-1115,1145-1152,1188-1189,1257-1265,1270,1292-1508
+lib/screens/editor_screen.dart
+  20e809cb7893ad5c 15,255,257-273
+lib/widgets/canvas_painter.dart
+  20e809cb7893ad5c 5,40-46,67-68,166-167,245-246,600-607,627-695,697-700,891-910,927-929
+lib/models/pattern.dart
+  20e809cb7893ad5c 6,62-64,90,188,225,347-349
+lib/screens/page_mode_dialog.dart
+  20e809cb7893ad5c 1-164
+.changeset/page-mode.md
+  20e809cb7893ad5c 1-5
+lib/utils/editor_key_handler.dart
+  20e809cb7893ad5c 50-60
+lib/providers/editor/editor_provider.dart
+  20e809cb7893ad5c 13-14,120-129,176-178,311-313,370-372,530-535,679-716
+lib/services/file_service.dart
+  20e809cb7893ad5c 12,250-260
+lib/models/page_config.dart
+  20e809cb7893ad5c 1-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "68497118d989d8a4332f05ec91b9c9651e1c4e02",
+  "prompts": {
+    "20e809cb7893ad5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59a0ba94-3f15-4dcf-ad46-aa21b5f6e64d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 994,
+      "total_deletions": 7,
+      "accepted_lines": 990,
+      "overriden_lines": 0
+    }
+  }
+}
