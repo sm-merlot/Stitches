@@ -37,8 +37,8 @@ void main() {
       expect(result, equals(0.25));
     });
 
-    test('1000 full stitches, 14-count, 2 strands → 1¼ skeins', () {
-      // 1000 * 0.02668m = 26.68m; usable = 24m; ceil(26.68/24 * 4)/4 = 5/4 = 1.25
+    test('1000 full stitches, 14-count, 2 strands → ¾ skein', () {
+      // cellMm=1.814; 1000 * 0.01334m = 13.34m; usable=24m; ceil(13.34/24*4)/4 = 3/4 = 0.75
       final result = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'310': 1000.0},
@@ -46,11 +46,11 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(1.25));
+      expect(result, equals(0.75));
     });
 
     test('backstitch-only thread, 1000 cell-units, 14-count, 2 strands → ½ skein', () {
-      // 1000 * 0.009434m = 9.43m; usable = 24m; ceil(9.43/24 * 4)/4 = 2/4 = 0.5
+      // cellMm=1.814; 1000 * 0.00943m = 9.43m; usable=24m; ceil(9.43/24*4)/4 = 2/4 = 0.5
       final result = calculateSkeins(
         dmcCode: '815',
         crossEquiv: {},
@@ -62,7 +62,7 @@ void main() {
     });
 
     test('mixed cross + backstitch usage is additive', () {
-      // 1000 full (26.68m) + 1000 back (9.43m) = 36.11m; ceil(36.11/24 * 4)/4 = 7/4 = 1.75
+      // 1000 full (13.34m) + 1000 back (9.43m) = 22.77m; ceil(22.77/24*4)/4 = 4/4 = 1.0
       final result = calculateSkeins(
         dmcCode: '310',
         crossEquiv: {'310': 1000.0},
@@ -70,7 +70,7 @@ void main() {
         aidaCount: 14,
         strands: 2,
       );
-      expect(result, equals(1.75));
+      expect(result, equals(1.0));
     });
 
     test('higher aida count (18) needs less thread than 14-count for same stitches', () {

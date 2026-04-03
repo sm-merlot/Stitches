@@ -2,9 +2,26 @@ import 'dart:math';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+/// Length of a standard DMC skein in metres.
 const double dmcSkeinMetres = 8.0;
+
+/// Number of strands in a standard DMC skein.
 const int dmcTotalStrands = 6;
+
+/// Extra thread for finishing, knots, and needle travel (30% overage).
 const double wasteFactor = 1.3;
+
+// Geometry helpers (private to library)
+const double _mmPerInch = 25.4; // exact by definition
+const double _mmPerMetre = 1000.0;
+
+// Thread-length multipliers per stitch type (excluding strands and cell size)
+//
+// Full cross stitch: two diagonal passes (/ and \), each √2 × cell diagonal
+const double _crossPassCount = 2.0; // number of diagonal passes in one X stitch
+
+// Backstitch: one forward pass; wasteFactor covers the return thread underneath
+const double _backPassCount = 2.0; // front pass + return thread under fabric
 
 // ─── Skein calculator ─────────────────────────────────────────────────────────
 
@@ -21,10 +38,11 @@ double calculateSkeins({
   required int aidaCount,
   required int strands,
 }) {
-  final cellMm = 25.4 / aidaCount;
+  final cellMm = _mmPerInch / aidaCount;
   final metersPerFullStitch =
-      strands * 4 * sqrt(2) * (cellMm / 1000) * wasteFactor;
-  final metersPerBackCell = strands * 2 * (cellMm / 1000) * wasteFactor;
+      strands * _crossPassCount * sqrt(2) * (cellMm / _mmPerMetre) * wasteFactor;
+  final metersPerBackCell =
+      strands * _backPassCount * (cellMm / _mmPerMetre) * wasteFactor;
   final usableMetresPerSkein = dmcSkeinMetres * (dmcTotalStrands / strands);
 
   final totalMetres = (crossEquiv[dmcCode] ?? 0) * metersPerFullStitch +
