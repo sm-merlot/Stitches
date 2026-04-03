@@ -12,6 +12,21 @@ class DmcColor {
 DmcColor? dmcColorByCode(String code) =>
     dmcColors.where((c) => c.code == code).firstOrNull;
 
+/// Maps discontinued DMC codes to their official replacements.
+///
+/// Used at pattern load time to automatically migrate old patterns.
+/// All values must exist in [dmcColors].
+const Map<String, String> dmcReplacements = {
+  '504': '3813', // Blue Green Very Light         → Blue Green Very Light
+  '731': '732',  // Olive Green Dark              → Olive Green
+  '776': '3326', // Pink Medium                   → Rose Very Light
+  '781': '782',  // Topaz Very Dark               → Topaz Dark
+  '806': '3760', // Peacock Blue Dark             → Wedgwood Med Very Dark
+  '971': '740',  // Pumpkin                       → Tangerine
+  '3745': '3047',// Yellow Beige Very Light       → Yellow Beige Light
+  '3773': '407', // Desert Sand Medium            → Sportsman Flesh Ultra Dk
+};
+
 const List<DmcColor> dmcColors = [
   DmcColor('White', 'White', Color(0xFFFFFFFF), '2'),
   DmcColor('Ecru', 'Ecru', Color(0xFFF0EADA), '387'),

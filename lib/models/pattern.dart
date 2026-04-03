@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import '../data/dmc_colors.dart';
 import 'layer.dart';
 import 'layer_item.dart';
 import 'snippet.dart';
@@ -296,7 +297,7 @@ class CrossStitchPattern {
       ];
     }
 
-    return CrossStitchPattern(
+    final parsed = CrossStitchPattern(
       name: yaml['name'] as String,
       width: yaml['width'] as int,
       height: yaml['height'] as int,
@@ -336,6 +337,107 @@ class CrossStitchPattern {
       materialsSuggestions: (yaml['materialsSuggestions'] as List? ?? [])
           .map((e) => (aidaCount: e['aidaCount'] as int, strands: e['strands'] as int))
           .toList(),
+    );
+    return _migrateDiscontinuedThreads(parsed);
+  }
+
+  /// Remaps any discontinued DMC thread codes in [p] to their replacements.
+  ///
+  /// Applied automatically on [fromYaml] so that patterns created with old
+  /// thread codes are transparently upgraded on load without touching the file.
+  ///
+  /// - Thread objects are updated to the replacement code/color/name; the
+  ///   user's symbol assignment is preserved.
+  /// - If the replacement already exists in the palette the discontinued entry
+  ///   is dropped and its stitches are remapped to the existing replacement.
+  /// - All stitches across layers, snippets, and palette threads are updated.
+  static CrossStitchPattern _migrateDiscontinuedThreads(CrossStitchPattern p) {
+    // Build remap table for discontinued codes anywhere in this pattern:
+    // top-level threads, snippet palette threads, and raw stitch references.
+    final remaps = <String, String>{};
+    void checkCode(String code) {
+      final newCode = dmcReplacements[code];
+      if (newCode != null) remaps[code] = newCode;
+    }
+    for (final t in p.threads) checkCode(t.dmcCode);
+    for (final snippet in p.snippets) {
+      for (final pal in snippet.palettes) {
+        for (final t in pal.threads) checkCode(t.dmcCode);
+      }
+      for (final s in snippet.stitches) checkCode(s.threadId);
+    }
+    for (final s in p.stitches) checkCode(s.threadId);
+    if (remaps.isEmpty) return p;
+
+    List<Stitch> remapStitches(List<Stitch> stitches) => stitches
+        .map((s) {
+          final newId = remaps[s.threadId];
+          return newId != null ? s.withThreadId(newId) : s;
+        })
+        .toList();
+
+    // Remap pattern-level threads; deduplicate if replacement already present.
+    final existingCodes = p.threads.map((t) => t.dmcCode).toSet();
+    final newThreads = <Thread>[];
+    for (final t in p.threads) {
+      final newCode = remaps[t.dmcCode];
+      if (newCode == null) {
+        newThreads.add(t);
+      } else if (existingCodes.contains(newCode)) {
+        // Replacement already in palette — drop discontinued entry; stitches
+        // will be remapped to the existing replacement thread below.
+      } else {
+        final dmcColor = dmcColorByCode(newCode);
+        newThreads.add(Thread(
+          dmcCode: newCode,
+          color: dmcColor?.color ?? t.color,
+          name: dmcColor?.name ?? t.name,
+          symbol: t.symbol, // preserve user-assigned symbol
+        ));
+      }
+    }
+
+    // Remap stitches in all layers.
+    final withRemappedLayers = p.mapLayers(
+      (layer) => layer.copyWith(stitches: remapStitches(layer.stitches)),
+    );
+
+    // Remap snippet palette threads and stitches.
+    final newSnippets = p.snippets.map((snippet) {
+      return snippet.copyWith(
+        stitches: remapStitches(snippet.stitches),
+        palettes: snippet.palettes.map((pal) {
+          final palCodes = pal.threads.map((t) => t.dmcCode).toSet();
+          final updatedThreads = pal.threads
+              .where((t) {
+                final newCode = remaps[t.dmcCode];
+                // Drop discontinued thread only when its replacement is already present.
+                return newCode == null || !palCodes.contains(newCode);
+              })
+              .map((t) {
+                final newCode = remaps[t.dmcCode];
+                if (newCode == null) return t;
+                final dmcColor = dmcColorByCode(newCode);
+                return t.copyWith(
+                  dmcCode: newCode,
+                  color: dmcColor?.color,
+                  name: dmcColor?.name,
+                );
+              })
+              .toList();
+          return pal.copyWith(threads: updatedThreads);
+        }).toList(),
+      );
+    }).toList();
+
+    // Remap selected-thread editor state.
+    final selId = p.editorSelectedThreadId;
+    final newSelId = selId != null ? (remaps[selId] ?? selId) : null;
+
+    return withRemappedLayers.copyWith(
+      threads: newThreads,
+      snippets: newSnippets,
+      editorSelectedThreadId: newSelId,
     );
   }
 }
