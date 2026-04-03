@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "b15aee1f4e7b1c5045557a19b359752361f1ffc9",
+  "prompts": {
+    "d94158e370348870": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a0d5454-d9d2-4b99-89bb-76d325dd2140",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1380,
+      "overriden_lines": 0
+    }
+  }
+}
