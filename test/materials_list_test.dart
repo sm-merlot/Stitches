@@ -14,7 +14,7 @@ void main() {
       double heightCm = 35.0,
       double widthIn = 11.0,
       double heightIn = 13.8,
-      List<({String dmcCode, String name, int skeins})> threads = const [],
+      List<({String dmcCode, String name, double skeins})> threads = const [],
     }) =>
         buildMaterialsListMarkdown(
           patternName: patternName,
@@ -59,25 +59,46 @@ void main() {
       expect(out, contains('- [ ] #FFABCDEF'));
     });
 
-    test('thread line format', () {
+    test('thread line format — whole skeins', () {
       final out = build(threads: [
-        (dmcCode: '310', name: 'Black', skeins: 2),
+        (dmcCode: '310', name: 'Black', skeins: 2.0),
       ]);
       expect(out, contains('- [ ] DMC 310 Black x 2 skeins'));
     });
 
     test('single skein uses singular', () {
       final out = build(threads: [
-        (dmcCode: '321', name: 'Red', skeins: 1),
+        (dmcCode: '321', name: 'Red', skeins: 1.0),
       ]);
       expect(out, contains('x 1 skein\n'));
     });
 
+    test('quarter skein uses singular', () {
+      final out = build(threads: [
+        (dmcCode: '321', name: 'Red', skeins: 0.25),
+      ]);
+      expect(out, contains('x ¼ skein\n'));
+    });
+
+    test('half skein uses singular', () {
+      final out = build(threads: [
+        (dmcCode: '321', name: 'Red', skeins: 0.5),
+      ]);
+      expect(out, contains('x ½ skein\n'));
+    });
+
+    test('one and three quarter skeins uses plural', () {
+      final out = build(threads: [
+        (dmcCode: '321', name: 'Red', skeins: 1.75),
+      ]);
+      expect(out, contains('x 1¾ skeins\n'));
+    });
+
     test('multiple threads all appear', () {
       final out = build(threads: [
-        (dmcCode: '310', name: 'Black', skeins: 2),
-        (dmcCode: '321', name: 'Red', skeins: 1),
-        (dmcCode: 'blanc', name: 'White', skeins: 3),
+        (dmcCode: '310', name: 'Black', skeins: 2.0),
+        (dmcCode: '321', name: 'Red', skeins: 1.0),
+        (dmcCode: 'blanc', name: 'White', skeins: 3.0),
       ]);
       expect(out, contains('DMC 310 Black'));
       expect(out, contains('DMC 321 Red'));
