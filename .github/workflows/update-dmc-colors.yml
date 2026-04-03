@@ -1,0 +1,50 @@
+name: Update DMC Colors
+
+# Runs on the 1st of every month and can be triggered manually.
+# If the community color dataset has changed, opens a PR with a diff
+# and (optionally) Claude-generated Anchor code suggestions.
+#
+# To enable Anchor suggestions, add ANTHROPIC_API_KEY as a repository secret.
+
+on:
+  schedule:
+    - cron: '0 9 1 * *' # 09:00 UTC on the 1st of each month
+  workflow_dispatch:     # Manual trigger from the Actions tab
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Fetch and diff DMC color list
+        id: update
+        run: dart run tool/update_dmc_colors.dart
+        env:
+          # Optional — set this secret to get Anchor code suggestions in the PR.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Open pull request
+        if: steps.update.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/update-dmc-colors
+          delete-branch: true
+          commit-message: 'chore: update DMC color list from community source'
+          title: 'chore: update DMC color list'
+          body-path: tool/.pr_body.md
+          labels: |
+            chore
+            colors
