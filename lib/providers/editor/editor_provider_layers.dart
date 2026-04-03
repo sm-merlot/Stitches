@@ -618,8 +618,25 @@ mixin LayersMixin on Notifier<EditorState> {
       }
     }
 
+    // Inject symbols from the resolved registry into composite threads.
+    // StitchCompositor doesn't know about compositeSymbols, so we apply them here.
+    final symbolizedCompositeThreads = <String, Thread>{};
+    for (final entry in result.compositeThreads.entries) {
+      final t = entry.value;
+      final sym = newRegistry[t.dmcCode] ?? t.symbol;
+      symbolizedCompositeThreads[entry.key] = sym == t.symbol ? t : t.copyWith(symbol: sym);
+    }
+    final symbolizedResult = CompositeResult(
+      compositeThreads: symbolizedCompositeThreads,
+      blendedColors: result.blendedColors,
+      dedupedNonBack: result.dedupedNonBack,
+      backstitches: result.backstitches,
+      crossStitchEquiv: result.crossStitchEquiv,
+      backStitchEquiv: result.backStitchEquiv,
+    );
+
     state = state.copyWith(
-      compositeResult: result,
+      compositeResult: symbolizedResult,
       pattern: state.pattern.copyWith(compositeSymbols: newRegistry),
       isDirty: registryChanged || state.isDirty,
     );

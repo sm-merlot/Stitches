@@ -93,41 +93,34 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
 
   /// Cross-stitch equivalents per dmcCode (FullStitch=1.0, Half=0.5, Quarter=0.25).
   Map<String, double> _crossEquiv() {
-    final state = widget.state;
-    final cache = state.compositeResult?.compositeThreads;
-    final equiv = <String, double>{};
-
-    // FullStitches: use composite cache (attributes blended cells correctly)
-    if (cache != null && cache.isNotEmpty) {
-      for (final t in cache.values) {
-        equiv[t.dmcCode] = (equiv[t.dmcCode] ?? 0) + 1.0;
-      }
-    } else {
-      for (final s in state.pattern.stitches) {
-        if (s is FullStitch) {
-          equiv[s.threadId] = (equiv[s.threadId] ?? 0) + 1.0;
-        }
-      }
+    final compositeResult = widget.state.compositeResult;
+    if (compositeResult != null) {
+      return Map<String, double>.from(compositeResult.crossStitchEquiv);
     }
-
-    // Non-full cross-stitches always use raw threadId
-    for (final s in state.pattern.stitches) {
-      if (s is FullStitch || s is BackStitch) continue;
+    // Fallback: no composite result yet — use raw single-layer stitches.
+    final equiv = <String, double>{};
+    for (final s in widget.state.pattern.stitches) {
+      if (s is BackStitch) continue;
       final e = switch (s) {
+        FullStitch() => 1.0,
         HalfStitch() => 0.5,
-        QuarterStitch() => 0.25,
         HalfCrossStitch() => 0.5,
+        QuarterStitch() => 0.25,
         QuarterCrossStitch() => 0.25,
         _ => 0.0,
       };
       if (e > 0) equiv[s.threadId] = (equiv[s.threadId] ?? 0) + e;
     }
-
     return equiv;
   }
 
   /// Backstitch Euclidean cell-unit length per dmcCode.
   Map<String, double> _backCells() {
+    final compositeResult = widget.state.compositeResult;
+    if (compositeResult != null) {
+      return Map<String, double>.from(compositeResult.backStitchEquiv);
+    }
+    // Fallback: no composite result yet.
     final cells = <String, double>{};
     for (final s in widget.state.pattern.stitches) {
       if (s is! BackStitch) continue;
