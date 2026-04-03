@@ -111,6 +111,9 @@ class StitchCompositor {
         final t = threadMap[stack.first.stitch.threadId];
         if (t != null) compositeThreads[key] = t;
       } else {
+        // The bottom layer is always the compositing base — its own blend mode is not
+        // applied (it has no layer below to blend with). Layers above it are applied
+        // in order, each blending onto the accumulated result.
         var blended = stack.first.color;
         for (int i = 1; i < stack.length; i++) {
           blended = stack[i].blendMode.apply(blended, stack[i].color, stack[i].opacity);
@@ -122,11 +125,8 @@ class StitchCompositor {
         final b = (blended.b * 255).round();
         final dmc = SpriteImporter.matchPixel(r, g, b, 255);
         if (dmc != null) {
-          compositeThreads[key] = Thread(
-            dmcCode: dmc.code,
-            color: dmc.color,
-            name: dmc.name,
-          );
+          compositeThreads[key] = threadMap[dmc.code] ??
+              Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name);
         }
       }
     }
