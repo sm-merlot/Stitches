@@ -381,7 +381,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
               SizedBox(
                 width: 60,
                 child: Text(
-                  '$nLabel sk',
+                  nLabel,
                   textAlign: TextAlign.right,
                   style: TextStyle(
                       fontSize: 13,
