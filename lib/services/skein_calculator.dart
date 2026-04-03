@@ -8,6 +8,9 @@ const double dmcSkeinMetres = 8.0;
 /// Number of strands in a standard DMC skein.
 const int dmcTotalStrands = 6;
 
+/// Total single-strand metres available in one skein (8 m × 6 strands).
+const double dmcSkeinSingleStrandMetres = dmcSkeinMetres * dmcTotalStrands;
+
 /// Extra thread for finishing, knots, and needle travel (30% overage).
 const double wasteFactor = 1.3;
 
@@ -15,18 +18,23 @@ const double wasteFactor = 1.3;
 const double _mmPerInch = 25.4; // exact by definition
 const double _mmPerMetre = 1000.0;
 
-// Thread-length multipliers per stitch type (excluding strands and cell size)
+// Thread-length multipliers per stitch type (per strand, per cell)
 //
-// Full cross stitch: two diagonal passes (/ and \), each √2 × cell diagonal
-const double _crossPassCount = 2.0; // number of diagonal passes in one X stitch
+// Full cross stitch: 2 front diagonal passes (/ and \) + 2 back-thread connections
+// Each diagonal = √2 × cell, so total per strand = 4 × √2 × cell.
+const double _crossStitchThreadFactor = 4.0;
 
-// Backstitch: one forward pass; wasteFactor covers the return thread underneath
-const double _backPassCount = 2.0; // front pass + return thread under fabric
+// Backstitch: 1 front pass + 1 back-thread connection per cell unit of distance.
+const double _backstitchThreadFactor = 2.0;
 
 // ─── Skein calculator ─────────────────────────────────────────────────────────
 
 /// Returns the number of skeins required for [dmcCode], in quarter-skein
 /// increments (0.25, 0.5, 0.75, 1.0, 1.25, …). Minimum is ¼ skein.
+///
+/// Thread usage scales linearly with [strands]: using 3 strands needs 3×
+/// as many single-strand-metres as 1 strand, divided by the fixed pool of
+/// single-strand-metres in a skein (8 m × 6 strands = 48 m).
 ///
 /// [crossEquiv] maps dmcCode → cross-stitch equivalents
 ///   (FullStitch=1.0, HalfStitch=0.5, QuarterStitch=0.25, etc.)
@@ -39,17 +47,20 @@ double calculateSkeins({
   required int strands,
 }) {
   final cellMm = _mmPerInch / aidaCount;
-  final metersPerFullStitch =
-      strands * _crossPassCount * sqrt(2) * (cellMm / _mmPerMetre) * wasteFactor;
-  final metersPerBackCell =
-      strands * _backPassCount * (cellMm / _mmPerMetre) * wasteFactor;
-  final usableMetresPerSkein = dmcSkeinMetres * (dmcTotalStrands / strands);
 
-  final totalMetres = (crossEquiv[dmcCode] ?? 0) * metersPerFullStitch +
-      (backCells[dmcCode] ?? 0) * metersPerBackCell;
+  // Single-strand metres consumed per stitch / per back-cell, then scaled by strands.
+  final singleStrandMetresPerCross =
+      _crossStitchThreadFactor * sqrt(2) * (cellMm / _mmPerMetre) * wasteFactor;
+  final singleStrandMetresPerBackCell =
+      _backstitchThreadFactor * (cellMm / _mmPerMetre) * wasteFactor;
+
+  final totalSingleStrandMetres =
+      strands * ((crossEquiv[dmcCode] ?? 0) * singleStrandMetresPerCross +
+          (backCells[dmcCode] ?? 0) * singleStrandMetresPerBackCell);
 
   // Round up to the nearest quarter-skein; minimum ¼.
-  final quartersNeeded = (totalMetres / usableMetresPerSkein * 4).ceil();
+  final quartersNeeded =
+      (totalSingleStrandMetres / dmcSkeinSingleStrandMetres * 4).ceil();
   return max(1, quartersNeeded) / 4.0;
 }
 
