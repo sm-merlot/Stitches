@@ -115,7 +115,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -137,7 +137,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -151,7 +151,7 @@ mixin LayersMixin on Notifier<EditorState> {
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(visible: !l.visible));
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeThreadCache: null);
+        pattern: newPattern, isDirty: true, compositeResult: null);
     if (state.showCompositeThreads) refreshCompositeCache();
   }
 
@@ -165,7 +165,7 @@ mixin LayersMixin on Notifier<EditorState> {
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeThreadCache: null);
+        pattern: newPattern, isDirty: true, compositeResult: null);
     if (state.showCompositeThreads) refreshCompositeCache();
   }
 
@@ -174,7 +174,7 @@ mixin LayersMixin on Notifier<EditorState> {
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeThreadCache: null);
+        pattern: newPattern, isDirty: true, compositeResult: null);
     if (state.showCompositeThreads) {
       _opacityDebounce?.cancel();
       _opacityDebounce =
@@ -191,7 +191,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
     if (state.showCompositeThreads) refreshCompositeCache();
   }
@@ -214,7 +214,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -247,7 +247,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -268,7 +268,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -288,7 +288,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -331,7 +331,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -378,7 +378,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -401,7 +401,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -426,7 +426,7 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       isDirty: true,
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -468,7 +468,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -486,7 +486,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -509,7 +509,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -522,7 +522,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -541,7 +541,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeThreadCache: null,
+      compositeResult: null,
     );
   }
 
@@ -552,8 +552,8 @@ mixin LayersMixin on Notifier<EditorState> {
   }
 
   void refreshCompositeCache() {
-    final raw = computeCompositeThreads(state.pattern);
-    final activeCodes = raw.values.map((t) => t.dmcCode).toSet();
+    final result = StitchCompositor.compute(state.pattern);
+    final activeCodes = result.compositeThreads.values.map((t) => t.dmcCode).toSet();
 
     final patternMap = <String, Thread>{
       for (final t in state.pattern.threads) t.dmcCode: t,
@@ -565,8 +565,6 @@ mixin LayersMixin on Notifier<EditorState> {
 
     final oldRegistry = state.pattern.compositeSymbols;
 
-    // Returns true when [sym] can be safely assigned: not already in [used]
-    // and not in the same visual-similarity group as any symbol in [used].
     bool symbolAvailable(String sym, Set<String> used) {
       if (used.contains(sym)) return false;
       final g = symbolSimilarityGroup(sym);
@@ -574,7 +572,6 @@ mixin LayersMixin on Notifier<EditorState> {
       return !used.any((s) => symbolSimilarityGroup(s) == g);
     }
 
-    // Pick the next available symbol from the pool, respecting similarity groups.
     String pickSymbol(List<String> freed, Set<String> used) {
       for (int i = 0; i < freed.length; i++) {
         if (symbolAvailable(freed[i], used)) return freed.removeAt(i);
@@ -585,8 +582,6 @@ mixin LayersMixin on Notifier<EditorState> {
       return '';
     }
 
-    // Freed symbols: old composite codes no longer active, whose symbols
-    // don't conflict (exact or similar group) with pattern symbols.
     final freedSymbols = <String>[
       for (final entry in oldRegistry.entries)
         if (!activeCodes.contains(entry.key) &&
@@ -597,44 +592,34 @@ mixin LayersMixin on Notifier<EditorState> {
     ];
 
     final used = Set<String>.from(patternSymbols);
+    final newRegistry = Map<String, String>.from(oldRegistry);
+    bool registryChanged = false;
 
-    final preAssigned = <String, String>{};
-    for (final dmcCode in activeCodes) {
-      if (patternMap.containsKey(dmcCode)) continue;
-      final stored = oldRegistry[dmcCode];
-      // Re-use the stored symbol only if it still doesn't conflict.
-      if (stored != null && stored.isNotEmpty && symbolAvailable(stored, used)) {
-        used.add(stored);
-        preAssigned[dmcCode] = stored;
+    for (final code in activeCodes) {
+      if (patternMap.containsKey(code)) continue; // real thread — already has symbol
+      final existing = newRegistry[code];
+      if (existing != null && existing.isNotEmpty && symbolAvailable(existing, used)) {
+        used.add(existing);
       } else {
         final sym = pickSymbol(freedSymbols, used);
-        if (sym.isNotEmpty) {
-          used.add(sym);
-          preAssigned[dmcCode] = sym;
+        if (sym.isNotEmpty) used.add(sym);
+        if (newRegistry[code] != sym) {
+          newRegistry[code] = sym;
+          registryChanged = true;
         }
       }
     }
 
-    final newRegistry = Map<String, String>.from(oldRegistry)..addAll(preAssigned);
-
-    final resolved = raw.map((cell, thread) {
-      final existing = patternMap[thread.dmcCode];
-      if (existing != null && existing.symbol.isNotEmpty) {
-        newRegistry[thread.dmcCode] = existing.symbol;
-        return MapEntry(cell, existing);
+    // Remove stale entries for codes no longer active and not real threads.
+    for (final code in oldRegistry.keys.toList()) {
+      if (!activeCodes.contains(code) && !patternMap.containsKey(code)) {
+        newRegistry.remove(code);
+        registryChanged = true;
       }
-      final sym = preAssigned[thread.dmcCode] ?? '';
-      return MapEntry(cell, thread.copyWith(symbol: sym));
-    });
-
-    // Only mark dirty if the composite symbol registry actually changed;
-    // entering stitch mode (which always calls this) must not trigger an
-    // auto-save when nothing has been edited.
-    final registryChanged = newRegistry.length != oldRegistry.length ||
-        newRegistry.entries.any((e) => oldRegistry[e.key] != e.value);
+    }
 
     state = state.copyWith(
-      compositeThreadCache: resolved,
+      compositeResult: result,
       pattern: state.pattern.copyWith(compositeSymbols: newRegistry),
       isDirty: registryChanged || state.isDirty,
     );

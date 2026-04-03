@@ -19,6 +19,7 @@ import '../../models/thread.dart';
 import '../../services/editor_session_service.dart';
 import '../../services/reference_image_service.dart';
 import '../../services/sprite_importer.dart';
+import '../../services/stitch_compositor.dart';
 import '../settings_provider.dart';
 
 part 'editor_provider_drawing.dart';
@@ -79,7 +80,7 @@ class EditorState {
   final bool clipboardFromSnippet;
   final String activeLayerId;
   final bool showCompositeThreads;
-  final Map<String, Thread>? compositeThreadCache;
+  final CompositeResult? compositeResult;
   final bool stitchMode;
   final bool blockMode;
   final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
@@ -138,7 +139,7 @@ class EditorState {
     this.clipboardFromSnippet = false,
     this.activeLayerId = '',
     this.showCompositeThreads = true,
-    this.compositeThreadCache,
+    this.compositeResult,
     this.stitchMode = false,
     this.blockMode = false,
     this.stitchCrossMode = false,
@@ -270,7 +271,7 @@ class EditorState {
     bool? clipboardFromSnippet,
     String? activeLayerId,
     bool? showCompositeThreads,
-    Object? compositeThreadCache = _sentinel,
+    Object? compositeResult = _sentinel,
     bool? stitchMode,
     bool? blockMode,
     bool? stitchCrossMode,
@@ -314,9 +315,9 @@ class EditorState {
       clipboardFromSnippet: clipboardFromSnippet ?? this.clipboardFromSnippet,
       activeLayerId: activeLayerId ?? this.activeLayerId,
       showCompositeThreads: showCompositeThreads ?? this.showCompositeThreads,
-      compositeThreadCache: compositeThreadCache == _sentinel
-          ? this.compositeThreadCache
-          : compositeThreadCache as Map<String, Thread>?,
+      compositeResult: compositeResult == _sentinel
+          ? this.compositeResult
+          : compositeResult as CompositeResult?,
       stitchMode: stitchMode ?? this.stitchMode,
       blockMode: blockMode ?? this.blockMode,
       stitchCrossMode: stitchCrossMode ?? this.stitchCrossMode,
@@ -774,61 +775,3 @@ class EditorNotifier extends Notifier<EditorState>
 final editorProvider =
     NotifierProvider<EditorNotifier, EditorState>(EditorNotifier.new);
 
-// ─── computeCompositeThreads ──────────────────────────────────────────────────
-
-/// Computes composite threads for each cell with stitches in multiple visible
-/// layers. Single-layer cells use their source thread directly.
-/// Returns a map from 'x,y' cell key to the composite [Thread].
-Map<String, Thread> computeCompositeThreads(CrossStitchPattern pattern) {
-  final cellLayers = <String, List<({Layer layer, FullStitch stitch})>>{};
-  for (final layer in pattern.layers) {
-    if (!layer.visible) continue;
-    for (final stitch in layer.stitches) {
-      if (stitch is! FullStitch) continue;
-      final key = '${stitch.x},${stitch.y}';
-      (cellLayers[key] ??= []).add((layer: layer, stitch: stitch));
-    }
-  }
-
-  final threadMap = <String, Thread>{
-    for (final t in pattern.threads) t.dmcCode: t,
-  };
-
-  final result = <String, Thread>{};
-
-  for (final entry in cellLayers.entries) {
-    final hits = entry.value;
-    if (hits.isEmpty) continue;
-
-    if (hits.length == 1) {
-      final t = threadMap[hits.first.stitch.threadId];
-      if (t != null) result[entry.key] = t;
-      continue;
-    }
-
-    var blended = threadMap[hits.first.stitch.threadId]?.color;
-    if (blended == null) continue;
-
-    for (int i = 1; i < hits.length; i++) {
-      final hit = hits[i];
-      final layerColor = threadMap[hit.stitch.threadId]?.color;
-      if (layerColor == null) continue;
-      blended = hit.layer.blendMode.apply(blended!, layerColor, hit.layer.opacity);
-    }
-
-    if (blended == null) continue;
-    final r = (blended.r * 255).round();
-    final g = (blended.g * 255).round();
-    final b = (blended.b * 255).round();
-    final dmc = SpriteImporter.matchPixel(r, g, b, 255);
-    if (dmc != null) {
-      result[entry.key] = Thread(
-        dmcCode: dmc.code,
-        color: dmc.color,
-        name: dmc.name,
-      );
-    }
-  }
-
-  return result;
-}

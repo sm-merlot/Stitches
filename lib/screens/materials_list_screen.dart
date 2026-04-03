@@ -80,7 +80,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
 
   /// Unique threads to display — from composite cache if available, else pattern.threads.
   List<Thread> _threads() {
-    final cache = widget.state.compositeThreadCache;
+    final cache = widget.state.compositeResult?.compositeThreads;
     if (cache != null && cache.isNotEmpty) {
       final unique = <String, Thread>{};
       for (final t in cache.values) {
@@ -94,7 +94,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
   /// Cross-stitch equivalents per dmcCode (FullStitch=1.0, Half=0.5, Quarter=0.25).
   Map<String, double> _crossEquiv() {
     final state = widget.state;
-    final cache = state.compositeThreadCache;
+    final cache = state.compositeResult?.compositeThreads;
     final equiv = <String, double>{};
 
     // FullStitches: use composite cache (attributes blended cells correctly)

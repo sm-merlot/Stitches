@@ -225,7 +225,7 @@ mixin DrawingMixin on Notifier<EditorState> {
         .toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(threads: threads),
-      compositeThreadCache: null,
+      compositeResult: null,
       isDirty: true,
     );
     // Rebuild immediately so composite panel doesn't fall back to layer threads.
