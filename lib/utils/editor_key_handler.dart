@@ -47,6 +47,17 @@ KeyEventResult handleEditorKeys(
       notifier.setDrawingMode(DrawingMode.pan);
       return KeyEventResult.handled;
     }
+    // Page mode navigation with arrow keys.
+    if (state.pattern.pageConfig.enabled && state.pageLayout != null) {
+      if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.arrowDown) {
+        notifier.navigateNextPage();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.arrowUp) {
+        notifier.navigatePreviousPage();
+        return KeyEventResult.handled;
+      }
+    }
     if (key == LogicalKeyboardKey.escape) {
       if (state.selectionRect != null) {
         notifier.cancelSelection();
