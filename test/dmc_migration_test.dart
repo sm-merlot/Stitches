@@ -9,12 +9,9 @@
 //   • editorSelectedThreadId is remapped
 //   • Current patterns (no discontinued codes) are returned unchanged
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/data/dmc_colors.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/stitch.dart';
-import 'package:stitches/models/thread.dart';
 
 /// Minimal YAML map for a CrossStitchPattern.
 Map<String, dynamic> _baseYaml({

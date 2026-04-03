@@ -360,14 +360,14 @@ class CrossStitchPattern {
       // Skip empty-string placeholders (replacement TBD — don't auto-migrate yet).
       if (newCode != null && newCode.isNotEmpty) remaps[code] = newCode;
     }
-    for (final t in p.threads) checkCode(t.dmcCode);
+    for (final t in p.threads) { checkCode(t.dmcCode); }
     for (final snippet in p.snippets) {
       for (final pal in snippet.palettes) {
-        for (final t in pal.threads) checkCode(t.dmcCode);
+        for (final t in pal.threads) { checkCode(t.dmcCode); }
       }
-      for (final s in snippet.stitches) checkCode(s.threadId);
+      for (final s in snippet.stitches) { checkCode(s.threadId); }
     }
-    for (final s in p.stitches) checkCode(s.threadId);
+    for (final s in p.stitches) { checkCode(s.threadId); }
     if (remaps.isEmpty) return p;
 
     List<Stitch> remapStitches(List<Stitch> stitches) => stitches
