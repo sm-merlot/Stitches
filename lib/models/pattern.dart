@@ -357,7 +357,8 @@ class CrossStitchPattern {
     final remaps = <String, String>{};
     void checkCode(String code) {
       final newCode = dmcReplacements[code];
-      if (newCode != null) remaps[code] = newCode;
+      // Skip empty-string placeholders (replacement TBD — don't auto-migrate yet).
+      if (newCode != null && newCode.isNotEmpty) remaps[code] = newCode;
     }
     for (final t in p.threads) checkCode(t.dmcCode);
     for (final snippet in p.snippets) {

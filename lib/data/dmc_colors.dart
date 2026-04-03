@@ -12,10 +12,12 @@ class DmcColor {
 DmcColor? dmcColorByCode(String code) =>
     dmcColors.where((c) => c.code == code).firstOrNull;
 
-/// Maps discontinued DMC codes to their official replacements.
+/// Maps discontinued DMC codes to their replacements.
 ///
 /// Used at pattern load time to automatically migrate old patterns.
-/// All values must exist in [dmcColors].
+/// Values must be valid codes in [dmcColors]. An empty string means the
+/// replacement hasn't been confirmed yet — auto-migration is skipped for those
+/// entries until a real replacement code is filled in.
 const Map<String, String> dmcReplacements = {
   '504': '3813', // Blue Green Very Light         → Blue Green Very Light
   '731': '732',  // Olive Green Dark              → Olive Green

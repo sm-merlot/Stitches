@@ -4,18 +4,16 @@
 //
 // What it does:
 //   • Adds colors present in the source but missing from the app list.
-//   • Flags colors in the app list but absent from the source (potentially
-//     retired) — prints them but does NOT remove them automatically.
+//   • Removes colors absent from the source: moves them out of dmcColors and
+//     adds placeholder entries (empty replacement) to dmcReplacements so they
+//     show up in the PR for review. Fill in the replacement before merging, or
+//     revert the change if it turns out to be a false alarm.
+//   • Updates name/hex for colors whose details changed in the source.
 //   • Never overwrites existing Anchor codes; preserves them on updates.
-//   • If ANTHROPIC_API_KEY is set, asks Claude for Anchor equivalents of any
-//     newly added colors and includes the suggestions in the PR body.
 //   • Writes tool/.pr_body.md and sets GITHUB_OUTPUT for CI use.
 //
 // Usage:
 //   dart run tool/update_dmc_colors.dart
-//
-// CI usage (set ANTHROPIC_API_KEY secret to enable Anchor suggestions):
-//   env ANTHROPIC_API_KEY=sk-... dart run tool/update_dmc_colors.dart
 
 // ignore_for_file: avoid_print
 
@@ -101,75 +99,30 @@ List<_Color> _parseCurrentFile(String content) {
   }).toList();
 }
 
-// ─── Anchor lookup via Claude ─────────────────────────────────────────────────
-
-Future<Map<String, String?>> _lookupAnchorCodes(
-    List<_Color> colors, String apiKey) async {
-  if (colors.isEmpty) return {};
-
-  final colorList =
-      colors.map((c) => '  ${c.code.padRight(6)} ${c.name}').join('\n');
-
-  final prompt = 'For each DMC embroidery thread below, provide the closest '
-      'Anchor equivalent thread code. Return ONLY a JSON object mapping DMC '
-      'code → Anchor code string. Use null if no equivalent exists.\n\n'
-      '$colorList';
-
-  final requestBody = jsonEncode({
-    'model': 'claude-haiku-4-5-20251001',
-    'max_tokens': 1024,
-    'messages': [
-      {'role': 'user', 'content': prompt},
-    ],
-  });
-
-  final client = HttpClient();
-  try {
-    final req = await client
-        .postUrl(Uri.parse('https://api.anthropic.com/v1/messages'));
-    req.headers
-      ..set('content-type', 'application/json')
-      ..set('x-api-key', apiKey)
-      ..set('anthropic-version', '2023-06-01');
-    req.write(requestBody);
-
-    final res = await req.close();
-    final body = await res.transform(utf8.decoder).join();
-
-    if (res.statusCode != 200) {
-      print('Warning: Anchor lookup returned HTTP ${res.statusCode}');
-      return {};
-    }
-
-    final text =
-        ((jsonDecode(body) as Map)['content'] as List).first['text'] as String;
-
-    // Extract the JSON block from the response.
-    final start = text.indexOf('{');
-    final end = text.lastIndexOf('}');
-    if (start == -1 || end == -1) return {};
-
-    final parsed = jsonDecode(text.substring(start, end + 1)) as Map;
-    return parsed.map((k, v) => MapEntry(k as String, v as String?));
-  } catch (e) {
-    print('Warning: Anchor lookup failed — $e');
-    return {};
-  } finally {
-    client.close(force: true);
-  }
+/// Returns the set of DMC codes already present in the dmcReplacements map.
+Set<String> _parseReplacementKeys(String content) {
+  const header = 'const Map<String, String> dmcReplacements = {';
+  final start = content.indexOf(header);
+  if (start == -1) return {};
+  final end = content.indexOf('\n};', start + header.length);
+  if (end == -1) return {};
+  final block = content.substring(start + header.length, end);
+  return RegExp(r"'([^']+)':")
+      .allMatches(block)
+      .map((m) => m.group(1)!)
+      .toSet();
 }
 
 // ─── PR body ──────────────────────────────────────────────────────────────────
 
 void _writePrBody({
   required List<_Color> added,
-  required List<_Color> potentiallyRetired,
+  required List<_Color> retired,
   required List<_Color> updated,
-  required Map<String, String?> anchorSuggestions,
 }) {
   final buf = StringBuffer();
 
-  final total = added.length + potentiallyRetired.length + updated.length;
+  final total = added.length + retired.length + updated.length;
   buf.writeln('## DMC Color List Update\n');
   buf.writeln('Automated monthly sync against the '
       '[cheshire137/cross-stitch-color-conversion]'
@@ -180,8 +133,8 @@ void _writePrBody({
   } else {
     final parts = [
       if (added.isNotEmpty) '**${added.length} added**',
-      if (potentiallyRetired.isNotEmpty)
-        '**${potentiallyRetired.length} possibly retired** (not auto-removed — needs review)',
+      if (retired.isNotEmpty)
+        '**${retired.length} possibly retired** (removed from list, replacement TBD)',
       if (updated.isNotEmpty) '**${updated.length} updated** (name or hex changed)',
     ];
     buf.writeln(parts.join(' · '));
@@ -189,39 +142,26 @@ void _writePrBody({
 
   if (added.isNotEmpty) {
     buf.writeln('\n### ➕ New colors\n');
-    final hasAnchors = anchorSuggestions.isNotEmpty;
-    if (hasAnchors) {
-      buf.writeln(
-          '> Anchor suggestions below were generated by Claude — please verify before merging.\n');
-      buf.writeln('| DMC | Name | Hex | Suggested Anchor |');
-      buf.writeln('|-----|------|-----|-----------------|');
-      for (final c in added) {
-        final anchor = anchorSuggestions[c.code];
-        final anchorCell = anchor ?? '—';
-        buf.writeln('| ${c.code} | ${c.name} | `#${c.hex}` | $anchorCell |');
-      }
-    } else {
-      buf.writeln(
-          '> Anchor codes not auto-looked up. Set `ANTHROPIC_API_KEY` secret to enable suggestions, '
-          'or add them manually in `lib/data/dmc_colors.dart`.\n');
-      buf.writeln('| DMC | Name | Hex |');
-      buf.writeln('|-----|------|-----|');
-      for (final c in added) {
-        buf.writeln('| ${c.code} | ${c.name} | `#${c.hex}` |');
-      }
+    buf.writeln(
+        '> Add Anchor equivalents manually in `lib/data/dmc_colors.dart` before merging.\n');
+    buf.writeln('| DMC | Name | Hex |');
+    buf.writeln('|-----|------|-----|');
+    for (final c in added) {
+      buf.writeln('| ${c.code} | ${c.name} | `#${c.hex}` |');
     }
   }
 
-  if (potentiallyRetired.isNotEmpty) {
-    buf.writeln('\n### ⚠️ Not found in source (possibly retired)\n');
+  if (retired.isNotEmpty) {
+    buf.writeln('\n### 🗑️ Possibly retired (removed from dmcColors)\n');
     buf.writeln(
-        'These colors are in the app list but absent from the community source. '
-        'They have **not** been removed automatically.\n'
-        'If confirmed discontinued, add them to `dmcReplacements` in '
-        '`lib/data/dmc_colors.dart` with the best replacement, then remove the entry.\n');
+        'These colors were absent from the community source and have been removed '
+        'from `dmcColors`. Placeholder entries (empty replacement) have been added '
+        'to `dmcReplacements`.\n\n'
+        '**Before merging:** fill in each replacement code in `dmcReplacements`, '
+        'or revert the entry if the source was wrong.\n');
     buf.writeln('| DMC | Name | Hex | Current Anchor |');
     buf.writeln('|-----|------|-----|----------------|');
-    for (final c in potentiallyRetired) {
+    for (final c in retired) {
       buf.writeln('| ${c.code} | ${c.name} | `#${c.hex}` | ${c.anchor ?? '—'} |');
     }
   }
@@ -266,99 +206,97 @@ Future<void> main() async {
   final currentColors = _parseCurrentFile(currentContent);
   print('Current: ${currentColors.length} colors');
 
+  // Codes already handled in dmcReplacements — don't flag them again.
+  final existingReplacementKeys = _parseReplacementKeys(currentContent);
+
   final sourceByCode = {for (final c in sourceColors) c.code: c};
   final currentByCode = {for (final c in currentColors) c.code: c};
 
-  // Colours in source but not in app → add them.
+  // Colors in source but not in app → add them.
   final added = sourceColors
       .where((c) => !currentByCode.containsKey(c.code))
       .toList();
 
-  // Colours in app but not in source → flag for review.
-  final potentiallyRetired = currentColors
-      .where((c) => !sourceByCode.containsKey(c.code))
+  // Colors in app but not in source (and not already in dmcReplacements) → retire them.
+  final retired = currentColors
+      .where((c) =>
+          !sourceByCode.containsKey(c.code) &&
+          !existingReplacementKeys.contains(c.code))
       .toList();
 
-  // Colours in both but with different name or hex in source.
+  // Colors in both but with different name or hex in source.
   final updated = currentColors.where((c) {
     final s = sourceByCode[c.code];
     if (s == null) return false;
     return s.name != c.name || s.hex != c.hex;
   }).toList();
 
-  if (added.isEmpty && updated.isEmpty) {
-    print('No changes to apply.');
-    if (potentiallyRetired.isNotEmpty) {
-      print(
-          '\n⚠️  ${potentiallyRetired.length} color(s) not found in source '
-          '(not auto-removed):');
-      for (final c in potentiallyRetired) {
-        print('  ${c.code.padRight(6)} ${c.name}');
-      }
-    }
+  if (added.isEmpty && updated.isEmpty && retired.isEmpty) {
+    print('No changes detected.');
     _setOutput('has_changes', 'false');
     exit(0);
   }
 
-  // Build new merged list:
-  // • Keep all current entries (updating name/hex from source where changed).
+  // Build new dmcColors list:
+  // • Keep current entries (updating name/hex where changed), excluding retired colors.
   // • Append newly added entries.
-  // • Never remove entries — retirements are flagged but handled manually.
+  final retiredCodes = {for (final c in retired) c.code};
   final merged = <_Color>[];
   for (final c in currentColors) {
+    if (retiredCodes.contains(c.code)) continue; // removed — moved to dmcReplacements
     final s = sourceByCode[c.code];
     if (s != null && (s.name != c.name || s.hex != c.hex)) {
-      // Update name and hex from source; preserve Anchor code.
       merged.add(_Color(c.code, s.name, s.hex, c.anchor));
     } else {
       merged.add(c);
     }
   }
   for (final c in added) {
-    merged.add(c); // anchor is null until looked up
+    merged.add(c);
   }
   merged.sort();
 
-  // Find the list boundaries in the current file and replace only that section.
+  // Apply changes to file.
+  var newContent = currentContent;
+
+  // Step 1: Insert placeholder entries for retired colors into dmcReplacements.
+  if (retired.isNotEmpty) {
+    const replHeader = 'const Map<String, String> dmcReplacements = {';
+    final rs = newContent.indexOf(replHeader);
+    final re = newContent.indexOf('\n};', rs + replHeader.length);
+    if (rs == -1 || re == -1) {
+      stderr.writeln('Error: could not find dmcReplacements map in $_colorsPath');
+      exit(1);
+    }
+    final newEntries = retired
+        .map((c) =>
+            "  '${c.code}': '', // ${c.name} (#${c.hex}) — possibly retired; fill in replacement")
+        .join('\n');
+    newContent = '${newContent.substring(0, re)}\n$newEntries${newContent.substring(re)}';
+  }
+
+  // Step 2: Replace the dmcColors list body.
   const listHeader = 'const List<DmcColor> dmcColors = [';
-  final listStart = currentContent.indexOf(listHeader);
+  final listStart = newContent.indexOf(listHeader);
   final listBodyStart = listStart + listHeader.length;
-  final listEnd = currentContent.indexOf('\n];', listBodyStart);
+  final listEnd = newContent.indexOf('\n];', listBodyStart);
   if (listStart == -1 || listEnd == -1) {
     stderr.writeln('Error: could not find dmcColors list in $_colorsPath');
     exit(1);
   }
-
   final newListBody = '\n${merged.map((c) => c.toDartLine()).join('\n')}\n';
-  final newContent = currentContent.substring(0, listBodyStart) +
-      newListBody +
-      currentContent.substring(listEnd);
+  newContent =
+      newContent.substring(0, listBodyStart) + newListBody + newContent.substring(listEnd);
 
   File(_colorsPath).writeAsStringSync(newContent);
 
   print('\nChanges applied:');
   if (added.isNotEmpty) print('  + ${added.length} added');
   if (updated.isNotEmpty) print('  ~ ${updated.length} updated (name/hex)');
-  if (potentiallyRetired.isNotEmpty) {
-    print(
-        '  ? ${potentiallyRetired.length} not in source (flagged, not removed)');
+  if (retired.isNotEmpty) {
+    print('  - ${retired.length} moved to dmcReplacements (replacement TBD)');
   }
 
-  // Optionally look up Anchor codes for new colors via Claude.
-  var anchorSuggestions = <String, String?>{};
-  final apiKey = Platform.environment['ANTHROPIC_API_KEY'];
-  if (apiKey != null && added.isNotEmpty) {
-    print('\nLooking up Anchor codes for ${added.length} new color(s)…');
-    anchorSuggestions = await _lookupAnchorCodes(added, apiKey);
-    print('Got ${anchorSuggestions.length} suggestions.');
-  }
-
-  _writePrBody(
-    added: added,
-    potentiallyRetired: potentiallyRetired,
-    updated: updated,
-    anchorSuggestions: anchorSuggestions,
-  );
-
+  _writePrBody(added: added, retired: retired, updated: updated);
   _setOutput('has_changes', 'true');
 }
