@@ -1,0 +1,36 @@
+test/pdf_logic_test.dart
+  20e809cb7893ad5c 203-232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "aff748caee2b823d7e59f8ae794245dba9613f7a",
+  "prompts": {
+    "20e809cb7893ad5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59a0ba94-3f15-4dcf-ad46-aa21b5f6e64d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 0,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    },
+    "d94158e370348870": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a0d5454-d9d2-4b99-89bb-76d325dd2140",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1380,
+      "overriden_lines": 0
+    }
+  }
+}
