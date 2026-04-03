@@ -34,20 +34,28 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _loading = false;
   StreamSubscription<String>? _incomingFileSub;
+  StreamSubscription<String>? _incomingFolderSub;
 
   @override
   void initState() {
     super.initState();
-    _incomingFileSub = IncomingFileService.stream.listen(_openFromIncomingPath);
+    _incomingFileSub = IncomingFileService.fileStream.listen(_openFromIncomingPath);
+    _incomingFolderSub = IncomingFileService.folderStream.listen(_openFromIncomingFolder);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final path = await IncomingFileService.getInitialFile();
-      if (path != null && mounted) await _openFromIncomingPath(path);
+      final path = await IncomingFileService.getInitialPath();
+      if (path == null || !mounted) return;
+      if (await FileSystemEntity.isDirectory(path)) {
+        await _openFromIncomingFolder(path);
+      } else {
+        await _openFromIncomingPath(path);
+      }
     });
   }
 
   @override
   void dispose() {
     _incomingFileSub?.cancel();
+    _incomingFolderSub?.cancel();
     super.dispose();
   }
 
@@ -109,6 +117,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Opens a folder delivered by the OS (Finder "Open With", drag-to-dock, etc.).
+  Future<void> _openFromIncomingFolder(String path) async {
+    ref.read(workspaceProvider.notifier).openWorkspace(LocalFolder(path));
+    ref.read(recentItemsProvider.notifier).add(path, isFolder: true);
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
+    );
   }
 
   Future<void> _openFolder() async {

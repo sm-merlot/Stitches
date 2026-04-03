@@ -1,33 +1,44 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 
-/// Handles .stitches files opened from outside the app (Finder, Files app,
-/// file managers, AirDrop, etc.) via the OS file-type association.
+/// Handles .stitches files and folders opened from outside the app
+/// (Finder, Files app, file managers, AirDrop, etc.) via OS file-type
+/// associations.
 ///
 /// Usage:
 ///   1. Call [listen] once at startup (after [WidgetsFlutterBinding.ensureInitialized]).
-///   2. In HomeScreen.initState, subscribe to [stream] and call [getInitialFile].
+///   2. In HomeScreen.initState, subscribe to [fileStream] / [folderStream]
+///      and call [getInitialPath].
 class IncomingFileService {
   static const _channel = MethodChannel('com.scme0.stitches/file_open');
-  static final _controller = StreamController<String>.broadcast();
+  static final _fileController = StreamController<String>.broadcast();
+  static final _folderController = StreamController<String>.broadcast();
 
   /// Emits a file path whenever the OS opens a .stitches file into a running app.
-  static Stream<String> get stream => _controller.stream;
+  static Stream<String> get fileStream => _fileController.stream;
+
+  /// Emits a folder path whenever the OS opens a folder into a running app.
+  static Stream<String> get folderStream => _folderController.stream;
 
   /// Register the method-call handler. Must be called after
   /// [WidgetsFlutterBinding.ensureInitialized] and before [runApp].
   static void listen() {
     _channel.setMethodCallHandler((call) async {
-      if (call.method == 'openFile') {
-        final path = call.arguments as String?;
-        if (path != null) _controller.add(path);
+      final path = call.arguments as String?;
+      if (path == null) return;
+      switch (call.method) {
+        case 'openFile':
+          _fileController.add(path);
+        case 'openFolder':
+          _folderController.add(path);
       }
     });
   }
 
-  /// Returns the file path the app was cold-started with, or null if the app
-  /// was launched normally. Clears the path on the native side after reading.
-  static Future<String?> getInitialFile() async {
+  /// Returns the path the app was cold-started with (file or folder), or null
+  /// if the app was launched normally. Checks the type and routes accordingly;
+  /// also returns the path so the caller can route it.
+  static Future<String?> getInitialPath() async {
     try {
       return await _channel.invokeMethod<String>('getInitialFile');
     } catch (_) {

@@ -23,11 +23,11 @@ class AppDelegate: FlutterAppDelegate {
     return true
   }
 
-  // ── File open callbacks ────────────────────────────────────────────────────
+  // ── File/folder open callbacks ─────────────────────────────────────────────
 
   // Modern URL-based API (preferred on macOS 12+).
   override func application(_ application: NSApplication, open urls: [URL]) {
-    for url in urls where url.isFileURL && url.path.hasSuffix(".stitches") {
+    for url in urls where url.isFileURL {
       deliver(url.path)
       break
     }
@@ -35,13 +35,13 @@ class AppDelegate: FlutterAppDelegate {
 
   // Legacy string-based API — kept for compatibility with older macOS.
   override func application(_ sender: NSApplication, openFile filename: String) -> Bool {
-    guard filename.hasSuffix(".stitches") else { return false }
+    guard isAccepted(filename) else { return false }
     deliver(filename)
     return true
   }
 
   override func application(_ sender: NSApplication, openFiles filenames: [String]) {
-    for filename in filenames where filename.hasSuffix(".stitches") {
+    for filename in filenames where isAccepted(filename) {
       deliver(filename)
       break
     }
@@ -75,13 +75,23 @@ class AppDelegate: FlutterAppDelegate {
     return ch
   }
 
-  /// Sends the path to Flutter if the engine is ready, otherwise queues it
-  /// for retrieval via getInitialFile.
+  /// Returns true for paths this app handles: .stitches files and directories.
+  private func isAccepted(_ path: String) -> Bool {
+    var isDir: ObjCBool = false
+    FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+    return isDir.boolValue || path.hasSuffix(".stitches")
+  }
+
+  /// Sends the path to Flutter. Directories go as `openFolder`; files as `openFile`.
+  /// Queues the path if the engine isn't ready yet.
   private func deliver(_ path: String) {
+    var isDir: ObjCBool = false
+    FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+    let method = isDir.boolValue ? "openFolder" : "openFile"
     if let ch = ensureChannel() {
-      ch.invokeMethod("openFile", arguments: path)
+      ch.invokeMethod(method, arguments: path)
     } else {
-      initialFilePath = path
+      initialFilePath = path // cold-start queue (file or folder)
     }
   }
 }

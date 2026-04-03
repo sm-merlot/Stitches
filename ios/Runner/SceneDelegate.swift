@@ -4,8 +4,9 @@ import UIKit
 private let kFileOpenChannel = "com.scme0.stitches/file_open"
 
 class SceneDelegate: FlutterSceneDelegate {
-  /// Queued path for cold-start file opens (set before Flutter is ready).
-  private static var pendingFilePath: String?
+  /// Queued path for cold-start opens (file or folder) — set before Flutter is ready.
+  private static var pendingPath: String?
+  private static var pendingMethod: String?
 
   // MARK: - Scene lifecycle
 
@@ -16,34 +17,32 @@ class SceneDelegate: FlutterSceneDelegate {
   ) {
     super.scene(scene, willConnectTo: session, options: connectionOptions)
 
-    // After super returns, the FlutterViewController is the root view controller.
-    // Register the getInitialFile handler so Flutter can retrieve a cold-start path.
+    // After super returns the FlutterViewController is the root view controller.
     if let ctrl = flutterViewController {
       let ch = FlutterMethodChannel(name: kFileOpenChannel, binaryMessenger: ctrl.binaryMessenger)
-      ch.setMethodCallHandler { call, result in
-        switch call.method {
-        case "getInitialFile":
-          result(SceneDelegate.pendingFilePath)
-          SceneDelegate.pendingFilePath = nil
-        default:
-          result(FlutterMethodNotImplemented)
-        }
+      ch.setMethodCallHandler { _, result in
+        result(SceneDelegate.pendingPath)
+        SceneDelegate.pendingPath = nil
+        SceneDelegate.pendingMethod = nil
       }
     }
 
-    // Check for a file URL delivered at cold-start.
+    // Check for a URL delivered at cold-start.
     if let url = connectionOptions.urlContexts.first?.url {
-      SceneDelegate.pendingFilePath = copyToTemp(url)
+      let (method, path) = resolve(url)
+      SceneDelegate.pendingPath = path
+      SceneDelegate.pendingMethod = method
     }
   }
 
-  // Called when a .stitches file is opened into an already-running app.
+  // Called when a file or folder is opened into an already-running app.
   override func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
     guard let url = URLContexts.first?.url,
-          let path = copyToTemp(url),
           let ctrl = flutterViewController else { return }
+    let (method, path) = resolve(url)
+    guard let path = path else { return }
     let ch = FlutterMethodChannel(name: kFileOpenChannel, binaryMessenger: ctrl.binaryMessenger)
-    ch.invokeMethod("openFile", arguments: path)
+    ch.invokeMethod(method, arguments: path)
   }
 
   // MARK: - Helpers
@@ -52,10 +51,22 @@ class SceneDelegate: FlutterSceneDelegate {
     window?.rootViewController as? FlutterViewController
   }
 
-  /// Copies the incoming file URL to the app's temp directory and returns the
-  /// new path. Handles security-scoped resources from other app sandboxes.
+  /// Determines the Flutter method name and resolved path for an incoming URL.
+  /// Directories are passed through directly; files are copied to the temp dir.
+  private func resolve(_ url: URL) -> (method: String, path: String?) {
+    guard url.isFileURL else { return ("openFile", nil) }
+    var isDir: ObjCBool = false
+    FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+    if isDir.boolValue {
+      return ("openFolder", url.path)
+    } else {
+      return ("openFile", copyToTemp(url))
+    }
+  }
+
+  /// Copies an incoming file URL to the app's temp directory. Handles
+  /// security-scoped resources from other app sandboxes.
   private func copyToTemp(_ url: URL) -> String? {
-    guard url.isFileURL else { return nil }
     let accessed = url.startAccessingSecurityScopedResource()
     defer { if accessed { url.stopAccessingSecurityScopedResource() } }
     let dest = FileManager.default.temporaryDirectory
