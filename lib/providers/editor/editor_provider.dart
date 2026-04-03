@@ -504,7 +504,7 @@ class EditorNotifier extends Notifier<EditorState>
       }
     }
 
-    if (stitchMode) refreshCompositeCache();
+    refreshCompositeCache();
 
     if (withSymbols.referenceImagePath != null) {
       ReferenceImageService.decodeFromPath(withSymbols.referenceImagePath!)
