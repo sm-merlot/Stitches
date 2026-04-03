@@ -10,12 +10,11 @@ import 'package:pdf/widgets.dart' as pw;
 import '../data/aida_presets.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
-import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import 'skein_calculator.dart';
-import 'sprite_importer.dart';
+import 'stitch_compositor.dart';
 
 typedef _PdfFonts = ({
   PdfFont regular,
@@ -43,69 +42,35 @@ class PdfService {
           await rootBundle.load('assets/fonts/NotoSansSymbols2-Regular.ttf')),
     ) as _PdfFonts;
 
-    // ── Data prep ──────────────────────────────────────────────────────────
+    // ── Data prep ──────────────────────────────────────────────────────────────
 
     final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
 
-    // Composite non-back stitches across visible layers: deduplicates FullStitches
-    // at the same cell using each layer's blend mode — matches 'stitch mode' canvas.
-    final (:nonBack, :blendedColors) = _compositeNonBack(pattern, threadMap);
+    // Single composite pass — matches the canvas view exactly.
+    final compositeResult = StitchCompositor.compute(pattern);
 
-    // For blended cells, snap to the nearest-DMC colour and symbol so the PDF
-    // grid matches the canvas composite view exactly. The raw blend colour
-    // (blendedColors) is kept as a fallback only when matchPixel fails.
+    // For blended cells, derive display color and symbol from CompositeResult.
     final blendedCellColors = <String, Color>{};
     final blendedCellSymbols = <String, String>{};
-    for (final entry in blendedColors.entries) {
-      final c = entry.value;
-      final r = (c.r * 255).round();
-      final g = (c.g * 255).round();
-      final b = (c.b * 255).round();
-      final dmc = SpriteImporter.matchPixel(r, g, b, 255);
-      if (dmc != null) {
-        blendedCellColors[entry.key] = dmc.color; // exact DMC colour, not raw blend
-        final sym = pattern.compositeSymbols[dmc.code] ?? '';
+    for (final key in compositeResult.blendedColors.keys) {
+      final t = compositeResult.compositeThreads[key];
+      if (t != null) {
+        blendedCellColors[key] = t.color;
+        final sym = pattern.compositeSymbols[t.dmcCode] ?? '';
         if (symbolIsVisible(sym) && !kPdfUnsupportedSymbols.contains(sym)) {
-          blendedCellSymbols[entry.key] = sym;
+          blendedCellSymbols[key] = sym;
         }
       }
     }
 
-    // Backstitches: no deduplication needed (backstitches never fully occlude).
-    final backstitches = pattern.layers
-        .where((l) => l.visible)
-        .expand((l) => l.stitches)
-        .whereType<BackStitch>()
-        .toList();
+    final nonBack = compositeResult.dedupedNonBack;
+    final backstitches = compositeResult.backstitches;
+    final blendedColors = compositeResult.blendedColors;
 
-    // Stitch counts from all raw layer stitches — not the deduped composites —
-    // so every thread (including blend-layer overlays) gets a correct count.
-    final crossStitchEquiv = <String, double>{};
-    final backStitchEquiv = <String, double>{};
-    for (final layer in pattern.layers) {
-      if (!layer.visible) continue;
-      for (final s in layer.stitches) {
-        if (s is BackStitch) {
-          final v = math.sqrt(
-              math.pow(s.x2 - s.x1, 2) + math.pow(s.y2 - s.y1, 2));
-          backStitchEquiv[s.threadId] =
-              (backStitchEquiv[s.threadId] ?? 0) + v;
-        } else {
-          final v = switch (s) {
-            FullStitch() => 1.0,
-            HalfStitch() => 0.5,
-            HalfCrossStitch() => 0.5,
-            QuarterStitch() => 0.25,
-            QuarterCrossStitch() => 0.25,
-            BackStitch() => 0.0, // unreachable
-          };
-          if (v > 0) {
-            crossStitchEquiv[s.threadId] =
-                (crossStitchEquiv[s.threadId] ?? 0) + v;
-          }
-        }
-      }
-    }
+    // Stitch counts from the composite view (one stitch per cell regardless
+    // of how many layers contributed to it — matches what the stitcher actually stitches).
+    final crossStitchEquiv = compositeResult.crossStitchEquiv;
+    final backStitchEquiv = compositeResult.backStitchEquiv;
 
     // Threads that have cross-type stitches / backstitches respectively,
     // sorted by DMC number so colour tables are easy to reference.
@@ -115,11 +80,18 @@ class PdfService {
       return ia != ib ? ia.compareTo(ib) : a.dmcCode.compareTo(b.dmcCode);
     }
 
-    final crossThreads = pattern.threads
+    // Build thread objects for all dmcCodes that appear in the composite counts.
+    // Source threads come from pattern.threads; composite (blended) threads come
+    // from compositeResult.compositeThreads values.
+    final allCompositeThreads = <String, Thread>{
+      for (final t in pattern.threads) t.dmcCode: t,
+      for (final t in compositeResult.compositeThreads.values) t.dmcCode: t,
+    };
+    final crossThreads = allCompositeThreads.values
         .where((t) => crossStitchEquiv.containsKey(t.dmcCode))
         .toList()
       ..sort(dmcSort);
-    final backThreads = pattern.threads
+    final backThreads = allCompositeThreads.values
         .where((t) => backStitchEquiv.containsKey(t.dmcCode))
         .toList()
       ..sort(dmcSort);
@@ -1846,79 +1818,6 @@ class PdfService {
 
   static PdfColor _pdfColor(Color c) =>
       PdfColor(c.r.toDouble(), c.g.toDouble(), c.b.toDouble());
-
-  // ── Layer compositing ─────────────────────────────────────────────────────
-
-  /// Composites non-BackStitch stitches from all visible layers, matching the
-  /// 'stitch mode' canvas. FullStitches at the same cell are deduplicated
-  /// (topmost layer wins for symbol/threadId) and their colours are blended
-  /// using each layer's blend mode. All other stitch types pass through as-is.
-  @visibleForTesting
-  static ({List<Stitch> nonBack, Map<String, Color> blendedColors})
-      compositeNonBackForTest(
-              CrossStitchPattern pattern, Map<String, Thread> threadMap) =>
-          _compositeNonBack(pattern, threadMap);
-
-  static ({List<Stitch> nonBack, Map<String, Color> blendedColors})
-      _compositeNonBack(
-          CrossStitchPattern pattern, Map<String, Thread> threadMap) {
-    final cellStack = <String,
-        List<({
-          Stitch stitch,
-          Color color,
-          double opacity,
-          LayerBlendMode blendMode
-        })>>{};
-    final otherNonBack = <Stitch>[];
-
-    for (final layer in pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        if (stitch is FullStitch) {
-          final thread = threadMap[stitch.threadId];
-          if (thread == null) continue;
-          final key = '${stitch.x},${stitch.y}';
-          (cellStack[key] ??= []).add((
-            stitch: stitch,
-            color: thread.color,
-            opacity: layer.opacity,
-            blendMode: layer.blendMode,
-          ));
-        } else {
-          otherNonBack.add(stitch);
-        }
-      }
-    }
-
-    final deduped = <Stitch>[];
-    final blendedColors = <String, Color>{};
-
-    for (final entry in cellStack.entries) {
-      final stack = entry.value;
-      // Symbol/threadId: topmost layer wins only when it fully covers (Normal
-      // blend at ≥99% opacity). For Add/Screen/Multiply/etc. the bottom layer
-      // provides the primary thread identity — its symbol distinguishes the
-      // different coloured areas of the base pattern.
-      final top = stack.last;
-      final symbolStitch =
-          (top.blendMode == LayerBlendMode.normal && top.opacity >= 0.99)
-              ? top.stitch
-              : stack.first.stitch;
-      deduped.add(symbolStitch);
-      if (stack.length > 1) {
-        var blended = stack.first.color;
-        for (int i = 1; i < stack.length; i++) {
-          blended = stack[i]
-              .blendMode
-              .apply(blended, stack[i].color, stack[i].opacity);
-        }
-        blendedColors[entry.key] = blended;
-      }
-    }
-
-    return (nonBack: [...deduped, ...otherNonBack], blendedColors: blendedColors);
-  }
 
   // ── Realistic stitch line-art ─────────────────────────────────────────────
 
