@@ -212,10 +212,10 @@ class _DesignColoursPanel extends ConsumerWidget {
   }
 
   List<Thread> _compositeThreads(EditorState state) {
-    if (state.compositeThreadCache != null &&
-        state.compositeThreadCache!.isNotEmpty) {
+    final cache = state.compositeResult?.compositeThreads;
+    if (cache != null && cache.isNotEmpty) {
       final unique = <String, Thread>{};
-      for (final t in state.compositeThreadCache!.values) {
+      for (final t in cache.values) {
         unique[t.dmcCode] = t;
       }
       return unique.values.toList();
@@ -289,7 +289,7 @@ Map<String, int> _countStitches(List<Stitch> stitches) {
 /// Counts stitches using the composite cache for FullStitches (deduplicates
 /// cells shared across layers) and raw threadId for non-FullStitch types.
 Map<String, int> _countStitchesComposite(EditorState state) {
-  final cache = state.compositeThreadCache;
+  final cache = state.compositeResult?.compositeThreads;
   if (cache == null || cache.isEmpty) {
     return _countStitches(state.pattern.stitches);
   }
@@ -403,10 +403,10 @@ class _StitchColoursPanel extends ConsumerWidget {
   }
 
   List<Thread> _compositeThreads(EditorState state) {
-    if (state.compositeThreadCache != null &&
-        state.compositeThreadCache!.isNotEmpty) {
+    final cache = state.compositeResult?.compositeThreads;
+    if (cache != null && cache.isNotEmpty) {
       final unique = <String, Thread>{};
-      for (final t in state.compositeThreadCache!.values) {
+      for (final t in cache.values) {
         unique[t.dmcCode] = t;
       }
       return unique.values.toList();
