@@ -1,0 +1,23 @@
+macos/Runner/AppDelegate.swift
+  20e809cb7893ad5c 8-9,15,26-33,36,46-72,74-75,78-79,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "16b1953972abdd915d312e96ee259d18e1ed278d",
+  "prompts": {
+    "20e809cb7893ad5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59a0ba94-3f15-4dcf-ad46-aa21b5f6e64d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 46,
+      "total_deletions": 22,
+      "accepted_lines": 46,
+      "overriden_lines": 0
+    }
+  }
+}
