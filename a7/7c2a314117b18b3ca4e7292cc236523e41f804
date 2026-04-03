@@ -1,0 +1,23 @@
+docs/superpowers/specs/2026-04-03-page-mode-design.md
+  20e809cb7893ad5c 1-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "a77c2a314117b18b3ca4e7292cc236523e41f804",
+  "prompts": {
+    "20e809cb7893ad5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "59a0ba94-3f15-4dcf-ad46-aa21b5f6e64d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 139,
+      "total_deletions": 1,
+      "accepted_lines": 138,
+      "overriden_lines": 0
+    }
+  }
+}
