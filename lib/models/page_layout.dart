@@ -25,6 +25,11 @@ class PageLayout {
   /// horizontalOffsets[boundaryRow][col] = offset delta from nominal boundary.
   final Map<int, Map<int, int>> horizontalOffsets;
 
+  /// page index → set of encoded cell keys excluded by the corner connectivity
+  /// post-pass (cells that pass raw boundary checks but are disconnected from
+  /// the page interior due to fuzzy corner interaction).
+  final Map<int, Set<int>> _excludedCells;
+
   PageLayout._({
     required this.config,
     required this.patternWidth,
@@ -33,7 +38,8 @@ class PageLayout {
     required this.pagesDown,
     required this.verticalOffsets,
     required this.horizontalOffsets,
-  });
+    required Map<int, Set<int>> excludedCells,
+  }) : _excludedCells = excludedCells;
 
   int get totalPages => pagesAcross * pagesDown;
 
@@ -78,20 +84,16 @@ class PageLayout {
 
   /// Whether the stitch at (x=col, y=row) belongs to page (pageCol, pageRow).
   ///
-  /// A connectivity guard is applied: the cell must also have at least one
-  /// orthogonal neighbour that passes the boundary check. This prevents
-  /// floating corner cells that arise when independent vertical and horizontal
-  /// fuzzy offsets converge at a page corner.
+  /// Cells near page corners are checked against a precomputed exclusion set
+  /// that removes any island groups disconnected from the page interior (a
+  /// consequence of vertical and horizontal fuzzy offsets being computed
+  /// independently and converging at corners).
   bool cellOnPage(int col, int row, int pageCol, int pageRow) {
     if (!_boundaryCheck(col, row, pageCol, pageRow)) return false;
-    return _boundaryCheck(col - 1, row, pageCol, pageRow) ||
-        _boundaryCheck(col + 1, row, pageCol, pageRow) ||
-        _boundaryCheck(col, row - 1, pageCol, pageRow) ||
-        _boundaryCheck(col, row + 1, pageCol, pageRow);
+    final excluded = _excludedCells[pageRow * pagesAcross + pageCol];
+    return excluded == null || !excluded.contains(_encodeCell(col, row));
   }
 
-  /// Raw boundary check without connectivity guard. Used internally by
-  /// [cellOnPage] to test neighbours without infinite recursion.
   bool _boundaryCheck(int col, int row, int pageCol, int pageRow) {
     if (col < 0 || col >= patternWidth || row < 0 || row >= patternHeight) {
       return false;
@@ -118,6 +120,8 @@ class PageLayout {
         .toDouble();
     return Rect.fromLTRB(left, top, right, bottom);
   }
+
+  static int _encodeCell(int col, int row) => (col << 16) | row;
 
   /// Build a [PageLayout] from [config] and the pattern's current stitch data.
   ///
@@ -181,6 +185,142 @@ class PageLayout {
       horizontalOffsets[boundaryRow] = colOffsets;
     }
 
+    // ── Corner connectivity post-pass ────────────────────────────────────────
+    // Independent vertical and horizontal fuzzy offsets can create isolated
+    // groups of cells at page corners. For each internal corner (where a
+    // vertical and a horizontal boundary cross), flood-fill from cells
+    // connected to the page interior and exclude any that aren't reachable.
+    //
+    // "Interior-connected" means: the cell has at least one orthogonal
+    // neighbour that is on the page but OUTSIDE the corner region.
+    //
+    // Only cells within the corner region (cols within fa of the vertical
+    // boundary AND rows within fa of the horizontal boundary) can be affected.
+
+    // Local raw-boundary check closure (mirrors instance _boundaryCheck).
+    bool rawOnPage(int col, int row, int px, int py) {
+      if (col < 0 || col >= pattern.width || row < 0 || row >= pattern.height) {
+        return false;
+      }
+      final leftNom = px * config.pageWidth;
+      final left = px == 0
+          ? 0
+          : (leftNom + (verticalOffsets[leftNom]?[row] ?? 0))
+              .clamp(0, pattern.width);
+      final rightNom = (px + 1) * config.pageWidth;
+      final right = px >= pagesAcross - 1
+          ? pattern.width
+          : (rightNom + (verticalOffsets[rightNom]?[row] ?? 0))
+              .clamp(0, pattern.width);
+      final topNom = py * config.pageHeight;
+      final top = py == 0
+          ? 0
+          : (topNom + (horizontalOffsets[topNom]?[col] ?? 0))
+              .clamp(0, pattern.height);
+      final bottomNom = (py + 1) * config.pageHeight;
+      final bottom = py >= pagesDown - 1
+          ? pattern.height
+          : (bottomNom + (horizontalOffsets[bottomNom]?[col] ?? 0))
+              .clamp(0, pattern.height);
+      return col >= left && col < right && row >= top && row < bottom;
+    }
+
+    final Map<int, Set<int>> excludedCells = {};
+
+    if (config.fuzzyAmount > 0) {
+      final fa = config.fuzzyAmount;
+
+      for (int py = 0; py < pagesDown; py++) {
+        for (int px = 0; px < pagesAcross; px++) {
+          final pageIdx = py * pagesAcross + px;
+
+          // The internal corners of this page: where a vertical boundary
+          // (cx ∈ [1, pagesAcross-1]) and horizontal boundary
+          // (cy ∈ [1, pagesDown-1]) both exist.
+          for (int cx = px; cx <= px + 1; cx++) {
+            if (cx == 0 || cx >= pagesAcross) continue;
+            for (int cy = py; cy <= py + 1; cy++) {
+              if (cy == 0 || cy >= pagesDown) continue;
+
+              final bv = cx * config.pageWidth;
+              final bh = cy * config.pageHeight;
+
+              // Corner region: cells within fa of both boundaries.
+              final cMinC = (bv - fa).clamp(0, pattern.width - 1);
+              final cMaxC = (bv + fa - 1).clamp(0, pattern.width - 1);
+              final cMinR = (bh - fa).clamp(0, pattern.height - 1);
+              final cMaxR = (bh + fa - 1).clamp(0, pattern.height - 1);
+
+              // Collect all cells in the corner region that pass raw boundary.
+              final Set<int> regionOnPage = {};
+              for (int c = cMinC; c <= cMaxC; c++) {
+                for (int r = cMinR; r <= cMaxR; r++) {
+                  if (rawOnPage(c, r, px, py)) {
+                    regionOnPage.add(_encodeCell(c, r));
+                  }
+                }
+              }
+              if (regionOnPage.isEmpty) continue;
+
+              // BFS: seed with region cells that have a non-region neighbour
+              // also on the page (i.e., connected to the interior).
+              final Set<int> connected = {};
+              final List<int> queue = [];
+
+              for (final key in regionOnPage) {
+                final c = key >> 16;
+                final r = key & 0xFFFF;
+                bool isConnected = false;
+                for (final d in [
+                  (-1, 0), (1, 0), (0, -1), (0, 1)
+                ]) {
+                  final nc = c + d.$1;
+                  final nr = r + d.$2;
+                  if (nc < cMinC || nc > cMaxC || nr < cMinR || nr > cMaxR) {
+                    // Outside corner region — if it's on the page, this cell
+                    // is connected to the interior.
+                    if (rawOnPage(nc, nr, px, py)) {
+                      isConnected = true;
+                      break;
+                    }
+                  }
+                }
+                if (isConnected) {
+                  connected.add(key);
+                  queue.add(key);
+                }
+              }
+
+              // Flood-fill within the region.
+              int qi = 0;
+              while (qi < queue.length) {
+                final key = queue[qi++];
+                final c = key >> 16;
+                final r = key & 0xFFFF;
+                for (final d in [(-1, 0), (1, 0), (0, -1), (0, 1)]) {
+                  final nc = c + d.$1;
+                  final nr = r + d.$2;
+                  final nkey = _encodeCell(nc, nr);
+                  if (regionOnPage.contains(nkey) &&
+                      !connected.contains(nkey)) {
+                    connected.add(nkey);
+                    queue.add(nkey);
+                  }
+                }
+              }
+
+              // Any cell on-page in the region but not reached → excluded.
+              for (final key in regionOnPage) {
+                if (!connected.contains(key)) {
+                  excludedCells.putIfAbsent(pageIdx, () => {}).add(key);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     return PageLayout._(
       config: config,
       patternWidth: pattern.width,
@@ -189,6 +329,7 @@ class PageLayout {
       pagesDown: pagesDown,
       verticalOffsets: verticalOffsets,
       horizontalOffsets: horizontalOffsets,
+      excludedCells: excludedCells,
     );
   }
 
