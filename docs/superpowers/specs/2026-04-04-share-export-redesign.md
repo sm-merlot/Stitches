@@ -2,8 +2,10 @@
 
 **Date:** 2026-04-04
 **Status:** Approved, awaiting implementation
-**Depends on:** Three-Mode Architecture (Share lives in View mode)
-**Related:** File Format v2 (progress stripping on share)
+**Depends on:** None — can be implemented independently of the other specs
+**Soft dependencies:**
+- Three-Mode Architecture: affects *where* the Share button lives (View mode AppBar). Without it, place the button in the current design mode AppBar and relocate when three-mode lands.
+- File Format v2 + Progress Tracking: only needed for the "strip progress on share" toggle. Until progress tracking exists, simply always omit the `progress:` key on share — no toggle needed.
 
 ---
 
