@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/page_layout.dart';
 import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
@@ -97,6 +98,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // All other gestures save directly on pointer-up / trackpad-zoom-end.
   Timer? _viewSaveTimer;
 
+  // ── Canvas size tracking (updated via LayoutBuilder) ──────────────────────
+  Size _canvasSize = Size.zero;
+
   void _saveViewPosition() {
     ref.read(editorProvider.notifier)
         .updateViewPosition(_panOffset.dx, _panOffset.dy, _scale);
@@ -105,6 +109,35 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   void _debouncedSaveViewPosition() {
     _viewSaveTimer?.cancel();
     _viewSaveTimer = Timer(const Duration(milliseconds: 400), _saveViewPosition);
+  }
+
+  /// Compute pan/scale so [pageIndex] fills the canvas with padding, then
+  /// animate to that view. Called when [EditorState.pendingFitPage] fires.
+  void _fitToPage(EditorState state, int pageIndex) {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final size = _canvasSize;
+    if (size.isEmpty) return;
+
+    final (pageCol, pageRow) = layout.pageCoords(pageIndex);
+    final rect = layout.nominalPageRect(pageCol, pageRow);
+    if (rect.isEmpty) return;
+
+    const padding = 24.0;
+    final availW = size.width - padding * 2;
+    final availH = size.height - padding * 2;
+    final newScale = math.min(availW / (rect.width * _cellSize),
+                              availH / (rect.height * _cellSize));
+    final pagePixelW = rect.width * _cellSize * newScale;
+    final pagePixelH = rect.height * _cellSize * newScale;
+    final newPanX = padding + (availW - pagePixelW) / 2 - rect.left * _cellSize * newScale;
+    final newPanY = padding + (availH - pagePixelH) / 2 - rect.top * _cellSize * newScale;
+
+    setState(() {
+      _scale = newScale;
+      _panOffset = Offset(newPanX, newPanY);
+    });
+    ref.read(editorProvider.notifier).updateViewPosition(newPanX, newPanY, newScale);
   }
 
   // ── Frame-coalesced rebuild ────────────────────────────────────────────────
@@ -1070,6 +1103,16 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           }
         });
       }
+      // Fit canvas to page when page mode navigates.
+      if (next.pendingFitPage != null &&
+          next.pendingFitPage != prev?.pendingFitPage) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _fitToPage(next, next.pendingFitPage!);
+            ref.read(editorProvider.notifier).clearPendingFitPage();
+          }
+        });
+      }
     });
     final isErasing = state.drawingMode == DrawingMode.erase;
     final isDrawCursor = state.drawingMode == DrawingMode.draw;
@@ -1099,7 +1142,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           state.selectedStitches.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
     }
 
-    return MouseRegion(
+    final pageModeActive = state.stitchMode &&
+        state.pattern.pageConfig.enabled &&
+        state.pageLayout != null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _canvasSize = constraints.biggest;
+        return MouseRegion(
       cursor: _cursor(state),
       onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
       child: Listener(
@@ -1135,6 +1185,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   referenceVisible: state.referenceVisible,
                   compositeResult: state.compositeResult,
                   paletteOverride: _getOrBuildPaletteOverride(state),
+                  pageLayout: state.pageLayout,
+                  currentPage: state.currentPage,
                 ),
                 isComplex: true,
                 size: Size.infinite,
@@ -1202,9 +1254,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               ),
               size: Size.infinite,
             ),
+            // Page navigation chrome — directional arrows + page indicator.
+            if (pageModeActive)
+              _PageNavOverlay(
+                layout: state.pageLayout!,
+                currentPage: state.currentPage,
+                onLeft:  () => ref.read(editorProvider.notifier).navigatePageLeft(),
+                onRight: () => ref.read(editorProvider.notifier).navigatePageRight(),
+                onUp:    () => ref.read(editorProvider.notifier).navigatePageUp(),
+                onDown:  () => ref.read(editorProvider.notifier).navigatePageDown(),
+                onPageTap: (page) => ref.read(editorProvider.notifier).navigatePage(page),
+              ),
           ],
         ),
       ),
+    );
+    },
     );
   }
 
@@ -1224,5 +1289,235 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               ? SystemMouseCursors.move
               : SystemMouseCursors.cell,
     };
+  }
+}
+
+// ─── Page navigation chrome ───────────────────────────────────────────────────
+
+class _PageNavOverlay extends StatelessWidget {
+  final PageLayout layout;
+  final int currentPage;
+  final VoidCallback onLeft;
+  final VoidCallback onRight;
+  final VoidCallback onUp;
+  final VoidCallback onDown;
+  final void Function(int page) onPageTap;
+
+  const _PageNavOverlay({
+    required this.layout,
+    required this.currentPage,
+    required this.onLeft,
+    required this.onRight,
+    required this.onUp,
+    required this.onDown,
+    required this.onPageTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = layout.totalPages;
+    final (col, row) = layout.pageCoords(currentPage);
+    final hasLeft  = col > 0;
+    final hasRight = col < layout.pagesAcross - 1;
+    final hasUp    = row > 0;
+    final hasDown  = row < layout.pagesDown - 1;
+    const buttonStyle = TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600);
+
+    return Stack(
+      children: [
+        // Left arrow — left edge
+        if (hasLeft)
+          Positioned(
+            left: 0, top: 0, bottom: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.chevron_left, onTap: onLeft)),
+          ),
+        // Right arrow — right edge
+        if (hasRight)
+          Positioned(
+            right: 0, top: 0, bottom: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.chevron_right, onTap: onRight)),
+          ),
+        // Up arrow — top centre
+        if (hasUp)
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.expand_less, horizontal: false, onTap: onUp)),
+          ),
+        // Down arrow — bottom centre (above page indicator)
+        if (hasDown)
+          Positioned(
+            bottom: 52, left: 0, right: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.expand_more, horizontal: false, onTap: onDown)),
+          ),
+        // Page indicator — bottom centre
+        Positioned(
+          bottom: 16,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: GestureDetector(
+              onTap: () => _showPageGrid(context),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${currentPage + 1} / $total',
+                  style: buttonStyle,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showPageGrid(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _PageGridSheet(
+        layout: layout,
+        currentPage: currentPage,
+        onPageTap: (page) {
+          Navigator.of(context).pop();
+          onPageTap(page);
+        },
+      ),
+    );
+  }
+}
+
+class _NavArrowButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  /// True for left/right arrows (tall and narrow); false for up/down (wide and short).
+  final bool horizontal;
+
+  const _NavArrowButton({
+    required this.icon,
+    required this.onTap,
+    this.horizontal = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: horizontal ? 36 : 64,
+        height: horizontal ? 64 : 36,
+        margin: horizontal
+            ? const EdgeInsets.symmetric(horizontal: 4)
+            : const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: Colors.white, size: 28),
+      ),
+    );
+  }
+}
+
+// ─── Page grid sheet ──────────────────────────────────────────────────────────
+
+class _PageGridSheet extends StatelessWidget {
+  final PageLayout layout;
+  final int currentPage;
+  final void Function(int page) onPageTap;
+
+  const _PageGridSheet({
+    required this.layout,
+    required this.currentPage,
+    required this.onPageTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = layout.totalPages;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.45,
+      minChildSize: 0.25,
+      maxChildSize: 0.85,
+      builder: (context, scrollController) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Text('Pages', style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                Text('$total total', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          Expanded(
+            child: GridView.builder(
+              controller: scrollController,
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 88,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemCount: total,
+              itemBuilder: (context, index) {
+                final isActive = index == currentPage;
+                final (col, row) = layout.pageCoords(index);
+                return GestureDetector(
+                  onTap: () => onPageTap(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? colorScheme.primaryContainer
+                          : colorScheme.surfaceContainerHighest,
+                      border: Border.all(
+                        color: isActive
+                            ? colorScheme.primary
+                            : colorScheme.outlineVariant,
+                        width: isActive ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isActive
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurface,
+                          ),
+                        ),
+                        Text(
+                          '${col + 1}×${row + 1}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isActive
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

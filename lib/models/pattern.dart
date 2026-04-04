@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../data/dmc_colors.dart';
 import 'layer.dart';
 import 'layer_item.dart';
+import 'page_config.dart';
 import 'snippet.dart';
 import 'stitch.dart';
 import 'thread.dart';
@@ -58,6 +59,9 @@ class CrossStitchPattern {
   /// Materials suggestions: list of {aidaCount, strands} records.
   final List<({int aidaCount, int strands})> materialsSuggestions;
 
+  /// Page mode configuration — how the pattern is split into pages.
+  final PageConfig pageConfig;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -83,6 +87,7 @@ class CrossStitchPattern {
     this.estimatedHours,
     this.copyright,
     this.materialsSuggestions = const [],
+    this.pageConfig = PageConfig.disabled,
   });
 
   /// Flattened list of all layers, applying group visibility overrides.
@@ -180,6 +185,7 @@ class CrossStitchPattern {
     Object? estimatedHours = _sentinel,
     Object? copyright = _sentinel,
     List<({int aidaCount, int strands})>? materialsSuggestions,
+    PageConfig? pageConfig,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -216,6 +222,7 @@ class CrossStitchPattern {
       estimatedHours: estimatedHours == _sentinel ? this.estimatedHours : estimatedHours as String?,
       copyright: copyright == _sentinel ? this.copyright : copyright as String?,
       materialsSuggestions: materialsSuggestions ?? this.materialsSuggestions,
+      pageConfig: pageConfig ?? this.pageConfig,
     );
   }
 
@@ -337,6 +344,9 @@ class CrossStitchPattern {
       materialsSuggestions: (yaml['materialsSuggestions'] as List? ?? [])
           .map((e) => (aidaCount: e['aidaCount'] as int, strands: e['strands'] as int))
           .toList(),
+      pageConfig: yaml['pageMode'] != null
+          ? PageConfig.fromYaml(yaml['pageMode'] as Map)
+          : PageConfig.disabled,
     );
     return _migrateDiscontinuedThreads(parsed);
   }

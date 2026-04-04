@@ -42,6 +42,7 @@ import 'pattern_scan_review_screen.dart';
 import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
+import 'page_mode_dialog.dart';
 
 part 'workspace_screen_components.dart';
 
@@ -956,8 +957,25 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ],
               ),
             ],
-            // Stitch mode actions — Materials + Demo + Screen Lock
+            // Stitch mode actions — Page Mode + Materials + Demo + Screen Lock
             if (editorState.isFileOpen && editorState.stitchMode && openPdf == null) ...[
+              IconButton(
+                tooltip: editorState.pattern.pageConfig.enabled
+                    ? 'Page mode: on'
+                    : 'Page mode: off',
+                isSelected: editorState.pattern.pageConfig.enabled,
+                icon: const Icon(Icons.auto_stories_outlined),
+                selectedIcon: const Icon(Icons.auto_stories),
+                onPressed: () => showPageModeDialog(context, ref),
+                style: editorState.pattern.pageConfig.enabled
+                    ? IconButton.styleFrom(
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
+              ),
               IconButton(
                 tooltip: 'Materials list',
                 icon: const Icon(Icons.shopping_bag_outlined),

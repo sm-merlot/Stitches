@@ -10,6 +10,8 @@ import '../../data/symbols.dart';
 import '../../models/layer.dart';
 import '../../models/layer_blend_mode.dart';
 import '../../models/layer_item.dart';
+import '../../models/page_config.dart';
+import '../../models/page_layout.dart';
 import '../../models/pattern.dart';
 import '../../models/snippet.dart';
 import '../../models/snippet_palette.dart';
@@ -115,6 +117,16 @@ class EditorState {
   /// setting for new patterns. Toggled per-file via the overflow menu.
   final bool compressOnSave;
 
+  /// Current page index (0-based) in page mode. Session-only, not persisted.
+  final int currentPage;
+
+  /// Precomputed page layout. Non-null when page mode is enabled.
+  final PageLayout? pageLayout;
+
+  /// When non-null, PatternCanvas should animate to fit this page index then
+  /// clear the value via [clearPendingFitPage].
+  final int? pendingFitPage;
+
   /// True when the current file is in the native .stitches format (or unsaved).
   bool get isNativeFormat {
     final path = filePath;
@@ -161,6 +173,9 @@ class EditorState {
     this.canvasSelectionMode = false,
     this.pendingCanvasWarning,
     this.compressOnSave = true,
+    this.currentPage = 0,
+    this.pageLayout,
+    this.pendingFitPage,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -293,6 +308,9 @@ class EditorState {
     bool? canvasSelectionMode,
     Object? pendingCanvasWarning = _sentinel,
     bool? compressOnSave,
+    int? currentPage,
+    Object? pageLayout = _sentinel,
+    Object? pendingFitPage = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -349,6 +367,9 @@ class EditorState {
           ? this.pendingCanvasWarning
           : pendingCanvasWarning as String?,
       compressOnSave: compressOnSave ?? this.compressOnSave,
+      currentPage: currentPage ?? this.currentPage,
+      pageLayout: pageLayout == _sentinel ? this.pageLayout : pageLayout as PageLayout?,
+      pendingFitPage: pendingFitPage == _sentinel ? this.pendingFitPage : pendingFitPage as int?,
     );
   }
 
@@ -506,6 +527,12 @@ class EditorNotifier extends Notifier<EditorState>
 
     refreshCompositeCache();
 
+    // Build page layout if page mode was saved with this pattern.
+    if (withSymbols.pageConfig.enabled) {
+      final layout = PageLayout.compute(withSymbols.pageConfig, withSymbols);
+      state = state.copyWith(pageLayout: layout, pendingFitPage: 0);
+    }
+
     if (withSymbols.referenceImagePath != null) {
       ReferenceImageService.decodeFromPath(withSymbols.referenceImagePath!)
           .then((img) {
@@ -647,6 +674,84 @@ class EditorNotifier extends Notifier<EditorState>
 
   void clearCanvasWarning() {
     state = state.copyWith(pendingCanvasWarning: null);
+  }
+
+  void clearPendingFitPage() {
+    state = state.copyWith(pendingFitPage: null);
+  }
+
+  // ─── Page mode ──────────────────────────────────────────────────────────────
+
+  /// Update page config and recompute the layout.
+  void updatePageConfig(PageConfig config) {
+    final newPattern = state.pattern.copyWith(pageConfig: config);
+    final layout = config.enabled
+        ? PageLayout.compute(config, newPattern)
+        : null;
+    final page = config.enabled ? state.currentPage.clamp(0, (layout!.totalPages - 1).clamp(0, 999)) : 0;
+    state = state.copyWith(
+      pattern: newPattern,
+      pageLayout: layout,
+      currentPage: page,
+      pendingFitPage: config.enabled ? page : null,
+      isDirty: true,
+    );
+  }
+
+  /// Navigate to a specific page index.
+  void navigatePage(int page) {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final clamped = page.clamp(0, layout.totalPages - 1);
+    state = state.copyWith(currentPage: clamped, pendingFitPage: clamped);
+  }
+
+  void navigateNextPage() {
+    navigatePage(state.currentPage + 1);
+  }
+
+  void navigatePreviousPage() {
+    navigatePage(state.currentPage - 1);
+  }
+
+  /// Navigate one page to the right within the same row.
+  void navigatePageRight() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (col < layout.pagesAcross - 1) {
+      navigatePage(layout.pageIndex(col + 1, row));
+    }
+  }
+
+  /// Navigate one page to the left within the same row.
+  void navigatePageLeft() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (col > 0) {
+      navigatePage(layout.pageIndex(col - 1, row));
+    }
+  }
+
+  /// Navigate one page down within the same column.
+  void navigatePageDown() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (row < layout.pagesDown - 1) {
+      navigatePage(layout.pageIndex(col, row + 1));
+    }
+  }
+
+  /// Navigate one page up within the same column.
+  void navigatePageUp() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (row > 0) {
+      navigatePage(layout.pageIndex(col, row - 1));
+    }
   }
 
   @override

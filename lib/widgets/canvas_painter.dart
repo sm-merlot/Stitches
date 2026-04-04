@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/layer.dart';
+import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -36,6 +37,13 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   /// When set, stitch colours are replaced with the active palette's colours
   /// using positional slot mapping (palette[N][i] replaces palette[0][i]).
   final Map<String, Color>? paletteOverride;
+
+  /// Page layout for page mode. When non-null (and config.enabled), only
+  /// stitches belonging to [currentPage] are rendered.
+  final PageLayout? pageLayout;
+
+  /// The 0-based page index to display when [pageLayout] is non-null.
+  final int currentPage;
   late final Map<String, Thread> _threadMap = {
     for (final t in pattern.threads) t.dmcCode: t,
   };
@@ -56,6 +64,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     this.referenceVisible = true,
     this.compositeResult,
     this.paletteOverride,
+    this.pageLayout,
+    this.currentPage = 0,
   });
 
   /// Returns [original] with the active palette's colour substituted if an
@@ -153,6 +163,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         for (final stitch in layer.stitches) {
           if (stitch is BackStitch) continue;
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
+          final coords = _stitchXY(stitch);
+          if (coords != null && !_stitchOnPage(coords.$1, coords.$2)) continue;
           final thread = _threadMap[stitch.threadId];
           if (thread == null) continue;
           final c = _resolveStitchColor(stitch.threadId,
@@ -230,6 +242,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
           // Skip symbol if a higher visible layer has a FullStitch at this cell
           if (stitch is FullStitch && occluded.contains((stitch.x << 16) | stitch.y)) continue;
+          final sCoords = _stitchXY(stitch);
+          if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
 
           // For blended cells, use the composite cache (stable symbol
           // assignments) when available; fall back to nearest-thread lookup
@@ -583,6 +597,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   void _drawLayerStitchesAsBlocks(Canvas canvas, Layer layer,
       Map<String, Color> blendMap,
       int minX, int minY, int maxX, int maxY) {
+
+    // When page mode is active, skip the block cache and filter per-stitch.
+    final layout = pageLayout;
+    if (layout != null && layout.config.enabled) {
+      _drawLayerBlocksWithPageFilter(canvas, layer, blendMap, minX, minY, maxX, maxY);
+      return;
+    }
+
     final byColor = _getOrBuildBlockRects(layer, blendMap);
 
     // Viewport bounds in canvas/pattern space for culling.
@@ -599,6 +621,83 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
             rect.bottom <= minPy || rect.top >= maxPy) { continue; }
         canvas.drawRect(rect, paint);
       }
+    }
+  }
+
+  /// Block rendering with per-stitch page membership filtering.
+  /// Used in place of the cached block rects when page mode is active.
+  void _drawLayerBlocksWithPageFilter(Canvas canvas, Layer layer,
+      Map<String, Color> blendMap,
+      int minX, int minY, int maxX, int maxY) {
+    final minPx = minX * cellSize;
+    final minPy = minY * cellSize;
+    final maxPx = maxX * cellSize;
+    final maxPy = maxY * cellSize;
+    final halfCell    = cellSize * 0.5;
+    final quarterCell = cellSize * 0.5;
+
+    for (final stitch in layer.stitches) {
+      if (stitch is BackStitch) continue;
+      if (!_inCellRange(stitch, minX, minY, maxX, maxY)) continue;
+      final xy = _stitchXY(stitch);
+      if (xy == null || !_stitchOnPage(xy.$1, xy.$2)) continue;
+
+      final thread = _threadMap[stitch.threadId];
+      if (thread == null) continue;
+      final c = _resolveStitchColor(stitch.threadId,
+          _applyPaletteOverride(stitch.threadId, thread.color),
+          isCrossStitch: true);
+      if (c == null) continue;
+
+      Color effectiveColor = c;
+      Rect? rect;
+      switch (stitch) {
+        case FullStitch(:final x, :final y):
+          final key = '$x,$y';
+          final blended = blendMap[key];
+          if (blended != null && stitchFocusThreadId != null) {
+            final compositeThread = compositeResult?.compositeThreads[key];
+            final isFocused = compositeThread?.dmcCode == stitchFocusThreadId;
+            effectiveColor = isFocused ? blended : _greyColor(blended);
+          } else {
+            effectiveColor = blended ?? c;
+          }
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
+
+        case HalfStitch(:final x, :final y, isForward: true):
+          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
+        case HalfStitch(:final x, :final y, isForward: false):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
+
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.left):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.right):
+          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.top):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell);
+        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell);
+
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize, quarterCell, quarterCell);
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
+          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize, quarterCell, quarterCell);
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
+          rect = Rect.fromLTWH(x * cellSize, y * cellSize + quarterCell, quarterCell, quarterCell);
+        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
+        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
+          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize + quarterCell, quarterCell, quarterCell);
+
+        default:
+          rect = null;
+      }
+      if (rect == null) continue;
+      if (rect.right <= minPx || rect.left >= maxPx ||
+          rect.bottom <= minPy || rect.top >= maxPy) { continue; }
+      canvas.drawRect(rect, Paint()..color = effectiveColor);
     }
   }
 
@@ -789,6 +888,26 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   static const Color _unfocusedGrey = Color(0xA0B8B8B8);
   static Color _greyColor(Color c) => _unfocusedGrey;
 
+  // ── Page mode helpers ──────────────────────────────────────────────────────
+
+  /// Returns the (x, y) cell coordinates of [stitch], or null for BackStitch.
+  static (int, int)? _stitchXY(Stitch stitch) => switch (stitch) {
+    FullStitch(:final x, :final y) => (x, y),
+    HalfStitch(:final x, :final y) => (x, y),
+    HalfCrossStitch(:final x, :final y) => (x, y),
+    QuarterStitch(:final x, :final y) => (x, y),
+    QuarterCrossStitch(:final x, :final y) => (x, y),
+    BackStitch() => null,
+  };
+
+  /// Returns true if stitch at (x=col, y=row) should be drawn on the current page.
+  bool _stitchOnPage(int col, int row) {
+    final layout = pageLayout;
+    if (layout == null || !layout.config.enabled) return true;
+    final (pageCol, pageRow) = layout.pageCoords(currentPage);
+    return layout.cellOnPage(col, row, pageCol, pageRow);
+  }
+
   @override
   bool shouldRepaint(CanvasStaticPainter old) =>
       old.pattern != pattern ||
@@ -805,6 +924,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.referenceOpacity != referenceOpacity ||
       old.referenceVisible != referenceVisible ||
       old.compositeResult != compositeResult ||
-      old.paletteOverride != paletteOverride;
+      old.paletteOverride != paletteOverride ||
+      old.pageLayout != pageLayout ||
+      old.currentPage != currentPage;
 }
 
