@@ -77,7 +77,25 @@ class PageLayout {
   }
 
   /// Whether the stitch at (x=col, y=row) belongs to page (pageCol, pageRow).
+  ///
+  /// A connectivity guard is applied: the cell must also have at least one
+  /// orthogonal neighbour that passes the boundary check. This prevents
+  /// floating corner cells that arise when independent vertical and horizontal
+  /// fuzzy offsets converge at a page corner.
   bool cellOnPage(int col, int row, int pageCol, int pageRow) {
+    if (!_boundaryCheck(col, row, pageCol, pageRow)) return false;
+    return _boundaryCheck(col - 1, row, pageCol, pageRow) ||
+        _boundaryCheck(col + 1, row, pageCol, pageRow) ||
+        _boundaryCheck(col, row - 1, pageCol, pageRow) ||
+        _boundaryCheck(col, row + 1, pageCol, pageRow);
+  }
+
+  /// Raw boundary check without connectivity guard. Used internally by
+  /// [cellOnPage] to test neighbours without infinite recursion.
+  bool _boundaryCheck(int col, int row, int pageCol, int pageRow) {
+    if (col < 0 || col >= patternWidth || row < 0 || row >= patternHeight) {
+      return false;
+    }
     final left = leftBoundaryForRow(pageCol, row);
     final right = rightBoundaryForRow(pageCol, row);
     final top = topBoundaryForCol(pageRow, col);
