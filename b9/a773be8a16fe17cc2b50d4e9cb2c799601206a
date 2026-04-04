@@ -1,0 +1,23 @@
+.changeset/readme-redesign.md
+  1dbb22e7e426b413 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "b9a773be8a16fe17cc2b50d4e9cb2c799601206a",
+  "prompts": {
+    "1dbb22e7e426b413": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33cef555-6d29-43e1-8237-78a3b862cd77",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 0,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}

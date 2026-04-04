@@ -1,0 +1,23 @@
+docs/superpowers/specs/2026-04-02-readme-redesign.md
+  1dbb22e7e426b413 1-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "301ed75b9fdddef0b8b6422a3989f8c880826a69",
+  "prompts": {
+    "1dbb22e7e426b413": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33cef555-6d29-43e1-8237-78a3b862cd77",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 237,
+      "total_deletions": 2,
+      "accepted_lines": 236,
+      "overriden_lines": 1
+    }
+  }
+}
