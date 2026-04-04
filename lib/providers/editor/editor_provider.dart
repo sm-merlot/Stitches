@@ -714,6 +714,46 @@ class EditorNotifier extends Notifier<EditorState>
     navigatePage(state.currentPage - 1);
   }
 
+  /// Navigate one page to the right within the same row.
+  void navigatePageRight() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (col < layout.pagesAcross - 1) {
+      navigatePage(layout.pageIndex(col + 1, row));
+    }
+  }
+
+  /// Navigate one page to the left within the same row.
+  void navigatePageLeft() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (col > 0) {
+      navigatePage(layout.pageIndex(col - 1, row));
+    }
+  }
+
+  /// Navigate one page down within the same column.
+  void navigatePageDown() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (row < layout.pagesDown - 1) {
+      navigatePage(layout.pageIndex(col, row + 1));
+    }
+  }
+
+  /// Navigate one page up within the same column.
+  void navigatePageUp() {
+    final layout = state.pageLayout;
+    if (layout == null) return;
+    final (col, row) = layout.pageCoords(state.currentPage);
+    if (row > 0) {
+      navigatePage(layout.pageIndex(col, row - 1));
+    }
+  }
+
   @override
   void warnNoSelection() {
     state = state.copyWith(

@@ -47,14 +47,22 @@ KeyEventResult handleEditorKeys(
       notifier.setDrawingMode(DrawingMode.pan);
       return KeyEventResult.handled;
     }
-    // Page mode navigation with arrow keys.
+    // Page mode navigation with arrow keys (2D grid-aware).
     if (state.pattern.pageConfig.enabled && state.pageLayout != null) {
-      if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.arrowDown) {
-        notifier.navigateNextPage();
+      if (key == LogicalKeyboardKey.arrowRight) {
+        notifier.navigatePageRight();
         return KeyEventResult.handled;
       }
-      if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.arrowUp) {
-        notifier.navigatePreviousPage();
+      if (key == LogicalKeyboardKey.arrowLeft) {
+        notifier.navigatePageLeft();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowDown) {
+        notifier.navigatePageDown();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowUp) {
+        notifier.navigatePageUp();
         return KeyEventResult.handled;
       }
     }

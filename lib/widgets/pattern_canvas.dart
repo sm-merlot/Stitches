@@ -1254,13 +1254,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               ),
               size: Size.infinite,
             ),
-            // Page navigation chrome — prev/next arrows + page indicator.
+            // Page navigation chrome — directional arrows + page indicator.
             if (pageModeActive)
               _PageNavOverlay(
                 layout: state.pageLayout!,
                 currentPage: state.currentPage,
-                onPrevious: () => ref.read(editorProvider.notifier).navigatePreviousPage(),
-                onNext: () => ref.read(editorProvider.notifier).navigateNextPage(),
+                onLeft:  () => ref.read(editorProvider.notifier).navigatePageLeft(),
+                onRight: () => ref.read(editorProvider.notifier).navigatePageRight(),
+                onUp:    () => ref.read(editorProvider.notifier).navigatePageUp(),
+                onDown:  () => ref.read(editorProvider.notifier).navigatePageDown(),
                 onPageTap: (page) => ref.read(editorProvider.notifier).navigatePage(page),
               ),
           ],
@@ -1295,52 +1297,57 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 class _PageNavOverlay extends StatelessWidget {
   final PageLayout layout;
   final int currentPage;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
+  final VoidCallback onLeft;
+  final VoidCallback onRight;
+  final VoidCallback onUp;
+  final VoidCallback onDown;
   final void Function(int page) onPageTap;
 
   const _PageNavOverlay({
     required this.layout,
     required this.currentPage,
-    required this.onPrevious,
-    required this.onNext,
+    required this.onLeft,
+    required this.onRight,
+    required this.onUp,
+    required this.onDown,
     required this.onPageTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final total = layout.totalPages;
-    final hasPrev = currentPage > 0;
-    final hasNext = currentPage < total - 1;
+    final (col, row) = layout.pageCoords(currentPage);
+    final hasLeft  = col > 0;
+    final hasRight = col < layout.pagesAcross - 1;
+    final hasUp    = row > 0;
+    final hasDown  = row < layout.pagesDown - 1;
     const buttonStyle = TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600);
 
     return Stack(
       children: [
-        // Previous page arrow — left edge
-        if (hasPrev)
+        // Left arrow — left edge
+        if (hasLeft)
           Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: _NavArrowButton(
-                icon: Icons.chevron_left,
-                onTap: onPrevious,
-              ),
-            ),
+            left: 0, top: 0, bottom: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.chevron_left, onTap: onLeft)),
           ),
-        // Next page arrow — right edge
-        if (hasNext)
+        // Right arrow — right edge
+        if (hasRight)
           Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: _NavArrowButton(
-                icon: Icons.chevron_right,
-                onTap: onNext,
-              ),
-            ),
+            right: 0, top: 0, bottom: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.chevron_right, onTap: onRight)),
+          ),
+        // Up arrow — top centre
+        if (hasUp)
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.expand_less, horizontal: false, onTap: onUp)),
+          ),
+        // Down arrow — bottom centre (above page indicator)
+        if (hasDown)
+          Positioned(
+            bottom: 52, left: 0, right: 0,
+            child: Center(child: _NavArrowButton(icon: Icons.expand_more, horizontal: false, onTap: onDown)),
           ),
         // Page indicator — bottom centre
         Positioned(
@@ -1387,17 +1394,25 @@ class _PageNavOverlay extends StatelessWidget {
 class _NavArrowButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
+  /// True for left/right arrows (tall and narrow); false for up/down (wide and short).
+  final bool horizontal;
 
-  const _NavArrowButton({required this.icon, required this.onTap});
+  const _NavArrowButton({
+    required this.icon,
+    required this.onTap,
+    this.horizontal = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 36,
-        height: 64,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+        width: horizontal ? 36 : 64,
+        height: horizontal ? 64 : 36,
+        margin: horizontal
+            ? const EdgeInsets.symmetric(horizontal: 4)
+            : const EdgeInsets.symmetric(vertical: 4),
         decoration: BoxDecoration(
           color: Colors.black45,
           borderRadius: BorderRadius.circular(8),
