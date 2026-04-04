@@ -12,6 +12,7 @@ import 'export_dialog.dart';
 import '../widgets/right_sidebar.dart';
 import '../widgets/right_sidebar_colours_panel.dart';
 import 'materials_list_screen.dart';
+import 'page_mode_dialog.dart';
 import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
@@ -251,8 +252,25 @@ class EditorScreen extends ConsumerWidget {
                 ],
               ),
             ],
-            // Stitch mode actions — Materials + Demo + Screen Lock
+            // Stitch mode actions — Page Mode + Materials + Demo + Screen Lock
             if (state.stitchMode) ...[
+              IconButton(
+                tooltip: state.pattern.pageConfig.enabled
+                    ? 'Page mode: on'
+                    : 'Page mode: off',
+                isSelected: state.pattern.pageConfig.enabled,
+                icon: const Icon(Icons.auto_stories_outlined),
+                selectedIcon: const Icon(Icons.auto_stories),
+                onPressed: () => showPageModeDialog(context, ref),
+                style: state.pattern.pageConfig.enabled
+                    ? IconButton.styleFrom(
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
+              ),
               IconButton(
                 tooltip: 'Materials list',
                 icon: const Icon(Icons.shopping_bag_outlined),

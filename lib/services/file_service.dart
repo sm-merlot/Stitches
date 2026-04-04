@@ -9,6 +9,7 @@ import '../models/layer.dart';
 import 'pattern_cache.dart';
 import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
+import '../models/page_config.dart';
 import '../models/pattern.dart';
 import '../models/snippet.dart';
 import 'format_service.dart';
@@ -244,6 +245,17 @@ class FileService {
       for (final entry in pattern.compositeSymbols.entries) {
         buf.writeln('  ${_yamlStr(entry.key)}: ${_yamlStr(entry.value)}');
       }
+    }
+
+    // Page mode config — only written when ever configured (even if disabled,
+    // so the user's page dimensions are preserved across saves).
+    final pc = pattern.pageConfig;
+    if (pc != PageConfig.disabled) {
+      buf.writeln('pageMode:');
+      buf.writeln('  enabled: ${pc.enabled}');
+      buf.writeln('  pageWidth: ${pc.pageWidth}');
+      buf.writeln('  pageHeight: ${pc.pageHeight}');
+      buf.writeln('  fuzzyAmount: ${pc.fuzzyAmount}');
     }
 
     return buf.toString();
