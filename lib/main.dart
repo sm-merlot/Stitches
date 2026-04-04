@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'services/incoming_file_service.dart';
 
 // Flutter on Windows uses BoringSSL with bundled root certs instead of the
 // Windows certificate store, causing TLS failures against Google endpoints.
@@ -21,6 +22,7 @@ void main() {
     HttpOverrides.global = _WindowsHttpOverrides();
   }
   WidgetsFlutterBinding.ensureInitialized();
+  IncomingFileService.listen();
   runApp(
     const ProviderScope(
       child: StitchesApp(),
