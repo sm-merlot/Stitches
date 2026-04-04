@@ -4,8 +4,9 @@
 **Status:** Approved, awaiting implementation
 **Depends on:** None — can be implemented independently of the other specs
 **Soft dependencies:**
+- File Format v2: the share stripping options (omit `stitching.progress` and/or `stitching.pageMode`) rely on those fields being cleanly organised under the `stitching:` key. Without v2, stripping is messier to implement.
 - Three-Mode Architecture: affects *where* the Share button lives (View mode AppBar). Without it, place the button in the current design mode AppBar and relocate when three-mode lands.
-- File Format v2 + Progress Tracking: only needed for the "strip progress on share" toggle. Until progress tracking exists, simply always omit the `progress:` key on share — no toggle needed.
+- Progress Tracking: the "strip progress" toggle is only meaningful once progress tracking exists. Until then, simply always omit `stitching.progress` on share — no toggle needed.
 
 ---
 
