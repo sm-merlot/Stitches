@@ -12,6 +12,7 @@ import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../services/incoming_file_service.dart';
 import '../services/pattern_cache.dart';
 import '../utils/snackbars.dart';
 import 'drive_file_picker_dialog.dart';
@@ -32,6 +33,31 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _loading = false;
+  StreamSubscription<String>? _incomingFileSub;
+  StreamSubscription<String>? _incomingFolderSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _incomingFileSub = IncomingFileService.fileStream.listen(_openFromIncomingPath);
+    _incomingFolderSub = IncomingFileService.folderStream.listen(_openFromIncomingFolder);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final path = await IncomingFileService.getInitialPath();
+      if (path == null || !mounted) return;
+      if (await FileSystemEntity.isDirectory(path)) {
+        await _openFromIncomingFolder(path);
+      } else {
+        await _openFromIncomingPath(path);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _incomingFileSub?.cancel();
+    _incomingFolderSub?.cancel();
+    super.dispose();
+  }
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -63,6 +89,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (!mounted) return;
       showError(context, 'Could not open file: $e');
     }
+  }
+
+  /// Opens a pattern from a path delivered by the OS (Finder double-click,
+  /// AirDrop, Files app, Android file manager, etc.).
+  Future<void> _openFromIncomingPath(String path) async {
+    setState(() => _loading = true);
+    try {
+      final (pattern, resolvedPath, wasCompressed) =
+          await FileService.openFileFromPath(path);
+      if (!mounted) return;
+      final session = await EditorSessionService.load('local:$resolvedPath');
+      if (!mounted) return;
+      ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: resolvedPath,
+            compressOnSave: wasCompressed,
+            session: session,
+          );
+      ref.read(recentItemsProvider.notifier).add(resolvedPath, isFolder: false);
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const EditorScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showError(context, 'Could not open file: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Opens a folder delivered by the OS (Finder "Open With", drag-to-dock, etc.).
+  Future<void> _openFromIncomingFolder(String path) async {
+    ref.read(workspaceProvider.notifier).openWorkspace(LocalFolder(path));
+    ref.read(recentItemsProvider.notifier).add(path, isFolder: true);
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
+    );
   }
 
   Future<void> _openFolder() async {

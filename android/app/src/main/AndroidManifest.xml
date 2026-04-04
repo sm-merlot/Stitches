@@ -24,6 +24,36 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Open .stitches files from file managers that use file:// URIs -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.stitches"/>
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.STITCHES"/>
+            </intent-filter>
+            <!-- Open .stitches files via content:// URIs (modern file managers / Files by Google) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="content" android:mimeType="application/octet-stream"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="content" android:mimeType="*/*"/>
+            </intent-filter>
+            <!-- Open folders from file managers (file:// scheme; content:// resolved in code) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="file" android:mimeType="inode/directory"/>
+                <data android:scheme="file" android:mimeType="resource/folder"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="content" android:mimeType="vnd.android.document/directory"/>
+            </intent-filter>
         </activity>
 
 <!-- Don't delete the meta-data below.
