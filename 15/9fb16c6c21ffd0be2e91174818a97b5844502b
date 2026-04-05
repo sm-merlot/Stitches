@@ -1,0 +1,23 @@
+lib/screens/pattern_info_dialog.dart
+  18675e21c96bca5e 343-344,361,364-365,368-378,403-419,423-439
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "159fb16c6c21ffd0be2e91174818a97b5844502b",
+  "prompts": {
+    "18675e21c96bca5e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e57d780-cfd0-42d8-b785-8a3603f1a59c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 52,
+      "total_deletions": 12,
+      "accepted_lines": 52,
+      "overriden_lines": 0
+    }
+  }
+}
