@@ -142,25 +142,6 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
                 ? '${p.name}.stitches  (Google Drive)'
                 : state.filePath!.split('/').last,
           ),
-        if (kDebugMode && state.isNativeFormat)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              children: [
-                const SizedBox(
-                  width: 120,
-                  child: Text('Compress file',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
-                ),
-                Switch(
-                  value: state.compressOnSave,
-                  onChanged: (_) =>
-                      ref.read(editorProvider.notifier).toggleCompressOnSave(),
-                ),
-              ],
-            ),
-          ),
         if (p.designer?.isNotEmpty == true) _InfoRow('Designer', p.designer!),
         if (p.difficulty?.isNotEmpty == true)
           _InfoRow('Difficulty', p.difficulty!),
@@ -359,6 +340,8 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
       ],
     );
 
+    final compressToggle = _compressToggle();
+
     if (isWide) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -375,19 +358,24 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
               child: content,
             ),
           ),
-          if (!_editing) ...[
+          if (compressToggle != null) ...[
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
-                ),
-              ),
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+              child: compressToggle,
             ),
           ],
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ),
+          ),
         ],
       );
     }
@@ -412,10 +400,43 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
                 onPressed: _enterEdit),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: content,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: content,
+            ),
+          ),
+          if (compressToggle != null) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+              child: compressToggle,
+            ),
+          ],
+        ],
       ),
+    );
+  }
+
+  Widget? _compressToggle() {
+    if (!kDebugMode) return null;
+    final state = ref.watch(editorProvider);
+    if (!state.isNativeFormat) return null;
+    return Row(
+      children: [
+        const Expanded(
+          child: Text('Compress file',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        ),
+        Switch(
+          value: state.compressOnSave,
+          onChanged: (_) =>
+              ref.read(editorProvider.notifier).toggleCompressOnSave(),
+        ),
+      ],
     );
   }
 }
