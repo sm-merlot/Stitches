@@ -131,30 +131,37 @@ class EditorScreen extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_title(state)),
+          titleSpacing: 0,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_title(state)),
+              const SizedBox(width: 4),
+              // ── Block mode toggle — in title area, consistent across modes ──
+              IconButton(
+                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
+                isSelected: state.blockMode,
+                icon: const Icon(Icons.grid_view_outlined),
+                selectedIcon: const Icon(Icons.grid_view),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).toggleBlockMode(),
+                style: state.blockMode
+                    ? IconButton.styleFrom(
+                        backgroundColor: state.mode == AppMode.stitch
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: state.mode == AppMode.stitch
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
+              ),
+            ],
+          ),
           backgroundColor: state.mode == AppMode.stitch
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
-            // ── Block mode toggle — visible in all modes ─────────────────────
-            IconButton(
-              tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
-              isSelected: state.blockMode,
-              icon: const Icon(Icons.grid_view_outlined),
-              selectedIcon: const Icon(Icons.grid_view),
-              onPressed: () =>
-                  ref.read(editorProvider.notifier).toggleBlockMode(),
-              style: state.blockMode
-                  ? IconButton.styleFrom(
-                      backgroundColor: state.mode == AppMode.stitch
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.primaryContainer,
-                      foregroundColor: state.mode == AppMode.stitch
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.onPrimaryContainer,
-                    )
-                  : null,
-            ),
             // ── View mode: pattern info/export menu + Edit + Stitch ──────────
             if (state.mode == AppMode.view) ...[
               IconButton(

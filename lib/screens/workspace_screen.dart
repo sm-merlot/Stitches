@@ -792,7 +792,39 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_title(editorState, wsState, openPdf)),
+          titleSpacing: 0,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_title(editorState, wsState, openPdf)),
+              // ── Block mode toggle — in title area, consistent across modes ──
+              if (editorState.isFileOpen && openPdf == null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: editorState.blockMode
+                      ? 'Block mode: on'
+                      : 'Block mode: off',
+                  isSelected: editorState.blockMode,
+                  icon: const Icon(Icons.grid_view_outlined),
+                  selectedIcon: const Icon(Icons.grid_view),
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).toggleBlockMode(),
+                  style: editorState.blockMode
+                      ? IconButton.styleFrom(
+                          backgroundColor: editorState.mode == AppMode.stitch
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.primaryContainer,
+                          foregroundColor: editorState.mode == AppMode.stitch
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                        )
+                      : null,
+                ),
+              ],
+            ],
+          ),
           backgroundColor: editorState.mode == AppMode.stitch
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
@@ -831,26 +863,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const EditorScreenLockButton(),
             ],
-            // ── Block mode toggle — visible whenever a file is open ──────────
-            if (editorState.isFileOpen && openPdf == null)
-              IconButton(
-                tooltip: editorState.blockMode ? 'Block mode: on' : 'Block mode: off',
-                isSelected: editorState.blockMode,
-                icon: const Icon(Icons.grid_view_outlined),
-                selectedIcon: const Icon(Icons.grid_view),
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).toggleBlockMode(),
-                style: editorState.blockMode
-                    ? IconButton.styleFrom(
-                        backgroundColor: editorState.mode == AppMode.stitch
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor: editorState.mode == AppMode.stitch
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onPrimaryContainer,
-                      )
-                    : null,
-              ),
             // ── View mode: pattern info + materials + overflow + Edit + Stitch
             if (editorState.isFileOpen && editorState.mode == AppMode.view && openPdf == null) ...[
               IconButton(
