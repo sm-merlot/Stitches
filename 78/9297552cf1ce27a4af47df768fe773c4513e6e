@@ -1,0 +1,25 @@
+lib/widgets/right_sidebar.dart
+  18675e21c96bca5e 148,172-175
+lib/widgets/right_sidebar_colours_panel.dart
+  18675e21c96bca5e 468-470,477,484,486-495,497-511,514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "789297552cf1ce27a4af47df768fe773c4513e6e",
+  "prompts": {
+    "18675e21c96bca5e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e57d780-cfd0-42d8-b785-8a3603f1a59c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 36,
+      "total_deletions": 28,
+      "accepted_lines": 36,
+      "overriden_lines": 0
+    }
+  }
+}
