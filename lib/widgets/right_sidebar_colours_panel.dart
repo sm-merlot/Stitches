@@ -489,14 +489,9 @@ class StitchDemoButton extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          FilledButton.icon(
-            icon: const Icon(Icons.play_circle_outline, size: 16),
-            label: const Text('Demo', style: TextStyle(fontSize: 13)),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 36),
-            ),
-            onPressed: enabled
-                ? () => _onDemonstrate(context)
+          GestureDetector(
+            onTap: enabled
+                ? null
                 : () {
                     ScaffoldMessenger.of(context)
                       ..hideCurrentSnackBar()
@@ -506,6 +501,14 @@ class StitchDemoButton extends StatelessWidget {
                         duration: Duration(seconds: 2),
                       ));
                   },
+            child: FilledButton.icon(
+              icon: const Icon(Icons.play_circle_outline, size: 16),
+              label: const Text('Demo', style: TextStyle(fontSize: 13)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 36),
+              ),
+              onPressed: enabled ? () => _onDemonstrate(context) : null,
+            ),
           ),
           Positioned(
             top: -5,
