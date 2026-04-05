@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/editor/editor_provider.dart';
@@ -140,6 +141,25 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
             state.driveParentFolderId != null
                 ? '${p.name}.stitches  (Google Drive)'
                 : state.filePath!.split('/').last,
+          ),
+        if (kDebugMode && state.isNativeFormat)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 120,
+                  child: Text('Compress file',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
+                ),
+                Switch(
+                  value: state.compressOnSave,
+                  onChanged: (_) =>
+                      ref.read(editorProvider.notifier).toggleCompressOnSave(),
+                ),
+              ],
+            ),
           ),
         if (p.designer?.isNotEmpty == true) _InfoRow('Designer', p.designer!),
         if (p.difficulty?.isNotEmpty == true)

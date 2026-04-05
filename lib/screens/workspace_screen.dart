@@ -46,7 +46,7 @@ import 'page_mode_dialog.dart';
 
 part 'workspace_screen_components.dart';
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, shortcuts, toggleCompress }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, shortcuts }
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -945,8 +945,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
-                    case _MenuAction.toggleCompress:
-                      ref.read(editorProvider.notifier).toggleCompressOnSave();
                     case _MenuAction.shortcuts:
                       showDialog(
                         context: context,
@@ -990,21 +988,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
-                  if (editorState.isNativeFormat)
-                    PopupMenuItem(
-                      value: _MenuAction.toggleCompress,
-                      child: EditorMenuRow(
-                        icon: Icons.folder_zip_outlined,
-                        label: editorState.compressOnSave
-                            ? 'File Compressed'
-                            : 'File Uncompressed',
-                        trailing: editorState.compressOnSave
-                            ? Icon(Icons.check,
-                                size: 16,
-                                color: Theme.of(context).colorScheme.primary)
-                            : null,
-                      ),
-                    ),
                   if (defaultTargetPlatform != TargetPlatform.iOS &&
                       defaultTargetPlatform != TargetPlatform.android)
                     const PopupMenuItem(

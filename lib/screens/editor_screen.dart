@@ -18,7 +18,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, toggleCompress }
+enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -254,8 +254,6 @@ class EditorScreen extends ConsumerWidget {
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
-                    case _MenuAction.toggleCompress:
-                      ref.read(editorProvider.notifier).toggleCompressOnSave();
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -294,21 +292,6 @@ class EditorScreen extends ConsumerWidget {
                         icon: Icons.upload_outlined,
                         label: 'Export…'),
                   ),
-                  if (state.isNativeFormat)
-                    PopupMenuItem(
-                      value: _MenuAction.toggleCompress,
-                      child: EditorMenuRow(
-                        icon: Icons.folder_zip_outlined,
-                        label: state.compressOnSave
-                            ? 'File Compressed'
-                            : 'File Uncompressed',
-                        trailing: state.compressOnSave
-                            ? Icon(Icons.check,
-                                size: 16,
-                                color: Theme.of(ctx).colorScheme.primary)
-                            : null,
-                      ),
-                    ),
                 ],
               ),
               const SizedBox(width: 4),
