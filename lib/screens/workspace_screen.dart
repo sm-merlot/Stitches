@@ -832,8 +832,62 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const EditorScreenLockButton(),
             ],
-            // ── View mode: entry points to Edit and Stitch ──────────────────
+            // ── Block mode toggle — visible whenever a file is open ──────────
+            if (editorState.isFileOpen && openPdf == null)
+              IconButton(
+                tooltip: editorState.blockMode ? 'Block mode: on' : 'Block mode: off',
+                isSelected: editorState.blockMode,
+                icon: const Icon(Icons.grid_view_outlined),
+                selectedIcon: const Icon(Icons.grid_view),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).toggleBlockMode(),
+                style: editorState.blockMode
+                    ? IconButton.styleFrom(
+                        backgroundColor: editorState.mode == AppMode.stitch
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: editorState.mode == AppMode.stitch
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
+                    : null,
+              ),
+            // ── View mode: pattern info + materials + overflow + Edit + Stitch
             if (editorState.isFileOpen && editorState.mode == AppMode.view && openPdf == null) ...[
+              IconButton(
+                tooltip: 'Pattern Info',
+                icon: const Icon(Icons.info_outline),
+                onPressed: () => showPatternInfo(context, ref, editorState),
+              ),
+              IconButton(
+                tooltip: 'Materials list',
+                icon: const Icon(Icons.shopping_bag_outlined),
+                onPressed: () => showMaterialsList(context, editorState),
+              ),
+              PopupMenuButton<_MenuAction>(
+                tooltip: 'More',
+                onSelected: (action) {
+                  switch (action) {
+                    case _MenuAction.saveAs:
+                      _saveAs(context);
+                    case _MenuAction.export:
+                      _showExportDialog(context, editorState);
+                    default:
+                      break;
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: _MenuAction.saveAs,
+                    child: EditorMenuRow(icon: Icons.save_as_outlined, label: 'Save As…'),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.export,
+                    child: EditorMenuRow(icon: Icons.upload_outlined, label: 'Export…'),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
               FilledButton.tonal(
                 onPressed: () =>
                     ref.read(editorProvider.notifier).setMode(AppMode.edit),
@@ -847,7 +901,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const SizedBox(width: 8),
             ],
-            // ── Edit mode: full editor tools + Finished ──────────────────────
+            // ── Edit mode: drive sync + save + overflow + Done ───────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.edit && openPdf == null) ...[
               // Drive sync indicator — shown as soon as the file has a Drive
               // parent, including while the initial upload is still pending
@@ -858,32 +912,21 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                           editorState.driveFileId == null)
                       ? 'Syncing to Google Drive…'
                       : 'Synced to Google Drive',
-                  child: (driveState.isSyncing ||
-                          editorState.driveFileId == null)
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : const Icon(Icons.cloud_done_outlined),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Center(
+                      child: (driveState.isSyncing ||
+                              editorState.driveFileId == null)
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_done_outlined),
+                    ),
+                  ),
                 ),
-              IconButton(
-                tooltip: editorState.blockMode ? 'Block mode: on' : 'Block mode: off',
-                isSelected: editorState.blockMode,
-                icon: const Icon(Icons.grid_view_outlined),
-                selectedIcon: const Icon(Icons.grid_view),
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).toggleBlockMode(),
-                style: editorState.blockMode
-                    ? IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                      )
-                    : null,
-              ),
               PopupMenuButton<_MenuAction>(
                 tooltip: 'More',
                 onSelected: (action) {
@@ -976,11 +1019,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               FilledButton(
                 onPressed: () =>
                     ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Finished'),
+                child: const Text('Done'),
               ),
               const SizedBox(width: 8),
             ],
-            // ── Stitch mode: page nav + tools + Exit ─────────────────────────
+            // ── Stitch mode: page nav + demo + screen lock + Done ────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.stitch && openPdf == null) ...[
               IconButton(
                 tooltip: editorState.pattern.pageConfig.enabled
@@ -999,18 +1042,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       )
                     : null,
               ),
-              IconButton(
-                tooltip: 'Materials list',
-                icon: const Icon(Icons.shopping_bag_outlined),
-                onPressed: () => showMaterialsList(context, editorState),
-              ),
               StitchDemoButton(state: editorState),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),
-              FilledButton.tonal(
+              FilledButton(
                 onPressed: () =>
                     ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Exit'),
+                child: const Text('Done'),
               ),
               const SizedBox(width: 8),
             ],
