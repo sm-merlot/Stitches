@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart' show Color;
@@ -26,7 +27,8 @@ typedef _TextRun = ({String text, bool bold, bool italic, bool sym});
 
 class PdfService {
   /// Generate PDF and save via file picker.
-  static Future<void> exportPattern(
+  /// Build a PDF for [pattern] and return the raw bytes.
+  static Future<Uint8List> buildPdfBytes(
     CrossStitchPattern pattern, {
     bool useDmc = true,
   }) async {
@@ -326,9 +328,15 @@ class PdfService {
       }
     }
 
-    // ── Save ───────────────────────────────────────────────────────────────
+    return await doc.save();
+  }
 
-    final bytes = await doc.save();
+  /// Generate PDF and save to a user-chosen location via the file picker.
+  static Future<void> exportPattern(
+    CrossStitchPattern pattern, {
+    bool useDmc = true,
+  }) async {
+    final bytes = await buildPdfBytes(pattern, useDmc: useDmc);
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     if (isMobile) {
