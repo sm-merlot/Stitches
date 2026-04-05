@@ -264,8 +264,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
     if (editorState.filePath != null || editorState.pattern.name != 'Untitled') {
       final name = editorState.pattern.name;
-      final dirty = editorState.isDirty ? ' •' : '';
-      return '$name$dirty';
+      return name;
     }
     return wsState.workspace?.displayName ?? 'Workspace';
   }
@@ -796,6 +795,46 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // ── Drive sync indicator — left of title, all modes ──────────
+              if (editorState.driveParentFolderId != null) ...[
+                Tooltip(
+                  message: (driveState.isSyncing || editorState.driveFileId == null || editorState.isDirty)
+                      ? 'Syncing to Google Drive…'
+                      : 'Synced to Google Drive',
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: (driveState.isSyncing || editorState.driveFileId == null || editorState.isDirty)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_done_outlined, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 2),
+              ] else if (editorState.isFileOpen && openPdf == null) ...[
+                Tooltip(
+                  message: editorState.isDirty ? 'Saving…' : 'Saved',
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: editorState.isDirty
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.task_alt, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 2),
+              ],
               Text(_title(editorState, wsState, openPdf)),
               // ── Block mode toggle — in title area, consistent across modes ──
               if (editorState.isFileOpen && openPdf == null) ...[
@@ -912,32 +951,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const SizedBox(width: 8),
             ],
-            // ── Edit mode: drive sync + save + overflow + Done ───────────────
+            // ── Edit mode: save + overflow + Done ────────────────────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.edit && openPdf == null) ...[
-              // Drive sync indicator — shown as soon as the file has a Drive
-              // parent, including while the initial upload is still pending
-              // (driveFileId == null but driveParentFolderId != null).
-              if (editorState.driveParentFolderId != null)
-                Tooltip(
-                  message: (driveState.isSyncing ||
-                          editorState.driveFileId == null)
-                      ? 'Syncing to Google Drive…'
-                      : 'Synced to Google Drive',
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Center(
-                      child: (driveState.isSyncing ||
-                              editorState.driveFileId == null)
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.cloud_done_outlined),
-                    ),
-                  ),
-                ),
               PopupMenuButton<_MenuAction>(
                 tooltip: 'More',
                 onSelected: (action) {
@@ -1031,36 +1046,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Sidebar + draggable resize handle — slides out in edit/stitch mode
-                if (wsState.sidebarVisible) ...[
-                  ClipRect(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                      width: editorState.mode == AppMode.view
-                          ? wsState.sidebarWidth
-                          : 0,
-                      child: OverflowBox(
-                        alignment: Alignment.centerLeft,
-                        minWidth: wsState.sidebarWidth,
-                        maxWidth: wsState.sidebarWidth,
-                        child: const FileSidebar(),
-                      ),
-                    ),
-                  ),
-                  ClipRect(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                      width: editorState.mode == AppMode.view ? 5 : 0,
-                      child: _ResizeDivider(
-                        onDrag: (delta) => ref
-                            .read(workspaceProvider.notifier)
-                            .setSidebarWidth(wsState.sidebarWidth + delta),
-                      ),
-                    ),
-                  ),
-                ],
                 // Editor, PDF viewer, image viewer, or empty state
                 Expanded(
                   child: openPdf != null
@@ -1103,6 +1088,26 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ),
               ],
             ),
+            // File sidebar overlay — slides over the canvas so the canvas never moves
+            if (wsState.sidebarVisible)
+              Positioned(
+                left: editorState.mode == AppMode.view
+                    ? 0.0
+                    : -(wsState.sidebarWidth + 5.0),
+                top: 0,
+                bottom: 0,
+                width: wsState.sidebarWidth + 5,
+                child: Row(
+                  children: [
+                    Expanded(child: const FileSidebar()),
+                    _ResizeDivider(
+                      onDrag: (delta) => ref
+                          .read(workspaceProvider.notifier)
+                          .setSidebarWidth(wsState.sidebarWidth + delta),
+                    ),
+                  ],
+                ),
+              ),
             // Blocking loading overlay (Drive download in progress)
             if (isFileLoading)
               const Positioned.fill(

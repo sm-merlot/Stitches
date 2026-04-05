@@ -101,11 +101,7 @@ class EditorScreen extends ConsumerWidget {
     return result ?? false;
   }
 
-  String _title(EditorState state) {
-    final name = state.pattern.name;
-    final dirty = state.isDirty ? ' •' : '';
-    return '$name$dirty';
-  }
+  String _title(EditorState state) => state.pattern.name;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -135,6 +131,46 @@ class EditorScreen extends ConsumerWidget {
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // ── Drive sync indicator — left of title, all modes ──────────
+              if (state.driveParentFolderId != null) ...[
+                Tooltip(
+                  message: (driveState.isSyncing || state.driveFileId == null || state.isDirty)
+                      ? 'Syncing to Google Drive…'
+                      : 'Synced to Google Drive',
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: (driveState.isSyncing || state.driveFileId == null || state.isDirty)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_done_outlined, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 2),
+              ] else if (state.isFileOpen) ...[
+                Tooltip(
+                  message: state.isDirty ? 'Saving…' : 'Saved',
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: state.isDirty
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.task_alt, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 2),
+              ],
               Text(_title(state)),
               const SizedBox(width: 4),
               // ── Block mode toggle — in title area, consistent across modes ──
@@ -213,28 +249,8 @@ class EditorScreen extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
             ],
-            // ── Edit mode: drive sync + save + overflow + Done ───────────────
+            // ── Edit mode: save + overflow + Done ────────────────────────────
             if (state.mode == AppMode.edit) ...[
-              // Drive sync indicator
-              if (state.driveFileId != null)
-                Tooltip(
-                  message: driveState.isSyncing
-                      ? 'Syncing to Google Drive…'
-                      : 'Synced to Google Drive',
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Center(
-                      child: driveState.isSyncing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.cloud_done_outlined, size: 22),
-                    ),
-                  ),
-                ),
               IconButton(
                 icon: const Icon(Icons.save_outlined),
                 tooltip: 'Save  (Cmd+S)',
