@@ -794,7 +794,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(_title(editorState, wsState, openPdf)),
-          backgroundColor: editorState.stitchMode
+          backgroundColor: editorState.mode == AppMode.stitch
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
@@ -832,7 +832,23 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const EditorScreenLockButton(),
             ],
-            if (editorState.isFileOpen && !editorState.stitchMode && openPdf == null) ...[
+            // ── View mode: entry points to Edit and Stitch ──────────────────
+            if (editorState.isFileOpen && editorState.mode == AppMode.view && openPdf == null) ...[
+              FilledButton.tonal(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.edit),
+                child: const Text('Edit'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.stitch),
+                child: const Text('Stitch'),
+              ),
+              const SizedBox(width: 8),
+            ],
+            // ── Edit mode: full editor tools + Finished ──────────────────────
+            if (editorState.isFileOpen && editorState.mode == AppMode.edit && openPdf == null) ...[
               // Drive sync indicator — shown as soon as the file has a Drive
               // parent, including while the initial upload is still pending
               // (driveFileId == null but driveParentFolderId != null).
@@ -956,9 +972,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     ),
                 ],
               ),
+              const SizedBox(width: 4),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.view),
+                child: const Text('Finished'),
+              ),
+              const SizedBox(width: 8),
             ],
-            // Stitch mode actions — Page Mode + Materials + Demo + Screen Lock
-            if (editorState.isFileOpen && editorState.stitchMode && openPdf == null) ...[
+            // ── Stitch mode: page nav + tools + Exit ─────────────────────────
+            if (editorState.isFileOpen && editorState.mode == AppMode.stitch && openPdf == null) ...[
               IconButton(
                 tooltip: editorState.pattern.pageConfig.enabled
                     ? 'Page mode: on'
@@ -984,6 +1007,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               StitchDemoButton(state: editorState),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),
+              FilledButton.tonal(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.view),
+                child: const Text('Exit'),
+              ),
+              const SizedBox(width: 8),
             ],
           ],
         ),
@@ -992,8 +1021,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Sidebar + draggable resize handle
-                if (wsState.sidebarVisible) ...[
+                // Sidebar + draggable resize handle — hidden in stitch mode
+                if (wsState.sidebarVisible && editorState.mode != AppMode.stitch) ...[
                   SizedBox(width: wsState.sidebarWidth, child: const FileSidebar()),
                   _ResizeDivider(
                     onDrag: (delta) => ref

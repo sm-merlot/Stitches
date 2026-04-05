@@ -133,11 +133,27 @@ class EditorScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: Text(_title(state)),
-          backgroundColor: state.stitchMode
+          backgroundColor: state.mode == AppMode.stitch
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
-            if (!state.stitchMode) ...[
+            // ── View mode: entry points to Edit and Stitch ──────────────────
+            if (state.mode == AppMode.view) ...[
+              FilledButton.tonal(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.edit),
+                child: const Text('Edit'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.stitch),
+                child: const Text('Stitch'),
+              ),
+              const SizedBox(width: 8),
+            ],
+            // ── Edit mode: full editor tools + Finished ──────────────────────
+            if (state.mode == AppMode.edit) ...[
               // Drive sync indicator
               if (state.driveFileId != null)
                 Tooltip(
@@ -251,9 +267,16 @@ class EditorScreen extends ConsumerWidget {
                     ),
                 ],
               ),
+              const SizedBox(width: 4),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.view),
+                child: const Text('Finished'),
+              ),
+              const SizedBox(width: 8),
             ],
-            // Stitch mode actions — Page Mode + Materials + Demo + Screen Lock
-            if (state.stitchMode) ...[
+            // ── Stitch mode: page nav + tools + Exit ─────────────────────────
+            if (state.mode == AppMode.stitch) ...[
               IconButton(
                 tooltip: state.pattern.pageConfig.enabled
                     ? 'Page mode: on'
@@ -279,6 +302,12 @@ class EditorScreen extends ConsumerWidget {
               StitchDemoButton(state: state),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),
+              FilledButton.tonal(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.view),
+                child: const Text('Exit'),
+              ),
+              const SizedBox(width: 8),
             ],
           ],
         ),

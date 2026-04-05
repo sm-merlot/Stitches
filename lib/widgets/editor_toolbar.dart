@@ -60,8 +60,8 @@ class EditorToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
 
-    // Stitch mode: toolbar not rendered (controls moved to sidebar)
-    if (state.stitchMode) {
+    // Toolbar only shown in edit mode — not in view or stitch modes.
+    if (state.mode != AppMode.edit) {
       return const SizedBox.shrink();
     }
 

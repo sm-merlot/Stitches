@@ -50,6 +50,13 @@ enum SnippetResizeMode { clip, scale, expand }
 
 enum SnippetTransform { flipH, flipV, rotateCW }
 
+/// The three top-level application modes.
+///
+/// - [view] — read-only overview; the default when opening a file.
+/// - [edit] — full pattern editor (drawing, layers, snippets, etc.).
+/// - [stitch] — active stitching session (page nav, progress tracking).
+enum AppMode { view, edit, stitch }
+
 
 // ─── Canvas warning messages ──────────────────────────────────────────────────
 
@@ -83,7 +90,7 @@ class EditorState {
   final String activeLayerId;
   final bool showCompositeThreads;
   final CompositeResult? compositeResult;
-  final bool stitchMode;
+  final AppMode mode;
   final bool blockMode;
   final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
   final bool stitchBackMode;  // Back: greys normal stitches, backstitches shown in colour
@@ -152,7 +159,7 @@ class EditorState {
     this.activeLayerId = '',
     this.showCompositeThreads = true,
     this.compositeResult,
-    this.stitchMode = false,
+    this.mode = AppMode.view,
     this.blockMode = false,
     this.stitchCrossMode = false,
     this.stitchBackMode = false,
@@ -181,6 +188,12 @@ class EditorState {
 
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
+
+  /// True when in stitch mode — used by existing consumers without change.
+  bool get stitchMode => mode == AppMode.stitch;
+
+  /// True when in edit mode.
+  bool get editMode => mode == AppMode.edit;
 
   Layer get activeLayer => pattern.layers.firstWhere(
         (l) => l.id == activeLayerId,
@@ -287,7 +300,7 @@ class EditorState {
     String? activeLayerId,
     bool? showCompositeThreads,
     Object? compositeResult = _sentinel,
-    bool? stitchMode,
+    AppMode? mode,
     bool? blockMode,
     bool? stitchCrossMode,
     bool? stitchBackMode,
@@ -336,7 +349,7 @@ class EditorState {
       compositeResult: compositeResult == _sentinel
           ? this.compositeResult
           : compositeResult as CompositeResult?,
-      stitchMode: stitchMode ?? this.stitchMode,
+      mode: mode ?? this.mode,
       blockMode: blockMode ?? this.blockMode,
       stitchCrossMode: stitchCrossMode ?? this.stitchCrossMode,
       stitchBackMode: stitchBackMode ?? this.stitchBackMode,
@@ -404,8 +417,8 @@ class EditorNotifier extends Notifier<EditorState>
     EditorSession? session,
   }) {
     // ── Resolve session state ────────────────────────────────────────────────
+    // Files always open in View mode regardless of saved session.
     DrawingTool tool = DrawingTool.fullStitch;
-    bool stitchMode = false;
     bool blockMode = false;
     String? selectedThreadId;
     String? rawActiveLayerId;
@@ -420,7 +433,6 @@ class EditorNotifier extends Notifier<EditorState>
 
     if (session != null) {
       try { tool = DrawingTool.values.byName(session.tool); } catch (_) {}
-      stitchMode      = session.stitchMode;
       blockMode       = session.blockMode;
       selectedThreadId = session.selectedThreadId;
       rawActiveLayerId = session.activeLayerId;
@@ -441,7 +453,6 @@ class EditorNotifier extends Notifier<EditorState>
       if (pattern.editorTool != null) {
         try { tool = DrawingTool.values.byName(pattern.editorTool!); } catch (_) {}
       }
-      stitchMode       = pattern.editorStitchMode;
       blockMode        = pattern.editorBlockMode;
       selectedThreadId = pattern.editorSelectedThreadId;
       rawActiveLayerId = pattern.editorActiveLayerId;
@@ -481,11 +492,9 @@ class EditorNotifier extends Notifier<EditorState>
       currentTool: tool,
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
-      stitchMode: stitchMode,
+      mode: AppMode.view,
       blockMode: blockMode,
-      drawingMode: hasClipboard
-          ? DrawingMode.paste
-          : (stitchMode ? DrawingMode.select : DrawingMode.draw),
+      drawingMode: hasClipboard ? DrawingMode.paste : DrawingMode.pan,
       clipboard: hasClipboard ? prevClipboard : null,
       clipboardThreads: hasClipboard ? prevClipboardThreads : null,
       clipboardFromSnippet: hasClipboard && prevClipboardFromSnippet,
@@ -514,7 +523,6 @@ class EditorNotifier extends Notifier<EditorState>
           EditorSession(
             tool: tool.name,
             selectedThreadId: threadId,
-            stitchMode: stitchMode,
             blockMode: blockMode,
             activeLayerId: resolvedLayerId.isEmpty ? null : resolvedLayerId,
             viewPanX: viewPanX,
@@ -568,7 +576,6 @@ class EditorNotifier extends Notifier<EditorState>
       EditorSession(
         tool: state.currentTool.name,
         selectedThreadId: state.selectedThreadId,
-        stitchMode: state.stitchMode,
         blockMode: state.blockMode,
         activeLayerId: state.activeLayerId.isEmpty ? null : state.activeLayerId,
         viewPanX: state.viewPanX,
@@ -576,6 +583,26 @@ class EditorNotifier extends Notifier<EditorState>
         viewScale: state.viewScale,
       ),
     ));
+  }
+
+  /// Switch to [mode], updating drawingMode and display state accordingly.
+  @override
+  void setMode(AppMode mode) {
+    state = state.copyWith(
+      mode: mode,
+      drawingMode: switch (mode) {
+        AppMode.stitch => DrawingMode.select,
+        AppMode.edit   => DrawingMode.draw,
+        AppMode.view   => DrawingMode.pan,
+      },
+      selectionRect: null,
+      backstitchStartPoint: null,
+      showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
+      stitchCrossMode: mode == AppMode.stitch ? false : state.stitchCrossMode,
+      stitchBackMode: mode == AppMode.stitch ? false : state.stitchBackMode,
+    );
+    if (mode == AppMode.stitch) refreshCompositeCache();
+    _saveSession();
   }
 
   void setDriveFileId(String? id) {

@@ -205,7 +205,7 @@ class _LayersPanelState extends ConsumerState<LayersPanel> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
-    if (state.stitchMode || !state.isFileOpen) return const SizedBox.shrink();
+    if (state.mode != AppMode.edit || !state.isFileOpen) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
 
