@@ -466,22 +466,23 @@ class _FocusToggle extends StatelessWidget {
 }
 
 /// Demo button — launches [StitchDemoScreen]. Shown at the bottom of the
-/// stitch-mode sidebar. Enabled only when a thread is focused (selected in
-/// the colours list) and it has full stitches to demonstrate.
+/// stitch-mode sidebar. Enabled only when stitches are rubber-band selected
+/// on the canvas. If focus mode is active (one colour highlighted) that colour
+/// is used directly; otherwise a picker is shown for multi-colour selections.
 class StitchDemoButton extends StatelessWidget {
   final EditorState state;
   const StitchDemoButton({super.key, required this.state});
 
   @override
   Widget build(BuildContext context) {
+    // Enabled only when the user has rubber-band selected stitches on the canvas,
+    // and at least one of those stitches is not greyed out (i.e. matches the
+    // focused thread when focus mode is active).
     final focusId = state.stitchFocusThreadId;
-    final pool = state.selectionRect != null
-        ? state.selectedStitches
-        : state.pattern.stitches;
-    final hasFullStitches = !state.stitchBackMode &&
-        pool.any((s) =>
-            s is FullStitch && (focusId == null || s.threadId == focusId));
-    final enabled = focusId != null && hasFullStitches;
+    final enabled = state.selectionRect != null &&
+        state.selectedStitches.any((s) =>
+            s is FullStitch &&
+            (focusId == null || s.threadId == focusId));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -500,8 +501,8 @@ class StitchDemoButton extends StatelessWidget {
                     ScaffoldMessenger.of(context)
                       ..hideCurrentSnackBar()
                       ..showSnackBar(const SnackBar(
-                        content: Text(
-                            'Select a colour from the list to demo stitching'),
+                        content:
+                            Text('Select some stitches on the canvas first'),
                         duration: Duration(seconds: 2),
                       ));
                   },
