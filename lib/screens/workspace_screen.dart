@@ -1031,13 +1031,29 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Sidebar + draggable resize handle — hidden in edit and stitch mode
-                if (wsState.sidebarVisible && editorState.mode == AppMode.view) ...[
-                  SizedBox(width: wsState.sidebarWidth, child: const FileSidebar()),
-                  _ResizeDivider(
-                    onDrag: (delta) => ref
-                        .read(workspaceProvider.notifier)
-                        .setSidebarWidth(wsState.sidebarWidth + delta),
+                // Sidebar + draggable resize handle — slides out in edit/stitch mode
+                if (wsState.sidebarVisible) ...[
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    width: editorState.mode == AppMode.view ? wsState.sidebarWidth : 0,
+                    child: const OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      maxWidth: double.infinity,
+                      child: FileSidebar(),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    width: editorState.mode == AppMode.view ? 5 : 0,
+                    child: editorState.mode == AppMode.view
+                        ? _ResizeDivider(
+                            onDrag: (delta) => ref
+                                .read(workspaceProvider.notifier)
+                                .setSidebarWidth(wsState.sidebarWidth + delta),
+                          )
+                        : const SizedBox.shrink(),
                   ),
                 ],
                 // Editor, PDF viewer, image viewer, or empty state
