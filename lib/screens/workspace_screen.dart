@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/pattern.dart';
 import '../models/storage_location.dart';
 import '../providers/editor/editor_provider.dart';
@@ -18,9 +21,12 @@ import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
 import '../services/format_service.dart';
+import '../services/pdf_service.dart';
+import '../services/png_export_service.dart';
 import '../utils/editor_key_handler.dart';
 import '../utils/snackbars.dart';
 import '../widgets/editor_shared_widgets.dart';
+import '../widgets/share_format_picker.dart';
 import 'export_dialog.dart';
 import 'materials_list_screen.dart';
 import '../services/grid_detector.dart';
@@ -45,7 +51,7 @@ import 'page_mode_dialog.dart';
 
 part 'workspace_screen_components.dart';
 
-enum _MenuAction { saveAs, export, resize, referenceImage, shortcuts }
+enum _MenuAction { saveAs, exportOxs, resize, referenceImage, shortcuts }
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -229,17 +235,119 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   Future<void> _saveAs(BuildContext context) async {
     final state = ref.read(editorProvider);
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     try {
-      final path =
-          await FileService.saveFileAs(state.patternForSave,
-              compress: state.compressOnSave);
-      if (path != null) {
-        ref.read(editorProvider.notifier).setFilePath(path);
-        ref.read(editorProvider.notifier).markSaved();
-        if (context.mounted) showSuccess(context, 'Saved');
+      if (!isMobile) {
+        // Desktop: show format picker — .stitches, PDF, or PNG.
+        final format = await showShareFormatPicker(context);
+        if (format == null || !context.mounted) return;
+        switch (format) {
+          case ShareFormat.stitchesFile:
+            final path = await FileService.saveFileAs(state.patternForSave,
+                compress: state.compressOnSave);
+            if (path != null) {
+              ref.read(editorProvider.notifier).setFilePath(path);
+              ref.read(editorProvider.notifier).markSaved();
+              if (context.mounted) showSuccess(context, 'Saved');
+            }
+          case ShareFormat.pdf:
+            final bytes = await PdfService.buildPdfBytes(state.pattern,
+                useDmc: ref.read(settingsProvider).useDmc);
+            if (!context.mounted) return;
+            final suggested =
+                state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+            final path = await FilePicker.platform.saveFile(
+              fileName: suggested,
+              type: FileType.custom,
+              allowedExtensions: ['pdf'],
+            );
+            if (path == null) return;
+            final finalPdfPath =
+                path.endsWith('.pdf') ? path : '$path.pdf';
+            await File(finalPdfPath).writeAsBytes(bytes);
+            if (context.mounted) {
+              showSuccess(context,
+                  'Saved as ${finalPdfPath.split(Platform.pathSeparator).last}');
+            }
+          case ShareFormat.png:
+            final bytes = await PngExportService.export(state.pattern);
+            if (!context.mounted) return;
+            final suggested =
+                state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+            final path = await FilePicker.platform.saveFile(
+              fileName: suggested,
+              type: FileType.custom,
+              allowedExtensions: ['png'],
+            );
+            if (path == null) return;
+            final finalPngPath =
+                path.endsWith('.png') ? path : '$path.png';
+            await File(finalPngPath).writeAsBytes(bytes);
+            if (context.mounted) {
+              showSuccess(context,
+                  'Saved as ${finalPngPath.split(Platform.pathSeparator).last}');
+            }
+        }
+      } else {
+        // Mobile: Save As only saves .stitches; use Share for PDF/PNG.
+        final path = await FileService.saveFileAs(state.patternForSave,
+            compress: state.compressOnSave);
+        if (path != null) {
+          ref.read(editorProvider.notifier).setFilePath(path);
+          ref.read(editorProvider.notifier).markSaved();
+          if (context.mounted) showSuccess(context, 'Saved');
+        }
       }
     } catch (e) {
       if (context.mounted) showError(context, 'Save failed: $e');
+    }
+  }
+
+  /// Share the pattern via the OS share sheet (iOS/Android/macOS only).
+  Future<void> _share(BuildContext context) async {
+    final state = ref.read(editorProvider);
+    final box = context.findRenderObject() as RenderBox?;
+    final origin =
+        box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final format = await showShareFormatPicker(context);
+    if (format == null || !context.mounted) return;
+    try {
+      final pattern = state.pattern;
+      final suggested =
+          pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+      final tmpDir = await getTemporaryDirectory();
+
+      final Uint8List bytes;
+      final String fileName;
+      final String mimeType;
+
+      switch (format) {
+        case ShareFormat.stitchesFile:
+          final yaml = FileService.toYamlString(pattern);
+          // Always compress for sharing (matches release-mode behaviour).
+          bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
+          fileName = '$suggested.stitches';
+          mimeType = 'application/octet-stream';
+        case ShareFormat.pdf:
+          bytes = await PdfService.buildPdfBytes(pattern,
+              useDmc: ref.read(settingsProvider).useDmc);
+          fileName = '$suggested.pdf';
+          mimeType = 'application/pdf';
+        case ShareFormat.png:
+          bytes = await PngExportService.export(pattern);
+          fileName = '$suggested.png';
+          mimeType = 'image/png';
+      }
+
+      final tmpFile = File('${tmpDir.path}/$fileName');
+      await tmpFile.writeAsBytes(bytes, flush: true);
+
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(tmpFile.path, mimeType: mimeType, name: fileName)],
+        sharePositionOrigin: origin,
+      ));
+    } catch (e) {
+      if (context.mounted) showError(context, 'Share failed: $e');
     }
   }
 
@@ -349,8 +457,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
   }
 
-  Future<void> _showExportDialog(
-      BuildContext context, EditorState state) async {
+  Future<void> _exportOxs(BuildContext context, EditorState state) async {
     await showExportDialog(context, state.pattern,
         useDmc: ref.read(settingsProvider).useDmc,
         notifier: ref.read(editorProvider.notifier));
@@ -902,7 +1009,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const EditorScreenLockButton(),
             ],
-            // ── View mode: pattern info + materials + overflow + Edit + Stitch
+            // ── View mode: pattern info + materials + share + overflow + Edit + Stitch
             if (editorState.isFileOpen && editorState.mode == AppMode.view && openPdf == null) ...[
               IconButton(
                 tooltip: 'Pattern Info',
@@ -914,14 +1021,21 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 icon: const Icon(Icons.shopping_bag_outlined),
                 onPressed: () => showMaterialsList(context, editorState),
               ),
+              // Share button: iOS, Android, macOS only (Windows uses Save As for export)
+              if (!kIsWeb && !Platform.isWindows)
+                IconButton(
+                  tooltip: 'Share',
+                  icon: const Icon(Icons.ios_share),
+                  onPressed: () => _share(context),
+                ),
               PopupMenuButton<_MenuAction>(
                 tooltip: 'More',
                 onSelected: (action) {
                   switch (action) {
                     case _MenuAction.saveAs:
                       _saveAs(context);
-                    case _MenuAction.export:
-                      _showExportDialog(context, editorState);
+                    case _MenuAction.exportOxs:
+                      _exportOxs(context, editorState);
                     default:
                       break;
                   }
@@ -932,8 +1046,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     child: EditorMenuRow(icon: Icons.save_as_outlined, label: 'Save As…'),
                   ),
                   const PopupMenuItem(
-                    value: _MenuAction.export,
-                    child: EditorMenuRow(icon: Icons.upload_outlined, label: 'Export…'),
+                    value: _MenuAction.exportOxs,
+                    child: EditorMenuRow(icon: Icons.swap_horiz, label: 'Export OXS…'),
                   ),
                 ],
               ),
