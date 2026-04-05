@@ -865,19 +865,20 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   Color? _resolveStitchColor(String threadId, Color original,
       {required bool isCrossStitch}) {
-    if (!stitchMode) return original;
-
     final hasFocus = stitchFocusThreadId != null;
     final isFocused = !hasFocus || stitchFocusThreadId == threadId;
 
-    // Focus: unfocused stitches always grey
+    // Focus greying applies in all modes (view, stitch, edit).
     if (hasFocus && !isFocused) return _greyColor(original);
 
-    // Back mode: grey normal stitches (isCrossStitch = true means non-backstitch)
-    if (stitchBackMode && isCrossStitch) return _greyColor(original);
+    // Back/cross mode only applies in stitch mode.
+    if (stitchMode) {
+      // Back mode: grey normal stitches (isCrossStitch = true means non-backstitch)
+      if (stitchBackMode && isCrossStitch) return _greyColor(original);
 
-    // Cross mode: hide backstitches
-    if (stitchCrossMode && !isCrossStitch) return null;
+      // Cross mode: hide backstitches
+      if (stitchCrossMode && !isCrossStitch) return null;
+    }
 
     return original;
   }
