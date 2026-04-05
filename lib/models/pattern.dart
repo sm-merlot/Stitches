@@ -246,6 +246,9 @@ class CrossStitchPattern {
   factory CrossStitchPattern.fromYaml(Map<String, dynamic> yaml) {
     final version = yaml['version'] as int?;
     if (version == 2) {
+      final patternInfoMap = yaml['patternInfo'] != null
+          ? Map<String, dynamic>.from(yaml['patternInfo'] as Map)
+          : <String, dynamic>{};
       final patternMap =
           Map<String, dynamic>.from(yaml['pattern'] as Map? ?? {});
       final stitchingMap = yaml['stitching'] != null
@@ -253,8 +256,8 @@ class CrossStitchPattern {
           : <String, dynamic>{};
       // Flatten v2 nested structure into the same shape _fromFlat expects.
       final flat = <String, dynamic>{
+        ...patternInfoMap,
         ...patternMap,
-        'name': yaml['name'],
         'pageMode': stitchingMap['pageMode'],
       };
       return _migrateDiscontinuedThreads(_fromFlat(flat));

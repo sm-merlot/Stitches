@@ -189,13 +189,10 @@ class FileService {
   static String toYamlString(CrossStitchPattern pattern) {
     final buf = StringBuffer();
     buf.writeln('version: 2');
-    buf.writeln('name: ${_yamlStr(pattern.name)}');
 
-    // ── pattern: section — the design itself ─────────────────────────────────
-    buf.writeln('pattern:');
-    buf.writeln('  width: ${pattern.width}');
-    buf.writeln('  height: ${pattern.height}');
-    buf.writeln('  aidaColor: ${_yamlStr(pattern.aidaColorHex)}');
+    // ── patternInfo: section — metadata (equiv. to k8s metadata) ─────────────
+    buf.writeln('patternInfo:');
+    buf.writeln('  name: ${_yamlStr(pattern.name)}');
     if (pattern.designer != null) buf.writeln('  designer: ${_yamlStr(pattern.designer!)}');
     if (pattern.description != null) buf.writeln('  description: ${_yamlStr(pattern.description!)}');
     if (pattern.difficulty != null) buf.writeln('  difficulty: ${_yamlStr(pattern.difficulty!)}');
@@ -208,6 +205,12 @@ class FileService {
         buf.writeln('      strands: ${s.strands}');
       }
     }
+
+    // ── pattern: section — the design spec ───────────────────────────────────
+    buf.writeln('pattern:');
+    buf.writeln('  width: ${pattern.width}');
+    buf.writeln('  height: ${pattern.height}');
+    buf.writeln('  aidaColor: ${_yamlStr(pattern.aidaColorHex)}');
     if (pattern.referenceImagePath != null) {
       buf.writeln('  overlay:');
       buf.writeln('    imagePath: ${_yamlStr(pattern.referenceImagePath!)}');
