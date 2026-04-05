@@ -1,0 +1,37 @@
+lib/screens/workspace_screen.dart
+  18675e21c96bca5e 797,835-851,975-981,983-984,1010-1015,1024-1025
+lib/providers/editor/editor_provider.dart
+  18675e21c96bca5e 53-59,93,162,192-197,303,352,420,495,497,588-605
+lib/providers/editor/editor_provider_drawing.dart
+  18675e21c96bca5e 18,611
+lib/widgets/editor_toolbar.dart
+  18675e21c96bca5e 63-64
+lib/widgets/layers_panel.dart
+  18675e21c96bca5e 208
+lib/widgets/editor_canvas_area.dart
+  18675e21c96bca5e 7,38
+lib/screens/editor_screen.dart
+  18675e21c96bca5e 136,140-156,270-276,278-279,305-310
+lib/services/editor_session_service.dart
+  18675e21c96bca5e 5-6,11-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "5e5baf406acadeb442f9fc702595db6e5e224c15",
+  "prompts": {
+    "18675e21c96bca5e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e57d780-cfd0-42d8-b785-8a3603f1a59c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 120,
+      "total_deletions": 74,
+      "accepted_lines": 120,
+      "overriden_lines": 0
+    }
+  }
+}
