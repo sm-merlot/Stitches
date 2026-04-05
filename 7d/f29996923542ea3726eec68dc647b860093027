@@ -1,0 +1,29 @@
+lib/screens/pattern_info_dialog.dart
+  18675e21c96bca5e 1,145-163
+lib/screens/workspace_screen.dart
+  18675e21c96bca5e 49
+lib/services/file_service.dart
+  18675e21c96bca5e 6,145-146,149,152,159-160,166,181
+lib/screens/editor_screen.dart
+  18675e21c96bca5e 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "7df29996923542ea3726eec68dc647b860093027",
+  "prompts": {
+    "18675e21c96bca5e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e57d780-cfd0-42d8-b785-8a3603f1a59c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 41,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}
