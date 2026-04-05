@@ -145,6 +145,7 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
   Widget _buildStitchLayout(ThemeData theme) {
     final isTouch = defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.android;
+    final editorState = ref.watch(editorProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -168,6 +169,10 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
         ),
         const Divider(height: 1),
         const Expanded(child: ColoursPanel(mode: ColoursPanelMode.stitch)),
+        if (editorState.mode == AppMode.stitch) ...[
+          const Divider(height: 1),
+          StitchDemoButton(state: editorState),
+        ],
       ],
     );
   }

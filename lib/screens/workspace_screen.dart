@@ -30,7 +30,6 @@ import 'pattern_scan_symbol_screen.dart';
 import '../widgets/editor_canvas_area.dart';
 import '../widgets/file_sidebar.dart';
 import '../widgets/right_sidebar.dart';
-import '../widgets/right_sidebar_colours_panel.dart';
 import '../widgets/pdf_page_picker.dart';
 import '../widgets/image_viewer_panel.dart';
 import '../widgets/pdf_viewer_panel.dart';
@@ -1004,7 +1003,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       )
                     : null,
               ),
-              StitchDemoButton(state: editorState),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),
               FilledButton(

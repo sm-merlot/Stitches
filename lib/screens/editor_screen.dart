@@ -10,7 +10,6 @@ import '../widgets/editor_canvas_area.dart';
 import '../widgets/editor_shared_widgets.dart';
 import 'export_dialog.dart';
 import '../widgets/right_sidebar.dart';
-import '../widgets/right_sidebar_colours_panel.dart';
 import 'materials_list_screen.dart';
 import 'page_mode_dialog.dart';
 import 'pattern_info_dialog.dart';
@@ -298,7 +297,6 @@ class EditorScreen extends ConsumerWidget {
                       )
                     : null,
               ),
-              StitchDemoButton(state: state),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),
               FilledButton(
