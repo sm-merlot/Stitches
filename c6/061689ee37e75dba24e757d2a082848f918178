@@ -1,0 +1,23 @@
+lib/screens/workspace_screen.dart
+  18675e21c96bca5e 1034-1035
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "c6061689ee37e75dba24e757d2a082848f918178",
+  "prompts": {
+    "18675e21c96bca5e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e57d780-cfd0-42d8-b785-8a3603f1a59c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
