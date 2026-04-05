@@ -1031,8 +1031,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Sidebar + draggable resize handle — hidden in stitch mode
-                if (wsState.sidebarVisible && editorState.mode != AppMode.stitch) ...[
+                // Sidebar + draggable resize handle — hidden in edit and stitch mode
+                if (wsState.sidebarVisible && editorState.mode == AppMode.view) ...[
                   SizedBox(width: wsState.sidebarWidth, child: const FileSidebar()),
                   _ResizeDivider(
                     onDrag: (delta) => ref
