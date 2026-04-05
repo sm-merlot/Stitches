@@ -1040,8 +1040,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       width: editorState.mode == AppMode.view
                           ? wsState.sidebarWidth
                           : 0,
-                      child: SizedBox(
-                        width: wsState.sidebarWidth,
+                      child: OverflowBox(
+                        alignment: Alignment.centerLeft,
+                        minWidth: wsState.sidebarWidth,
+                        maxWidth: wsState.sidebarWidth,
                         child: const FileSidebar(),
                       ),
                     ),
