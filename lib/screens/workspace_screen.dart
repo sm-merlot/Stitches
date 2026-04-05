@@ -1033,27 +1033,30 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               children: [
                 // Sidebar + draggable resize handle — slides out in edit/stitch mode
                 if (wsState.sidebarVisible) ...[
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    width: editorState.mode == AppMode.view ? wsState.sidebarWidth : 0,
-                    child: const OverflowBox(
-                      alignment: Alignment.centerLeft,
-                      maxWidth: double.infinity,
-                      child: FileSidebar(),
+                  ClipRect(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      width: editorState.mode == AppMode.view
+                          ? wsState.sidebarWidth
+                          : 0,
+                      child: SizedBox(
+                        width: wsState.sidebarWidth,
+                        child: const FileSidebar(),
+                      ),
                     ),
                   ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    width: editorState.mode == AppMode.view ? 5 : 0,
-                    child: editorState.mode == AppMode.view
-                        ? _ResizeDivider(
-                            onDrag: (delta) => ref
-                                .read(workspaceProvider.notifier)
-                                .setSidebarWidth(wsState.sidebarWidth + delta),
-                          )
-                        : const SizedBox.shrink(),
+                  ClipRect(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      width: editorState.mode == AppMode.view ? 5 : 0,
+                      child: _ResizeDivider(
+                        onDrag: (delta) => ref
+                            .read(workspaceProvider.notifier)
+                            .setSidebarWidth(wsState.sidebarWidth + delta),
+                      ),
+                    ),
                   ),
                 ],
                 // Editor, PDF viewer, image viewer, or empty state
