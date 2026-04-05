@@ -46,7 +46,7 @@ import 'page_mode_dialog.dart';
 
 part 'workspace_screen_components.dart';
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, shortcuts }
+enum _MenuAction { saveAs, export, resize, referenceImage, shortcuts }
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({super.key});
@@ -931,14 +931,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 tooltip: 'More',
                 onSelected: (action) {
                   switch (action) {
-                    case _MenuAction.saveAs:
-                      _saveAs(context);
-                    case _MenuAction.export:
-                      _showExportDialog(context, editorState);
                     case _MenuAction.resize:
                       _showResizeDialog(context, editorState);
-                    case _MenuAction.patternInfo:
-                      showPatternInfo(context, ref, editorState);
                     case _MenuAction.referenceImage:
                       showModalBottomSheet(
                         context: context,
@@ -950,6 +944,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         context: context,
                         builder: (_) => const _ShortcutsDialog(),
                       );
+                    default:
+                      break;
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -970,23 +966,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     value: _MenuAction.resize,
                     child: EditorMenuRow(
                         icon: Icons.aspect_ratio, label: 'Resize Aida'),
-                  ),
-                  const PopupMenuItem(
-                    value: _MenuAction.patternInfo,
-                    child: EditorMenuRow(
-                        icon: Icons.info_outline, label: 'Pattern Info'),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: _MenuAction.saveAs,
-                    child: EditorMenuRow(
-                        icon: Icons.save_as_outlined, label: 'Save As…'),
-                  ),
-                  const PopupMenuItem(
-                    value: _MenuAction.export,
-                    child: EditorMenuRow(
-                        icon: Icons.upload_outlined,
-                        label: 'Export…'),
                   ),
                   if (defaultTargetPlatform != TargetPlatform.iOS &&
                       defaultTargetPlatform != TargetPlatform.android)

@@ -18,7 +18,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage }
+enum _MenuAction { saveAs, export, resize, referenceImage }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -238,22 +238,16 @@ class EditorScreen extends ConsumerWidget {
                 tooltip: 'More',
                 onSelected: (action) {
                   switch (action) {
-                    case _MenuAction.saveAs:
-                      _saveAs(context, ref);
-                    case _MenuAction.export:
-                      showExportDialog(context, state.pattern,
-                          useDmc: ref.read(settingsProvider).useDmc,
-                          notifier: ref.read(editorProvider.notifier));
                     case _MenuAction.resize:
                       _showResizeDialog(context, ref, state);
-                    case _MenuAction.patternInfo:
-                      showPatternInfo(context, ref, state);
                     case _MenuAction.referenceImage:
                       showModalBottomSheet(
                         context: context,
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
+                    default:
+                      break;
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -274,23 +268,6 @@ class EditorScreen extends ConsumerWidget {
                     value: _MenuAction.resize,
                     child: EditorMenuRow(
                         icon: Icons.aspect_ratio, label: 'Resize Aida'),
-                  ),
-                  const PopupMenuItem(
-                    value: _MenuAction.patternInfo,
-                    child: EditorMenuRow(
-                        icon: Icons.info_outline, label: 'Pattern Info'),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: _MenuAction.saveAs,
-                    child: EditorMenuRow(
-                        icon: Icons.save_as_outlined, label: 'Save As…'),
-                  ),
-                  const PopupMenuItem(
-                    value: _MenuAction.export,
-                    child: EditorMenuRow(
-                        icon: Icons.upload_outlined,
-                        label: 'Export…'),
                   ),
                 ],
               ),
