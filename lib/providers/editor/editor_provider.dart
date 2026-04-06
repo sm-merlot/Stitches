@@ -81,6 +81,8 @@ class EditorState {
   final String? selectedThreadId;
   final List<(CrossStitchPattern, List<SnippetPalette>)> _undoStack;
   final List<(CrossStitchPattern, List<SnippetPalette>)> _redoStack;
+  final List<PatternProgress> _progressUndoStack;
+  final List<PatternProgress> _progressRedoStack;
   final bool isDirty;
   final Offset? backstitchStartPoint;
   /// Most-recently-used thread IDs, most recent first. Max 5. Session-only.
@@ -157,6 +159,8 @@ class EditorState {
     this.selectedThreadId,
     List<(CrossStitchPattern, List<SnippetPalette>)> undoStack = const [],
     List<(CrossStitchPattern, List<SnippetPalette>)> redoStack = const [],
+    List<PatternProgress> progressUndoStack = const [],
+    List<PatternProgress> progressRedoStack = const [],
     this.isDirty = false,
     this.backstitchStartPoint,
     this.recentThreadIds = const [],
@@ -193,10 +197,14 @@ class EditorState {
     this.pendingFitPage,
     this.progressRegion,
   })  : _undoStack = undoStack,
-        _redoStack = redoStack;
+        _redoStack = redoStack,
+        _progressUndoStack = progressUndoStack,
+        _progressRedoStack = progressRedoStack;
 
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
+  bool get canUndoProgress => _progressUndoStack.isNotEmpty;
+  bool get canRedoProgress => _progressRedoStack.isNotEmpty;
 
   /// True when in stitch mode — used by existing consumers without change.
   bool get stitchMode => mode == AppMode.stitch;
@@ -299,6 +307,8 @@ class EditorState {
     Object? selectedThreadId = _sentinel,
     List<(CrossStitchPattern, List<SnippetPalette>)>? undoStack,
     List<(CrossStitchPattern, List<SnippetPalette>)>? redoStack,
+    List<PatternProgress>? progressUndoStack,
+    List<PatternProgress>? progressRedoStack,
     bool? isDirty,
     Object? backstitchStartPoint = _sentinel,
     List<String>? recentThreadIds,
@@ -345,6 +355,8 @@ class EditorState {
           : selectedThreadId as String?,
       undoStack: undoStack ?? _undoStack,
       redoStack: redoStack ?? _redoStack,
+      progressUndoStack: progressUndoStack ?? _progressUndoStack,
+      progressRedoStack: progressRedoStack ?? _progressRedoStack,
       isDirty: isDirty ?? this.isDirty,
       backstitchStartPoint: backstitchStartPoint == _sentinel
           ? this.backstitchStartPoint

@@ -55,13 +55,19 @@ class EditorCanvasArea extends ConsumerWidget {
 class ProgressInfoBar extends ConsumerWidget {
   const ProgressInfoBar({super.key});
 
+  static Color _barColor(int pct) =>
+      Color.lerp(Colors.orange.shade700, Colors.green.shade600, pct / 100.0)!;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
     if (!state.stitchMode) return const SizedBox.shrink();
 
     final progress = state.pattern.progress;
-    if (progress.completedStitches.isEmpty) return const SizedBox.shrink();
+    // Keep the bar visible when there's undoable progress, even if cleared.
+    if (progress.completedStitches.isEmpty && !state.canUndoProgress) {
+      return const SizedBox.shrink();
+    }
 
     // Count unique cells with non-backstitch stitches as the total.
     final totalCells = <(int, int)>{};
@@ -75,6 +81,7 @@ class ProgressInfoBar extends ConsumerWidget {
     final total = totalCells.length;
     final done = progress.completedStitches.length;
     final pct = total > 0 ? (done * 100 / total).round() : 0;
+    final fraction = total > 0 ? done / total : 0.0;
 
     // Colours done.
     final allStitches = state.pattern.stitches;
@@ -93,31 +100,75 @@ class ProgressInfoBar extends ConsumerWidget {
     final style = theme.textTheme.labelSmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
+    final barColor = _barColor(pct);
     const sep = SizedBox(width: 4);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text('$done/$total stitches', style: style),
-          sep,
-          Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
-          sep,
-          Text('$pct% done', style: style),
-          if (pageMode) ...[
-            sep,
-            Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
-            sep,
-            Text('$donePages/$totalPages pages', style: style),
-          ],
-          sep,
-          Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
-          sep,
-          Text('$doneColours/${threads.length} colours', style: style),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Coloured progress bar — fills left-to-right, colour shifts orange→green.
+        LinearProgressIndicator(
+          value: fraction,
+          color: barColor,
+          backgroundColor: theme.colorScheme.outlineVariant.withValues(alpha: 0.25),
+          minHeight: 3,
+        ),
+        Container(
+          padding: const EdgeInsets.only(left: 12, right: 4, top: 1, bottom: 1),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+          child: Row(
+            children: [
+              // Stats — centred in the available space
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('$pct%', style: style?.copyWith(
+                      color: barColor,
+                      fontWeight: FontWeight.w600,
+                    )),
+                    sep,
+                    Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
+                    sep,
+                    Text('$done/$total stitches', style: style),
+                    if (pageMode) ...[
+                      sep,
+                      Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
+                      sep,
+                      Text('$donePages/$totalPages pages', style: style),
+                    ],
+                    sep,
+                    Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
+                    sep,
+                    Text('$doneColours/${threads.length} colours', style: style),
+                  ],
+                ),
+              ),
+              // Undo / redo for progress operations
+              IconButton(
+                icon: const Icon(Icons.undo),
+                iconSize: 16,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                tooltip: 'Undo progress',
+                onPressed: state.canUndoProgress
+                    ? () => ref.read(editorProvider.notifier).undoProgress()
+                    : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.redo),
+                iconSize: 16,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                tooltip: 'Redo progress',
+                onPressed: state.canRedoProgress
+                    ? () => ref.read(editorProvider.notifier).redoProgress()
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

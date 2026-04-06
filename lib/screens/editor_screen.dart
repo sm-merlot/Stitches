@@ -9,8 +9,9 @@ import 'package:share_plus/share_plus.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
+import '../models/page_config.dart';
+import '../models/pattern_progress.dart';
 import '../models/storage_location.dart';
-import '../services/google_drive_service.dart';
 import '../services/file_service.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
@@ -83,8 +84,11 @@ class EditorScreen extends ConsumerWidget {
 
   Future<void> _export(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
-    final format = await showShareFormatPicker(context, title: 'Export as…');
-    if (format == null || !context.mounted) return;
+    final result = await showShareFormatPicker(context,
+        title: 'Export as…',
+        hasProgress: state.pattern.progress.completedStitches.isNotEmpty,
+        hasPageSettings: state.pattern.pageConfig.enabled);
+    if (result == null || !context.mounted) return;
 
     if (state.driveParentFolderId != null) {
       bool saveLocally = false;
@@ -96,28 +100,31 @@ class EditorScreen extends ConsumerWidget {
       );
       if (!context.mounted) return;
       if (driveResult != null) {
-        await _exportToDriveFolder(context, ref, state, format, driveResult.$1);
+        await _exportToDriveFolder(context, ref, state, result, driveResult.$1);
         return;
       }
       if (!saveLocally) return;
     }
 
-    await _exportToLocalFile(context, ref, state, format);
+    await _exportToLocalFile(context, ref, state, result);
   }
 
   Future<void> _exportToDriveFolder(
       BuildContext context,
       WidgetRef ref,
       EditorState state,
-      ShareFormat format,
+      PatternShareResult result,
       DriveFolder folder) async {
     final suggested = state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     try {
-      final Uint8List bytes;
-      final String fileName;
-      switch (format) {
+      late final Uint8List bytes;
+      late final String fileName;
+      switch (result.format) {
         case ShareFormat.stitchesFile:
-          final yaml = FileService.toYamlString(state.patternForSave);
+          var sharePattern = state.patternForSave;
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
+          final yaml = FileService.toYamlString(sharePattern);
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
           fileName = '$suggested.stitches';
         case ShareFormat.oxs:
@@ -147,17 +154,20 @@ class EditorScreen extends ConsumerWidget {
   }
 
   Future<void> _exportToLocalFile(
-      BuildContext context, WidgetRef ref, EditorState state, ShareFormat format) async {
+      BuildContext context, WidgetRef ref, EditorState state, PatternShareResult result) async {
     final suggested = state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     final initialDir = (state.filePath != null && state.driveParentFolderId == null)
         ? File(state.filePath!).parent.path
         : null;
     try {
-      switch (format) {
+      switch (result.format) {
         case ShareFormat.stitchesFile:
+          var sharePattern = state.patternForSave;
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           if (isMobile) {
-            final yaml = FileService.toYamlString(state.patternForSave);
+            final yaml = FileService.toYamlString(sharePattern);
             final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
             final path = await FilePicker.platform.saveFile(
               fileName: '$suggested.stitches', type: FileType.any, bytes: bytes);
@@ -175,7 +185,7 @@ class EditorScreen extends ConsumerWidget {
             );
             if (path == null) return;
             final finalPath = path.endsWith('.stitches') ? path : '$path.stitches';
-            await FileService.saveFile(state.patternForSave, finalPath,
+            await FileService.saveFile(sharePattern, finalPath,
                 compress: state.compressOnSave);
             ref.read(editorProvider.notifier).setFilePath(finalPath);
             ref.read(editorProvider.notifier).markSaved();
@@ -306,26 +316,32 @@ class EditorScreen extends ConsumerWidget {
     }
   }
 
+
   Future<void> _share(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     final box = context.findRenderObject() as RenderBox?;
     final origin =
         box != null ? box.localToGlobal(Offset.zero) & box.size : null;
-    final format = await showShareFormatPicker(context);
-    if (format == null || !context.mounted) return;
+    final result = await showShareFormatPicker(context,
+        hasProgress: state.pattern.progress.completedStitches.isNotEmpty,
+        hasPageSettings: state.pattern.pageConfig.enabled);
+    if (result == null || !context.mounted) return;
     try {
       final pattern = state.pattern;
       final suggested =
           pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
       final tmpDir = await getTemporaryDirectory();
 
-      final Uint8List bytes;
-      final String fileName;
-      final String mimeType;
+      late final Uint8List bytes;
+      late final String fileName;
+      late final String mimeType;
 
-      switch (format) {
+      switch (result.format) {
         case ShareFormat.stitchesFile:
-          final yaml = FileService.toYamlString(pattern);
+          var sharePattern = pattern;
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
+          final yaml = FileService.toYamlString(sharePattern);
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
           fileName = '$suggested.stitches';
           mimeType = 'application/octet-stream';
@@ -573,6 +589,11 @@ class EditorScreen extends ConsumerWidget {
                       )
                     : null,
               ),
+              IconButton(
+                tooltip: 'How progress tracking works',
+                icon: const Icon(Icons.checklist),
+                onPressed: () => showProgressHelpDialog(context, ref),
+              ),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),
               FilledButton(
@@ -621,4 +642,5 @@ class EditorScreen extends ConsumerWidget {
   }
 
 }
+
 
