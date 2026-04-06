@@ -12,7 +12,7 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
-    _ = ensureChannel() // set up the handler as early as possible
+    // Channel is registered by MainFlutterWindow.awakeFromNib via registerChannel(with:).
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -49,17 +49,10 @@ class AppDelegate: FlutterAppDelegate {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /// Returns the existing channel or creates it by finding the FlutterViewController
-  /// in the window list. MainFlutterWindow extends NSWindow (not FlutterWindow),
-  /// so mainFlutterWindow is nil — we scan NSApp.windows instead.
-  @discardableResult
-  private func ensureChannel() -> FlutterMethodChannel? {
-    if let ch = channel { return ch }
-    guard let ctrl = NSApp.windows
-      .compactMap({ $0.contentViewController as? FlutterViewController })
-      .first
-    else { return nil }
-
+  /// Called by MainFlutterWindow.awakeFromNib immediately after the
+  /// FlutterViewController is created — guaranteed timing, no window scanning.
+  func registerChannel(with ctrl: FlutterViewController) {
+    guard channel == nil else { return }
     let ch = FlutterMethodChannel(name: kFileOpenChannel,
                                   binaryMessenger: ctrl.engine.binaryMessenger)
     ch.setMethodCallHandler { [weak self] call, result in
@@ -86,7 +79,19 @@ class AppDelegate: FlutterAppDelegate {
       }
     }
     channel = ch
-    return ch
+  }
+
+  /// Lazy fallback for deliver() when the channel wasn't registered yet
+  /// (e.g. cold-start file open before awakeFromNib fires). Scans windows.
+  @discardableResult
+  private func ensureChannel() -> FlutterMethodChannel? {
+    if let ch = channel { return ch }
+    guard let ctrl = NSApp.windows
+      .compactMap({ $0.contentViewController as? FlutterViewController })
+      .first
+    else { return nil }
+    registerChannel(with: ctrl)
+    return channel
   }
 
   /// Returns true for paths this app handles: .stitches files and directories.
