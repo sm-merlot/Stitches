@@ -138,6 +138,8 @@ class _HomeItem extends ConsumerWidget {
             r.id.startsWith(homePath))
         .take(4)
         .map((r) => r.thumbnailKey!)
+        .toList()
+        .reversed
         .toList();
 
     return Card(
@@ -580,6 +582,9 @@ class _RecentItemTile extends ConsumerWidget {
         height: 40,
       );
     } else if (item.isFolder) {
+      // Collect up to 3 child thumbnails. allRecents is most-recent-first so
+      // we reverse before passing to the strip — the most-recent key ends up
+      // last in the Stack and is therefore rendered on top.
       final folderKeys = allRecents
           .where((r) =>
               !r.isFolder &&
@@ -587,6 +592,8 @@ class _RecentItemTile extends ConsumerWidget {
               (r.id.startsWith(item.id) || r.parentId == item.id))
           .take(3)
           .map((r) => r.thumbnailKey!)
+          .toList()
+          .reversed
           .toList();
       leading = folderKeys.isNotEmpty
           ? _FolderThumbnailStrip(thumbnailKeys: folderKeys)

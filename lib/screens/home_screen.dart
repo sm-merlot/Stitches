@@ -55,6 +55,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Prune recents whose local files have been deleted.
       ref.read(recentItemsProvider.notifier).pruneDeletedFiles();
 
+      // Refresh thumbnails for any Drive folder recents that lack children.
+      unawaited(_refreshDriveFolderThumbnails());
+
       // Load home folder path on mobile.
       if (_isMobile) {
         final path = await homeFolderPath();
@@ -91,6 +94,74 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final bytes = await generatePatternThumbnail(pattern);
       if (bytes != null) await ThumbnailCache.store(key, bytes);
     } catch (_) {}
+  }
+
+  /// For every Drive folder in recents, ensure its .stitches files have
+  /// thumbnail-only recents entries. Skips folders that already have children,
+  /// so it's cheap on repeat visits.
+  Future<void> _refreshDriveFolderThumbnails() async {
+    try {
+      final recents = ref.read(recentItemsProvider);
+      final driveFolders = recents.where((r) => r.isFolder && r.isDrive);
+      if (driveFolders.isEmpty) return;
+
+      final service =
+          await ref.read(googleDriveProvider.notifier).getService();
+      if (service == null || !mounted) return;
+
+      final notifier = ref.read(recentItemsProvider.notifier);
+
+      for (final folderItem in driveFolders) {
+        // Skip if we already have thumbnail children for this folder.
+        final alreadyHasChildren = recents
+            .any((r) => r.thumbnailOnly && r.parentId == folderItem.id);
+        if (alreadyHasChildren) continue;
+
+        final folder = DriveFolder(
+            folderId: folderItem.id, name: folderItem.driveName ?? 'Drive');
+        try {
+          final contents = await service.listFolderContents(folder);
+          if (!mounted) return;
+
+          for (final file in contents.files) {
+            if (file is! DrivePatternFile) continue;
+            final key = driveThumbnailKey(file.fileId);
+            var cached = await ThumbnailCache.load(key);
+            if (cached == null) {
+              try {
+                final bytes = await service.downloadFile(file.fileId);
+                final tempDir = await getTemporaryDirectory();
+                final tempPath = '${tempDir.path}/${file.fileId}.stitches';
+                await File(tempPath).writeAsBytes(bytes);
+                final (pattern, _, _) =
+                    await FileService.openFileFromPath(tempPath);
+                final thumbBytes = await generatePatternThumbnail(pattern);
+                if (thumbBytes != null) {
+                  await ThumbnailCache.store(key, thumbBytes);
+                  cached = thumbBytes;
+                }
+              } catch (_) {
+                continue;
+              }
+            }
+            if (cached != null && mounted) {
+              notifier.add(
+                file.fileId,
+                isFolder: false,
+                thumbnailKey: key,
+                thumbnailOnly: true,
+                parentId: folderItem.id,
+              );
+            }
+          }
+        } catch (_) {
+          // Skip this folder on error — try again next launch.
+          continue;
+        }
+      }
+    } catch (_) {
+      // Silently ignore — thumbnails are non-critical.
+    }
   }
 
   // ─── Actions ──────────────────────────────────────────────────────────────
