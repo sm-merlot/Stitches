@@ -141,7 +141,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       final contents = await service.listFolderContents(folder);
       if (!mounted) return;
       final notifier = ref.read(recentItemsProvider.notifier);
-      final parentId = folder.id; // 'drive:<folderId>'
+      // Drive folder RecentItems use bare folderId as their id (not 'drive:…').
+      final parentId = folder.folderId;
       for (final file in contents.files) {
         if (file is! DrivePatternFile) continue;
         final key = driveThumbnailKey(file.fileId);
