@@ -7,7 +7,10 @@ import '../services/google_drive_service.dart';
 /// A dialog that lets the user navigate their Google Drive folder hierarchy
 /// and select a folder to use as the workspace root.
 class DriveFolderPickerDialog extends ConsumerStatefulWidget {
-  const DriveFolderPickerDialog({super.key});
+  /// When non-null, shows a "Save to local storage" button that calls this.
+  final VoidCallback? onSaveLocally;
+
+  const DriveFolderPickerDialog({super.key, this.onSaveLocally});
 
   /// Shows the dialog and returns the selected folder + its breadcrumb path,
   /// or null if cancelled.
@@ -168,13 +171,23 @@ class _DriveFolderPickerDialogState
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _current.displayName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurfaceVariant,
+                  if (widget.onSaveLocally != null)
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop(null);
+                        widget.onSaveLocally!();
+                      },
+                      icon: const Icon(Icons.folder_outlined, size: 16),
+                      label: const Text('Save to local storage'),
+                    )
+                  else
+                    Text(
+                      _current.displayName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
                   Row(
                     children: [
                       TextButton(

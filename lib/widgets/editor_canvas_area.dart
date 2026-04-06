@@ -8,21 +8,25 @@ import 'pattern_canvas.dart';
 ///
 /// Callers are responsible for only rendering this widget when a file is open.
 class EditorCanvasArea extends ConsumerWidget {
-  /// When non-null, shows the import-format banner with a Save As button.
+  /// When non-null, shows the import-format banner for this non-native file.
   final String? importFilePath;
-  final VoidCallback? onSaveAs;
 
-  /// Pass true in the Workspace context to mention Drive in the banner text.
-  final bool showDriveNoteInBanner;
+  /// Called when user taps "Convert to .stitches". Null when [onOpenNative]
+  /// is provided instead (i.e. a .stitches sibling already exists).
+  final VoidCallback? onConvert;
+
+  /// Called when user taps "Open .stitches". Non-null only when a native
+  /// sibling already exists beside [importFilePath].
+  final VoidCallback? onOpenNative;
 
   const EditorCanvasArea({
     super.key,
     this.importFilePath,
-    this.onSaveAs,
-    this.showDriveNoteInBanner = false,
+    this.onConvert,
+    this.onOpenNative,
   }) : assert(
-          importFilePath == null || onSaveAs != null,
-          'onSaveAs is required when importFilePath is provided',
+          importFilePath == null || onConvert != null || onOpenNative != null,
+          'onConvert or onOpenNative is required when importFilePath is provided',
         );
 
   @override
@@ -32,8 +36,8 @@ class EditorCanvasArea extends ConsumerWidget {
         if (importFilePath != null)
           EditorImportBanner(
             filePath: importFilePath!,
-            onSaveAs: onSaveAs!,
-            showDriveNote: showDriveNoteInBanner,
+            onConvert: onConvert,
+            onOpenNative: onOpenNative,
           ),
         const Expanded(child: PatternCanvas()),
         const SafeArea(top: false, child: EditorToolbar()),

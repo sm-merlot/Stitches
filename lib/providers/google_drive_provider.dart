@@ -186,6 +186,37 @@ class DriveNotifier extends Notifier<DriveState> {
       return null;
     }
   }
+
+  /// Upload arbitrary bytes to Drive as a new file (always creates).
+  /// Returns the new Drive file ID, or null on failure.
+  Future<String?> uploadRawFile({
+    required String name,
+    required Uint8List bytes,
+    required String parentFolderId,
+  }) async {
+    state = state.copyWith(isSyncing: true);
+    try {
+      final service = await getService();
+      if (!ref.mounted) return null;
+      if (service == null) {
+        state = state.copyWith(isSyncing: false, error: 'Not connected to Google Drive.');
+        return null;
+      }
+      final id = await service.uploadFile(
+        fileId: null,
+        name: name,
+        bytes: bytes,
+        parentFolderId: parentFolderId,
+      );
+      if (!ref.mounted) return null;
+      state = state.copyWith(isSyncing: false, error: null);
+      return id;
+    } catch (e) {
+      if (!ref.mounted) return null;
+      state = state.copyWith(isSyncing: false, error: 'Upload failed: $e');
+      return null;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

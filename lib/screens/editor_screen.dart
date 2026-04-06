@@ -17,6 +17,7 @@ import '../utils/snackbars.dart';
 import '../widgets/editor_canvas_area.dart';
 import '../widgets/editor_shared_widgets.dart';
 import '../widgets/share_format_picker.dart';
+import 'drive_folder_picker_dialog.dart';
 import 'export_dialog.dart';
 import '../widgets/right_sidebar.dart';
 import 'materials_list_screen.dart';
@@ -26,7 +27,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, exportOxs, resize, referenceImage }
+// No overflow menu — all actions are direct app bar buttons.
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -65,69 +66,241 @@ class EditorScreen extends ConsumerWidget {
 
   Future<void> _saveAs(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
-    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     try {
-      if (!isMobile) {
-        final format = await showShareFormatPicker(context);
-        if (format == null || !context.mounted) return;
-        switch (format) {
-          case ShareFormat.stitchesFile:
-            final path = await FileService.saveFileAs(state.patternForSave,
-                compress: state.compressOnSave);
+      final path = await FileService.saveFileAs(state.patternForSave,
+          compress: state.compressOnSave);
+      if (path != null) {
+        ref.read(editorProvider.notifier).setFilePath(path);
+        ref.read(editorProvider.notifier).markSaved();
+        if (context.mounted) showSuccess(context, 'Saved');
+      }
+    } catch (e) {
+      if (context.mounted) showError(context, 'Save failed: $e');
+    }
+  }
+
+  Future<void> _export(BuildContext context, WidgetRef ref) async {
+    final state = ref.read(editorProvider);
+    final format = await showShareFormatPicker(context, title: 'Export as…');
+    if (format == null || !context.mounted) return;
+
+    if (state.driveParentFolderId != null) {
+      bool saveLocally = false;
+      final driveResult = await showDialog<(DriveFolder, String)?>(
+        context: context,
+        builder: (_) => DriveFolderPickerDialog(
+          onSaveLocally: () => saveLocally = true,
+        ),
+      );
+      if (!context.mounted) return;
+      if (driveResult != null) {
+        await _exportToDriveFolder(context, ref, state, format, driveResult.$1);
+        return;
+      }
+      if (!saveLocally) return;
+    }
+
+    await _exportToLocalFile(context, ref, state, format);
+  }
+
+  Future<void> _exportToDriveFolder(
+      BuildContext context,
+      WidgetRef ref,
+      EditorState state,
+      ShareFormat format,
+      DriveFolder folder) async {
+    final suggested = state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+    try {
+      final Uint8List bytes;
+      final String fileName;
+      switch (format) {
+        case ShareFormat.stitchesFile:
+          final yaml = FileService.toYamlString(state.patternForSave);
+          bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
+          fileName = '$suggested.stitches';
+        case ShareFormat.oxs:
+          bytes = Uint8List.fromList(utf8.encode(
+              FormatService.encodeFile(state.pattern, CrossStitchFormat.oxs)));
+          fileName = '$suggested.oxs';
+        case ShareFormat.pdf:
+          bytes = await PdfService.buildPdfBytes(state.pattern,
+              useDmc: ref.read(settingsProvider).useDmc);
+          fileName = '$suggested.pdf';
+        case ShareFormat.png:
+          bytes = await PngExportService.export(state.pattern);
+          fileName = '$suggested.png';
+      }
+      if (!context.mounted) return;
+      final id = await ref.read(googleDriveProvider.notifier).uploadRawFile(
+            name: fileName, bytes: bytes, parentFolderId: folder.folderId);
+      if (!context.mounted) return;
+      if (id != null) {
+        showSuccess(context, 'Exported to Drive as $fileName');
+      } else {
+        showError(context, 'Drive export failed');
+      }
+    } catch (e) {
+      if (context.mounted) showError(context, 'Export failed: $e');
+    }
+  }
+
+  Future<void> _exportToLocalFile(
+      BuildContext context, WidgetRef ref, EditorState state, ShareFormat format) async {
+    final suggested = state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final initialDir = (state.filePath != null && state.driveParentFolderId == null)
+        ? File(state.filePath!).parent.path
+        : null;
+    try {
+      switch (format) {
+        case ShareFormat.stitchesFile:
+          if (isMobile) {
+            final yaml = FileService.toYamlString(state.patternForSave);
+            final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
+            final path = await FilePicker.platform.saveFile(
+              fileName: '$suggested.stitches', type: FileType.any, bytes: bytes);
             if (path != null) {
               ref.read(editorProvider.notifier).setFilePath(path);
               ref.read(editorProvider.notifier).markSaved();
               if (context.mounted) showSuccess(context, 'Saved');
             }
-          case ShareFormat.pdf:
-            final bytes = await PdfService.buildPdfBytes(state.pattern,
-                useDmc: ref.read(settingsProvider).useDmc);
-            if (!context.mounted) return;
-            final suggested =
-                state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+          } else {
+            final path = await FilePicker.platform.saveFile(
+              fileName: suggested,
+              type: FileType.custom,
+              allowedExtensions: ['stitches'],
+              initialDirectory: initialDir,
+            );
+            if (path == null) return;
+            final finalPath = path.endsWith('.stitches') ? path : '$path.stitches';
+            await FileService.saveFile(state.patternForSave, finalPath,
+                compress: state.compressOnSave);
+            ref.read(editorProvider.notifier).setFilePath(finalPath);
+            ref.read(editorProvider.notifier).markSaved();
+            if (context.mounted) {
+              showSuccess(context, 'Saved as ${finalPath.split(Platform.pathSeparator).last}');
+            }
+          }
+        case ShareFormat.oxs:
+          final bytes = Uint8List.fromList(utf8.encode(
+              FormatService.encodeFile(state.pattern, CrossStitchFormat.oxs)));
+          if (isMobile) {
+            await FilePicker.platform.saveFile(
+              fileName: '$suggested.oxs', type: FileType.any, bytes: bytes);
+            if (context.mounted) showSuccess(context, 'Exported $suggested.oxs');
+          } else {
+            final path = await FilePicker.platform.saveFile(
+              fileName: suggested,
+              type: FileType.custom,
+              allowedExtensions: ['oxs'],
+              initialDirectory: initialDir,
+            );
+            if (path == null) return;
+            final finalPath = path.endsWith('.oxs') ? path : '$path.oxs';
+            await FormatService.exportFile(state.pattern, finalPath, CrossStitchFormat.oxs);
+            if (context.mounted) {
+              showSuccess(context, 'Exported ${finalPath.split(Platform.pathSeparator).last}');
+            }
+          }
+        case ShareFormat.pdf:
+          final bytes = await PdfService.buildPdfBytes(state.pattern,
+              useDmc: ref.read(settingsProvider).useDmc);
+          if (!context.mounted) return;
+          if (isMobile) {
+            await FilePicker.platform.saveFile(
+              fileName: '$suggested.pdf', type: FileType.any, bytes: bytes);
+            if (context.mounted) showSuccess(context, 'Exported $suggested.pdf');
+          } else {
             final path = await FilePicker.platform.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['pdf'],
+              initialDirectory: initialDir,
             );
             if (path == null) return;
-            final finalPdfPath =
-                path.endsWith('.pdf') ? path : '$path.pdf';
-            await File(finalPdfPath).writeAsBytes(bytes);
+            final finalPath = path.endsWith('.pdf') ? path : '$path.pdf';
+            await File(finalPath).writeAsBytes(bytes);
             if (context.mounted) {
-              showSuccess(context,
-                  'Saved as ${finalPdfPath.split(Platform.pathSeparator).last}');
+              showSuccess(context, 'Exported ${finalPath.split(Platform.pathSeparator).last}');
             }
-          case ShareFormat.png:
-            final bytes = await PngExportService.export(state.pattern);
-            if (!context.mounted) return;
-            final suggested =
-                state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
+          }
+        case ShareFormat.png:
+          final bytes = await PngExportService.export(state.pattern);
+          if (!context.mounted) return;
+          if (isMobile) {
+            await FilePicker.platform.saveFile(
+              fileName: '$suggested.png', type: FileType.any, bytes: bytes);
+            if (context.mounted) showSuccess(context, 'Exported $suggested.png');
+          } else {
             final path = await FilePicker.platform.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['png'],
+              initialDirectory: initialDir,
             );
             if (path == null) return;
-            final finalPngPath =
-                path.endsWith('.png') ? path : '$path.png';
-            await File(finalPngPath).writeAsBytes(bytes);
+            final finalPath = path.endsWith('.png') ? path : '$path.png';
+            await File(finalPath).writeAsBytes(bytes);
             if (context.mounted) {
-              showSuccess(context,
-                  'Saved as ${finalPngPath.split(Platform.pathSeparator).last}');
+              showSuccess(context, 'Exported ${finalPath.split(Platform.pathSeparator).last}');
             }
-        }
-      } else {
-        final path = await FileService.saveFileAs(state.patternForSave,
-            compress: state.compressOnSave);
-        if (path != null) {
-          ref.read(editorProvider.notifier).setFilePath(path);
-          ref.read(editorProvider.notifier).markSaved();
-          if (context.mounted) showSuccess(context, 'Saved');
-        }
+          }
       }
     } catch (e) {
-      if (context.mounted) showError(context, 'Save failed: $e');
+      if (context.mounted) showError(context, 'Export failed: $e');
+    }
+  }
+
+  Future<void> _convertToNative(BuildContext context, WidgetRef ref) async {
+    final state = ref.read(editorProvider);
+    final filePath = state.filePath;
+    if (filePath == null) return;
+    final lastDot = filePath.lastIndexOf('.');
+    final withoutExt = lastDot > 0 ? filePath.substring(0, lastDot) : filePath;
+    final targetPath = '$withoutExt.stitches';
+    try {
+      await FileService.saveFile(state.patternForSave, targetPath,
+          compress: state.compressOnSave);
+      ref.read(editorProvider.notifier).setFilePath(targetPath);
+      ref.read(editorProvider.notifier).markSaved();
+      if (context.mounted) {
+        showSuccess(
+            context, 'Converted to ${targetPath.split(Platform.pathSeparator).last}');
+      }
+    } catch (e) {
+      if (context.mounted) showError(context, 'Convert failed: $e');
+    }
+  }
+
+  /// Builds the canvas area, wiring up the import banner callbacks.
+  Widget _buildCanvasArea(BuildContext context, WidgetRef ref, EditorState state) {
+    if (state.isNativeFormat) {
+      return const EditorCanvasArea();
+    }
+    final filePath = state.filePath!;
+    final lastDot = filePath.lastIndexOf('.');
+    final withoutExt = lastDot > 0 ? filePath.substring(0, lastDot) : filePath;
+    final nativePath = '$withoutExt.stitches';
+    final nativeExists = File(nativePath).existsSync();
+    return EditorCanvasArea(
+      importFilePath: filePath,
+      onConvert: nativeExists ? null : () => _convertToNative(context, ref),
+      onOpenNative: nativeExists ? () => _openNativeFile(context, ref, nativePath) : null,
+    );
+  }
+
+  Future<void> _openNativeFile(
+      BuildContext context, WidgetRef ref, String nativePath) async {
+    try {
+      final (pattern, path, wasCompressed) =
+          await FileService.openFileFromPath(nativePath);
+      ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: path,
+            compressOnSave: wasCompressed,
+          );
+    } catch (e) {
+      if (context.mounted) showError(context, 'Open failed: $e');
     }
   }
 
@@ -453,13 +626,7 @@ class EditorScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: EditorCanvasArea(
-                  importFilePath:
-                      state.isNativeFormat ? null : state.filePath,
-                  onSaveAs: state.isNativeFormat
-                      ? null
-                      : () => _saveAs(context, ref),
-                ),
+                child: _buildCanvasArea(context, ref, state),
               ),
               const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
             ],
