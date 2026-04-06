@@ -576,11 +576,23 @@ class _RecentItemTile extends ConsumerWidget {
     final allRecents = ref.watch(recentItemsProvider);
     Widget leading;
     if (!item.isFolder && item.thumbnailKey != null) {
-      leading = _CachedThumbnailImage(
+      // File with thumbnail — overlay a Drive badge if needed.
+      final thumb = _CachedThumbnailImage(
         thumbnailKey: item.thumbnailKey!,
         width: 40,
         height: 40,
       );
+      leading = item.isDrive
+          ? Stack(children: [
+              thumb,
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: _TypeBadge(
+                    isFolder: false, isDrive: true, theme: theme),
+              ),
+            ])
+          : thumb;
     } else if (item.isFolder) {
       // Collect up to 3 child thumbnails. allRecents is most-recent-first so
       // we reverse before passing to the strip — the most-recent key ends up
@@ -595,9 +607,21 @@ class _RecentItemTile extends ConsumerWidget {
           .toList()
           .reversed
           .toList();
-      leading = folderKeys.isNotEmpty
-          ? _FolderThumbnailStrip(thumbnailKeys: folderKeys)
-          : _RecentIcon(item: item, theme: theme);
+      if (folderKeys.isNotEmpty) {
+        // Folder with thumbnail strip — overlay folder + optional Drive badge.
+        leading = Stack(children: [
+          _FolderThumbnailStrip(thumbnailKeys: folderKeys),
+          Positioned(
+            right: 2,
+            bottom: 2,
+            child: _TypeBadge(
+                isFolder: true, isDrive: item.isDrive, theme: theme),
+          ),
+        ]);
+      } else {
+        // No thumbnails yet — _RecentIcon already shows folder/Drive icons.
+        leading = _RecentIcon(item: item, theme: theme);
+      }
     } else {
       leading = _RecentIcon(item: item, theme: theme);
     }
@@ -710,6 +734,43 @@ class _RecentIcon extends StatelessWidget {
               child:
                   Icon(Icons.cloud, size: 10, color: theme.colorScheme.primary),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small pill badge overlaid on thumbnails to indicate folder and/or Drive.
+/// At least one of [isFolder]/[isDrive] should be true.
+class _TypeBadge extends StatelessWidget {
+  final bool isFolder;
+  final bool isDrive;
+  final ThemeData theme;
+
+  const _TypeBadge({
+    required this.isFolder,
+    required this.isDrive,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isFolder)
+            Icon(Icons.folder_outlined,
+                size: 10, color: theme.colorScheme.onSurfaceVariant),
+          if (isFolder && isDrive) const SizedBox(width: 2),
+          if (isDrive)
+            Icon(Icons.cloud_outlined,
+                size: 10, color: theme.colorScheme.primary),
         ],
       ),
     );
