@@ -96,6 +96,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } catch (_) {}
   }
 
+  /// Recursively collects all [DrivePatternFile]s under [folder], up to
+  /// [maxDepth] levels deep. Silently skips inaccessible sub-folders.
+  Future<List<DrivePatternFile>> _collectDriveFiles(
+      dynamic service, DriveFolder folder,
+      {int maxDepth = 4}) async {
+    if (maxDepth <= 0) return [];
+    final contents = await service.listFolderContents(folder);
+    final files = contents.files.whereType<DrivePatternFile>().toList();
+    for (final sub in contents.subfolders.whereType<DriveFolder>()) {
+      try {
+        files.addAll(
+            await _collectDriveFiles(service, sub, maxDepth: maxDepth - 1));
+      } catch (_) {}
+    }
+    return files;
+  }
+
   /// For every Drive folder in recents, ensure its .stitches files have
   /// thumbnail-only recents entries. Skips folders that already have children,
   /// so it's cheap on repeat visits.
@@ -120,11 +137,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final folder = DriveFolder(
             folderId: folderItem.id, name: folderItem.driveName ?? 'Drive');
         try {
-          final contents = await service.listFolderContents(folder);
+          final allFiles =
+              await _collectDriveFiles(service, folder);
           if (!mounted) return;
 
-          for (final file in contents.files) {
-            if (file is! DrivePatternFile) continue;
+          for (final file in allFiles) {
             final key = driveThumbnailKey(file.fileId);
             var cached = await ThumbnailCache.load(key);
             if (cached == null) {

@@ -98,7 +98,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       final dir = Directory(folderPath);
       if (!await dir.exists()) return;
       final notifier = ref.read(recentItemsProvider.notifier);
-      await for (final entity in dir.list(recursive: false)) {
+      await for (final entity in dir.list(recursive: true)) {
         if (entity is! File || !entity.path.endsWith('.stitches')) continue;
         final path = entity.path;
         final key = localThumbnailKey(path);
@@ -130,21 +130,37 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
   }
 
-  /// Lists [folder] on Drive and generates thumbnails for .stitches files,
-  /// adding each as a thumbnail-only recents entry so the folder strip shows
-  /// them. Drive is network I/O so this is deliberately fire-and-forget.
+  /// Recursively collects all [DrivePatternFile]s under [folder], up to
+  /// [maxDepth] levels deep. Silently skips inaccessible sub-folders.
+  Future<List<DrivePatternFile>> _collectDriveFiles(
+      dynamic service, DriveFolder folder,
+      {int maxDepth = 4}) async {
+    if (maxDepth <= 0) return [];
+    final contents = await service.listFolderContents(folder);
+    final files = contents.files.whereType<DrivePatternFile>().toList();
+    for (final sub in contents.subfolders.whereType<DriveFolder>()) {
+      try {
+        files.addAll(
+            await _collectDriveFiles(service, sub, maxDepth: maxDepth - 1));
+      } catch (_) {}
+    }
+    return files;
+  }
+
+  /// Lists [folder] on Drive (recursively) and generates thumbnails for
+  /// .stitches files, adding each as a thumbnail-only recents entry so the
+  /// folder strip shows them. Fire-and-forget.
   Future<void> _refreshDriveThumbnailsInBackground(DriveFolder folder) async {
     try {
       final service =
           await ref.read(googleDriveProvider.notifier).getService();
       if (service == null || !mounted) return;
-      final contents = await service.listFolderContents(folder);
+      final allFiles = await _collectDriveFiles(service, folder);
       if (!mounted) return;
       final notifier = ref.read(recentItemsProvider.notifier);
       // Drive folder RecentItems use bare folderId as their id (not 'drive:…').
       final parentId = folder.folderId;
-      for (final file in contents.files) {
-        if (file is! DrivePatternFile) continue;
+      for (final file in allFiles) {
         final key = driveThumbnailKey(file.fileId);
         var cached = await ThumbnailCache.load(key);
         if (cached == null) {
