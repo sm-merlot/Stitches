@@ -3,14 +3,19 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 /// The format the user wants to produce.
-enum ShareFormat { stitchesFile, pdf, png }
+enum ShareFormat { stitchesFile, oxs, pdf, png }
 
 /// Show a format picker and return the chosen [ShareFormat], or null if
 /// the user dismissed.
 ///
 /// Presents a bottom sheet on mobile, a dialog on desktop — the same widget
-/// is used by both the Share button and the desktop Save As flow.
-Future<ShareFormat?> showShareFormatPicker(BuildContext context) {
+/// is used by both the Share button and the Export flow.
+///
+/// [title] overrides the default "Share as…" / "Save As…" heading.
+Future<ShareFormat?> showShareFormatPicker(
+  BuildContext context, {
+  String? title,
+}) {
   final isMobile =
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
   if (isMobile) {
@@ -20,12 +25,12 @@ Future<ShareFormat?> showShareFormatPicker(BuildContext context) {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => const _ShareFormatSheet(),
+      builder: (_) => _ShareFormatSheet(title: title),
     );
   }
   return showDialog<ShareFormat>(
     context: context,
-    builder: (_) => const _ShareFormatDialog(),
+    builder: (_) => _ShareFormatDialog(title: title),
   );
 }
 
@@ -58,7 +63,8 @@ class _FormatOption extends StatelessWidget {
 // ── Bottom sheet (mobile) ─────────────────────────────────────────────────────
 
 class _ShareFormatSheet extends StatelessWidget {
-  const _ShareFormatSheet();
+  final String? title;
+  const _ShareFormatSheet({this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +76,7 @@ class _ShareFormatSheet extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
-              'Share as…',
+              title ?? 'Share as…',
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
@@ -79,6 +85,12 @@ class _ShareFormatSheet extends StatelessWidget {
             title: 'Pattern file',
             subtitle: '.stitches — open in StitchX',
             value: ShareFormat.stitchesFile,
+          ),
+          _FormatOption(
+            icon: Icons.swap_horiz,
+            title: 'Open Cross Stitch (.oxs)',
+            subtitle: 'WinStitch / MacStitch compatible',
+            value: ShareFormat.oxs,
           ),
           _FormatOption(
             icon: Icons.picture_as_pdf_outlined,
@@ -102,12 +114,13 @@ class _ShareFormatSheet extends StatelessWidget {
 // ── Dialog (desktop) ──────────────────────────────────────────────────────────
 
 class _ShareFormatDialog extends StatelessWidget {
-  const _ShareFormatDialog();
+  final String? title;
+  const _ShareFormatDialog({this.title});
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Save As…'),
+      title: Text(title ?? 'Save As…'),
       content: SizedBox(
         width: 340,
         child: Column(
@@ -118,6 +131,12 @@ class _ShareFormatDialog extends StatelessWidget {
               title: 'Pattern file (.stitches)',
               subtitle: 'Open in StitchX',
               value: ShareFormat.stitchesFile,
+            ),
+            _FormatOption(
+              icon: Icons.swap_horiz,
+              title: 'Open Cross Stitch (.oxs)',
+              subtitle: 'WinStitch / MacStitch compatible',
+              value: ShareFormat.oxs,
             ),
             _FormatOption(
               icon: Icons.picture_as_pdf_outlined,
