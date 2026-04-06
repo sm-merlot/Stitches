@@ -68,9 +68,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   Offset? _pasteOrigin;
 
   // Progress tracking — stitch mode tap/drag state
-  Offset? _progressAnchor;        // cell where progress drag/tap started
-  bool _hasDraggedProgress = false;
-  Rect? _progressDragRect;        // live region during drag (reuses selection overlay)
+  Offset? _progressAnchor;           // cell coords where drag/tap started
+  Offset? _progressAnchorScreen;     // screen pixels where drag started (for jitter threshold)
+  bool _hasDraggedProgress = false;  // true once pointer moved > _kProgressDragThreshold px
+  Rect? _progressDragRect;           // live region during drag (reuses selection overlay)
+  static const double _kProgressDragThreshold = 10.0; // screen-pixel minimum drag distance
 
   // Whether Ctrl is currently held — switches paste from single-stamp to multi-stamp.
   bool _ctrlHeld = false;
@@ -723,6 +725,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           if (_screenOnCanvas(event.localPosition)) {
             setState(() {
               _progressAnchor = cell;
+              _progressAnchorScreen = event.localPosition;
               _hasDraggedProgress = false;
               _progressDragRect = null;
             });
@@ -803,6 +806,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           if (_screenOnCanvas(event.localPosition)) {
             setState(() {
               _progressAnchor = cell;
+              _progressAnchorScreen = event.localPosition;
               _hasDraggedProgress = false;
               _progressDragRect = null;
             });
@@ -904,7 +908,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
       final mode = ref.read(editorProvider).drawingMode;
 
-      if (mode == DrawingMode.select) {
+      if (mode == DrawingMode.select && !ref.read(editorProvider).stitchMode) {
         final cell = _screenToSelCell(event.localPosition);
         if (_isMovingSelection && _moveDragStartCell != null) {
           _moveDelta = cell - _moveDragStartCell!;
@@ -933,9 +937,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (ref.read(editorProvider).stitchMode && _progressAnchor != null) {
         final cell = _screenToSelCell(event.localPosition);
         final newRect = _buildSelRect(_progressAnchor!, cell);
+        // Only count as a real drag once the pointer has moved enough screen
+        // pixels from the anchor — this prevents mouse jitter from triggering
+        // the drag path on what is really just a click.
+        if (!_hasDraggedProgress && _progressAnchorScreen != null &&
+            (event.localPosition - _progressAnchorScreen!).distance > _kProgressDragThreshold) {
+          _hasDraggedProgress = true;
+        }
         if (newRect != _progressDragRect) {
-          // Only count as a real drag once the region spans more than one cell.
-          if (newRect.width > 1 || newRect.height > 1) _hasDraggedProgress = true;
           _progressDragRect = newRect;
           _scheduleRebuild();
         }
@@ -978,7 +987,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         return;
       }
       final mode = ref.read(editorProvider).drawingMode;
-      if (mode == DrawingMode.select) {
+      if (mode == DrawingMode.select && !ref.read(editorProvider).stitchMode) {
         final cell = _screenToSelCell(event.localPosition);
         if (_isMovingSelection && _moveDragStartCell != null) {
           _moveDelta = cell - _moveDragStartCell!;
@@ -1108,6 +1117,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
       }
       _progressAnchor = null;
+      _progressAnchorScreen = null;
       _hasDraggedProgress = false;
       _progressDragRect = null;
       _scheduleRebuild();
