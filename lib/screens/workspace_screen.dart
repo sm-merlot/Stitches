@@ -26,6 +26,7 @@ import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
 import '../utils/editor_key_handler.dart';
+import '../providers/recent_items_provider.dart';
 import '../utils/snackbars.dart';
 import '../widgets/editor_shared_widgets.dart';
 import '../widgets/share_format_picker.dart';
@@ -87,22 +88,41 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   }
 
   /// Walks [folderPath] and generates thumbnails for any `.stitches` file
-  /// not already in the cache. Runs without blocking the UI.
+  /// not already in the cache. Also updates recents entries that are missing
+  /// a thumbnailKey so the folder thumbnail strip shows them. Fire-and-forget.
   Future<void> _refreshThumbnailsInBackground(String folderPath) async {
     try {
       final dir = Directory(folderPath);
       if (!await dir.exists()) return;
+      final notifier = ref.read(recentItemsProvider.notifier);
       await for (final entity in dir.list(recursive: false)) {
         if (entity is! File || !entity.path.endsWith('.stitches')) continue;
-        final key = localThumbnailKey(entity.path);
-        if (await ThumbnailCache.load(key) != null) continue;
-        try {
-          final (pattern, _, _) =
-              await FileService.openFileFromPath(entity.path);
-          final bytes = await generatePatternThumbnail(pattern);
-          if (bytes != null) await ThumbnailCache.store(key, bytes);
-        } catch (_) {
-          // Skip files that can't be parsed.
+        final path = entity.path;
+        final key = localThumbnailKey(path);
+        // Check if cache already has the thumbnail.
+        var cached = await ThumbnailCache.load(key);
+        if (cached == null) {
+          try {
+            final (pattern, _, _) =
+                await FileService.openFileFromPath(path);
+            final bytes = await generatePatternThumbnail(pattern);
+            if (bytes != null) {
+              await ThumbnailCache.store(key, bytes);
+              cached = bytes;
+            }
+          } catch (_) {
+            // Skip files that can't be parsed.
+            continue;
+          }
+        }
+        // If a recents entry exists for this file but lacks a thumbnailKey,
+        // update it so the folder thumbnail strip can display it.
+        if (cached != null && mounted) {
+          final recents = ref.read(recentItemsProvider);
+          final entry = recents.where((r) => r.id == path).firstOrNull;
+          if (entry != null && entry.thumbnailKey == null) {
+            notifier.add(path, isFolder: false, thumbnailKey: key);
+          }
         }
       }
     } catch (_) {

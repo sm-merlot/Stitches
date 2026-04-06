@@ -14,9 +14,12 @@ import '../providers/pdf_viewer_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/drive_cache.dart';
+import '../providers/recent_items_provider.dart';
 import '../services/file_service.dart';
 import '../services/pattern_cache.dart';
 import '../services/format_service.dart';
+import '../services/pattern_thumbnail.dart';
+import '../services/thumbnail_cache.dart';
 import '../utils/snackbars.dart';
 import '../providers/image_viewer_provider.dart';
 import '../screens/new_pattern_dialog.dart';
@@ -371,6 +374,22 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (!context.mounted) return;
         _switchToEditor();
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed, session: session);
+        // Add to recents without thumbnail first; generate in background.
+        final notifier = ref.read(recentItemsProvider.notifier);
+        notifier.add(path, isFolder: false);
+        final thumbKey = localThumbnailKey(path);
+        unawaited(() async {
+          final existing = await ThumbnailCache.load(thumbKey);
+          if (existing != null) {
+            notifier.add(path, isFolder: false, thumbnailKey: thumbKey);
+            return;
+          }
+          final bytes = await generatePatternThumbnail(pattern);
+          if (bytes != null) {
+            await ThumbnailCache.store(thumbKey, bytes);
+            notifier.add(path, isFolder: false, thumbnailKey: thumbKey);
+          }
+        }());
       } catch (e) {
         if (context.mounted) showError(context, 'Could not open file: $e');
       } finally {
