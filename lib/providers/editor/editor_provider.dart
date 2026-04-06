@@ -136,6 +136,12 @@ class EditorState {
   /// clear the value via [clearPendingFitPage].
   final int? pendingFitPage;
 
+  /// The committed progress-marking region in stitch mode (cell coordinates).
+  /// Set when the user finishes a drag-to-select on the canvas. Shown as a
+  /// dashed overlay and drives the "Mark done / Mark not done" sidebar button.
+  /// Cleared when leaving stitch mode or starting a new drag.
+  final Rect? progressRegion;
+
   /// True when the current file is in the native .stitches format (or unsaved).
   bool get isNativeFormat {
     final path = filePath;
@@ -185,6 +191,7 @@ class EditorState {
     this.currentPage = 0,
     this.pageLayout,
     this.pendingFitPage,
+    this.progressRegion,
   })  : _undoStack = undoStack,
         _redoStack = redoStack;
 
@@ -326,6 +333,7 @@ class EditorState {
     int? currentPage,
     Object? pageLayout = _sentinel,
     Object? pendingFitPage = _sentinel,
+    Object? progressRegion = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -385,6 +393,7 @@ class EditorState {
       currentPage: currentPage ?? this.currentPage,
       pageLayout: pageLayout == _sentinel ? this.pageLayout : pageLayout as PageLayout?,
       pendingFitPage: pendingFitPage == _sentinel ? this.pendingFitPage : pendingFitPage as int?,
+      progressRegion: progressRegion == _sentinel ? this.progressRegion : progressRegion as Rect?,
     );
   }
 
@@ -599,6 +608,7 @@ class EditorNotifier extends Notifier<EditorState>
       },
       selectionRect: null,
       backstitchStartPoint: null,
+      progressRegion: null,
       showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
       stitchCrossMode: false,
       stitchBackMode: false,
@@ -606,6 +616,11 @@ class EditorNotifier extends Notifier<EditorState>
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
     _saveSession();
+  }
+
+  /// Set or clear the committed progress-marking region (stitch mode).
+  void setProgressRegion(Rect? region) {
+    state = state.copyWith(progressRegion: region);
   }
 
   void setDriveFileId(String? id) {

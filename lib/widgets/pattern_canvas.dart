@@ -46,9 +46,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Double-tap / double-click detection
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
-  // Mouse double-click (for flood-fill in stitch mode on macOS/desktop)
-  DateTime? _lastMouseUpTime;
-  Offset? _lastMouseUpPos;
+  // Double-click / double-tap flood fill (stitch mode).
+  // onDoubleTapDown stores the position for onDoubleTap; the suppression flag
+  // prevents _onPointerUp from firing toggleStitchDone on the second click.
+  Offset? _doubleTapFloodFillPos;   // set in onDoubleTapDown, used in onDoubleTap
+  bool _suppressNextProgressTap = false; // set in onDoubleTapDown, cleared in _onPointerUp
 
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
@@ -205,34 +207,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   /// Shows a bottom sheet letting the user confirm marking a dragged region done.
-  void _showMarkDoneSheet(BuildContext context, Rect region) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton.icon(
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text('Mark done'),
-                onPressed: () {
-                  ref.read(editorProvider.notifier).markRegionDone(region);
-                  Navigator.of(ctx).pop();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   /// Returns true if stitch [s] occupies cell (x, y).
   /// Uses EditorState.cellCoords for non-backstitch types; skips backstitches.
   bool _stitchAtCell(Stitch s, int x, int y) {
@@ -1085,37 +1059,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_progressAnchor != null) {
       final cell = _screenToSelCell(pos);
       if (_hasDraggedProgress) {
+        // Drag ended: commit region to provider (shows sidebar Mark Done button).
         final rect = _progressDragRect ?? _buildSelRect(_progressAnchor!, cell);
         if (rect.width > 1 || rect.height > 1) {
-          _showMarkDoneSheet(context, rect);
-        }
-      } else if (event.kind != PointerDeviceKind.touch) {
-        // Mouse/stylus: detect double-click → flood fill done.
-        final timeSinceLast = _lastMouseUpTime != null
-            ? now.difference(_lastMouseUpTime!)
-            : const Duration(seconds: 1);
-        final nearLast = _lastMouseUpPos != null
-            ? (pos - _lastMouseUpPos!).distance < 40.0
-            : false;
-        if (timeSinceLast < const Duration(milliseconds: 400) && nearLast) {
-          final cx = _progressAnchor!.dx.toInt();
-          final cy = _progressAnchor!.dy.toInt();
-          ref.read(editorProvider.notifier).floodFillDone(cx, cy);
-          _lastMouseUpTime = null;
-          _lastMouseUpPos = null;
-        } else {
-          // Single click → toggle stitch done
-          final cx = _progressAnchor!.dx.toInt();
-          final cy = _progressAnchor!.dy.toInt();
-          ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
-          _lastMouseUpTime = now;
-          _lastMouseUpPos = pos;
+          ref.read(editorProvider.notifier).setProgressRegion(rect);
         }
       } else {
-        // Touch single tap → toggle stitch done
+        // Tap: toggle the tapped stitch done/not-done.
+        // The GestureDetector onDoubleTapDown sets _suppressNextProgressTap so
+        // the second click of a double-tap doesn't toggle before onDoubleTap
+        // fires the bidirectional flood fill.
         final cx = _progressAnchor!.dx.toInt();
         final cy = _progressAnchor!.dy.toInt();
-        ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
+        if (!_suppressNextProgressTap) {
+          ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
+        }
+        _suppressNextProgressTap = false; // always clear after consuming
+        // Clear any committed progress region on a tap
+        ref.read(editorProvider.notifier).setProgressRegion(null);
       }
       _progressAnchor = null;
       _progressAnchorScreen = null;
@@ -1126,9 +1087,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
-    // Double-tap (touch only) → flood fill done (stitch mode) or undo (edit mode).
-    // Skip both if this finger was part of a multi-touch gesture.
-    if (event.kind == PointerDeviceKind.touch && wasSinglePointer && !_hadMultiTouch) {
+    // Double-tap (touch, edit mode only) → undo.
+    // Stitch mode double-tap is handled by GestureDetector.onDoubleTap.
+    // Skip if this finger was part of a multi-touch gesture.
+    if (event.kind == PointerDeviceKind.touch && wasSinglePointer &&
+        !_hadMultiTouch && !ref.read(editorProvider).stitchMode) {
       final timeSinceLast = _lastTouchUpTime != null
           ? now.difference(_lastTouchUpTime!)
           : const Duration(seconds: 1);
@@ -1137,15 +1100,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           : false;
 
       if (timeSinceLast < const Duration(milliseconds: 350) && nearLast) {
-        if (ref.read(editorProvider).stitchMode) {
-          final c = _screenToCanvas(pos);
-          final (cx, cy) = _canvasToCell(c);
-          if (_inBounds(cx, cy)) {
-            ref.read(editorProvider.notifier).floodFillDone(cx, cy);
-          }
-        } else {
-          ref.read(editorProvider.notifier).undo();
-        }
+        ref.read(editorProvider.notifier).undo();
         _lastTouchUpTime = null;
         _lastTouchUpPos = null;
         _activePointers.remove(event.pointer);
@@ -1315,10 +1270,30 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _canvasSize = constraints.biggest;
-        return MouseRegion(
-      cursor: _cursor(state),
-      onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
-      child: Listener(
+        return GestureDetector(
+          // Double-tap/double-click in stitch mode → bidirectional flood fill.
+          // Using GestureDetector (Flutter gesture recognizer) is more reliable
+          // than manual timing in _onPointerUp, especially for trackpad/macOS.
+          onDoubleTapDown: (details) {
+            if (ref.read(editorProvider).stitchMode) {
+              _doubleTapFloodFillPos = details.localPosition;
+              _suppressNextProgressTap = true;
+            }
+          },
+          onDoubleTap: () {
+            final pos = _doubleTapFloodFillPos;
+            _doubleTapFloodFillPos = null;
+            if (pos == null || !ref.read(editorProvider).stitchMode) return;
+            final c = _screenToCanvas(pos);
+            final (cx, cy) = _canvasToCell(c);
+            if (_inBounds(cx, cy)) {
+              ref.read(editorProvider.notifier).floodFillDone(cx, cy);
+            }
+          },
+          child: MouseRegion(
+        cursor: _cursor(state),
+        onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
+        child: Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: _onPointerMove,
         onPointerUp: _onPointerUp,
@@ -1407,7 +1382,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                     ? null
                     : _mouseScreenPos,
-                selectionRect: _progressDragRect ?? _dragSelectionRect ?? state.selectionRect,
+                selectionRect: _progressDragRect ?? state.progressRegion ?? _dragSelectionRect ?? state.selectionRect,
                 ghostStitches: ghostStitches,
                 ghostThreads: state.drawingMode == DrawingMode.paste
                     ? state.clipboardThreads
@@ -1437,6 +1412,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           ],
         ),
       ),
+    ),
     );
     },
     );

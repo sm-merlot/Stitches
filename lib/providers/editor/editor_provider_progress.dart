@@ -58,8 +58,14 @@ mixin ProgressMixin on Notifier<EditorState> {
   }
 
   /// Flood-fill: mark all orthogonally connected stitches of the same thread
-  /// starting from (x, y) as done.
+  /// starting from (x, y) as done — or as NOT done if the starting cell is
+  /// already done. This makes double-click bidirectional:
+  /// - tap a done cell: flood fill un-marks the connected region
+  /// - tap an undone cell: flood fill marks the connected region done
   void floodFillDone(int x, int y) {
+    final prog = state.pattern.progress;
+    final startIsDone = prog.completedStitches.contains((x, y));
+
     // Find the thread at this cell.
     String? threadId;
     for (final layer in state.pattern.layers) {
@@ -89,8 +95,6 @@ mixin ProgressMixin on Notifier<EditorState> {
     }
 
     // BFS flood fill — orthogonal, same thread only.
-    final prog = state.pattern.progress;
-    final filled = Set<(int, int)>.from(prog.completedStitches);
     final queue = <(int, int)>[(x, y)];
     final visited = <(int, int)>{};
     while (queue.isNotEmpty) {
@@ -98,18 +102,50 @@ mixin ProgressMixin on Notifier<EditorState> {
       if (visited.contains(cell)) continue;
       visited.add(cell);
       if (cellThread[cell] != threadId) continue;
-      filled.add(cell);
       final (cx, cy) = cell;
       for (final n in [(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)]) {
         if (!visited.contains(n) && cellThread.containsKey(n)) queue.add(n);
       }
     }
 
-    if (filled.length == prog.completedStitches.length) return;
-    final newProg = prog.copyWith(completedStitches: filled);
-    _applyProgress(newProg, pushUndo: true);
-    _checkColourCompletion(newProg, {threadId});
-    _checkPageCompletion(newProg);
+    if (startIsDone) {
+      // Un-mark mode: remove all visited cells from completedStitches.
+      final newCompleted = Set<(int, int)>.from(prog.completedStitches)
+        ..removeAll(visited);
+      if (newCompleted.length == prog.completedStitches.length) return;
+      _applyProgress(prog.copyWith(completedStitches: newCompleted), pushUndo: true);
+    } else {
+      // Mark done mode: add all visited cells to completedStitches.
+      final newCompleted = Set<(int, int)>.from(prog.completedStitches)
+        ..addAll(visited);
+      if (newCompleted.length == prog.completedStitches.length) return;
+      final newProg = prog.copyWith(completedStitches: newCompleted);
+      _applyProgress(newProg, pushUndo: true);
+      _checkColourCompletion(newProg, {threadId});
+      _checkPageCompletion(newProg);
+    }
+  }
+
+  /// Mark all stitches within [region] (cell coords) as NOT done.
+  void markRegionNotDone(Rect region) {
+    final prog = state.pattern.progress;
+    final current = Set<(int, int)>.from(prog.completedStitches);
+    int removed = 0;
+    for (final layer in state.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is BackStitch) continue;
+        final coords = _crossStitchXY(stitch);
+        if (coords == null) continue;
+        final (sx, sy) = coords;
+        if (sx >= region.left && sx < region.right &&
+            sy >= region.top && sy < region.bottom) {
+          if (current.remove((sx, sy))) removed++;
+        }
+      }
+    }
+    if (removed == 0) return;
+    _applyProgress(prog.copyWith(completedStitches: current), pushUndo: true);
   }
 
   /// Manually toggle a page's done state.
