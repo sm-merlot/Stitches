@@ -1,0 +1,31 @@
+lib/widgets/editor_canvas_area.dart
+  d8bd1190668fd39e 3-4,45,51-123
+lib/widgets/pattern_canvas.dart
+  d8bd1190668fd39e 49-57,704-711,793-800,1090-1095,1097-1098,1100,1114,1296
+lib/widgets/right_sidebar.dart
+  d8bd1190668fd39e 174-181
+lib/widgets/right_sidebar_colours_panel.dart
+  d8bd1190668fd39e 5,477-508,511-512,514-519,574,1143-1145,1155-1156,1161
+lib/providers/editor/editor_provider_progress.dart
+  d8bd1190668fd39e 35,40-41,51,134,139-140,150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "9e8f654abca1ab4631d38bddabf52c4519452306",
+  "prompts": {
+    "d8bd1190668fd39e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67a0199d-cea8-40c6-a795-5d1ddeb9abf5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 176,
+      "total_deletions": 48,
+      "accepted_lines": 176,
+      "overriden_lines": 0
+    }
+  }
+}
