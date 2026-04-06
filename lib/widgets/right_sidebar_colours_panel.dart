@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
-import '../models/page_layout.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
@@ -519,7 +518,7 @@ class StitchDemoButton extends StatelessWidget {
         pool.any((s) => s is FullStitch && (focusId == null || s.threadId == focusId));
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -540,6 +539,7 @@ class StitchDemoButton extends StatelessWidget {
               label: const Text('Demo', style: TextStyle(fontSize: 13)),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
               onPressed: enabled ? () => _onDemonstrate(context) : null,
             ),
@@ -1165,15 +1165,16 @@ class MarkDoneButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final allDone = _isRegionAllDone(state);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+      padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
       child: FilledButton.icon(
         icon: Icon(allDone ? Icons.remove_done : Icons.done_all, size: 16),
         label: Text(
-          allDone ? 'Mark not done' : 'Mark done',
+          allDone ? 'Unmark' : 'Mark',
           style: const TextStyle(fontSize: 13),
         ),
         style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           backgroundColor:
               allDone ? Colors.orange.shade700 : null,
         ),
