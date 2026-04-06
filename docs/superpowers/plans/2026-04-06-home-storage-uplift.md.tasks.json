@@ -1,0 +1,68 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-06-home-storage-uplift.md",
+  "tasks": [
+    {
+      "id": 10,
+      "subject": "Task 0: Create feature branch",
+      "status": "pending",
+      "description": "**Goal:** Create branch from scme0/feature/share-export-redesign.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"git log --oneline -3\", \"acceptanceCriteria\": [\"branch exists based on share-export-redesign\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 1: ThumbnailCache service",
+      "status": "pending",
+      "blockedBy": [10],
+      "description": "**Goal:** Persistent on-disk PNG cache.\n\n**Files:** Create `lib/services/thumbnail_cache.dart`\n\n```json:metadata\n{\"files\": [\"lib/services/thumbnail_cache.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/services/thumbnail_cache.dart\", \"acceptanceCriteria\": [\"store/load/remove/pruneLocal implemented\", \"no analysis issues\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 2: PatternThumbnail renderer",
+      "status": "pending",
+      "blockedBy": [10],
+      "description": "**Goal:** Render CrossStitchPattern to 160×110 PNG.\n\n**Files:** Create `lib/services/pattern_thumbnail.dart`\n\n```json:metadata\n{\"files\": [\"lib/services/pattern_thumbnail.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/services/pattern_thumbnail.dart\", \"acceptanceCriteria\": [\"generatePatternThumbnail implemented\", \"no analysis issues\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 3: RecentItem — thumbnailKey, home-folder suppression",
+      "status": "pending",
+      "blockedBy": [11],
+      "description": "**Goal:** Add thumbnailKey to RecentItem; suppress home folder from recents on mobile.\n\n**Files:** Modify `lib/providers/recent_items_provider.dart`\n\n```json:metadata\n{\"files\": [\"lib/providers/recent_items_provider.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/providers/recent_items_provider.dart\", \"acceptanceCriteria\": [\"thumbnailKey added\", \"home folder suppressed\", \"pruneDeletedFiles implemented\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 4: Thumbnail generation on file open (home screen)",
+      "status": "pending",
+      "blockedBy": [12, 13],
+      "description": "**Goal:** Generate and cache thumbnail after every file open in home_screen.dart.\n\n**Files:** Modify `lib/screens/home_screen.dart`\n\n```json:metadata\n{\"files\": [\"lib/screens/home_screen.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/screens/home_screen.dart\", \"acceptanceCriteria\": [\"thumbnail generated on all open paths\", \"pruneDeletedFiles called on init\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 5: Home screen layout — header, HOME item, mixed recents",
+      "status": "pending",
+      "blockedBy": [14],
+      "description": "**Goal:** Centered header, mobile HOME item, flat mixed recents with thumbnails.\n\n**Files:** Modify `lib/screens/home_screen.dart`, `lib/screens/home_screen_widgets.dart`\n\n```json:metadata\n{\"files\": [\"lib/screens/home_screen.dart\", \"lib/screens/home_screen_widgets.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/screens/\", \"acceptanceCriteria\": [\"centered header\", \"HOME item mobile-only\", \"flat mixed recents\", \"thumbnails shown\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 6: Open… modal",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** _OpenModal bottom sheet/dialog with accordion Local+Drive rows.\n\n**Files:** Modify `lib/screens/home_screen.dart`, `lib/screens/home_screen_widgets.dart`\n\n```json:metadata\n{\"files\": [\"lib/screens/home_screen.dart\", \"lib/screens/home_screen_widgets.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/screens/\", \"acceptanceCriteria\": [\"single Open button\", \"accordion sub-rows\", \"drive connect inline\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 7: New Pattern → auto-save to home folder on mobile",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** On mobile, _newPattern() saves immediately to docsDir.\n\n**Files:** Modify `lib/screens/home_screen.dart`\n\n```json:metadata\n{\"files\": [\"lib/screens/home_screen.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/screens/home_screen.dart\", \"acceptanceCriteria\": [\"mobile saves to docsDir\", \"unique filename\", \"desktop unchanged\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 8: Background thumbnail refresh in WorkspaceScreen",
+      "status": "pending",
+      "blockedBy": [11, 12],
+      "description": "**Goal:** Generate missing thumbnails in background when workspace folder loads.\n\n**Files:** Modify `lib/screens/workspace_screen.dart`\n\n```json:metadata\n{\"files\": [\"lib/screens/workspace_screen.dart\"], \"verifyCommand\": \"export PATH=\\\"/opt/homebrew/bin:$PATH\\\" && flutter analyze lib/screens/workspace_screen.dart\", \"acceptanceCriteria\": [\"background thumbnail refresh implemented\", \"does not block UI\"], \"requiresUserVerification\": false}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-06T00:00:00Z"
+}
