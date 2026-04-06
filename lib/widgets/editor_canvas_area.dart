@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/stitch.dart';
+import '../providers/editor/editor_provider.dart';
 import 'editor_shared_widgets.dart';
 import 'editor_toolbar.dart';
 import 'pattern_canvas.dart';
@@ -40,8 +42,82 @@ class EditorCanvasArea extends ConsumerWidget {
             onOpenNative: onOpenNative,
           ),
         const Expanded(child: PatternCanvas()),
+        const ProgressInfoBar(),
         const SafeArea(top: false, child: EditorToolbar()),
       ],
+    );
+  }
+}
+
+/// Thin stats bar shown below the canvas in stitch mode when at least one
+/// stitch has been marked done. Shows: stitches done/total, % done,
+/// pages done (page mode only), and colours done.
+class ProgressInfoBar extends ConsumerWidget {
+  const ProgressInfoBar({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(editorProvider);
+    if (!state.stitchMode) return const SizedBox.shrink();
+
+    final progress = state.pattern.progress;
+    if (progress.completedStitches.isEmpty) return const SizedBox.shrink();
+
+    // Count unique cells with non-backstitch stitches as the total.
+    final totalCells = <(int, int)>{};
+    for (final layer in state.pattern.layers) {
+      for (final stitch in layer.stitches) {
+        if (stitch is BackStitch) continue;
+        final c = EditorState.cellCoords(stitch);
+        if (c != null) totalCells.add(c);
+      }
+    }
+    final total = totalCells.length;
+    final done = progress.completedStitches.length;
+    final pct = total > 0 ? (done * 100 / total).round() : 0;
+
+    // Colours done.
+    final allStitches = state.pattern.stitches;
+    final threads = state.pattern.threads;
+    final doneColours = threads
+        .where((t) => progress.isColourDone(t.dmcCode, allStitches))
+        .length;
+
+    // Pages done (page mode only).
+    final layout = state.pageLayout;
+    final pageMode = layout != null;
+    final donePages = progress.completedPages.length;
+    final totalPages = layout?.totalPages ?? 0;
+
+    final theme = Theme.of(context);
+    final style = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    const sep = SizedBox(width: 4);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('$done/$total stitches', style: style),
+          sep,
+          Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
+          sep,
+          Text('$pct% done', style: style),
+          if (pageMode) ...[
+            sep,
+            Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
+            sep,
+            Text('$donePages/$totalPages pages', style: style),
+          ],
+          sep,
+          Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
+          sep,
+          Text('$doneColours/${threads.length} colours', style: style),
+        ],
+      ),
     );
   }
 }

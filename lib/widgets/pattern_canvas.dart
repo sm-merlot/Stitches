@@ -46,11 +46,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Double-tap / double-click detection
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
-  // Double-click / double-tap flood fill (stitch mode).
-  // onDoubleTapDown stores the position for onDoubleTap; the suppression flag
-  // prevents _onPointerUp from firing toggleStitchDone on the second click.
-  Offset? _doubleTapFloodFillPos;   // set in onDoubleTapDown, used in onDoubleTap
-  bool _suppressNextProgressTap = false; // set in onDoubleTapDown, cleared in _onPointerUp
+  // Progress double-click flood fill detection (stitch mode).
+  // Timing-based in _onPointerDown: if pointer down arrives within
+  // _kDoubleClickMs of last progress pointer-up at a nearby position,
+  // treat it as a double-click and call floodFillDone instead of toggleStitchDone.
+  DateTime? _lastProgressUpTime;
+  Offset?   _lastProgressUpPos;
+  bool      _isProgressDoubleClick = false;
+  static const int    _kDoubleClickMs     = 500;
+  static const double _kDoubleClickRadius = 80.0;
 
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
@@ -698,6 +702,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
           if (_screenOnCanvas(event.localPosition)) {
+            // Detect double-click by comparing against last progress pointer-up.
+            final now = DateTime.now();
+            final lastUp = _lastProgressUpTime;
+            final lastPos = _lastProgressUpPos;
+            _isProgressDoubleClick = lastUp != null &&
+                now.difference(lastUp).inMilliseconds < _kDoubleClickMs &&
+                lastPos != null &&
+                (event.localPosition - lastPos).distance < _kDoubleClickRadius;
             setState(() {
               _progressAnchor = cell;
               _progressAnchorScreen = event.localPosition;
@@ -779,6 +791,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
           if (_screenOnCanvas(event.localPosition)) {
+            // Detect double-tap by comparing against last progress pointer-up.
+            final now = DateTime.now();
+            final lastUp = _lastProgressUpTime;
+            final lastPos = _lastProgressUpPos;
+            _isProgressDoubleClick = lastUp != null &&
+                now.difference(lastUp).inMilliseconds < _kDoubleClickMs &&
+                lastPos != null &&
+                (event.localPosition - lastPos).distance < _kDoubleClickRadius;
             setState(() {
               _progressAnchor = cell;
               _progressAnchorScreen = event.localPosition;
@@ -1066,15 +1086,19 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         }
       } else {
         // Tap: toggle the tapped stitch done/not-done.
-        // The GestureDetector onDoubleTapDown sets _suppressNextProgressTap so
-        // the second click of a double-tap doesn't toggle before onDoubleTap
-        // fires the bidirectional flood fill.
         final cx = _progressAnchor!.dx.toInt();
         final cy = _progressAnchor!.dy.toInt();
-        if (!_suppressNextProgressTap) {
+        if (_isProgressDoubleClick) {
+          // Double-click/double-tap: flood-fill done/undone from this cell.
+          ref.read(editorProvider.notifier).floodFillDone(cx, cy);
+          _lastProgressUpTime = null; // reset so triple-click doesn't re-trigger
+          _lastProgressUpPos = null;
+        } else {
           ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
+          _lastProgressUpTime = DateTime.now();
+          _lastProgressUpPos = pos;
         }
-        _suppressNextProgressTap = false; // always clear after consuming
+        _isProgressDoubleClick = false;
         // Clear any committed progress region on a tap
         ref.read(editorProvider.notifier).setProgressRegion(null);
       }
@@ -1088,7 +1112,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     }
 
     // Double-tap (touch, edit mode only) → undo.
-    // Stitch mode double-tap is handled by GestureDetector.onDoubleTap.
+    // Stitch mode double-click/tap is detected in _onPointerDown via timing.
     // Skip if this finger was part of a multi-touch gesture.
     if (event.kind == PointerDeviceKind.touch && wasSinglePointer &&
         !_hadMultiTouch && !ref.read(editorProvider).stitchMode) {
@@ -1270,27 +1294,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _canvasSize = constraints.biggest;
-        return GestureDetector(
-          // Double-tap/double-click in stitch mode → bidirectional flood fill.
-          // Using GestureDetector (Flutter gesture recognizer) is more reliable
-          // than manual timing in _onPointerUp, especially for trackpad/macOS.
-          onDoubleTapDown: (details) {
-            if (ref.read(editorProvider).stitchMode) {
-              _doubleTapFloodFillPos = details.localPosition;
-              _suppressNextProgressTap = true;
-            }
-          },
-          onDoubleTap: () {
-            final pos = _doubleTapFloodFillPos;
-            _doubleTapFloodFillPos = null;
-            if (pos == null || !ref.read(editorProvider).stitchMode) return;
-            final c = _screenToCanvas(pos);
-            final (cx, cy) = _canvasToCell(c);
-            if (_inBounds(cx, cy)) {
-              ref.read(editorProvider.notifier).floodFillDone(cx, cy);
-            }
-          },
-          child: MouseRegion(
+        return MouseRegion(
         cursor: _cursor(state),
         onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
         child: Listener(
@@ -1412,7 +1416,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           ],
         ),
       ),
-    ),
     );
     },
     );
