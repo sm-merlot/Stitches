@@ -1,0 +1,51 @@
+lib/screens/home_screen_widgets.dart
+  d71bae6cfca681e2 7,12,24,26-30,32-36,39-58,63-81,83-102,104-151,153-204,206-209,212,218,220-228,230-238,242-247,249-250,252-352,355-362,364-372,382-389,392-401,403-415,418-423,429-433,439-539,576-601,604-610,612-619,622-623,625-654,656-668,670-671,673-710
+lib/screens/home_screen.dart
+  d71bae6cfca681e2 4,8,15,19-20,42,44-45,50-53,55-64,82-93,104-133,146-152,177-181,217-224,235,246,251-252,254-255,258-264,266,289-290,293-299,301,330-331,333-335,341-342,344-350,387-388,391-400,404-405,423-424,427-436,445-446,448-449,451-459,495-506,508-527,554-555,587-600,603-612,615-630,632-633,635-642,644,646-679,681-684,688-699,702
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "5f5217ca04820292d3629178f3727ead0ae1c306",
+  "prompts": {
+    "ad2996bcc93d488a": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1775478884633",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    },
+    "d6da6067a62f8507": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0402cb23-ab56-4b25-a358-eeece3c0f788",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 99,
+      "overriden_lines": 0
+    },
+    "d71bae6cfca681e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "065b8df4-b649-48b1-87e3-d331d46f4b6d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2821,
+      "overriden_lines": 0
+    }
+  }
+}
