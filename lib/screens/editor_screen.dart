@@ -9,7 +9,10 @@ import 'package:share_plus/share_plus.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
+import '../models/storage_location.dart';
+import '../services/google_drive_service.dart';
 import '../services/file_service.dart';
+import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
 import '../utils/editor_key_handler.dart';
@@ -18,7 +21,6 @@ import '../widgets/editor_canvas_area.dart';
 import '../widgets/editor_shared_widgets.dart';
 import '../widgets/share_format_picker.dart';
 import 'drive_folder_picker_dialog.dart';
-import 'export_dialog.dart';
 import '../widgets/right_sidebar.dart';
 import 'materials_list_screen.dart';
 import 'page_mode_dialog.dart';
@@ -327,6 +329,11 @@ class EditorScreen extends ConsumerWidget {
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
           fileName = '$suggested.stitches';
           mimeType = 'application/octet-stream';
+        case ShareFormat.oxs:
+          bytes = Uint8List.fromList(utf8.encode(
+              FormatService.encodeFile(pattern, CrossStitchFormat.oxs)));
+          fileName = '$suggested.oxs';
+          mimeType = 'application/octet-stream';
         case ShareFormat.pdf:
           bytes = await PdfService.buildPdfBytes(pattern,
               useDmc: ref.read(settingsProvider).useDmc);
@@ -498,30 +505,10 @@ class EditorScreen extends ConsumerWidget {
                   icon: const Icon(Icons.ios_share),
                   onPressed: () => _share(context, ref),
                 ),
-              PopupMenuButton<_MenuAction>(
-                tooltip: 'More',
-                onSelected: (action) {
-                  switch (action) {
-                    case _MenuAction.saveAs:
-                      _saveAs(context, ref);
-                    case _MenuAction.exportOxs:
-                      showExportDialog(context, state.pattern,
-                          useDmc: ref.read(settingsProvider).useDmc,
-                          notifier: ref.read(editorProvider.notifier));
-                    default:
-                      break;
-                  }
-                },
-                itemBuilder: (ctx) => [
-                  const PopupMenuItem(
-                    value: _MenuAction.saveAs,
-                    child: EditorMenuRow(icon: Icons.save_as_outlined, label: 'Save As…'),
-                  ),
-                  const PopupMenuItem(
-                    value: _MenuAction.exportOxs,
-                    child: EditorMenuRow(icon: Icons.swap_horiz, label: 'Export OXS…'),
-                  ),
-                ],
+              IconButton(
+                tooltip: 'Export',
+                icon: const Icon(Icons.upload_outlined),
+                onPressed: () => _export(context, ref),
               ),
               const SizedBox(width: 4),
               FilledButton.tonal(
@@ -544,42 +531,20 @@ class EditorScreen extends ConsumerWidget {
                 tooltip: 'Save  (Cmd+S)',
                 onPressed: () => _save(context, ref),
               ),
-              PopupMenuButton<_MenuAction>(
-                tooltip: 'More',
-                onSelected: (action) {
-                  switch (action) {
-                    case _MenuAction.resize:
-                      _showResizeDialog(context, ref, state);
-                    case _MenuAction.referenceImage:
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (_) => const ReferenceImageSheet(),
-                      );
-                    default:
-                      break;
-                  }
-                },
-                itemBuilder: (ctx) => [
-                  PopupMenuItem(
-                    value: _MenuAction.referenceImage,
-                    child: EditorMenuRow(
-                      icon: Icons.image_outlined,
-                      label: 'Reference Image',
-                      trailing: state.referenceImage != null &&
-                              state.referenceVisible
-                          ? Icon(Icons.check,
-                              size: 16,
-                              color: Theme.of(ctx).colorScheme.primary)
-                          : null,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: _MenuAction.resize,
-                    child: EditorMenuRow(
-                        icon: Icons.aspect_ratio, label: 'Resize Aida'),
-                  ),
-                ],
+              IconButton(
+                tooltip: 'Reference Image',
+                isSelected: state.referenceImage != null && state.referenceVisible,
+                icon: const Icon(Icons.image_outlined),
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const ReferenceImageSheet(),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Resize Aida',
+                icon: const Icon(Icons.aspect_ratio),
+                onPressed: () => _showResizeDialog(context, ref, state),
               ),
               const SizedBox(width: 4),
               FilledButton(
