@@ -4,13 +4,12 @@ part of 'home_screen.dart';
 
 class _SectionLabel extends StatelessWidget {
   final String label;
-  final Widget? trailing;
-  const _SectionLabel({required this.label, this.trailing});
+  const _SectionLabel({required this.label});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final labelText = Text(
+    return Text(
       label,
       style: TextStyle(
         fontSize: 11,
@@ -19,144 +18,525 @@ class _SectionLabel extends StatelessWidget {
         letterSpacing: 1.0,
       ),
     );
-    if (trailing == null) return labelText;
-    return Row(
-      children: [
-        labelText,
-        const SizedBox(width: 8),
-        trailing!,
-      ],
-    );
   }
 }
 
-// ─── Open button ──────────────────────────────────────────────────────────────
+// ─── Cached thumbnail image ────────────────────────────────────────────────────
 
-class _OpenButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool cloudBadge;
-  final VoidCallback? onTap;
+class _CachedThumbnailImage extends StatefulWidget {
+  final String thumbnailKey;
+  final double width;
+  final double height;
+  final double borderRadius;
 
-  const _OpenButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.cloudBadge = false,
+  const _CachedThumbnailImage({
+    required this.thumbnailKey,
+    required this.width,
+    required this.height,
+    this.borderRadius = 8,
   });
+
+  @override
+  State<_CachedThumbnailImage> createState() => _CachedThumbnailImageState();
+}
+
+class _CachedThumbnailImageState extends State<_CachedThumbnailImage> {
+  Uint8List? _bytes;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ThumbnailCache.load(widget.thumbnailKey).then((bytes) {
+      if (mounted) {
+        setState(() {
+          _bytes = bytes;
+          _loaded = true;
+        });
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(widget.borderRadius),
+      child: Container(
+        width: widget.width,
+        height: widget.height,
+        color: theme.colorScheme.primaryContainer,
+        child: _loaded && _bytes != null
+            ? Image.memory(
+                _bytes!,
+                fit: BoxFit.cover,
+                width: widget.width,
+                height: widget.height,
+              )
+            : Icon(
+                Icons.grid_4x4,
+                size: widget.width * 0.45,
+                color: theme.colorScheme.onPrimaryContainer
+                    .withValues(alpha: 0.5),
+              ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+    );
+  }
+}
+
+// ─── Folder thumbnail strip ────────────────────────────────────────────────────
+
+class _FolderThumbnailStrip extends StatelessWidget {
+  final List<String> thumbnailKeys;
+
+  const _FolderThumbnailStrip({required this.thumbnailKeys});
+
+  @override
+  Widget build(BuildContext context) {
+    final keys = thumbnailKeys.take(4).toList();
+    // Each 40px thumbnail is offset 12px from the previous.
+    final w = 40.0 + (keys.length - 1) * 12.0;
+    return SizedBox(
+      width: w,
+      height: 40,
+      child: Stack(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Icon(icon, size: 18),
-              if (cloudBadge)
-                Positioned(
-                  right: -6,
-                  bottom: -4,
-                  child: Icon(Icons.cloud, size: 10,
-                      color: theme.colorScheme.primary),
-                ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          Text(label),
+          for (int i = 0; i < keys.length; i++)
+            Positioned(
+              left: i * 12.0,
+              child: _CachedThumbnailImage(
+                thumbnailKey: keys[i],
+                width: 40,
+                height: 40,
+                borderRadius: 6,
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-// ─── Recent section (expandable) ──────────────────────────────────────────────
+// ─── HOME item (mobile only) ──────────────────────────────────────────────────
 
-class _RecentSection extends StatefulWidget {
-  final String label;
-  final IconData icon;
-  final List<RecentItem> items;
-  final void Function(RecentItem)? onTap;
-  final void Function(RecentItem) onRemove;
+class _HomeItem extends ConsumerWidget {
+  final String homePath;
+  final VoidCallback onTap;
 
-  const _RecentSection({
-    required this.label,
-    required this.icon,
-    required this.items,
-    required this.onTap,
-    required this.onRemove,
+  const _HomeItem({required this.homePath, required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final recents = ref.watch(recentItemsProvider);
+
+    final homeThumbnailKeys = recents
+        .where((r) =>
+            !r.isFolder &&
+            !r.isDrive &&
+            r.thumbnailKey != null &&
+            r.id.startsWith(homePath))
+        .take(4)
+        .map((r) => r.thumbnailKey!)
+        .toList();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              homeThumbnailKeys.isNotEmpty
+                  ? _FolderThumbnailStrip(thumbnailKeys: homeThumbnailKeys)
+                  : Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.folder_outlined,
+                          size: 22,
+                          color: theme.colorScheme.onPrimaryContainer),
+                    ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Local Patterns',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'HOME',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onPrimary,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Built-in app storage',
+                      style:
+                          TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  size: 18,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Open modal ───────────────────────────────────────────────────────────────
+
+class _OpenModal extends StatefulWidget {
+  final bool driveConnected;
+  final bool driveConfigured;
+  final String? driveEmail;
+  final VoidCallback onOpenLocalFile;
+  final VoidCallback onOpenLocalFolder;
+  final VoidCallback onOpenDriveFile;
+  final VoidCallback onOpenDriveFolder;
+  final VoidCallback onConnectDrive;
+
+  const _OpenModal({
+    required this.driveConnected,
+    required this.driveConfigured,
+    this.driveEmail,
+    required this.onOpenLocalFile,
+    required this.onOpenLocalFolder,
+    required this.onOpenDriveFile,
+    required this.onOpenDriveFolder,
+    required this.onConnectDrive,
   });
 
   @override
-  State<_RecentSection> createState() => _RecentSectionState();
+  State<_OpenModal> createState() => _OpenModalState();
 }
 
-class _RecentSectionState extends State<_RecentSection> {
-  bool _expanded = true;
+class _OpenModalState extends State<_OpenModal> {
+  bool _localExpanded = false;
+  bool _driveExpanded = false;
+
+  void _dismiss() => Navigator.of(context).pop();
 
   @override
   Widget build(BuildContext context) {
-    if (widget.items.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle bar.
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Text('Open',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 16),
+
+          // Local row.
+          _SourceRow(
+            icon: Icons.folder_outlined,
+            label: 'Local',
+            subtitle: 'Files & folders on this device',
+            expanded: _localExpanded,
+            onTap: () => setState(() {
+              _localExpanded = !_localExpanded;
+              if (_localExpanded) _driveExpanded = false;
+            }),
+            subRows: [
+              _SubRow(
+                icon: Icons.insert_drive_file_outlined,
+                label: 'File',
+                onTap: () {
+                  _dismiss();
+                  widget.onOpenLocalFile();
+                },
+              ),
+              _SubRow(
+                icon: Icons.folder_open_outlined,
+                label: 'Folder',
+                onTap: () {
+                  _dismiss();
+                  widget.onOpenLocalFolder();
+                },
+              ),
+            ],
+          ),
+
+          if (widget.driveConfigured) ...[
+            const SizedBox(height: 10),
+            if (widget.driveConnected)
+              _SourceRow(
+                icon: Icons.cloud_outlined,
+                label: 'Google Drive',
+                subtitle: widget.driveEmail ?? 'Connected',
+                subtitleColor: Colors.green.shade600,
+                expanded: _driveExpanded,
+                onTap: () => setState(() {
+                  _driveExpanded = !_driveExpanded;
+                  if (_driveExpanded) _localExpanded = false;
+                }),
+                subRows: [
+                  _SubRow(
+                    icon: Icons.insert_drive_file_outlined,
+                    label: 'Drive File',
+                    onTap: () {
+                      _dismiss();
+                      widget.onOpenDriveFile();
+                    },
+                  ),
+                  _SubRow(
+                    icon: Icons.folder_open_outlined,
+                    label: 'Drive Folder',
+                    onTap: () {
+                      _dismiss();
+                      widget.onOpenDriveFolder();
+                    },
+                  ),
+                ],
+              )
+            else
+              _DriveNotConnectedRow(onConnect: () {
+                _dismiss();
+                widget.onConnectDrive();
+              }),
+          ],
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color? subtitleColor;
+  final bool expanded;
+  final VoidCallback onTap;
+  final List<Widget> subRows;
+
+  const _SourceRow({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    this.subtitleColor,
+    required this.expanded,
+    required this.onTap,
+    required this.subRows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
-          borderRadius: BorderRadius.circular(4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Row(
               children: [
-                Icon(
-                  _expanded
-                      ? Icons.keyboard_arrow_down
-                      : Icons.keyboard_arrow_right,
-                  size: 16,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon,
+                      size: 22,
+                      color: theme.colorScheme.onPrimaryContainer),
                 ),
-                const SizedBox(width: 4),
-                Icon(widget.icon,
-                    size: 14,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
-                const SizedBox(width: 6),
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    letterSpacing: 0.8,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text(subtitle,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: subtitleColor ?? Colors.grey.shade500)),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  '${widget.items.length}',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.35)),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.chevron_right,
+                  size: 18,
+                  color: theme.colorScheme.primary,
                 ),
               ],
             ),
           ),
         ),
-        if (_expanded)
-          ...widget.items.map((item) => _RecentItemTile(
-                item: item,
-                onTap: widget.onTap != null ? () => widget.onTap!(item) : null,
-                onRemove: () => widget.onRemove(item),
-              )),
-        const SizedBox(height: 8),
+        if (expanded)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 16, right: 4),
+            child: Column(children: subRows),
+          ),
       ],
+    );
+  }
+}
+
+class _SubRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SubRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        child: Row(
+          children: [
+            Icon(icon,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 13,
+                  color:
+                      theme.colorScheme.onSurface.withValues(alpha: 0.85)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DriveNotConnectedRow extends StatelessWidget {
+  final VoidCallback onConnect;
+
+  const _DriveNotConnectedRow({required this.onConnect});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.35),
+          width: 1.5,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.cloud_outlined,
+                size: 22,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Google Drive',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.55))),
+                Text('Not connected',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.4))),
+              ],
+            ),
+          ),
+          FilledButton(
+            onPressed: onConnect,
+            style: FilledButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              textStyle: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600),
+              minimumSize: Size.zero,
+            ),
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -193,85 +573,141 @@ class _RecentItemTile extends ConsumerWidget {
     final driveWarning = _driveWarning(ref.watch(googleDriveProvider));
     final effectiveOnTap = driveWarning != null ? null : onTap;
 
+    // Derive folder thumbnail keys from other recents.
+    final allRecents = ref.watch(recentItemsProvider);
+    Widget leading;
+    if (!item.isFolder && item.thumbnailKey != null) {
+      leading = _CachedThumbnailImage(
+        thumbnailKey: item.thumbnailKey!,
+        width: 40,
+        height: 40,
+      );
+    } else if (item.isFolder && !item.isDrive) {
+      final folderKeys = allRecents
+          .where((r) =>
+              !r.isFolder &&
+              !r.isDrive &&
+              r.thumbnailKey != null &&
+              r.id.startsWith(item.id))
+          .take(3)
+          .map((r) => r.thumbnailKey!)
+          .toList();
+      leading = folderKeys.isNotEmpty
+          ? _FolderThumbnailStrip(thumbnailKeys: folderKeys)
+          : _RecentIcon(item: item, theme: theme);
+    } else {
+      leading = _RecentIcon(item: item, theme: theme);
+    }
+
     return Opacity(
       opacity: driveWarning != null ? 0.55 : 1.0,
-      child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
+      child: InkWell(
+        onTap: effectiveOnTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(
-                item.isFolder
-                    ? Icons.folder_outlined
-                    : Icons.insert_drive_file_outlined,
-                size: 20,
-                color: theme.colorScheme.onPrimaryContainer,
-              ),
-              if (item.isDrive)
-                Positioned(
-                  right: 4,
-                  bottom: 4,
-                  child: Icon(Icons.cloud,
-                      size: 10, color: theme.colorScheme.primary),
+              SizedBox(height: 40, child: leading),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w500, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    driveWarning != null
+                        ? Row(
+                            children: [
+                              Icon(Icons.warning_amber_outlined,
+                                  size: 11,
+                                  color: Colors.orange.shade700),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  driveWarning,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange.shade700),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            item.displayPath,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade500),
+                          ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Text(item.relativeTime,
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.grey.shade400)),
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(Icons.close,
+                      size: 14, color: Colors.grey.shade400),
+                ),
+              ),
             ],
           ),
         ),
-        title: Text(
-          item.displayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-        ),
-        subtitle: driveWarning != null
-            ? Row(
-                children: [
-                  Icon(Icons.warning_amber_outlined,
-                      size: 11, color: Colors.orange.shade700),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      driveWarning,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.orange.shade700),
-                    ),
-                  ),
-                ],
-              )
-            : Text(
-                item.displayPath,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-              ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(item.relativeTime,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
-            const SizedBox(width: 4),
-            InkWell(
-              onTap: onRemove,
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child:
-                    Icon(Icons.close, size: 14, color: Colors.grey.shade400),
-              ),
+      ),
+    );
+  }
+}
+
+class _RecentIcon extends StatelessWidget {
+  final RecentItem item;
+  final ThemeData theme;
+
+  const _RecentIcon({required this.item, required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            item.isFolder
+                ? Icons.folder_outlined
+                : Icons.insert_drive_file_outlined,
+            size: 20,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+          if (item.isDrive)
+            Positioned(
+              right: 4,
+              bottom: 4,
+              child:
+                  Icon(Icons.cloud, size: 10, color: theme.colorScheme.primary),
             ),
-          ],
-        ),
-        onTap: effectiveOnTap,
+        ],
       ),
     );
   }
