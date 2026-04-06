@@ -1,0 +1,25 @@
+lib/widgets/share_format_picker.dart
+  d8bd1190668fd39e 8-24,26-27,29-30,33-34,36,38,44-47,51,53-57,61-68,70-77,79-82,84-87,91,94-97,99-105,109-112,114-122,124-165,173,175-186,188-199,203-206,208,213,215-225,227-234,236-247,256-298,300-317
+lib/widgets/right_sidebar_colours_panel.dart
+  d8bd1190668fd39e 521,542,1168,1172,1177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "5b1615a8a4f568172b3ccbfaf008ac902f877f4f",
+  "prompts": {
+    "d8bd1190668fd39e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67a0199d-cea8-40c6-a795-5d1ddeb9abf5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 263,
+      "overriden_lines": 0
+    }
+  }
+}
