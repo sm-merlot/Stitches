@@ -1,0 +1,23 @@
+.changeset/progress-tracking.md
+  d8bd1190668fd39e 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "b798ac6ae1b3441325e06e06f8374823035c9400",
+  "prompts": {
+    "d8bd1190668fd39e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67a0199d-cea8-40c6-a795-5d1ddeb9abf5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 0,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
