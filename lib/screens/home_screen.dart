@@ -20,8 +20,7 @@ import '../services/pattern_cache.dart';
 import '../services/pattern_thumbnail.dart';
 import '../services/thumbnail_cache.dart';
 import '../utils/snackbars.dart';
-import 'drive_file_picker_dialog.dart';
-import 'drive_folder_picker_dialog.dart';
+import 'drive_picker_dialog.dart';
 import 'editor_screen.dart';
 import 'new_pattern_dialog.dart';
 import 'settings_screen.dart';
@@ -296,48 +295,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Future<void> _openDriveFile() async {
-    final selection = await DriveFilePickerDialog.show(context);
-    if (selection == null || !mounted) return;
+  /// Unified Drive picker — handles both files and folders.
+  Future<void> _openDrive() async {
+    final result = await DrivePickerDialog.show(context);
+    if (result == null || !mounted) return;
+
+    if (result is DrivePickerFolderResult) {
+      ref.read(workspaceProvider.notifier).openWorkspace(result.folder);
+      final email = ref.read(googleDriveProvider).email;
+      ref.read(recentItemsProvider.notifier).add(
+            result.folder.folderId,
+            isFolder: true,
+            isDrive: true,
+            driveName: result.folder.name,
+            driveEmail: email,
+            drivePath: result.drivePath,
+          );
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
+      );
+      return;
+    }
+
+    // File result
+    final sel = result as DrivePickerFileResult;
     try {
       final tempDir = await getTemporaryDirectory();
       await Directory(tempDir.path).create(recursive: true);
-      final tempPath = '${tempDir.path}/${selection.fileId}.stitches';
+      final tempPath = '${tempDir.path}/${sel.fileId}.stitches';
       final cached = File(tempPath);
-      final thumbKey = driveThumbnailKey(selection.fileId);
+      final thumbKey = driveThumbnailKey(sel.fileId);
 
-      // Read email before any async gaps to avoid stale ref access.
       final email = ref.read(googleDriveProvider).email;
       final notifier = ref.read(recentItemsProvider.notifier);
 
       void addToRecents({String? thumbnailKey}) {
         notifier.add(
-          selection.fileId,
+          sel.fileId,
           isFolder: false,
           isDrive: true,
-          driveName: selection.fileName,
+          driveName: sel.fileName,
           driveEmail: email,
-          drivePath: selection.drivePath,
+          drivePath: sel.drivePath,
           thumbnailKey: thumbnailKey,
         );
       }
 
       if (await cached.exists()) {
+        if (!mounted) return;
         final (pattern, path, wasCompressed) =
             await FileService.openFileFromPath(tempPath);
         if (!mounted) return;
-        final session =
-            await EditorSessionService.load('drive:${selection.fileId}');
+        final session = await EditorSessionService.load('drive:${sel.fileId}');
         if (!mounted) return;
         ref.read(editorProvider.notifier).loadPattern(
               pattern,
               filePath: path,
-              driveFileId: selection.fileId,
-              driveParentFolderId: selection.parentFolderId,
+              driveFileId: sel.fileId,
+              driveParentFolderId: sel.parentFolderId,
               compressOnSave: wasCompressed,
               session: session,
             );
-        addToRecents(); // no thumbnail yet
+        addToRecents();
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const EditorScreen()),
         );
@@ -346,7 +365,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           addToRecents(thumbnailKey: thumbKey);
         }());
         unawaited(_refreshDriveFileInBackground(
-            ref, selection.fileId, selection.parentFolderId, tempPath));
+            ref, sel.fileId, sel.parentFolderId, tempPath));
       } else {
         setState(() => _loading = true);
         try {
@@ -357,7 +376,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             showError(context, 'Not connected to Google Drive.');
             return;
           }
-          final bytes = await service.downloadFile(selection.fileId);
+          final bytes = await service.downloadFile(sel.fileId);
           if (!mounted) return;
           await cached.writeAsBytes(bytes);
           if (!mounted) return;
@@ -365,17 +384,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               await FileService.openFileFromPath(tempPath);
           if (!mounted) return;
           final session =
-              await EditorSessionService.load('drive:${selection.fileId}');
+              await EditorSessionService.load('drive:${sel.fileId}');
           if (!mounted) return;
           ref.read(editorProvider.notifier).loadPattern(
                 pattern,
                 filePath: path,
-                driveFileId: selection.fileId,
-                driveParentFolderId: selection.parentFolderId,
+                driveFileId: sel.fileId,
+                driveParentFolderId: sel.parentFolderId,
                 compressOnSave: wasCompressed,
                 session: session,
               );
-          addToRecents(); // no thumbnail yet
+          addToRecents();
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const EditorScreen()),
           );
@@ -431,25 +450,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             );
       }
     } catch (_) {}
-  }
-
-  Future<void> _openDriveFolder() async {
-    final result = await DriveFolderPickerDialog.show(context);
-    if (result == null || !mounted) return;
-    final (folder, drivePath) = result;
-    ref.read(workspaceProvider.notifier).openWorkspace(folder);
-    final email = ref.read(googleDriveProvider).email;
-    ref.read(recentItemsProvider.notifier).add(
-          folder.folderId,
-          isFolder: true,
-          isDrive: true,
-          driveName: folder.name,
-          driveEmail: email,
-          drivePath: drivePath,
-        );
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
-    );
   }
 
   Future<void> _openRecentFile(RecentItem item) async {
@@ -609,8 +609,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onOpenLocal: _smartOpenLocal,
       onOpenLocalFile: _openFile,
       onOpenLocalFolder: _openFolder,
-      onOpenDriveFile: _openDriveFile,
-      onOpenDriveFolder: _openDriveFolder,
+      onOpenDrive: _openDrive,
       onConnectDrive: _connectDrive,
     );
 

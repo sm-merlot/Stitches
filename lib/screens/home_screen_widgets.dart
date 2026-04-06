@@ -225,8 +225,8 @@ class _OpenModal extends StatefulWidget {
   final VoidCallback onOpenLocal;
   final VoidCallback onOpenLocalFile;
   final VoidCallback onOpenLocalFolder;
-  final VoidCallback onOpenDriveFile;
-  final VoidCallback onOpenDriveFolder;
+  /// Unified Drive picker: handles both files and folders.
+  final VoidCallback onOpenDrive;
   final VoidCallback onConnectDrive;
 
   const _OpenModal({
@@ -236,8 +236,7 @@ class _OpenModal extends StatefulWidget {
     required this.onOpenLocal,
     required this.onOpenLocalFile,
     required this.onOpenLocalFolder,
-    required this.onOpenDriveFile,
-    required this.onOpenDriveFolder,
+    required this.onOpenDrive,
     required this.onConnectDrive,
   });
 
@@ -323,33 +322,20 @@ class _OpenModalState extends State<_OpenModal> {
 
           if (widget.driveConfigured) ...[
             const SizedBox(height: 10),
-            if (widget.driveConnected) ...[
+            if (widget.driveConnected)
               _SourceRow(
-                icon: Icons.insert_drive_file_outlined,
-                label: 'Drive File',
-                subtitle: widget.driveEmail ?? 'Google Drive',
+                icon: Icons.cloud_outlined,
+                label: 'Google Drive',
+                subtitle: widget.driveEmail ?? 'Connected',
                 subtitleColor: Colors.green.shade600,
                 expanded: false,
                 onTap: () {
                   _dismiss();
-                  widget.onOpenDriveFile();
+                  widget.onOpenDrive();
                 },
                 subRows: const [],
-              ),
-              const SizedBox(height: 10),
-              _SourceRow(
-                icon: Icons.folder_open_outlined,
-                label: 'Drive Folder',
-                subtitle: widget.driveEmail ?? 'Google Drive',
-                subtitleColor: Colors.green.shade600,
-                expanded: false,
-                onTap: () {
-                  _dismiss();
-                  widget.onOpenDriveFolder();
-                },
-                subRows: const [],
-              ),
-            ] else
+              )
+            else
               _DriveNotConnectedRow(onConnect: () {
                 _dismiss();
                 widget.onConnectDrive();
