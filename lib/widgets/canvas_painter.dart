@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/layer.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
+import '../models/pattern_progress.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../data/symbols.dart';
@@ -44,6 +45,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   /// The 0-based page index to display when [pageLayout] is non-null.
   final int currentPage;
+
+  /// Progress data — used in stitch mode to dim completed stitch cells.
+  final PatternProgress progress;
   late final Map<String, Thread> _threadMap = {
     for (final t in pattern.threads) t.dmcCode: t,
   };
@@ -66,6 +70,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     this.paletteOverride,
     this.pageLayout,
     this.currentPage = 0,
+    this.progress = PatternProgress.empty,
   });
 
   /// Returns [original] with the active palette's colour substituted if an
@@ -269,6 +274,23 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
               isCrossStitch: true);
           if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
         }
+      }
+    }
+
+    // ── Done-stitch dimming (Stitch mode only) ──────────────────────────────
+    // Draw a semi-transparent aida-coloured overlay on each completed cell so
+    // done stitches appear at ~30% of their full brightness, making remaining
+    // work visually prominent.
+    if (stitchMode && progress.completedStitches.isNotEmpty) {
+      final dimPaint = Paint()
+        ..color = aidaColor.withValues(alpha: 0.70);
+      for (final (cx, cy) in progress.completedStitches) {
+        if (cx < minCX || cx >= maxCX || cy < minCY || cy >= maxCY) continue;
+        if (!_stitchOnPage(cx, cy)) continue;
+        canvas.drawRect(
+          Rect.fromLTWH(cx * cellSize, cy * cellSize, cellSize, cellSize),
+          dimPaint,
+        );
       }
     }
 
@@ -922,6 +944,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.compositeResult != compositeResult ||
       old.paletteOverride != paletteOverride ||
       old.pageLayout != pageLayout ||
-      old.currentPage != currentPage;
+      old.currentPage != currentPage ||
+      old.progress != progress;
 }
 

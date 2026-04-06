@@ -4,6 +4,7 @@ import '../data/dmc_colors.dart';
 import 'layer.dart';
 import 'layer_item.dart';
 import 'page_config.dart';
+import 'pattern_progress.dart';
 import 'snippet.dart';
 import 'stitch.dart';
 import 'thread.dart';
@@ -62,6 +63,9 @@ class CrossStitchPattern {
   /// Page mode configuration — how the pattern is split into pages.
   final PageConfig pageConfig;
 
+  /// Progress tracking — which stitches and pages the user has physically done.
+  final PatternProgress progress;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -88,6 +92,7 @@ class CrossStitchPattern {
     this.copyright,
     this.materialsSuggestions = const [],
     this.pageConfig = PageConfig.disabled,
+    this.progress = PatternProgress.empty,
   });
 
   /// Flattened list of all layers, applying group visibility overrides.
@@ -186,6 +191,7 @@ class CrossStitchPattern {
     Object? copyright = _sentinel,
     List<({int aidaCount, int strands})>? materialsSuggestions,
     PageConfig? pageConfig,
+    PatternProgress? progress,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -223,6 +229,7 @@ class CrossStitchPattern {
       copyright: copyright == _sentinel ? this.copyright : copyright as String?,
       materialsSuggestions: materialsSuggestions ?? this.materialsSuggestions,
       pageConfig: pageConfig ?? this.pageConfig,
+      progress: progress ?? this.progress,
     );
   }
 
@@ -259,6 +266,7 @@ class CrossStitchPattern {
         ...patternInfoMap,
         ...patternMap,
         'pageMode': stitchingMap['pageMode'],
+        'progress': stitchingMap['progress'],
       };
       return _migrateDiscontinuedThreads(_fromFlat(flat));
     }
@@ -369,6 +377,9 @@ class CrossStitchPattern {
       pageConfig: yaml['pageMode'] != null
           ? PageConfig.fromYaml(yaml['pageMode'] as Map)
           : PageConfig.disabled,
+      progress: yaml['progress'] != null
+          ? PatternProgress.fromYaml(yaml['progress'] as Map)
+          : PatternProgress.empty,
     );
     return parsed;
   }
