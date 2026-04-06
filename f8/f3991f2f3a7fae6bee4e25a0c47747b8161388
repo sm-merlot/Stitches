@@ -1,0 +1,23 @@
+lib/widgets/pattern_canvas.dart
+  b1e6dc2fda893046 46,49-51,721-732,744,801-812,824,937-938,1003,1079,1082-1103,1105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "f8f3991f2f3a7fae6bee4e25a0c47747b8161388",
+  "prompts": {
+    "b1e6dc2fda893046": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca011c36-a6c0-4184-a75d-def9877553ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 57,
+      "total_deletions": 9,
+      "accepted_lines": 57,
+      "overriden_lines": 0
+    }
+  }
+}
