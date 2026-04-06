@@ -247,7 +247,6 @@ class _OpenModal extends StatefulWidget {
 
 class _OpenModalState extends State<_OpenModal> {
   bool _localExpanded = false;
-  bool _driveExpanded = false;
 
   void _dismiss() => Navigator.of(context).pop();
 
@@ -301,7 +300,6 @@ class _OpenModalState extends State<_OpenModal> {
               expanded: _localExpanded,
               onTap: () => setState(() {
                 _localExpanded = !_localExpanded;
-                if (_localExpanded) _driveExpanded = false;
               }),
               subRows: [
                 _SubRow(
@@ -325,37 +323,33 @@ class _OpenModalState extends State<_OpenModal> {
 
           if (widget.driveConfigured) ...[
             const SizedBox(height: 10),
-            if (widget.driveConnected)
+            if (widget.driveConnected) ...[
               _SourceRow(
-                icon: Icons.cloud_outlined,
-                label: 'Google Drive',
-                subtitle: widget.driveEmail ?? 'Connected',
+                icon: Icons.insert_drive_file_outlined,
+                label: 'Drive File',
+                subtitle: widget.driveEmail ?? 'Google Drive',
                 subtitleColor: Colors.green.shade600,
-                expanded: _driveExpanded,
-                onTap: () => setState(() {
-                  _driveExpanded = !_driveExpanded;
-                  if (_driveExpanded) _localExpanded = false;
-                }),
-                subRows: [
-                  _SubRow(
-                    icon: Icons.insert_drive_file_outlined,
-                    label: 'Drive File',
-                    onTap: () {
-                      _dismiss();
-                      widget.onOpenDriveFile();
-                    },
-                  ),
-                  _SubRow(
-                    icon: Icons.folder_open_outlined,
-                    label: 'Drive Folder',
-                    onTap: () {
-                      _dismiss();
-                      widget.onOpenDriveFolder();
-                    },
-                  ),
-                ],
-              )
-            else
+                expanded: false,
+                onTap: () {
+                  _dismiss();
+                  widget.onOpenDriveFile();
+                },
+                subRows: const [],
+              ),
+              const SizedBox(height: 10),
+              _SourceRow(
+                icon: Icons.folder_open_outlined,
+                label: 'Drive Folder',
+                subtitle: widget.driveEmail ?? 'Google Drive',
+                subtitleColor: Colors.green.shade600,
+                expanded: false,
+                onTap: () {
+                  _dismiss();
+                  widget.onOpenDriveFolder();
+                },
+                subRows: const [],
+              ),
+            ] else
               _DriveNotConnectedRow(onConnect: () {
                 _dismiss();
                 widget.onConnectDrive();
