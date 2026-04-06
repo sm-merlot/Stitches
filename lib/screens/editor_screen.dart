@@ -359,12 +359,16 @@ class EditorScreen extends ConsumerWidget {
   Future<bool> _onWillPop(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     if (!state.isDirty) return true;
+    final isUnsavedNew = state.filePath == null && state.driveParentFolderId == null;
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Unsaved Changes'),
-        content:
-            const Text('You have unsaved changes. Leave without saving?'),
+        content: Text(
+          isUnsavedNew
+              ? 'This pattern hasn\'t been saved. Leave now and your work will be lost.'
+              : 'You have unsaved changes. Leave without saving?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -372,15 +376,14 @@ class EditorScreen extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child:
-                const Text('Leave', style: TextStyle(color: Colors.red)),
+            child: const Text('Leave', style: TextStyle(color: Colors.red)),
           ),
           FilledButton(
             onPressed: () async {
               Navigator.of(context).pop(false);
               await _save(context, ref);
             },
-            child: const Text('Save'),
+            child: Text(isUnsavedNew ? 'Save As…' : 'Save'),
           ),
         ],
       ),
@@ -440,22 +443,40 @@ class EditorScreen extends ConsumerWidget {
                 ),
                 const SizedBox(width: 2),
               ] else if (state.isFileOpen) ...[
-                Tooltip(
-                  message: state.isDirty ? 'Saving…' : 'Saved',
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Center(
-                      child: state.isDirty
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.task_alt, size: 20),
+                // New unsaved file (no path yet) — can't auto-save; show
+                // a static "needs saving" badge. Saved/saving: spinner → tick.
+                if (state.filePath == null)
+                  Tooltip(
+                    message: 'Not saved — use Save As to save this pattern',
+                    child: SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: Center(
+                        child: Icon(
+                          Icons.save_outlined,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Tooltip(
+                    message: state.isDirty ? 'Saving…' : 'Saved',
+                    child: SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: Center(
+                        child: state.isDirty
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.task_alt, size: 20),
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(width: 2),
               ],
               Text(_title(state)),
