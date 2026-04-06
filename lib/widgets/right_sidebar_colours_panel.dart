@@ -1092,3 +1092,66 @@ class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
     );
   }
 }
+
+// ─── MarkDoneButton ──────────────────────────────────────────────────────────
+
+/// "Mark done" / "Mark not done" button shown in the stitch-mode sidebar when
+/// the user has rubber-band selected a region on the canvas.
+///
+/// • If ALL stitches in the region are done → shows "Mark not done" (orange)
+/// • Otherwise → shows "Mark done"
+/// Pressing the button does NOT deselect the region so the user can act again.
+class MarkDoneButton extends ConsumerWidget {
+  final EditorState state;
+  const MarkDoneButton({super.key, required this.state});
+
+  static bool _isRegionAllDone(EditorState s) {
+    final region = s.progressRegion;
+    if (region == null) return false;
+    final progress = s.pattern.progress;
+    for (final layer in s.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is BackStitch) continue;
+        final coords = EditorState.cellCoords(stitch);
+        if (coords == null) continue;
+        final (sx, sy) = coords;
+        if (sx >= region.left && sx < region.right &&
+            sy >= region.top && sy < region.bottom) {
+          if (!progress.completedStitches.contains((sx, sy))) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final allDone = _isRegionAllDone(state);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+      child: FilledButton.icon(
+        icon: Icon(allDone ? Icons.remove_done : Icons.done_all, size: 16),
+        label: Text(
+          allDone ? 'Mark not done' : 'Mark done',
+          style: const TextStyle(fontSize: 13),
+        ),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(double.infinity, 36),
+          backgroundColor:
+              allDone ? Colors.orange.shade700 : null,
+        ),
+        onPressed: () {
+          final notifier = ref.read(editorProvider.notifier);
+          final region = state.progressRegion!;
+          if (allDone) {
+            notifier.markRegionNotDone(region);
+          } else {
+            notifier.markRegionDone(region);
+          }
+          // Keep the region selected so the user can act again
+        },
+      ),
+    );
+  }
+}
