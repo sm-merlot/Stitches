@@ -13,6 +13,7 @@ import '../../models/layer_item.dart';
 import '../../models/page_config.dart';
 import '../../models/page_layout.dart';
 import '../../models/pattern.dart';
+import '../../models/pattern_progress.dart';
 import '../../models/snippet.dart';
 import '../../models/snippet_palette.dart';
 import '../../models/snippet_palette_resolver.dart';
@@ -26,6 +27,7 @@ import '../settings_provider.dart';
 
 part 'editor_provider_drawing.dart';
 part 'editor_provider_layers.dart';
+part 'editor_provider_progress.dart';
 part 'editor_provider_snippets.dart';
 part 'editor_provider_selection.dart';
 
@@ -392,7 +394,7 @@ class EditorState {
 // ─── EditorNotifier ───────────────────────────────────────────────────────────
 
 class EditorNotifier extends Notifier<EditorState>
-    with DrawingMixin, LayersMixin, SnippetsMixin, SelectionMixin {
+    with DrawingMixin, LayersMixin, ProgressMixin, SnippetsMixin, SelectionMixin {
 
   static const int _maxUndoDepth = 200;
 

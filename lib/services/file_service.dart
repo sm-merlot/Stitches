@@ -255,16 +255,31 @@ class FileService {
     }
 
     // ── stitching: section — act-of-stitching state ───────────────────────────
-    // Page mode config — only written when ever configured (even if disabled,
-    // so the user's page dimensions are preserved across saves).
     final pc = pattern.pageConfig;
-    if (pc != PageConfig.disabled) {
+    final prog = pattern.progress;
+    final hasStitching = pc != PageConfig.disabled || !prog.isEmpty;
+    if (hasStitching) {
       buf.writeln('stitching:');
-      buf.writeln('  pageMode:');
-      buf.writeln('    enabled: ${pc.enabled}');
-      buf.writeln('    pageWidth: ${pc.pageWidth}');
-      buf.writeln('    pageHeight: ${pc.pageHeight}');
-      buf.writeln('    fuzzyAmount: ${pc.fuzzyAmount}');
+      if (pc != PageConfig.disabled) {
+        buf.writeln('  pageMode:');
+        buf.writeln('    enabled: ${pc.enabled}');
+        buf.writeln('    pageWidth: ${pc.pageWidth}');
+        buf.writeln('    pageHeight: ${pc.pageHeight}');
+        buf.writeln('    fuzzyAmount: ${pc.fuzzyAmount}');
+      }
+      if (!prog.isEmpty) {
+        buf.writeln('  progress:');
+        if (prog.completedStitches.isNotEmpty) {
+          buf.writeln('    completedStitches:');
+          for (final c in prog.completedStitches) {
+            buf.writeln('      - ${c.$1},${c.$2}');
+          }
+        }
+        if (prog.completedPages.isNotEmpty) {
+          final pages = prog.completedPages.toList()..sort();
+          buf.writeln('    completedPages: [${pages.join(', ')}]');
+        }
+      }
     }
 
     return buf.toString();
