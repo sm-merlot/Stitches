@@ -46,14 +46,16 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Double-tap / double-click detection
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
-  // Progress double-click flood fill detection (stitch mode).
-  // Timing-based in _onPointerDown: if pointer down arrives within
-  // _kDoubleClickMs of last progress pointer-up at a nearby position,
-  // treat it as a double-click and call floodFillDone instead of toggleStitchDone.
-  DateTime? _lastProgressUpTime;
-  Offset?   _lastProgressUpPos;
-  bool      _isProgressDoubleClick = false;
-  static const int    _kDoubleClickMs     = 500;
+  // Progress double-click/double-tap flood fill detection (stitch mode).
+  // Detected at pointer-DOWN time (DOWN-to-DOWN): if the second DOWN arrives
+  // within _kDoubleClickMs of the previous DOWN at a nearby screen position,
+  // set _pendingDoubleClick so that pointer-UP does a flood fill instead of
+  // a single toggle.
+  DateTime? _lastProgressDownTime;
+  Offset?   _lastProgressDownPos;
+  bool      _pendingDoubleClick = false;
+  bool?     _wasProgressCellDone; // state of the cell BEFORE the last single-click toggle
+  static const int    _kDoubleClickMs     = 400;
   static const double _kDoubleClickRadius = 80.0;
 
   // Cursor/hover tracking
@@ -630,6 +632,30 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     );
   }
 
+  // ─── Progress double-click helper ─────────────────────────────────────────
+
+  /// Call on every pointer-DOWN that would start a progress tap.
+  /// Sets [_pendingDoubleClick] if this DOWN follows a previous DOWN within
+  /// the double-click time and radius thresholds.
+  void _checkProgressDoubleClick(Offset screenPos) {
+    final now = DateTime.now();
+    final last = _lastProgressDownTime;
+    final lastPos = _lastProgressDownPos;
+    if (last != null &&
+        lastPos != null &&
+        now.difference(last).inMilliseconds < _kDoubleClickMs &&
+        (screenPos - lastPos).distance < _kDoubleClickRadius) {
+      _pendingDoubleClick = true;
+      // Reset so a triple-click doesn't fire a second flood fill.
+      _lastProgressDownTime = null;
+      _lastProgressDownPos = null;
+    } else {
+      _pendingDoubleClick = false;
+      _lastProgressDownTime = now;
+      _lastProgressDownPos = screenPos;
+    }
+  }
+
   // ─── Selection helpers ────────────────────────────────────────────────────
 
   Rect _buildSelRect(Offset a, Offset b) {
@@ -653,6 +679,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   // ─── Pointer event handling ───────────────────────────────────────────────
+
+  /// Returns true when [screenPos] is inside a nav-button hit area.
+  /// Used to suppress accidental stitch operations when the user taps a nav
+  /// button (which is a child of the Listener, so raw events reach us too).
+  bool _isNavZone(Offset screenPos) {
+    final s = ref.read(editorProvider);
+    if (!s.stitchMode || !s.pattern.pageConfig.enabled || s.pageLayout == null) {
+      return false;
+    }
+    // Nav buttons: left/right arrows (36 px wide + 4 margin each side = ~44 px)
+    // up/down arrows (36 px tall + margins).  Page indicator at very bottom.
+    const double edgeG = 56.0;
+    const double bottomG = 100.0;
+    return screenPos.dx < edgeG ||
+        screenPos.dx > _canvasSize.width - edgeG ||
+        screenPos.dy < edgeG ||
+        screenPos.dy > _canvasSize.height - bottomG;
+  }
 
   bool get _isPanMode =>
       ref.read(editorProvider).drawingMode == DrawingMode.pan;
@@ -701,15 +745,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final inStitchMode = editorState.stitchMode;
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
-          if (_screenOnCanvas(event.localPosition)) {
-            // Detect double-click by comparing against last progress pointer-up.
-            final now = DateTime.now();
-            final lastUp = _lastProgressUpTime;
-            final lastPos = _lastProgressUpPos;
-            _isProgressDoubleClick = lastUp != null &&
-                now.difference(lastUp).inMilliseconds < _kDoubleClickMs &&
-                lastPos != null &&
-                (event.localPosition - lastPos).distance < _kDoubleClickRadius;
+          if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
+            _checkProgressDoubleClick(event.localPosition);
             setState(() {
               _progressAnchor = cell;
               _progressAnchorScreen = event.localPosition;
@@ -765,12 +802,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
       // In stitch mode, start a progress anchor instead of drawing.
       if (ref.read(editorProvider).stitchMode) {
-        final cell = _screenToSelCell(event.localPosition);
-        setState(() {
-          _progressAnchor = cell;
-          _hasDraggedProgress = false;
-          _progressDragRect = null;
-        });
+        if (!_isNavZone(event.localPosition)) {
+          final cell = _screenToSelCell(event.localPosition);
+          _checkProgressDoubleClick(event.localPosition);
+          setState(() {
+            _progressAnchor = cell;
+            _hasDraggedProgress = false;
+            _progressDragRect = null;
+          });
+        }
         return;
       }
 
@@ -790,15 +830,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final inStitchMode = editorState.stitchMode;
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
-          if (_screenOnCanvas(event.localPosition)) {
-            // Detect double-tap by comparing against last progress pointer-up.
-            final now = DateTime.now();
-            final lastUp = _lastProgressUpTime;
-            final lastPos = _lastProgressUpPos;
-            _isProgressDoubleClick = lastUp != null &&
-                now.difference(lastUp).inMilliseconds < _kDoubleClickMs &&
-                lastPos != null &&
-                (event.localPosition - lastPos).distance < _kDoubleClickRadius;
+          if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
+            _checkProgressDoubleClick(event.localPosition);
             setState(() {
               _progressAnchor = cell;
               _progressAnchorScreen = event.localPosition;
@@ -855,12 +888,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
       // In stitch mode, start a progress anchor instead of drawing.
       if (ref.read(editorProvider).stitchMode) {
-        final cell = _screenToSelCell(event.localPosition);
-        setState(() {
-          _progressAnchor = cell;
-          _hasDraggedProgress = false;
-          _progressDragRect = null;
-        });
+        if (!_isNavZone(event.localPosition)) {
+          final cell = _screenToSelCell(event.localPosition);
+          _checkProgressDoubleClick(event.localPosition);
+          setState(() {
+            _progressAnchor = cell;
+            _hasDraggedProgress = false;
+            _progressDragRect = null;
+          });
+        }
         return;
       }
     }
@@ -1085,20 +1121,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           ref.read(editorProvider.notifier).setProgressRegion(rect);
         }
       } else {
-        // Tap: toggle the tapped stitch done/not-done.
+        // Tap: toggle the tapped stitch done/not-done, or flood fill on double-click.
         final cx = _progressAnchor!.dx.toInt();
         final cy = _progressAnchor!.dy.toInt();
-        if (_isProgressDoubleClick) {
-          // Double-click/double-tap: flood-fill done/undone from this cell.
-          ref.read(editorProvider.notifier).floodFillDone(cx, cy);
-          _lastProgressUpTime = null; // reset so triple-click doesn't re-trigger
-          _lastProgressUpPos = null;
+        if (_pendingDoubleClick) {
+          // Flood-fill done/undone from this cell. Pass the cell's state
+          // BEFORE the first-click toggle so flood fill goes in the right
+          // direction (the first click already flipped the cell).
+          ref.read(editorProvider.notifier).floodFillDone(cx, cy,
+              originalStartIsDone: _wasProgressCellDone,
+              afterSingleTap: true);
+          _pendingDoubleClick = false;
+          _wasProgressCellDone = null;
         } else {
+          // Record the cell state BEFORE toggling, so double-click can use it.
+          _wasProgressCellDone = ref.read(editorProvider)
+              .pattern.progress.completedStitches.contains((cx, cy));
           ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
-          _lastProgressUpTime = DateTime.now();
-          _lastProgressUpPos = pos;
         }
-        _isProgressDoubleClick = false;
         // Clear any committed progress region on a tap
         ref.read(editorProvider.notifier).setProgressRegion(null);
       }
@@ -1297,7 +1337,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         return MouseRegion(
         cursor: _cursor(state),
         onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
-        child: Listener(
+        child: Stack(children: [
+        Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: _onPointerMove,
         onPointerUp: _onPointerUp,
@@ -1330,7 +1371,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   referenceVisible: state.referenceVisible,
                   compositeResult: state.compositeResult,
                   paletteOverride: _getOrBuildPaletteOverride(state),
-                  pageLayout: state.pageLayout,
+                  // Pages are a stitch-mode concept — don't filter in edit/view.
+                  pageLayout: state.stitchMode ? state.pageLayout : null,
                   currentPage: state.currentPage,
                   progress: state.pattern.progress,
                 ),
@@ -1400,7 +1442,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               ),
               size: Size.infinite,
             ),
-            // Page navigation chrome — directional arrows + page indicator.
+            // Page navigation chrome — inside Listener so multi-touch (pinch)
+            // is always tracked. Nav-zone guard in _onPointerDown prevents
+            // accidental stitch marks when tapping nav buttons.
             if (pageModeActive)
               _PageNavOverlay(
                 layout: state.pageLayout!,
@@ -1416,7 +1460,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           ],
         ),
       ),
-    );
+        ])); // outer Stack, MouseRegion
     },
     );
   }
