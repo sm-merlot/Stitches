@@ -20,6 +20,8 @@ import '../providers/pdf_viewer_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../services/pattern_thumbnail.dart';
+import '../services/thumbnail_cache.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
@@ -72,6 +74,41 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS) &&
       MediaQuery.of(context).size.shortestSide < 600;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ws = ref.read(workspaceProvider).workspace;
+      if (ws is LocalFolder) {
+        unawaited(_refreshThumbnailsInBackground(ws.path));
+      }
+    });
+  }
+
+  /// Walks [folderPath] and generates thumbnails for any `.stitches` file
+  /// not already in the cache. Runs without blocking the UI.
+  Future<void> _refreshThumbnailsInBackground(String folderPath) async {
+    try {
+      final dir = Directory(folderPath);
+      if (!await dir.exists()) return;
+      await for (final entity in dir.list(recursive: false)) {
+        if (entity is! File || !entity.path.endsWith('.stitches')) continue;
+        final key = localThumbnailKey(entity.path);
+        if (await ThumbnailCache.load(key) != null) continue;
+        try {
+          final (pattern, _, _) =
+              await FileService.openFileFromPath(entity.path);
+          final bytes = await generatePatternThumbnail(pattern);
+          if (bytes != null) await ThumbnailCache.store(key, bytes);
+        } catch (_) {
+          // Skip files that can't be parsed.
+        }
+      }
+    } catch (_) {
+      // Silently ignore filesystem errors.
+    }
+  }
 
   void _openFolderSidebar() {
     ref.read(workspaceProvider.notifier).setSidebarVisible(true);
