@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
+import '../models/page_layout.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
@@ -473,16 +474,49 @@ class StitchDemoButton extends StatelessWidget {
   final EditorState state;
   const StitchDemoButton({super.key, required this.state});
 
+  /// Returns the pool of stitches for the Demo button.
+  /// In stitch mode: stitches within progressRegion (page-filtered if needed).
+  /// In edit mode: selectedStitches from selectionRect.
+  /// Fallback: all pattern stitches.
+  List<Stitch> _stitchPool() {
+    final region = state.stitchMode ? state.progressRegion : state.selectionRect;
+    if (region != null) {
+      final layout = state.pageLayout;
+      final (pageCol, pageRow) = layout != null
+          ? layout.pageCoords(state.currentPage)
+          : (0, 0);
+      final stitches = <Stitch>[];
+      for (final layer in state.pattern.layers) {
+        if (!layer.visible) continue;
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) continue;
+          final coords = EditorState.cellCoords(stitch);
+          if (coords == null) continue;
+          final (sx, sy) = coords;
+          if (sx >= region.left && sx < region.right &&
+              sy >= region.top && sy < region.bottom) {
+            if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+            stitches.add(stitch);
+          }
+        }
+      }
+      return stitches;
+    }
+    if (state.selectionRect != null) return state.selectedStitches;
+    return state.pattern.stitches;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Enabled only when the user has rubber-band selected stitches on the canvas,
-    // and at least one of those stitches is not greyed out (i.e. matches the
-    // focused thread when focus mode is active).
+    // Enabled only when the user has a selection or progress region with stitches,
+    // and at least one is a FullStitch matching the focused thread (if any).
     final focusId = state.stitchFocusThreadId;
-    final enabled = state.selectionRect != null &&
-        state.selectedStitches.any((s) =>
-            s is FullStitch &&
-            (focusId == null || s.threadId == focusId));
+    final hasRegion = state.stitchMode
+        ? state.progressRegion != null
+        : state.selectionRect != null;
+    final pool = _stitchPool();
+    final enabled = hasRegion &&
+        pool.any((s) => s is FullStitch && (focusId == null || s.threadId == focusId));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -537,10 +571,7 @@ class StitchDemoButton extends StatelessWidget {
   Future<void> _onDemonstrate(BuildContext context) async {
     final pattern = state.pattern;
     final focusId = state.stitchFocusThreadId;
-    final pool = state.selectionRect != null
-        ? state.selectedStitches
-        : pattern.stitches;
-    final fullStitches = pool.whereType<FullStitch>().toList();
+    final fullStitches = _stitchPool().whereType<FullStitch>().toList();
 
     Thread? thread;
     if (focusId != null) {
@@ -1109,6 +1140,9 @@ class MarkDoneButton extends ConsumerWidget {
     final region = s.progressRegion;
     if (region == null) return false;
     final progress = s.pattern.progress;
+    final layout = s.pageLayout;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.currentPage) : (0, 0);
+    bool hasAny = false;
     for (final layer in s.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -1118,11 +1152,13 @@ class MarkDoneButton extends ConsumerWidget {
         final (sx, sy) = coords;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
+          if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+          hasAny = true;
           if (!progress.completedStitches.contains((sx, sy))) return false;
         }
       }
     }
-    return true;
+    return hasAny;
   }
 
   @override

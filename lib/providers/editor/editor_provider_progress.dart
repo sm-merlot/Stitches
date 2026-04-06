@@ -32,10 +32,13 @@ mixin ProgressMixin on Notifier<EditorState> {
 
   /// Mark all stitches within [region] (cell coords) as done.
   /// Does not un-mark already-completed stitches.
+  /// In page mode, only stitches on the current page are affected.
   void markRegionDone(Rect region) {
     final prog = state.pattern.progress;
     final current = Set<(int, int)>.from(prog.completedStitches);
     final affectedThreads = <String>{};
+    final layout = state.pageLayout;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -45,6 +48,7 @@ mixin ProgressMixin on Notifier<EditorState> {
         final (sx, sy) = coords;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
+          if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
           current.add((sx, sy));
           affectedThreads.add(stitch.threadId);
         }
@@ -127,10 +131,13 @@ mixin ProgressMixin on Notifier<EditorState> {
   }
 
   /// Mark all stitches within [region] (cell coords) as NOT done.
+  /// In page mode, only stitches on the current page are affected.
   void markRegionNotDone(Rect region) {
     final prog = state.pattern.progress;
     final current = Set<(int, int)>.from(prog.completedStitches);
     int removed = 0;
+    final layout = state.pageLayout;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -140,6 +147,7 @@ mixin ProgressMixin on Notifier<EditorState> {
         final (sx, sy) = coords;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
+          if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
           if (current.remove((sx, sy))) removed++;
         }
       }
