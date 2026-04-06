@@ -794,17 +794,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        ...recents.map((item) => _RecentItemTile(
-                              item: item,
-                              onTap: _loading
-                                  ? null
-                                  : () => item.isFolder
-                                      ? _openRecentFolder(item)
-                                      : _openRecentFile(item),
-                              onRemove: () => ref
-                                  .read(recentItemsProvider.notifier)
-                                  .remove(item.id),
-                            )),
+                        ...recents
+                            .where((item) => !item.thumbnailOnly)
+                            .map((item) => _RecentItemTile(
+                                  item: item,
+                                  onTap: _loading
+                                      ? null
+                                      : () => item.isFolder
+                                          ? _openRecentFolder(item)
+                                          : _openRecentFile(item),
+                                  onRemove: () => ref
+                                      .read(recentItemsProvider.notifier)
+                                      .remove(item.id),
+                                )),
                       ],
                     ),
                   ),

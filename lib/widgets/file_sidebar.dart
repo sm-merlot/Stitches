@@ -374,20 +374,25 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
         if (!context.mounted) return;
         _switchToEditor();
         ref.read(editorProvider.notifier).loadPattern(pattern, filePath: path, compressOnSave: wasCompressed, session: session);
-        // Add to recents without thumbnail first; generate in background.
+        // Add as thumbnail-only (workspace file — folder is the real recent).
         final notifier = ref.read(recentItemsProvider.notifier);
-        notifier.add(path, isFolder: false);
+        final ws = ref.read(workspaceProvider).workspace;
+        final parentId = ws?.id;
+        notifier.add(path, isFolder: false,
+            thumbnailOnly: true, parentId: parentId);
         final thumbKey = localThumbnailKey(path);
         unawaited(() async {
           final existing = await ThumbnailCache.load(thumbKey);
           if (existing != null) {
-            notifier.add(path, isFolder: false, thumbnailKey: thumbKey);
+            notifier.add(path, isFolder: false, thumbnailKey: thumbKey,
+                thumbnailOnly: true, parentId: parentId);
             return;
           }
           final bytes = await generatePatternThumbnail(pattern);
           if (bytes != null) {
             await ThumbnailCache.store(thumbKey, bytes);
-            notifier.add(path, isFolder: false, thumbnailKey: thumbKey);
+            notifier.add(path, isFolder: false, thumbnailKey: thumbKey,
+                thumbnailOnly: true, parentId: parentId);
           }
         }());
       } catch (e) {

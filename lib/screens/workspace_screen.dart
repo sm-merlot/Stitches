@@ -83,6 +83,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       final ws = ref.read(workspaceProvider).workspace;
       if (ws is LocalFolder) {
         unawaited(_refreshThumbnailsInBackground(ws.path));
+      } else if (ws is DriveFolder) {
+        unawaited(_refreshDriveThumbnailsInBackground(ws));
       }
     });
   }
@@ -116,14 +118,63 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             continue;
           }
         }
-        // Add (or update) recents entry for this file so the folder thumbnail
-        // strip shows it — even if never explicitly opened in this session.
+        // Add as thumbnail-only so the folder strip shows it without
+        // creating a visible standalone entry in the recents list.
         if (cached != null && mounted) {
-          notifier.add(path, isFolder: false, thumbnailKey: key);
+          notifier.add(path, isFolder: false, thumbnailKey: key,
+              thumbnailOnly: true, parentId: folderPath);
         }
       }
     } catch (_) {
       // Silently ignore filesystem errors.
+    }
+  }
+
+  /// Lists [folder] on Drive and generates thumbnails for .stitches files,
+  /// adding each as a thumbnail-only recents entry so the folder strip shows
+  /// them. Drive is network I/O so this is deliberately fire-and-forget.
+  Future<void> _refreshDriveThumbnailsInBackground(DriveFolder folder) async {
+    try {
+      final service =
+          await ref.read(googleDriveProvider.notifier).getService();
+      if (service == null || !mounted) return;
+      final contents = await service.listFolderContents(folder);
+      if (!mounted) return;
+      final notifier = ref.read(recentItemsProvider.notifier);
+      final parentId = folder.id; // 'drive:<folderId>'
+      for (final file in contents.files) {
+        if (file is! DrivePatternFile) continue;
+        final key = driveThumbnailKey(file.fileId);
+        var cached = await ThumbnailCache.load(key);
+        if (cached == null) {
+          try {
+            final bytes = await service.downloadFile(file.fileId);
+            final tempDir = await getTemporaryDirectory();
+            final tempPath = '${tempDir.path}/${file.fileId}.stitches';
+            await File(tempPath).writeAsBytes(bytes);
+            final (pattern, _, _) =
+                await FileService.openFileFromPath(tempPath);
+            final thumbBytes = await generatePatternThumbnail(pattern);
+            if (thumbBytes != null) {
+              await ThumbnailCache.store(key, thumbBytes);
+              cached = thumbBytes;
+            }
+          } catch (_) {
+            continue;
+          }
+        }
+        if (cached != null && mounted) {
+          notifier.add(
+            file.fileId,
+            isFolder: false,
+            thumbnailKey: key,
+            thumbnailOnly: true,
+            parentId: parentId,
+          );
+        }
+      }
+    } catch (_) {
+      // Silently ignore Drive errors.
     }
   }
 

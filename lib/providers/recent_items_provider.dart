@@ -24,6 +24,12 @@ class RecentItem {
   /// Cache key for the thumbnail PNG (local → base64 of path; drive file → fileId).
   /// Null for drive folders (no thumbnail).
   final String? thumbnailKey;
+  /// If true, this entry exists only to supply thumbnails to a parent folder's
+  /// thumbnail strip. It is hidden from the visible recents list.
+  final bool thumbnailOnly;
+  /// The [id] of the parent folder RecentItem this entry belongs to.
+  /// Required for Drive folder strips where path-prefix matching doesn't work.
+  final String? parentId;
 
   const RecentItem({
     required this.id,
@@ -34,6 +40,8 @@ class RecentItem {
     this.driveName,
     this.drivePath,
     this.thumbnailKey,
+    this.thumbnailOnly = false,
+    this.parentId,
   });
 
   List<String> get _localPathParts => id.split(RegExp(r'[/\\]'));
@@ -78,6 +86,8 @@ class RecentItem {
         if (drivePath != null) 'drivePath': drivePath,
         'lastOpened': lastOpened.millisecondsSinceEpoch,
         if (thumbnailKey != null) 'thumbnailKey': thumbnailKey,
+        if (thumbnailOnly) 'thumbnailOnly': true,
+        if (parentId != null) 'parentId': parentId,
       };
 
   factory RecentItem.fromJson(Map<String, dynamic> json) => RecentItem(
@@ -91,6 +101,8 @@ class RecentItem {
         driveName: json['driveName'] as String?,
         drivePath: json['drivePath'] as String?,
         thumbnailKey: json['thumbnailKey'] as String?,
+        thumbnailOnly: json['thumbnailOnly'] as bool? ?? false,
+        parentId: json['parentId'] as String?,
       );
 }
 
@@ -138,6 +150,8 @@ class RecentItemsNotifier extends Notifier<List<RecentItem>> {
     String? driveName,
     String? drivePath,
     String? thumbnailKey,
+    bool thumbnailOnly = false,
+    String? parentId,
   }) async {
     // On mobile, suppress the home folder itself from appearing in recents.
     if (_isMobile && !isDrive && isFolder) {
@@ -154,9 +168,16 @@ class RecentItemsNotifier extends Notifier<List<RecentItem>> {
       driveName: driveName,
       drivePath: drivePath,
       thumbnailKey: thumbnailKey,
+      thumbnailOnly: thumbnailOnly,
+      parentId: parentId,
     );
     var updated = [item, ...state.where((e) => e.id != id)];
-    if (updated.length > _maxItems) updated = updated.sublist(0, _maxItems);
+    // thumbnailOnly entries are invisible — don't count toward _maxItems.
+    final visible = updated.where((e) => !e.thumbnailOnly).toList();
+    final thumbOnly = updated.where((e) => e.thumbnailOnly).toList();
+    if (visible.length > _maxItems) {
+      updated = [...visible.sublist(0, _maxItems), ...thumbOnly];
+    }
     state = updated;
     await _save();
   }

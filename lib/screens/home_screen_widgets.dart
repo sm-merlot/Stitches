@@ -579,13 +579,12 @@ class _RecentItemTile extends ConsumerWidget {
         width: 40,
         height: 40,
       );
-    } else if (item.isFolder && !item.isDrive) {
+    } else if (item.isFolder) {
       final folderKeys = allRecents
           .where((r) =>
               !r.isFolder &&
-              !r.isDrive &&
               r.thumbnailKey != null &&
-              r.id.startsWith(item.id))
+              (r.id.startsWith(item.id) || r.parentId == item.id))
           .take(3)
           .map((r) => r.thumbnailKey!)
           .toList();
