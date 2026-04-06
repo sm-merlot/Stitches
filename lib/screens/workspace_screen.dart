@@ -88,8 +88,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   }
 
   /// Walks [folderPath] and generates thumbnails for any `.stitches` file
-  /// not already in the cache. Also updates recents entries that are missing
-  /// a thumbnailKey so the folder thumbnail strip shows them. Fire-and-forget.
+  /// not already in the cache, then adds every file to recents (with its
+  /// thumbnailKey) so the folder thumbnail strip is fully populated even for
+  /// files never explicitly opened. Fire-and-forget.
   Future<void> _refreshThumbnailsInBackground(String folderPath) async {
     try {
       final dir = Directory(folderPath);
@@ -115,14 +116,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             continue;
           }
         }
-        // If a recents entry exists for this file but lacks a thumbnailKey,
-        // update it so the folder thumbnail strip can display it.
+        // Add (or update) recents entry for this file so the folder thumbnail
+        // strip shows it — even if never explicitly opened in this session.
         if (cached != null && mounted) {
-          final recents = ref.read(recentItemsProvider);
-          final entry = recents.where((r) => r.id == path).firstOrNull;
-          if (entry != null && entry.thumbnailKey == null) {
-            notifier.add(path, isFolder: false, thumbnailKey: key);
-          }
+          notifier.add(path, isFolder: false, thumbnailKey: key);
         }
       }
     } catch (_) {
