@@ -43,9 +43,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   double _trackpadStartScale = 1.0;
   Offset _trackpadStartPanOffset = Offset.zero;
 
-  // Double-tap detection (touch only)
+  // Double-tap / double-click detection
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
+  // Mouse double-click (for flood-fill in stitch mode on macOS/desktop)
+  DateTime? _lastMouseUpTime;
+  Offset? _lastMouseUpPos;
 
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
@@ -716,7 +719,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final cell = _screenToSelCell(event.localPosition);
         final sel = editorState.selectionRect;
         final inStitchMode = editorState.stitchMode;
-        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        // In stitch mode, select-drag marks a region done instead of selecting.
+        if (inStitchMode) {
+          if (_screenOnCanvas(event.localPosition)) {
+            setState(() {
+              _progressAnchor = cell;
+              _hasDraggedProgress = false;
+              _progressDragRect = null;
+            });
+          }
+          return;
+        }
+        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           if (editorState.selectedStitches.isEmpty) {
             _showWarningBanner(kWarnNothingToMove +
                 (editorState.canvasSelectionMode ? '' : kLayerHint));
@@ -728,7 +742,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             });
           }
         } else {
-          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
+          ref.read(editorProvider.notifier).setSelectionRect(null);
           if (_screenOnCanvas(event.localPosition)) {
             setState(() {
               _selectionAnchor = cell;
@@ -785,7 +799,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final cell = _screenToSelCell(event.localPosition);
         final sel = editorState.selectionRect;
         final inStitchMode = editorState.stitchMode;
-        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        // In stitch mode, select-drag marks a region done instead of selecting.
+        if (inStitchMode) {
+          if (_screenOnCanvas(event.localPosition)) {
+            setState(() {
+              _progressAnchor = cell;
+              _hasDraggedProgress = false;
+              _progressDragRect = null;
+            });
+          }
+          return;
+        }
+        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           if (editorState.selectedStitches.isEmpty) {
             _showWarningBanner(kWarnNothingToMove +
                 (editorState.canvasSelectionMode ? '' : kLayerHint));
@@ -797,7 +822,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             });
           }
         } else {
-          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
+          ref.read(editorProvider.notifier).setSelectionRect(null);
           if (_screenOnCanvas(event.localPosition)) {
             setState(() {
               _selectionAnchor = cell;
@@ -910,7 +935,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final cell = _screenToSelCell(event.localPosition);
         final newRect = _buildSelRect(_progressAnchor!, cell);
         if (newRect != _progressDragRect) {
-          _hasDraggedProgress = true;
+          // Only count as a real drag once the region spans more than one cell.
+          if (newRect.width > 1 || newRect.height > 1) _hasDraggedProgress = true;
           _progressDragRect = newRect;
           _scheduleRebuild();
         }
@@ -975,7 +1001,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final cell = _screenToSelCell(event.localPosition);
         final newRect = _buildSelRect(_progressAnchor!, cell);
         if (newRect != _progressDragRect) {
-          _hasDraggedProgress = true;
+          if (newRect.width > 1 || newRect.height > 1) _hasDraggedProgress = true;
           _progressDragRect = newRect;
           _scheduleRebuild();
         }
@@ -1051,11 +1077,33 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final cell = _screenToSelCell(pos);
       if (_hasDraggedProgress) {
         final rect = _progressDragRect ?? _buildSelRect(_progressAnchor!, cell);
-        if (rect.width >= 1 && rect.height >= 1) {
+        if (rect.width > 1 || rect.height > 1) {
           _showMarkDoneSheet(context, rect);
         }
+      } else if (event.kind != PointerDeviceKind.touch) {
+        // Mouse/stylus: detect double-click → flood fill done.
+        final timeSinceLast = _lastMouseUpTime != null
+            ? now.difference(_lastMouseUpTime!)
+            : const Duration(seconds: 1);
+        final nearLast = _lastMouseUpPos != null
+            ? (pos - _lastMouseUpPos!).distance < 40.0
+            : false;
+        if (timeSinceLast < const Duration(milliseconds: 400) && nearLast) {
+          final cx = _progressAnchor!.dx.toInt();
+          final cy = _progressAnchor!.dy.toInt();
+          ref.read(editorProvider.notifier).floodFillDone(cx, cy);
+          _lastMouseUpTime = null;
+          _lastMouseUpPos = null;
+        } else {
+          // Single click → toggle stitch done
+          final cx = _progressAnchor!.dx.toInt();
+          final cy = _progressAnchor!.dy.toInt();
+          ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
+          _lastMouseUpTime = now;
+          _lastMouseUpPos = pos;
+        }
       } else {
-        // Single tap → toggle stitch done
+        // Touch single tap → toggle stitch done
         final cx = _progressAnchor!.dx.toInt();
         final cy = _progressAnchor!.dy.toInt();
         ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
