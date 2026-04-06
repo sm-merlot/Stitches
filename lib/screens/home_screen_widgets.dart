@@ -221,6 +221,8 @@ class _OpenModal extends StatefulWidget {
   final bool driveConnected;
   final bool driveConfigured;
   final String? driveEmail;
+  /// Unified picker (macOS): opens NSOpenPanel for both files and folders.
+  final VoidCallback onOpenLocal;
   final VoidCallback onOpenLocalFile;
   final VoidCallback onOpenLocalFolder;
   final VoidCallback onOpenDriveFile;
@@ -231,6 +233,7 @@ class _OpenModal extends StatefulWidget {
     required this.driveConnected,
     required this.driveConfigured,
     this.driveEmail,
+    required this.onOpenLocal,
     required this.onOpenLocalFile,
     required this.onOpenLocalFolder,
     required this.onOpenDriveFile,
@@ -276,35 +279,49 @@ class _OpenModalState extends State<_OpenModal> {
                   ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
 
-          // Local row.
-          _SourceRow(
-            icon: Icons.folder_outlined,
-            label: 'Local',
-            subtitle: 'Files & folders on this device',
-            expanded: _localExpanded,
-            onTap: () => setState(() {
-              _localExpanded = !_localExpanded;
-              if (_localExpanded) _driveExpanded = false;
-            }),
-            subRows: [
-              _SubRow(
-                icon: Icons.insert_drive_file_outlined,
-                label: 'File',
-                onTap: () {
-                  _dismiss();
-                  widget.onOpenLocalFile();
-                },
-              ),
-              _SubRow(
-                icon: Icons.folder_open_outlined,
-                label: 'Folder',
-                onTap: () {
-                  _dismiss();
-                  widget.onOpenLocalFolder();
-                },
-              ),
-            ],
-          ),
+          // Local row — on macOS a single unified picker handles both files and
+          // folders; on other platforms the accordion expands to show two options.
+          if (!kIsWeb && Platform.isMacOS)
+            _SourceRow(
+              icon: Icons.folder_outlined,
+              label: 'Open\u2026',
+              subtitle: 'File or folder on this Mac',
+              expanded: false,
+              onTap: () {
+                _dismiss();
+                widget.onOpenLocal();
+              },
+              subRows: const [],
+            )
+          else
+            _SourceRow(
+              icon: Icons.folder_outlined,
+              label: 'Local',
+              subtitle: 'Files & folders on this device',
+              expanded: _localExpanded,
+              onTap: () => setState(() {
+                _localExpanded = !_localExpanded;
+                if (_localExpanded) _driveExpanded = false;
+              }),
+              subRows: [
+                _SubRow(
+                  icon: Icons.insert_drive_file_outlined,
+                  label: 'File',
+                  onTap: () {
+                    _dismiss();
+                    widget.onOpenLocalFile();
+                  },
+                ),
+                _SubRow(
+                  icon: Icons.folder_open_outlined,
+                  label: 'Folder',
+                  onTap: () {
+                    _dismiss();
+                    widget.onOpenLocalFolder();
+                  },
+                ),
+              ],
+            ),
 
           if (widget.driveConfigured) ...[
             const SizedBox(height: 10),

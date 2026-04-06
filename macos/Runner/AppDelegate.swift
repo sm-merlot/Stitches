@@ -67,6 +67,20 @@ class AppDelegate: FlutterAppDelegate {
       case "getInitialFile":
         result(self?.initialFilePath)
         self?.initialFilePath = nil
+      case "pickFileOrFolder":
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.title = "Open"
+        panel.prompt = "Open"
+        panel.begin { response in
+          if response == .OK, let url = panel.url {
+            result(url.path)
+          } else {
+            result(nil)
+          }
+        }
       default:
         result(FlutterMethodNotImplemented)
       }

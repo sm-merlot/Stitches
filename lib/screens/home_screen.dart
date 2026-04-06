@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -145,17 +146,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (!mounted) return;
       ref.read(editorProvider.notifier).loadPattern(pattern,
           filePath: path, compressOnSave: wasCompressed, session: session);
-      final thumbKey = localThumbnailKey(path);
-      ref
-          .read(recentItemsProvider.notifier)
-          .add(path, isFolder: false, thumbnailKey: thumbKey);
-      unawaited(_generateAndCacheThumbnail(pattern, thumbKey));
+      // Add to recents immediately (no thumbnail yet — avoids race condition).
+      final notifier = ref.read(recentItemsProvider.notifier);
+      notifier.add(path, isFolder: false);
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const EditorScreen()),
       );
+      // Background: write thumbnail to cache, then refresh the recents entry
+      // with the key so _CachedThumbnailImage finds it on first load.
+      final thumbKey = localThumbnailKey(path);
+      unawaited(() async {
+        await _generateAndCacheThumbnail(pattern, thumbKey);
+        notifier.add(path, isFolder: false, thumbnailKey: thumbKey);
+      }());
     } catch (e) {
       if (!mounted) return;
       showError(context, 'Could not open file: $e');
+    }
+  }
+
+  /// Opens a file from a known [path] (e.g. from the unified local picker).
+  Future<void> _openFilePath(String path) async {
+    setState(() => _loading = true);
+    try {
+      final (pattern, resolvedPath, wasCompressed) =
+          await FileService.openFileFromPath(path);
+      if (!mounted) return;
+      final session = await EditorSessionService.load('local:$resolvedPath');
+      if (!mounted) return;
+      ref.read(editorProvider.notifier).loadPattern(pattern,
+          filePath: resolvedPath,
+          compressOnSave: wasCompressed,
+          session: session);
+      final notifier = ref.read(recentItemsProvider.notifier);
+      notifier.add(resolvedPath, isFolder: false);
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const EditorScreen()),
+      );
+      final thumbKey = localThumbnailKey(resolvedPath);
+      unawaited(() async {
+        await _generateAndCacheThumbnail(pattern, thumbKey);
+        notifier.add(resolvedPath, isFolder: false, thumbnailKey: thumbKey);
+      }());
+    } catch (e) {
+      if (!mounted) return;
+      showError(context, 'Could not open file: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Opens a file or folder using a unified picker.
+  /// On macOS, uses the native NSOpenPanel (file + directory in one shot).
+  /// On other platforms, falls back to the file picker.
+  Future<void> _smartOpenLocal() async {
+    try {
+      String? path;
+      if (!kIsWeb && Platform.isMacOS) {
+        path = await const MethodChannel('com.scme0.stitches/file_open')
+            .invokeMethod<String>('pickFileOrFolder');
+      } else {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['stitches'],
+        );
+        path = result?.files.single.path;
+      }
+      if (path == null || !mounted) return;
+      if (await FileSystemEntity.isDirectory(path)) {
+        if (!mounted) return;
+        ref.read(workspaceProvider.notifier).openWorkspace(LocalFolder(path));
+        ref.read(recentItemsProvider.notifier).add(path, isFolder: true);
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
+        );
+      } else {
+        await _openFilePath(path);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showError(context, 'Could not open: $e');
     }
   }
 
@@ -174,14 +244,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             compressOnSave: wasCompressed,
             session: session,
           );
-      final thumbKey = localThumbnailKey(resolvedPath);
-      ref
-          .read(recentItemsProvider.notifier)
-          .add(resolvedPath, isFolder: false, thumbnailKey: thumbKey);
-      unawaited(_generateAndCacheThumbnail(pattern, thumbKey));
+      final notifier = ref.read(recentItemsProvider.notifier);
+      notifier.add(resolvedPath, isFolder: false);
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const EditorScreen()),
       );
+      final thumbKey = localThumbnailKey(resolvedPath);
+      unawaited(() async {
+        await _generateAndCacheThumbnail(pattern, thumbKey);
+        notifier.add(resolvedPath, isFolder: false, thumbnailKey: thumbKey);
+      }());
     } catch (e) {
       if (!mounted) return;
       showError(context, 'Could not open file: $e');
@@ -234,17 +306,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final cached = File(tempPath);
       final thumbKey = driveThumbnailKey(selection.fileId);
 
-      Future<void> addToRecents() {
-        final email = ref.read(googleDriveProvider).email;
-        return ref.read(recentItemsProvider.notifier).add(
-              selection.fileId,
-              isFolder: false,
-              isDrive: true,
-              driveName: selection.fileName,
-              driveEmail: email,
-              drivePath: selection.drivePath,
-              thumbnailKey: thumbKey,
-            );
+      // Read email before any async gaps to avoid stale ref access.
+      final email = ref.read(googleDriveProvider).email;
+      final notifier = ref.read(recentItemsProvider.notifier);
+
+      void addToRecents({String? thumbnailKey}) {
+        notifier.add(
+          selection.fileId,
+          isFolder: false,
+          isDrive: true,
+          driveName: selection.fileName,
+          driveEmail: email,
+          drivePath: selection.drivePath,
+          thumbnailKey: thumbnailKey,
+        );
       }
 
       if (await cached.exists()) {
@@ -262,11 +337,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               compressOnSave: wasCompressed,
               session: session,
             );
-        unawaited(addToRecents());
-        unawaited(_generateAndCacheThumbnail(pattern, thumbKey));
+        addToRecents(); // no thumbnail yet
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const EditorScreen()),
         );
+        unawaited(() async {
+          await _generateAndCacheThumbnail(pattern, thumbKey);
+          addToRecents(thumbnailKey: thumbKey);
+        }());
         unawaited(_refreshDriveFileInBackground(
             ref, selection.fileId, selection.parentFolderId, tempPath));
       } else {
@@ -297,11 +375,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 compressOnSave: wasCompressed,
                 session: session,
               );
-          unawaited(addToRecents());
-          unawaited(_generateAndCacheThumbnail(pattern, thumbKey));
+          addToRecents(); // no thumbnail yet
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const EditorScreen()),
           );
+          unawaited(() async {
+            await _generateAndCacheThumbnail(pattern, thumbKey);
+            addToRecents(thumbnailKey: thumbKey);
+          }());
         } finally {
           if (mounted) setState(() => _loading = false);
         }
@@ -379,6 +460,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final tempPath = '${tempDir.path}/${item.id}.stitches';
         final cached = File(tempPath);
 
+        final driveThumbKey =
+            item.thumbnailKey ?? driveThumbnailKey(item.id);
+        final driveNotifier = ref.read(recentItemsProvider.notifier);
+
         if (await cached.exists()) {
           if (!mounted) return;
           final (pattern, path, wasCompressed) =
@@ -395,12 +480,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 compressOnSave: wasCompressed,
                 session: session,
               );
-          if (item.thumbnailKey != null) {
-            unawaited(_generateAndCacheThumbnail(pattern, item.thumbnailKey!));
-          }
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const EditorScreen()),
           );
+          unawaited(() async {
+            await _generateAndCacheThumbnail(pattern, driveThumbKey);
+            if (item.thumbnailKey == null) {
+              driveNotifier.add(item.id,
+                  isFolder: false,
+                  isDrive: true,
+                  driveName: item.driveName,
+                  driveEmail: item.driveEmail,
+                  drivePath: item.drivePath,
+                  thumbnailKey: driveThumbKey);
+            }
+          }());
           unawaited(
               _refreshDriveFileInBackground(ref, item.id, '', tempPath));
         } else {
@@ -430,13 +524,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   compressOnSave: wasCompressed,
                   session: session,
                 );
-            if (item.thumbnailKey != null) {
-              unawaited(
-                  _generateAndCacheThumbnail(pattern, item.thumbnailKey!));
-            }
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const EditorScreen()),
             );
+            unawaited(() async {
+              await _generateAndCacheThumbnail(pattern, driveThumbKey);
+              if (item.thumbnailKey == null) {
+                driveNotifier.add(item.id,
+                    isFolder: false,
+                    isDrive: true,
+                    driveName: item.driveName,
+                    driveEmail: item.driveEmail,
+                    drivePath: item.drivePath,
+                    thumbnailKey: driveThumbKey);
+              }
+            }());
           } finally {
             if (mounted) setState(() => _loading = false);
           }
@@ -453,13 +555,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             compressOnSave: wasCompressed,
             session: session);
         final thumbKey = item.thumbnailKey ?? localThumbnailKey(path);
-        ref
-            .read(recentItemsProvider.notifier)
-            .add(path, isFolder: false, thumbnailKey: thumbKey);
-        unawaited(_generateAndCacheThumbnail(pattern, thumbKey));
+        final notifier = ref.read(recentItemsProvider.notifier);
+        // Keep existing thumbnailKey if we already have one (avoids flicker).
+        notifier.add(path, isFolder: false, thumbnailKey: item.thumbnailKey);
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const EditorScreen()),
         );
+        unawaited(() async {
+          await _generateAndCacheThumbnail(pattern, thumbKey);
+          // If we didn't have a key yet, refresh the entry now that it's cached.
+          if (item.thumbnailKey == null) {
+            notifier.add(path, isFolder: false, thumbnailKey: thumbKey);
+          }
+        }());
       }
     } catch (e) {
       if (!mounted) return;
@@ -498,6 +606,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       driveConnected: driveState.status == DriveStatus.connected,
       driveConfigured: driveState.isConfigured,
       driveEmail: driveState.email,
+      onOpenLocal: _smartOpenLocal,
       onOpenLocalFile: _openFile,
       onOpenLocalFolder: _openFolder,
       onOpenDriveFile: _openDriveFile,
