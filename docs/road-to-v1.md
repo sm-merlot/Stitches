@@ -21,7 +21,7 @@ Tracking everything needed before the first public release.
 
 - [ ] **Publish Google Cloud auth project** — move OAuth client from dev/test project to production
 - [ ] **Update OAuth clients** — point all platforms to the production Cloud project credentials
-- [ ] **Google Drive API quota / billing** — set appropriate quotas, enable billing alerts before public traffic hits
+- [ ] **Google Drive API quota / billing** — attach a billing account to the Cloud project (card on file, no expected charges) and set a budget alert (e.g. $1/month) in Billing → Budgets & alerts
 
 ---
 
