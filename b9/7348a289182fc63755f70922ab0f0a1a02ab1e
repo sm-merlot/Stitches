@@ -1,0 +1,41 @@
+lib/models/pattern_progress.dart
+  30288df8ee2fa637 9-12,18,24-27,32-33,51,56-57,75-87,99-103,109-112,116-127,143,150-151
+lib/screens/workspace_screen.dart
+  30288df8ee2fa637 1256-1264,1300-1304
+lib/widgets/right_sidebar_colours_panel.dart
+  30288df8ee2fa637 11,282-303,344-347,423,692-693,703,935-937,1173-1174,1179,1184-1206,1218,1224-1246,1260-1262
+lib/providers/editor/editor_provider.dart
+  30288df8ee2fa637 613-646,648,664
+lib/screens/editor_screen.dart
+  30288df8ee2fa637 537-545,583-587
+lib/providers/editor/editor_provider_progress.dart
+  30288df8ee2fa637 13-18,43-68,78-79,84,96-122,142-143,164-167,222-223,228,235,239-261,263-264,354-388,451-465
+lib/widgets/canvas_painter.dart
+  30288df8ee2fa637 224,227-231,233
+lib/widgets/editor_canvas_area.dart
+  30288df8ee2fa637 72,74,77-82,87-91,140
+lib/widgets/editor_shared_widgets.dart
+  30288df8ee2fa637 5,69-70,73-144,146,150-166,170-177,180-205
+lib/widgets/pattern_canvas.dart
+  30288df8ee2fa637 54-58,82,84,638-639,643-645,647,649,653,657,661-692,694,787-788,792,847-848,851,876-877,881,1168-1174,1176-1188,1195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "b97348a289182fc63755f70922ab0f0a1a02ab1e",
+  "prompts": {
+    "30288df8ee2fa637": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b7aa176-177d-4a77-af5c-f537c367d41f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 634,
+      "total_deletions": 239,
+      "accepted_lines": 586,
+      "overriden_lines": 0
+    }
+  }
+}
