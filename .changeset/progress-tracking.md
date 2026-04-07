@@ -9,4 +9,5 @@ Add stitch progress tracking in Stitch mode: tap to mark individual stitches don
 - Colour completion toast when all stitches of a thread are marked done
 - Double-tap flood fill is a single undo step (not two)
 - Page mode: marking and flood fill constrained to the current page only
+- Page position remembered between sessions: re-opening a file in Stitch mode returns to the last active page (only when page mode is on and progress has started)
 - Share / Export .stitches: optional checkboxes to strip progress data and/or page settings from the exported file
