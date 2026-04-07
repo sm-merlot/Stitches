@@ -51,12 +51,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // within _kDoubleClickMs of the previous DOWN at a nearby screen position,
   // set _pendingDoubleClick so that pointer-UP does a flood fill instead of
   // a single toggle.
-  DateTime? _lastProgressDownTime;
-  Offset?   _lastProgressDownPos;
-  bool      _pendingDoubleClick = false;
-  bool?     _wasProgressCellDone; // state of the cell BEFORE the last single-click toggle
-  static const int    _kDoubleClickMs     = 400;
-  static const double _kDoubleClickRadius = 80.0;
+  DateTime?    _lastProgressDownTime;
+  (int, int)?  _lastProgressDownCell;
+  bool         _pendingDoubleClick = false;
+  bool?        _wasProgressCellDone; // state of the cell BEFORE the last single-click toggle
+  static const int _kDoubleClickMs = 400;
 
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
@@ -80,7 +79,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   Offset? _progressAnchorScreen;     // screen pixels where drag started (for jitter threshold)
   bool _hasDraggedProgress = false;  // true once pointer moved > _kProgressDragThreshold px
   Rect? _progressDragRect;           // live region during drag (reuses selection overlay)
+  BackStitch? _progressBackstitch;   // backstitch hit at pointer-down; tapped if no drag
   static const double _kProgressDragThreshold = 10.0; // screen-pixel minimum drag distance
+  static const double _kBackstitchHitRadius = 0.3;    // cell units
 
   // Whether Ctrl is currently held — switches paste from single-stamp to multi-stamp.
   bool _ctrlHeld = false;
@@ -634,25 +635,63 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // ─── Progress double-click helper ─────────────────────────────────────────
 
   /// Call on every pointer-DOWN that would start a progress tap.
-  /// Sets [_pendingDoubleClick] if this DOWN follows a previous DOWN within
-  /// the double-click time and radius thresholds.
+  /// Sets [_pendingDoubleClick] if this DOWN is on the same cell as the
+  /// previous DOWN and within the double-click time threshold.
   void _checkProgressDoubleClick(Offset screenPos) {
     final now = DateTime.now();
     final last = _lastProgressDownTime;
-    final lastPos = _lastProgressDownPos;
+    final lastCell = _lastProgressDownCell;
+    final c = _screenToCanvas(screenPos);
+    final (cx, cy) = _canvasToCell(c);
     if (last != null &&
-        lastPos != null &&
+        lastCell != null &&
         now.difference(last).inMilliseconds < _kDoubleClickMs &&
-        (screenPos - lastPos).distance < _kDoubleClickRadius) {
+        lastCell.$1 == cx && lastCell.$2 == cy) {
       _pendingDoubleClick = true;
       // Reset so a triple-click doesn't fire a second flood fill.
       _lastProgressDownTime = null;
-      _lastProgressDownPos = null;
+      _lastProgressDownCell = null;
     } else {
       _pendingDoubleClick = false;
       _lastProgressDownTime = now;
-      _lastProgressDownPos = screenPos;
+      _lastProgressDownCell = (cx, cy);
     }
+  }
+
+  /// Returns the topmost visible BackStitch within [_kBackstitchHitRadius] cell
+  /// units of [screenPos], respecting focus mode. Null if none hit.
+  BackStitch? _getBackstitchHit(Offset screenPos) {
+    final s = ref.read(editorProvider);
+    // Cross-stitch focus mode: backstitch hits are ignored so cross-stitch taps work normally.
+    if (s.stitchCrossMode) return null;
+    final focusId = s.stitchFocusThreadId;
+    final canvas = _screenToCanvas(screenPos);
+    final px = canvas.dx / _cellSize;
+    final py = canvas.dy / _cellSize;
+    BackStitch? result;
+    for (final layer in s.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is! BackStitch) continue;
+        if (focusId != null && stitch.threadId != focusId) continue;
+        // Point-to-segment distance in cell space.
+        final dx = stitch.x2 - stitch.x1, dy = stitch.y2 - stitch.y1;
+        final lenSq = dx * dx + dy * dy;
+        double dist;
+        if (lenSq == 0) {
+          final ex = px - stitch.x1, ey = py - stitch.y1;
+          dist = math.sqrt(ex * ex + ey * ey);
+        } else {
+          final t = ((px - stitch.x1) * dx + (py - stitch.y1) * dy) / lenSq;
+          final tc = t.clamp(0.0, 1.0);
+          final nx = stitch.x1 + tc * dx - px;
+          final ny = stitch.y1 + tc * dy - py;
+          dist = math.sqrt(nx * nx + ny * ny);
+        }
+        if (dist < _kBackstitchHitRadius) result = stitch; // last = topmost layer
+      }
+    }
+    return result;
   }
 
   // ─── Selection helpers ────────────────────────────────────────────────────
@@ -745,10 +784,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
           if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
-            _checkProgressDoubleClick(event.localPosition);
+            final bs = _getBackstitchHit(event.localPosition);
+            if (bs == null) _checkProgressDoubleClick(event.localPosition);
             setState(() {
               _progressAnchor = cell;
               _progressAnchorScreen = event.localPosition;
+              _progressBackstitch = bs;
               _hasDraggedProgress = false;
               _progressDragRect = null;
             });
@@ -803,9 +844,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (ref.read(editorProvider).stitchMode) {
         if (!_isNavZone(event.localPosition)) {
           final cell = _screenToSelCell(event.localPosition);
-          _checkProgressDoubleClick(event.localPosition);
+          final bs = _getBackstitchHit(event.localPosition);
+          if (bs == null) _checkProgressDoubleClick(event.localPosition);
           setState(() {
             _progressAnchor = cell;
+            _progressBackstitch = bs;
             _hasDraggedProgress = false;
             _progressDragRect = null;
           });
@@ -830,10 +873,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
           if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
-            _checkProgressDoubleClick(event.localPosition);
+            final bs = _getBackstitchHit(event.localPosition);
+            if (bs == null) _checkProgressDoubleClick(event.localPosition);
             setState(() {
               _progressAnchor = cell;
               _progressAnchorScreen = event.localPosition;
+              _progressBackstitch = bs;
               _hasDraggedProgress = false;
               _progressDragRect = null;
             });
@@ -1120,29 +1165,34 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           ref.read(editorProvider.notifier).setProgressRegion(rect);
         }
       } else {
-        // Tap: toggle the tapped stitch done/not-done, or flood fill on double-click.
-        final cx = _progressAnchor!.dx.toInt();
-        final cy = _progressAnchor!.dy.toInt();
-        if (_pendingDoubleClick) {
-          // Flood-fill done/undone from this cell. Pass the cell's state
-          // BEFORE the first-click toggle so flood fill goes in the right
-          // direction (the first click already flipped the cell).
-          ref.read(editorProvider.notifier).floodFillDone(cx, cy,
-              originalStartIsDone: _wasProgressCellDone,
-              afterSingleTap: true);
-          _pendingDoubleClick = false;
-          _wasProgressCellDone = null;
+        // Tap: toggle the tapped stitch/backstitch done/not-done,
+        // or flood fill on double-click (cross-stitches only).
+        final bs = _progressBackstitch;
+        if (bs != null) {
+          // Backstitch tap — always a single toggle, no flood fill.
+          ref.read(editorProvider.notifier)
+              .toggleBackstitchDone(bs.x1, bs.y1, bs.x2, bs.y2);
         } else {
-          // Record the cell state BEFORE toggling, so double-click can use it.
-          _wasProgressCellDone = ref.read(editorProvider)
-              .pattern.progress.completedStitches.contains((cx, cy));
-          ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
+          final cx = _progressAnchor!.dx.toInt();
+          final cy = _progressAnchor!.dy.toInt();
+          if (_pendingDoubleClick) {
+            ref.read(editorProvider.notifier).floodFillDone(cx, cy,
+                originalStartIsDone: _wasProgressCellDone,
+                afterSingleTap: true);
+            _pendingDoubleClick = false;
+            _wasProgressCellDone = null;
+          } else {
+            _wasProgressCellDone = ref.read(editorProvider)
+                .pattern.progress.completedStitches.contains((cx, cy));
+            ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
+          }
         }
         // Clear any committed progress region on a tap
         ref.read(editorProvider.notifier).setProgressRegion(null);
       }
       _progressAnchor = null;
       _progressAnchorScreen = null;
+      _progressBackstitch = null;
       _hasDraggedProgress = false;
       _progressDragRect = null;
       _scheduleRebuild();

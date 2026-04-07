@@ -174,8 +174,7 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (editorState.progressRegion != null)
-                Expanded(child: MarkDoneButton(state: editorState)),
+              Expanded(child: MarkDoneButton(state: editorState)),
               Expanded(child: StitchDemoButton(state: editorState)),
             ],
           ),

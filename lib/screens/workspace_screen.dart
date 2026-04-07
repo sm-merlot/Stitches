@@ -1253,8 +1253,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.stitch),
+                onPressed: () {
+                  final pruned = ref
+                      .read(editorProvider.notifier)
+                      .setMode(AppMode.stitch);
+                  if (pruned > 0 && context.mounted) {
+                    showWarning(context,
+                        '$pruned completed ${pruned == 1 ? 'stitch' : 'stitches'} removed — no longer in the pattern');
+                  }
+                },
                 child: const Text('Stitch'),
               ),
               const SizedBox(width: 8),
@@ -1290,6 +1297,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.stitch && openPdf == null) ...[
               IconButton(
+                tooltip: 'Progress tracking',
+                icon: const Icon(Icons.checklist),
+                onPressed: () =>
+                    showProgressHelpDialog(context, ref, state: editorState),
+              ),
+              IconButton(
                 tooltip: editorState.pattern.pageConfig.enabled
                     ? 'Page mode: on'
                     : 'Page mode: off',
@@ -1305,11 +1318,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                             Theme.of(context).colorScheme.onPrimaryContainer,
                       )
                     : null,
-              ),
-              IconButton(
-                tooltip: 'How progress tracking works',
-                icon: const Icon(Icons.checklist),
-                onPressed: () => showProgressHelpDialog(context, ref),
               ),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),

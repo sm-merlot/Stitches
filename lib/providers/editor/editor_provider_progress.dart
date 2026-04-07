@@ -10,6 +10,12 @@ mixin ProgressMixin on Notifier<EditorState> {
 
   /// Toggle a single cell done/undone.
   void toggleStitchDone(int x, int y) {
+    // Backstitch focus mode: cross-stitch marking blocked.
+    if (state.stitchBackMode) return;
+    // In focus mode, only interact with cells whose topmost thread matches.
+    final focusId = state.stitchFocusThreadId;
+    if (focusId != null && _topThreadAt(x, y) != focusId) return;
+
     final prog = state.pattern.progress;
     final cell = (x, y);
     final current = prog.completedStitches;
@@ -34,6 +40,32 @@ mixin ProgressMixin on Notifier<EditorState> {
     _checkPageCompletion(newProg);
   }
 
+  /// Toggle a single backstitch done/undone.
+  void toggleBackstitchDone(double x1, double y1, double x2, double y2) {
+    // Cross-stitch focus mode: backstitch marking blocked.
+    if (state.stitchCrossMode) return;
+    // Focus mode guard.
+    final focusId = state.stitchFocusThreadId;
+    if (focusId != null) {
+      final thread = _backstitchThreadAt(x1, y1, x2, y2);
+      if (thread == null || thread != focusId) return;
+    }
+    // Page mode guard — backstitch must lie on the current page.
+    final layout = state.pageLayout;
+    if (layout != null) {
+      final mid = ((x1 + x2) / 2, (y1 + y2) / 2);
+      final (pageCol, pageRow) = layout.pageCoords(state.currentPage);
+      if (!layout.cellOnPage(mid.$1.floor(), mid.$2.floor(), pageCol, pageRow)) return;
+    }
+    final prog = state.pattern.progress;
+    final key = PatternProgress.normBackstitch(x1, y1, x2, y2);
+    final current = prog.completedBackstitches;
+    final next = current.contains(key)
+        ? ({...current}..remove(key))
+        : {...current, key};
+    _applyProgress(prog.copyWith(completedBackstitches: next), pushUndo: true);
+  }
+
   /// Mark all stitches within [region] (cell coords) as done.
   /// Does not un-mark already-completed stitches.
   /// In page mode, only stitches on the current page are affected.
@@ -43,10 +75,13 @@ mixin ProgressMixin on Notifier<EditorState> {
     final affectedThreads = <String>{};
     final layout = state.pageLayout;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
+    final focusId = state.stitchFocusThreadId;
+    if (!state.stitchBackMode) {
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
+        if (focusId != null && stitch.threadId != focusId) continue;
         final coords = _crossStitchXY(stitch);
         if (coords == null) continue;
         final (sx, sy) = coords;
@@ -58,8 +93,33 @@ mixin ProgressMixin on Notifier<EditorState> {
         }
       }
     }
-    if (current.length == prog.completedStitches.length) return;
-    final newProg = prog.copyWith(completedStitches: current);
+    }
+    // Backstitches — include if midpoint is within region (and on current page).
+    final backCurrent = Set<(double, double, double, double)>.from(
+        prog.completedBackstitches);
+    if (!state.stitchCrossMode) {
+    for (final layer in state.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is! BackStitch) continue;
+        if (focusId != null && stitch.threadId != focusId) continue;
+        final midX = (stitch.x1 + stitch.x2) / 2;
+        final midY = (stitch.y1 + stitch.y2) / 2;
+        if (midX >= region.left && midX < region.right &&
+            midY >= region.top && midY < region.bottom) {
+          if (layout != null &&
+              !layout.cellOnPage(
+                  midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+          backCurrent.add(PatternProgress.normBackstitch(
+              stitch.x1, stitch.y1, stitch.x2, stitch.y2));
+        }
+      }
+    }
+    }
+    if (current.length == prog.completedStitches.length &&
+        backCurrent.length == prog.completedBackstitches.length) { return; }
+    final newProg = prog.copyWith(
+        completedStitches: current, completedBackstitches: backCurrent);
     _applyProgress(newProg, pushUndo: true);
     _checkColourCompletion(newProg, affectedThreads);
     _checkPageCompletion(newProg);
@@ -79,6 +139,8 @@ mixin ProgressMixin on Notifier<EditorState> {
   /// so flood fill squashes into it rather than adding a second entry.
   void floodFillDone(int x, int y,
       {bool? originalStartIsDone, bool afterSingleTap = false}) {
+    // Backstitch focus mode: flood fill only applies to cross-stitches.
+    if (state.stitchBackMode) return;
     final prog = state.pattern.progress;
     final startIsDone = originalStartIsDone ?? prog.completedStitches.contains((x, y));
 
@@ -98,6 +160,10 @@ mixin ProgressMixin on Notifier<EditorState> {
     // The thread that is visually on top at the starting cell.
     final threadId = topThread[(x, y)];
     if (threadId == null) return;
+
+    // In focus mode, only flood-fill if the starting cell matches the focus thread.
+    final focusId = state.stitchFocusThreadId;
+    if (focusId != null && threadId != focusId) return;
 
     // In page mode, constrain flood fill to the current page.
     final layout = state.pageLayout;
@@ -153,22 +219,49 @@ mixin ProgressMixin on Notifier<EditorState> {
     int removed = 0;
     final layout = state.pageLayout;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
+    final focusId = state.stitchFocusThreadId;
+    if (!state.stitchBackMode) {
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
+        if (focusId != null && stitch.threadId != focusId) continue;
         final coords = _crossStitchXY(stitch);
         if (coords == null) continue;
         final (sx, sy) = coords;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
           if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
-          if (current.remove((sx, sy))) removed++;
+          if (current.remove((sx, sy))) { removed++; }
         }
       }
     }
+    }
+    // Backstitches in region.
+    final backCurrent = Set<(double, double, double, double)>.from(
+        prog.completedBackstitches);
+    if (!state.stitchCrossMode) {
+    for (final layer in state.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is! BackStitch) continue;
+        if (focusId != null && stitch.threadId != focusId) continue;
+        final midX = (stitch.x1 + stitch.x2) / 2;
+        final midY = (stitch.y1 + stitch.y2) / 2;
+        if (midX >= region.left && midX < region.right &&
+            midY >= region.top && midY < region.bottom) {
+          if (layout != null &&
+              !layout.cellOnPage(
+                  midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+          if (backCurrent.remove(PatternProgress.normBackstitch(
+              stitch.x1, stitch.y1, stitch.x2, stitch.y2))) { removed++; }
+        }
+      }
+    }
+    }
     if (removed == 0) return;
-    final newProg = prog.copyWith(completedStitches: current);
+    final newProg = prog.copyWith(
+        completedStitches: current, completedBackstitches: backCurrent);
     _applyProgress(newProg, pushUndo: true);
     _checkPageCompletion(newProg);
   }
@@ -258,6 +351,41 @@ mixin ProgressMixin on Notifier<EditorState> {
     );
   }
 
+  /// Returns the threadId of the backstitch with the given endpoints, or null
+  /// if no visible backstitch matches. Order-independent (matches BackStitch equality).
+  String? _backstitchThreadAt(double x1, double y1, double x2, double y2) {
+    for (final layer in state.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is! BackStitch) continue;
+        if ((stitch.x1 == x1 && stitch.y1 == y1 &&
+                stitch.x2 == x2 && stitch.y2 == y2) ||
+            (stitch.x1 == x2 && stitch.y1 == y2 &&
+                stitch.x2 == x1 && stitch.y2 == y1)) {
+          return stitch.threadId;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Returns the threadId of the topmost visible non-backstitch at (x, y),
+  /// matching what the user sees on the composite canvas. Null if no stitch.
+  String? _topThreadAt(int x, int y) {
+    String? result;
+    for (final layer in state.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is BackStitch) continue;
+        final coords = _crossStitchXY(stitch);
+        if (coords != null && coords.$1 == x && coords.$2 == y) {
+          result = stitch.threadId; // last write wins = topmost layer
+        }
+      }
+    }
+    return result;
+  }
+
   bool _hasCrossStitchAt(int x, int y) {
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
@@ -314,19 +442,27 @@ mixin ProgressMixin on Notifier<EditorState> {
     bool changed = false;
     for (int p = 0; p < layout.totalPages; p++) {
       final wasComplete = pages.contains(p);
-      // Check all stitches on this page.
       final (pageCol, pageRow) = layout.pageCoords(p);
       bool allDone = true;
       bool hasAny = false;
       for (final layer in state.pattern.layers) {
         if (!layer.visible) continue;
         for (final stitch in layer.stitches) {
-          if (stitch is BackStitch) continue;
-          final coords = _crossStitchXY(stitch);
-          if (coords == null) continue;
-          if (!layout.cellOnPage(coords.$1, coords.$2, pageCol, pageRow)) continue;
-          hasAny = true;
-          if (!prog.completedStitches.contains(coords)) { allDone = false; break; }
+          if (stitch is BackStitch) {
+            final midX = (stitch.x1 + stitch.x2) / 2;
+            final midY = (stitch.y1 + stitch.y2) / 2;
+            if (!layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) continue;
+            hasAny = true;
+            final key = PatternProgress.normBackstitch(
+                stitch.x1, stitch.y1, stitch.x2, stitch.y2);
+            if (!prog.completedBackstitches.contains(key)) { allDone = false; break; }
+          } else {
+            final coords = _crossStitchXY(stitch);
+            if (coords == null) continue;
+            if (!layout.cellOnPage(coords.$1, coords.$2, pageCol, pageRow)) continue;
+            hasAny = true;
+            if (!prog.completedStitches.contains(coords)) { allDone = false; break; }
+          }
         }
         if (!allDone) break;
       }
