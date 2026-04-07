@@ -79,6 +79,12 @@ Future<void> refreshDrivePatternInBackground(
           session: liveSession,
         );
 
+    // loadPattern sets pendingFitPage=0 whenever page mode is enabled, which
+    // would snap the canvas to page 0 via the PatternCanvas listener.  We've
+    // already captured the correct viewport in liveSession, so suppress the
+    // snap by clearing the pending fit immediately.
+    ref.read(editorProvider.notifier).clearPendingFitPage();
+
     // Restore the user's mode if they had already left view mode.
     if (liveMode != AppMode.view) {
       ref.read(editorProvider.notifier).setMode(liveMode);
