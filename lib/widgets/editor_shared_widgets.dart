@@ -66,17 +66,22 @@ class EditorScreenLockButton extends ConsumerWidget {
 
 class EditorImportBanner extends StatelessWidget {
   final String filePath;
-  final VoidCallback onSaveAs;
 
-  /// When true, the banner also mentions Drive sync (workspace context).
-  final bool showDriveNote;
+  /// Called when the user taps "Convert to .stitches". Null if a native
+  /// .stitches file already exists beside this file (use [onOpenNative]).
+  final VoidCallback? onConvert;
+
+  /// Called when the user taps "Open .stitches". Non-null only when a native
+  /// sibling already exists.
+  final VoidCallback? onOpenNative;
 
   const EditorImportBanner({
     required this.filePath,
-    required this.onSaveAs,
-    this.showDriveNote = false,
+    this.onConvert,
+    this.onOpenNative,
     super.key,
-  });
+  }) : assert(onConvert != null || onOpenNative != null,
+            'At least one of onConvert or onOpenNative must be provided');
 
   String get _ext {
     final dot = filePath.lastIndexOf('.');
@@ -86,7 +91,8 @@ class EditorImportBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final features = showDriveNote ? 'snippets and Drive sync' : 'snippets';
+    final buttonLabel =
+        onOpenNative != null ? 'Open .stitches' : 'Convert to .stitches';
     return Material(
       color: cs.tertiaryContainer,
       child: Padding(
@@ -97,7 +103,7 @@ class EditorImportBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Imported $_ext file — $features require .stitches format.',
+                'Viewing $_ext file — read-only mode.',
                 style: TextStyle(fontSize: 12, color: cs.onTertiaryContainer),
               ),
             ),
@@ -109,9 +115,8 @@ class EditorImportBanner extends StatelessWidget {
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              onPressed: onSaveAs,
-              child: const Text('Save As .stitches',
-                  style: TextStyle(fontSize: 12)),
+              onPressed: onOpenNative ?? onConvert,
+              child: Text(buttonLabel, style: const TextStyle(fontSize: 12)),
             ),
           ],
         ),
