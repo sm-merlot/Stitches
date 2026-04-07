@@ -10,7 +10,6 @@ import '../widgets/editor_canvas_area.dart';
 import '../widgets/editor_shared_widgets.dart';
 import 'export_dialog.dart';
 import '../widgets/right_sidebar.dart';
-import '../widgets/right_sidebar_colours_panel.dart';
 import 'materials_list_screen.dart';
 import 'page_mode_dialog.dart';
 import 'pattern_info_dialog.dart';
@@ -18,7 +17,7 @@ import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 
 
-enum _MenuAction { saveAs, export, resize, patternInfo, referenceImage, toggleCompress }
+enum _MenuAction { saveAs, export, resize, referenceImage }
 
 class EditorScreen extends ConsumerWidget {
   const EditorScreen({super.key});
@@ -102,11 +101,7 @@ class EditorScreen extends ConsumerWidget {
     return result ?? false;
   }
 
-  String _title(EditorState state) {
-    final name = state.pattern.name;
-    final dirty = state.isDirty ? ' •' : '';
-    return '$name$dirty';
-  }
+  String _title(EditorState state) => state.pattern.name;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -132,29 +127,53 @@ class EditorScreen extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_title(state)),
-          backgroundColor: state.stitchMode
-              ? Theme.of(context).colorScheme.primaryContainer
-              : null,
-          actions: [
-            if (!state.stitchMode) ...[
-              // Drive sync indicator
-              if (state.driveFileId != null)
+          titleSpacing: 0,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Drive sync indicator — left of title, all modes ──────────
+              if (state.driveParentFolderId != null) ...[
                 Tooltip(
-                  message: driveState.isSyncing
+                  message: (driveState.isSyncing || state.driveFileId == null || state.isDirty)
                       ? 'Syncing to Google Drive…'
                       : 'Synced to Google Drive',
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: driveState.isSyncing
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.cloud_done_outlined, size: 22),
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: (driveState.isSyncing || state.driveFileId == null || state.isDirty)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_done_outlined, size: 20),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 2),
+              ] else if (state.isFileOpen) ...[
+                Tooltip(
+                  message: state.isDirty ? 'Saving…' : 'Saved',
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: state.isDirty
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.task_alt, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 2),
+              ],
+              Text(_title(state)),
+              const SizedBox(width: 4),
+              // ── Block mode toggle — in title area, consistent across modes ──
               IconButton(
                 tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
                 isSelected: state.blockMode,
@@ -164,15 +183,32 @@ class EditorScreen extends ConsumerWidget {
                     ref.read(editorProvider.notifier).toggleBlockMode(),
                 style: state.blockMode
                     ? IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                        backgroundColor: state.mode == AppMode.stitch
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: state.mode == AppMode.stitch
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onPrimaryContainer,
                       )
                     : null,
               ),
+            ],
+          ),
+          backgroundColor: state.mode == AppMode.stitch
+              ? Theme.of(context).colorScheme.primaryContainer
+              : null,
+          actions: [
+            // ── View mode: pattern info/export menu + Edit + Stitch ──────────
+            if (state.mode == AppMode.view) ...[
               IconButton(
-                icon: const Icon(Icons.save_outlined),
-                tooltip: 'Save  (Cmd+S)',
-                onPressed: () => _save(context, ref),
+                tooltip: 'Pattern Info',
+                icon: const Icon(Icons.info_outline),
+                onPressed: () => showPatternInfo(context, ref, state),
+              ),
+              IconButton(
+                tooltip: 'Materials list',
+                icon: const Icon(Icons.shopping_bag_outlined),
+                onPressed: () => showMaterialsList(context, state),
               ),
               PopupMenuButton<_MenuAction>(
                 tooltip: 'More',
@@ -184,18 +220,56 @@ class EditorScreen extends ConsumerWidget {
                       showExportDialog(context, state.pattern,
                           useDmc: ref.read(settingsProvider).useDmc,
                           notifier: ref.read(editorProvider.notifier));
+                    default:
+                      break;
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: _MenuAction.saveAs,
+                    child: EditorMenuRow(icon: Icons.save_as_outlined, label: 'Save As…'),
+                  ),
+                  const PopupMenuItem(
+                    value: _MenuAction.export,
+                    child: EditorMenuRow(icon: Icons.upload_outlined, label: 'Export…'),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+              FilledButton.tonal(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.edit),
+                child: const Text('Edit'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.stitch),
+                child: const Text('Stitch'),
+              ),
+              const SizedBox(width: 8),
+            ],
+            // ── Edit mode: save + overflow + Done ────────────────────────────
+            if (state.mode == AppMode.edit) ...[
+              IconButton(
+                icon: const Icon(Icons.save_outlined),
+                tooltip: 'Save  (Cmd+S)',
+                onPressed: () => _save(context, ref),
+              ),
+              PopupMenuButton<_MenuAction>(
+                tooltip: 'More',
+                onSelected: (action) {
+                  switch (action) {
                     case _MenuAction.resize:
                       _showResizeDialog(context, ref, state);
-                    case _MenuAction.patternInfo:
-                      showPatternInfo(context, ref, state);
                     case _MenuAction.referenceImage:
                       showModalBottomSheet(
                         context: context,
                         isScrollControlled: true,
                         builder: (_) => const ReferenceImageSheet(),
                       );
-                    case _MenuAction.toggleCompress:
-                      ref.read(editorProvider.notifier).toggleCompressOnSave();
+                    default:
+                      break;
                   }
                 },
                 itemBuilder: (ctx) => [
@@ -217,43 +291,18 @@ class EditorScreen extends ConsumerWidget {
                     child: EditorMenuRow(
                         icon: Icons.aspect_ratio, label: 'Resize Aida'),
                   ),
-                  const PopupMenuItem(
-                    value: _MenuAction.patternInfo,
-                    child: EditorMenuRow(
-                        icon: Icons.info_outline, label: 'Pattern Info'),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: _MenuAction.saveAs,
-                    child: EditorMenuRow(
-                        icon: Icons.save_as_outlined, label: 'Save As…'),
-                  ),
-                  const PopupMenuItem(
-                    value: _MenuAction.export,
-                    child: EditorMenuRow(
-                        icon: Icons.upload_outlined,
-                        label: 'Export…'),
-                  ),
-                  if (state.isNativeFormat)
-                    PopupMenuItem(
-                      value: _MenuAction.toggleCompress,
-                      child: EditorMenuRow(
-                        icon: Icons.folder_zip_outlined,
-                        label: state.compressOnSave
-                            ? 'File Compressed'
-                            : 'File Uncompressed',
-                        trailing: state.compressOnSave
-                            ? Icon(Icons.check,
-                                size: 16,
-                                color: Theme.of(ctx).colorScheme.primary)
-                            : null,
-                      ),
-                    ),
                 ],
               ),
+              const SizedBox(width: 4),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.view),
+                child: const Text('Done'),
+              ),
+              const SizedBox(width: 8),
             ],
-            // Stitch mode actions — Page Mode + Materials + Demo + Screen Lock
-            if (state.stitchMode) ...[
+            // ── Stitch mode: page nav + demo + screen lock + Done ────────────
+            if (state.mode == AppMode.stitch) ...[
               IconButton(
                 tooltip: state.pattern.pageConfig.enabled
                     ? 'Page mode: on'
@@ -271,14 +320,14 @@ class EditorScreen extends ConsumerWidget {
                       )
                     : null,
               ),
-              IconButton(
-                tooltip: 'Materials list',
-                icon: const Icon(Icons.shopping_bag_outlined),
-                onPressed: () => showMaterialsList(context, state),
-              ),
-              StitchDemoButton(state: state),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).setMode(AppMode.view),
+                child: const Text('Done'),
+              ),
+              const SizedBox(width: 8),
             ],
           ],
         ),

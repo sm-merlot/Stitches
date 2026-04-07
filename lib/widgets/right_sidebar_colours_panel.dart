@@ -465,45 +465,57 @@ class _FocusToggle extends StatelessWidget {
   }
 }
 
-/// Demo button — launches [StitchDemoScreen]. Used in stitch-mode AppBar.
+/// Demo button — launches [StitchDemoScreen]. Shown at the bottom of the
+/// stitch-mode sidebar. Enabled only when stitches are rubber-band selected
+/// on the canvas. If focus mode is active (one colour highlighted) that colour
+/// is used directly; otherwise a picker is shown for multi-colour selections.
 class StitchDemoButton extends StatelessWidget {
   final EditorState state;
   const StitchDemoButton({super.key, required this.state});
 
   @override
   Widget build(BuildContext context) {
-    final pool = state.selectionRect != null
-        ? state.selectedStitches
-        : state.pattern.stitches;
+    // Enabled only when the user has rubber-band selected stitches on the canvas,
+    // and at least one of those stitches is not greyed out (i.e. matches the
+    // focused thread when focus mode is active).
     final focusId = state.stitchFocusThreadId;
-    final hasFullStitches = !state.stitchBackMode &&
-        pool.any((s) =>
-            s is FullStitch && (focusId == null || s.threadId == focusId));
+    final enabled = state.selectionRect != null &&
+        state.selectedStitches.any((s) =>
+            s is FullStitch &&
+            (focusId == null || s.threadId == focusId));
 
-    return Tooltip(
-      message: 'Demonstrate stitching (beta)',
-      child: Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            FilledButton.icon(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          GestureDetector(
+            onTap: enabled
+                ? null
+                : () {
+                    ScaffoldMessenger.of(context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(const SnackBar(
+                        content:
+                            Text('Select some stitches on the canvas first'),
+                        duration: Duration(seconds: 2),
+                      ));
+                  },
+            child: FilledButton.icon(
               icon: const Icon(Icons.play_circle_outline, size: 16),
-              label: const Text('Demo', style: TextStyle(fontSize: 12)),
+              label: const Text('Demo', style: TextStyle(fontSize: 13)),
               style: FilledButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                minimumSize: const Size(0, 32),
+                minimumSize: const Size(double.infinity, 36),
               ),
-              onPressed: hasFullStitches ? () => _onDemonstrate(context) : null,
+              onPressed: enabled ? () => _onDemonstrate(context) : null,
             ),
-            Positioned(
-              top: -5,
-              right: -5,
+          ),
+          Positioned(
+            top: -5,
+            right: -5,
             child: IgnorePointer(
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                 decoration: BoxDecoration(
                   color: Colors.orange.shade700,
                   borderRadius: BorderRadius.circular(5),
@@ -518,7 +530,6 @@ class StitchDemoButton extends StatelessWidget {
             ),
           ),
         ],
-        ),
       ),
     );
   }

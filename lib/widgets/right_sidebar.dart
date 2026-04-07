@@ -68,7 +68,6 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
   Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
     final theme = Theme.of(context);
-    final isStitchMode = state.stitchMode;
     final isSnippet = widget.sidebarContext == RightSidebarContext.snippetEditor;
 
     if (!state.isFileOpen && !isSnippet) return const SizedBox.shrink();
@@ -107,7 +106,7 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
           width: _width,
           child: Container(
             color: theme.colorScheme.surface,
-            child: isStitchMode
+            child: state.mode != AppMode.edit
                 ? _buildStitchLayout(theme)
                 : DefaultTabController(
                     length: 2,
@@ -146,6 +145,7 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
   Widget _buildStitchLayout(ThemeData theme) {
     final isTouch = defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.android;
+    final editorState = ref.watch(editorProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -169,6 +169,10 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
         ),
         const Divider(height: 1),
         const Expanded(child: ColoursPanel(mode: ColoursPanelMode.stitch)),
+        if (editorState.mode == AppMode.stitch) ...[
+          const Divider(height: 1),
+          StitchDemoButton(state: editorState),
+        ],
       ],
     );
   }

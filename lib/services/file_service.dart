@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:yaml/yaml.dart';
 import '../models/layer.dart';
 import 'pattern_cache.dart';
@@ -142,24 +142,28 @@ class FileService {
   /// file-switch is served from cache without re-reading the file.
   static Future<void> saveFile(CrossStitchPattern pattern, String path,
       {bool compress = true}) async {
+    // Release builds always compress regardless of the per-file flag.
+    final effectiveCompress = kDebugMode ? compress : true;
     final yaml = toYamlString(pattern);
     final bytes =
-        compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
+        effectiveCompress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
     await File(path).writeAsBytes(bytes, flush: true);
     final stat = await File(path).stat();
-    PatternCache.put(path, pattern, compress, stat.modified);
+    PatternCache.put(path, pattern, effectiveCompress, stat.modified);
   }
 
   /// Prompt the user for a save location; returns the chosen path or null.
   /// [compress] controls whether the written file is gzip-compressed.
   static Future<String?> saveFileAs(CrossStitchPattern pattern,
       {bool compress = true}) async {
+    // Release builds always compress regardless of the per-file flag.
+    final effectiveCompress = kDebugMode ? compress : true;
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     if (_isMobile) {
       // On iOS/Android the platform manages writing; bytes must be provided.
       final yaml = toYamlString(pattern);
       final bytes =
-          compress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
+          effectiveCompress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
       final path = await FilePicker.platform.saveFile(
         fileName: '$suggestedName.$_ext',
         type: FileType.any,
@@ -174,7 +178,7 @@ class FileService {
     );
     if (path == null) return null;
     final finalPath = path.endsWith('.$_ext') ? path : '$path.$_ext';
-    await saveFile(pattern, finalPath, compress: compress);
+    await saveFile(pattern, finalPath, compress: effectiveCompress);
     return finalPath;
   }
 

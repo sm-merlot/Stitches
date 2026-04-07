@@ -369,6 +369,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   void _handleDrawAt(Offset screenPos) {
     final state = ref.read(editorProvider);
+    if (!state.editMode) return;
     final notifier = ref.read(editorProvider.notifier);
     final canvas = _screenToCanvas(screenPos);
 

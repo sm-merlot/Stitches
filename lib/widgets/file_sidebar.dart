@@ -853,7 +853,9 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
     final clipboard = workspaceState.clipboard;
 
-    return SizedBox.expand(
+    return ColoredBox(
+      color: theme.colorScheme.surface,
+      child: SizedBox.expand(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1031,6 +1033,6 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
