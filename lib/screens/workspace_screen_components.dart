@@ -16,7 +16,7 @@ class _ResizeDivider extends StatelessWidget {
         onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
         child: Container(
           width: 5,
-          color: Colors.transparent,
+          color: theme.colorScheme.surface,
           child: VerticalDivider(
             width: 1,
             thickness: 1,

@@ -15,6 +15,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   String _nextSymbol(Set<String> used);
   void refreshCompositeCache(); // provided by LayersMixin
   void _saveSession();          // provided by EditorNotifier
+  void setMode(AppMode mode);   // provided by EditorNotifier
 
   // ─── Private helpers (unique to this mixin) ───────────────────────────────
 
@@ -607,18 +608,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   void toggleStitchMode() {
-    final entering = !state.stitchMode;
-    state = state.copyWith(
-      stitchMode: entering,
-      drawingMode: entering ? DrawingMode.select : DrawingMode.draw,
-      selectionRect: null,
-      backstitchStartPoint: null,
-      showCompositeThreads: entering,
-      stitchCrossMode: false,
-      stitchBackMode: false,
-    );
-    if (entering) refreshCompositeCache();
-    _saveSession();
+    setMode(state.stitchMode ? AppMode.view : AppMode.stitch);
   }
 
   /// Cross: hides backstitches. Activating clears Back.
