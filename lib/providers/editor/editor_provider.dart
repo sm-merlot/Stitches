@@ -13,6 +13,7 @@ import '../../models/layer_item.dart';
 import '../../models/page_config.dart';
 import '../../models/page_layout.dart';
 import '../../models/pattern.dart';
+import '../../models/pattern_progress.dart';
 import '../../models/snippet.dart';
 import '../../models/snippet_palette.dart';
 import '../../models/snippet_palette_resolver.dart';
@@ -26,6 +27,7 @@ import '../settings_provider.dart';
 
 part 'editor_provider_drawing.dart';
 part 'editor_provider_layers.dart';
+part 'editor_provider_progress.dart';
 part 'editor_provider_snippets.dart';
 part 'editor_provider_selection.dart';
 
@@ -79,6 +81,8 @@ class EditorState {
   final String? selectedThreadId;
   final List<(CrossStitchPattern, List<SnippetPalette>)> _undoStack;
   final List<(CrossStitchPattern, List<SnippetPalette>)> _redoStack;
+  final List<PatternProgress> _progressUndoStack;
+  final List<PatternProgress> _progressRedoStack;
   final bool isDirty;
   final Offset? backstitchStartPoint;
   /// Most-recently-used thread IDs, most recent first. Max 5. Session-only.
@@ -134,6 +138,12 @@ class EditorState {
   /// clear the value via [clearPendingFitPage].
   final int? pendingFitPage;
 
+  /// The committed progress-marking region in stitch mode (cell coordinates).
+  /// Set when the user finishes a drag-to-select on the canvas. Shown as a
+  /// dashed overlay and drives the "Mark done / Mark not done" sidebar button.
+  /// Cleared when leaving stitch mode or starting a new drag.
+  final Rect? progressRegion;
+
   /// True when the current file is in the native .stitches format (or unsaved).
   bool get isNativeFormat {
     final path = filePath;
@@ -149,6 +159,8 @@ class EditorState {
     this.selectedThreadId,
     List<(CrossStitchPattern, List<SnippetPalette>)> undoStack = const [],
     List<(CrossStitchPattern, List<SnippetPalette>)> redoStack = const [],
+    List<PatternProgress> progressUndoStack = const [],
+    List<PatternProgress> progressRedoStack = const [],
     this.isDirty = false,
     this.backstitchStartPoint,
     this.recentThreadIds = const [],
@@ -183,11 +195,16 @@ class EditorState {
     this.currentPage = 0,
     this.pageLayout,
     this.pendingFitPage,
+    this.progressRegion,
   })  : _undoStack = undoStack,
-        _redoStack = redoStack;
+        _redoStack = redoStack,
+        _progressUndoStack = progressUndoStack,
+        _progressRedoStack = progressRedoStack;
 
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
+  bool get canUndoProgress => _progressUndoStack.isNotEmpty;
+  bool get canRedoProgress => _progressRedoStack.isNotEmpty;
 
   /// True when in stitch mode — used by existing consumers without change.
   bool get stitchMode => mode == AppMode.stitch;
@@ -290,6 +307,8 @@ class EditorState {
     Object? selectedThreadId = _sentinel,
     List<(CrossStitchPattern, List<SnippetPalette>)>? undoStack,
     List<(CrossStitchPattern, List<SnippetPalette>)>? redoStack,
+    List<PatternProgress>? progressUndoStack,
+    List<PatternProgress>? progressRedoStack,
     bool? isDirty,
     Object? backstitchStartPoint = _sentinel,
     List<String>? recentThreadIds,
@@ -324,6 +343,7 @@ class EditorState {
     int? currentPage,
     Object? pageLayout = _sentinel,
     Object? pendingFitPage = _sentinel,
+    Object? progressRegion = _sentinel,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -335,6 +355,8 @@ class EditorState {
           : selectedThreadId as String?,
       undoStack: undoStack ?? _undoStack,
       redoStack: redoStack ?? _redoStack,
+      progressUndoStack: progressUndoStack ?? _progressUndoStack,
+      progressRedoStack: progressRedoStack ?? _progressRedoStack,
       isDirty: isDirty ?? this.isDirty,
       backstitchStartPoint: backstitchStartPoint == _sentinel
           ? this.backstitchStartPoint
@@ -383,6 +405,7 @@ class EditorState {
       currentPage: currentPage ?? this.currentPage,
       pageLayout: pageLayout == _sentinel ? this.pageLayout : pageLayout as PageLayout?,
       pendingFitPage: pendingFitPage == _sentinel ? this.pendingFitPage : pendingFitPage as int?,
+      progressRegion: progressRegion == _sentinel ? this.progressRegion : progressRegion as Rect?,
     );
   }
 
@@ -392,7 +415,7 @@ class EditorState {
 // ─── EditorNotifier ───────────────────────────────────────────────────────────
 
 class EditorNotifier extends Notifier<EditorState>
-    with DrawingMixin, LayersMixin, SnippetsMixin, SelectionMixin {
+    with DrawingMixin, LayersMixin, ProgressMixin, SnippetsMixin, SelectionMixin {
 
   static const int _maxUndoDepth = 200;
 
@@ -425,6 +448,7 @@ class EditorNotifier extends Notifier<EditorState>
     double viewPanX = 0;
     double viewPanY = 0;
     double viewScale = 0;
+    int? stitchPage = 0;
 
     // True when the parsed YAML contained a legacy `editor:` section that
     // is no longer written by toYamlString.  We mark the file dirty so the
@@ -439,6 +463,7 @@ class EditorNotifier extends Notifier<EditorState>
       viewPanX = session.viewPanX;
       viewPanY = session.viewPanY;
       viewScale = session.viewScale;
+      stitchPage = session.stitchPage;
     } else {
       // First open after migration: read legacy YAML fields as a one-time seed.
       hasLegacyEditorSection =
@@ -460,6 +485,8 @@ class EditorNotifier extends Notifier<EditorState>
       viewPanY = pattern.editorViewPanY;
       viewScale = pattern.editorViewScale;
     }
+
+    stitchPage ??= 0;
 
     // ── Assign symbols and validate palette ──────────────────────────────────
     final withSymbols = pattern.copyWith(
@@ -508,6 +535,13 @@ class EditorNotifier extends Notifier<EditorState>
       viewScale: viewScale,
       compressOnSave: compressOnSave,
       isDirty: hasLegacyEditorSection,
+      // Only restore the saved stitch page when page mode is enabled and the
+      // user has already started marking progress on this pattern.
+      currentPage: (withSymbols.pageConfig.enabled &&
+              (withSymbols.progress.completedStitches.isNotEmpty ||
+               withSymbols.progress.completedBackstitches.isNotEmpty))
+          ? stitchPage
+          : 0,
     );
 
     // Migrate legacy session fields to app data on first open.
@@ -528,6 +562,7 @@ class EditorNotifier extends Notifier<EditorState>
             viewPanX: viewPanX,
             viewPanY: viewPanY,
             viewScale: viewScale,
+            stitchPage: stitchPage,
           ),
         ));
       }
@@ -581,14 +616,49 @@ class EditorNotifier extends Notifier<EditorState>
         viewPanX: state.viewPanX,
         viewPanY: state.viewPanY,
         viewScale: state.viewScale,
+        stitchPage: state.currentPage,
       ),
     ));
   }
 
   /// Switch to [mode], updating drawingMode and display state accordingly.
   @override
-  void setMode(AppMode mode) {
+  /// Switches to [mode]. Returns the number of orphaned completed-stitch
+  /// entries pruned when entering stitch mode (cells no longer in the pattern).
+  int setMode(AppMode mode) {
+    int pruned = 0;
+    var pattern = state.pattern;
+    if (mode == AppMode.stitch) {
+      final validCells = <(int, int)>{};
+      final validBack = <(double, double, double, double)>{};
+      for (final layer in pattern.layers) {
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) {
+            validBack.add(PatternProgress.normBackstitch(
+                stitch.x1, stitch.y1, stitch.x2, stitch.y2));
+          } else {
+            final c = EditorState.cellCoords(stitch);
+            if (c != null) validCells.add(c);
+          }
+        }
+      }
+      final oldCompleted = pattern.progress.completedStitches;
+      final newCompleted = oldCompleted.intersection(validCells);
+      final oldBack = pattern.progress.completedBackstitches;
+      final newBack = oldBack.intersection(validBack);
+      pruned = (oldCompleted.length - newCompleted.length) +
+               (oldBack.length - newBack.length);
+      if (pruned > 0) {
+        pattern = pattern.copyWith(
+          progress: pattern.progress.copyWith(
+            completedStitches: newCompleted,
+            completedBackstitches: newBack,
+          ),
+        );
+      }
+    }
     state = state.copyWith(
+      pattern: pruned > 0 ? pattern : null,
       mode: mode,
       drawingMode: switch (mode) {
         AppMode.stitch => DrawingMode.select,
@@ -597,13 +667,21 @@ class EditorNotifier extends Notifier<EditorState>
       },
       selectionRect: null,
       backstitchStartPoint: null,
+      progressRegion: null,
       showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
       stitchCrossMode: false,
       stitchBackMode: false,
       stitchFocusThreadId: mode == AppMode.stitch ? state.stitchFocusThreadId : null,
+      pendingFitPage: state.currentPage,
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
     _saveSession();
+    return pruned;
+  }
+
+  /// Set or clear the committed progress-marking region (stitch mode).
+  void setProgressRegion(Rect? region) {
+    state = state.copyWith(progressRegion: region);
   }
 
   void setDriveFileId(String? id) {
@@ -732,6 +810,15 @@ class EditorNotifier extends Notifier<EditorState>
     if (layout == null) return;
     final clamped = page.clamp(0, layout.totalPages - 1);
     state = state.copyWith(currentPage: clamped, pendingFitPage: clamped);
+    // Persist the current page so it is restored on next session open — but
+    // only when in stitch mode with page mode active and progress started.
+    final progress = state.pattern.progress;
+    if (state.mode == AppMode.stitch &&
+        state.pattern.pageConfig.enabled &&
+        (progress.completedStitches.isNotEmpty ||
+         progress.completedBackstitches.isNotEmpty)) {
+      _saveSession();
+    }
   }
 
   void navigateNextPage() {

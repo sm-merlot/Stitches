@@ -43,9 +43,19 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   double _trackpadStartScale = 1.0;
   Offset _trackpadStartPanOffset = Offset.zero;
 
-  // Double-tap detection (touch only)
+  // Double-tap / double-click detection
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
+  // Progress double-click/double-tap flood fill detection (stitch mode).
+  // Detected at pointer-DOWN time (DOWN-to-DOWN): if the second DOWN arrives
+  // within _kDoubleClickMs of the previous DOWN at a nearby screen position,
+  // set _pendingDoubleClick so that pointer-UP does a flood fill instead of
+  // a single toggle.
+  DateTime?    _lastProgressDownTime;
+  (int, int)?  _lastProgressDownCell;
+  bool         _pendingDoubleClick = false;
+  bool?        _wasProgressCellDone; // state of the cell BEFORE the last single-click toggle
+  static const int _kDoubleClickMs = 400;
 
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
@@ -63,6 +73,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   // Paste preview origin (grid cell coords, top-left of where clipboard will land)
   Offset? _pasteOrigin;
+
+  // Progress tracking — stitch mode tap/drag state
+  Offset? _progressAnchor;           // cell coords where drag/tap started
+  Offset? _progressAnchorScreen;     // screen pixels where drag started (for jitter threshold)
+  bool _hasDraggedProgress = false;  // true once pointer moved > _kProgressDragThreshold px
+  Rect? _progressDragRect;           // live region during drag (reuses selection overlay)
+  BackStitch? _progressBackstitch;   // backstitch hit at pointer-down; tapped if no drag
+  static const double _kProgressDragThreshold = 10.0; // screen-pixel minimum drag distance
+  static const double _kBackstitchHitRadius = 0.3;    // cell units
 
   // Whether Ctrl is currently held — switches paste from single-stamp to multi-stamp.
   bool _ctrlHeld = false;
@@ -194,6 +213,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     });
   }
 
+  /// Shows a bottom sheet letting the user confirm marking a dragged region done.
   /// Returns true if stitch [s] occupies cell (x, y).
   /// Uses EditorState.cellCoords for non-backstitch types; skips backstitches.
   bool _stitchAtCell(Stitch s, int x, int y) {
@@ -613,6 +633,68 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     );
   }
 
+  // ─── Progress double-click helper ─────────────────────────────────────────
+
+  /// Call on every pointer-DOWN that would start a progress tap.
+  /// Sets [_pendingDoubleClick] if this DOWN is on the same cell as the
+  /// previous DOWN and within the double-click time threshold.
+  void _checkProgressDoubleClick(Offset screenPos) {
+    final now = DateTime.now();
+    final last = _lastProgressDownTime;
+    final lastCell = _lastProgressDownCell;
+    final c = _screenToCanvas(screenPos);
+    final (cx, cy) = _canvasToCell(c);
+    if (last != null &&
+        lastCell != null &&
+        now.difference(last).inMilliseconds < _kDoubleClickMs &&
+        lastCell.$1 == cx && lastCell.$2 == cy) {
+      _pendingDoubleClick = true;
+      // Reset so a triple-click doesn't fire a second flood fill.
+      _lastProgressDownTime = null;
+      _lastProgressDownCell = null;
+    } else {
+      _pendingDoubleClick = false;
+      _lastProgressDownTime = now;
+      _lastProgressDownCell = (cx, cy);
+    }
+  }
+
+  /// Returns the topmost visible BackStitch within [_kBackstitchHitRadius] cell
+  /// units of [screenPos], respecting focus mode. Null if none hit.
+  BackStitch? _getBackstitchHit(Offset screenPos) {
+    final s = ref.read(editorProvider);
+    // Cross-stitch focus mode: backstitch hits are ignored so cross-stitch taps work normally.
+    if (s.stitchCrossMode) return null;
+    final focusId = s.stitchFocusThreadId;
+    final canvas = _screenToCanvas(screenPos);
+    final px = canvas.dx / _cellSize;
+    final py = canvas.dy / _cellSize;
+    BackStitch? result;
+    for (final layer in s.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is! BackStitch) continue;
+        if (focusId != null && stitch.threadId != focusId) continue;
+        // Point-to-segment distance in cell space.
+        final dx = stitch.x2 - stitch.x1, dy = stitch.y2 - stitch.y1;
+        final lenSq = dx * dx + dy * dy;
+        double dist;
+        if (lenSq == 0) {
+          final ex = px - stitch.x1, ey = py - stitch.y1;
+          dist = math.sqrt(ex * ex + ey * ey);
+        } else {
+          final t = ((px - stitch.x1) * dx + (py - stitch.y1) * dy) / lenSq;
+          final tc = t.clamp(0.0, 1.0);
+          final nx = stitch.x1 + tc * dx - px;
+          final ny = stitch.y1 + tc * dy - py;
+          dist = math.sqrt(nx * nx + ny * ny);
+        }
+        if (dist < _kBackstitchHitRadius) result = stitch; // last = topmost layer
+      }
+    }
+    return result;
+  }
+
   // ─── Selection helpers ────────────────────────────────────────────────────
 
   Rect _buildSelRect(Offset a, Offset b) {
@@ -636,6 +718,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   // ─── Pointer event handling ───────────────────────────────────────────────
+
+  /// Returns true when [screenPos] is inside a nav-button hit area.
+  /// Used to suppress accidental stitch operations when the user taps a nav
+  /// button (which is a child of the Listener, so raw events reach us too).
+  bool _isNavZone(Offset screenPos) {
+    final s = ref.read(editorProvider);
+    if (!s.stitchMode || !s.pattern.pageConfig.enabled || s.pageLayout == null) {
+      return false;
+    }
+    // Nav buttons: left/right arrows (36 px wide + 4 margin each side = ~44 px)
+    // up/down arrows (36 px tall + margins).  Page indicator at very bottom.
+    const double edgeG = 56.0;
+    const double bottomG = 100.0;
+    return screenPos.dx < edgeG ||
+        screenPos.dx > _canvasSize.width - edgeG ||
+        screenPos.dy < edgeG ||
+        screenPos.dy > _canvasSize.height - bottomG;
+  }
 
   bool get _isPanMode =>
       ref.read(editorProvider).drawingMode == DrawingMode.pan;
@@ -682,7 +782,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final cell = _screenToSelCell(event.localPosition);
         final sel = editorState.selectionRect;
         final inStitchMode = editorState.stitchMode;
-        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        // In stitch mode, select-drag marks a region done instead of selecting.
+        if (inStitchMode) {
+          if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
+            final bs = _getBackstitchHit(event.localPosition);
+            if (bs == null) _checkProgressDoubleClick(event.localPosition);
+            setState(() {
+              _progressAnchor = cell;
+              _progressAnchorScreen = event.localPosition;
+              _progressBackstitch = bs;
+              _hasDraggedProgress = false;
+              _progressDragRect = null;
+            });
+          }
+          return;
+        }
+        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           if (editorState.selectedStitches.isEmpty) {
             _showWarningBanner(kWarnNothingToMove +
                 (editorState.canvasSelectionMode ? '' : kLayerHint));
@@ -694,7 +809,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             });
           }
         } else {
-          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
+          ref.read(editorProvider.notifier).setSelectionRect(null);
           if (_screenOnCanvas(event.localPosition)) {
             setState(() {
               _selectionAnchor = cell;
@@ -726,6 +841,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         return;
       }
 
+      // In stitch mode, start a progress anchor instead of drawing.
+      if (ref.read(editorProvider).stitchMode) {
+        if (!_isNavZone(event.localPosition)) {
+          final cell = _screenToSelCell(event.localPosition);
+          final bs = _getBackstitchHit(event.localPosition);
+          if (bs == null) _checkProgressDoubleClick(event.localPosition);
+          setState(() {
+            _progressAnchor = cell;
+            _progressBackstitch = bs;
+            _hasDraggedProgress = false;
+            _progressDragRect = null;
+          });
+        }
+        return;
+      }
+
       _handleDrawAt(event.localPosition);
       return;
     }
@@ -740,7 +871,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final cell = _screenToSelCell(event.localPosition);
         final sel = editorState.selectionRect;
         final inStitchMode = editorState.stitchMode;
-        if (!inStitchMode && sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
+        // In stitch mode, select-drag marks a region done instead of selecting.
+        if (inStitchMode) {
+          if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
+            final bs = _getBackstitchHit(event.localPosition);
+            if (bs == null) _checkProgressDoubleClick(event.localPosition);
+            setState(() {
+              _progressAnchor = cell;
+              _progressAnchorScreen = event.localPosition;
+              _progressBackstitch = bs;
+              _hasDraggedProgress = false;
+              _progressDragRect = null;
+            });
+          }
+          return;
+        }
+        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
           if (editorState.selectedStitches.isEmpty) {
             _showWarningBanner(kWarnNothingToMove +
                 (editorState.canvasSelectionMode ? '' : kLayerHint));
@@ -752,7 +898,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             });
           }
         } else {
-          if (!inStitchMode) ref.read(editorProvider.notifier).setSelectionRect(null);
+          ref.read(editorProvider.notifier).setSelectionRect(null);
           if (_screenOnCanvas(event.localPosition)) {
             setState(() {
               _selectionAnchor = cell;
@@ -781,6 +927,20 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           final (cx, cy) = _canvasToCell(c);
           setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
           // Commit on pointer up to avoid double-tap undo collision
+        }
+        return;
+      }
+
+      // In stitch mode, start a progress anchor instead of drawing.
+      if (ref.read(editorProvider).stitchMode) {
+        if (!_isNavZone(event.localPosition)) {
+          final cell = _screenToSelCell(event.localPosition);
+          _checkProgressDoubleClick(event.localPosition);
+          setState(() {
+            _progressAnchor = cell;
+            _hasDraggedProgress = false;
+            _progressDragRect = null;
+          });
         }
         return;
       }
@@ -824,7 +984,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
       final mode = ref.read(editorProvider).drawingMode;
 
-      if (mode == DrawingMode.select) {
+      if (mode == DrawingMode.select && !ref.read(editorProvider).stitchMode) {
         final cell = _screenToSelCell(event.localPosition);
         if (_isMovingSelection && _moveDragStartCell != null) {
           _moveDelta = cell - _moveDragStartCell!;
@@ -848,6 +1008,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
 
       if (mode == DrawingMode.colorPicker) return;
+
+      // In stitch mode, update progress drag region instead of drawing.
+      if (ref.read(editorProvider).stitchMode && _progressAnchor != null) {
+        final cell = _screenToSelCell(event.localPosition);
+        final newRect = _buildSelRect(_progressAnchor!, cell);
+        // Only count as a real drag once the pointer has moved enough screen
+        // pixels from the anchor — this prevents mouse jitter from triggering
+        // the drag path on what is really just a click.
+        if (!_hasDraggedProgress && _progressAnchorScreen != null &&
+            (event.localPosition - _progressAnchorScreen!).distance > _kProgressDragThreshold) {
+          _hasDraggedProgress = true;
+        }
+        if (newRect != _progressDragRect) {
+          _progressDragRect = newRect;
+          _scheduleRebuild();
+        }
+        return;
+      }
 
       _handleDrawAt(event.localPosition);
 
@@ -885,7 +1063,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         return;
       }
       final mode = ref.read(editorProvider).drawingMode;
-      if (mode == DrawingMode.select) {
+      if (mode == DrawingMode.select && !ref.read(editorProvider).stitchMode) {
         final cell = _screenToSelCell(event.localPosition);
         if (_isMovingSelection && _moveDragStartCell != null) {
           _moveDelta = cell - _moveDragStartCell!;
@@ -902,6 +1080,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         _scheduleRebuild();
       } else if (_isPanMode) {
         _pan(event.delta);
+      } else if (ref.read(editorProvider).stitchMode && _progressAnchor != null) {
+        // Stitch mode: update progress drag region.
+        final cell = _screenToSelCell(event.localPosition);
+        final newRect = _buildSelRect(_progressAnchor!, cell);
+        if (newRect != _progressDragRect) {
+          if (newRect.width > 1 || newRect.height > 1) _hasDraggedProgress = true;
+          _progressDragRect = newRect;
+          _scheduleRebuild();
+        }
       } else {
         _handleDrawAt(event.localPosition);
       }
@@ -969,9 +1156,56 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       return;
     }
 
-    // Double-tap (touch only) → undo; single-tap → draw.
-    // Skip both if this finger was part of a multi-touch gesture.
-    if (event.kind == PointerDeviceKind.touch && wasSinglePointer && !_hadMultiTouch) {
+    // Finalize progress anchor (stitch mode tap / drag-to-mark)
+    if (_progressAnchor != null) {
+      final cell = _screenToSelCell(pos);
+      if (_hasDraggedProgress) {
+        // Drag ended: commit region to provider (shows sidebar Mark Done button).
+        final rect = _progressDragRect ?? _buildSelRect(_progressAnchor!, cell);
+        if (rect.width > 1 || rect.height > 1) {
+          ref.read(editorProvider.notifier).setProgressRegion(rect);
+        }
+      } else {
+        // Tap: toggle the tapped stitch/backstitch done/not-done,
+        // or flood fill on double-click (cross-stitches only).
+        final bs = _progressBackstitch;
+        if (bs != null) {
+          // Backstitch tap — always a single toggle, no flood fill.
+          ref.read(editorProvider.notifier)
+              .toggleBackstitchDone(bs.x1, bs.y1, bs.x2, bs.y2);
+        } else {
+          final cx = _progressAnchor!.dx.toInt();
+          final cy = _progressAnchor!.dy.toInt();
+          if (_pendingDoubleClick) {
+            ref.read(editorProvider.notifier).floodFillDone(cx, cy,
+                originalStartIsDone: _wasProgressCellDone,
+                afterSingleTap: true);
+            _pendingDoubleClick = false;
+            _wasProgressCellDone = null;
+          } else {
+            _wasProgressCellDone = ref.read(editorProvider)
+                .pattern.progress.completedStitches.contains((cx, cy));
+            ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
+          }
+        }
+        // Clear any committed progress region on a tap
+        ref.read(editorProvider.notifier).setProgressRegion(null);
+      }
+      _progressAnchor = null;
+      _progressAnchorScreen = null;
+      _progressBackstitch = null;
+      _hasDraggedProgress = false;
+      _progressDragRect = null;
+      _scheduleRebuild();
+      _activePointers.remove(event.pointer);
+      return;
+    }
+
+    // Double-tap (touch, edit mode only) → undo.
+    // Stitch mode double-click/tap is detected in _onPointerDown via timing.
+    // Skip if this finger was part of a multi-touch gesture.
+    if (event.kind == PointerDeviceKind.touch && wasSinglePointer &&
+        !_hadMultiTouch && !ref.read(editorProvider).stitchMode) {
       final timeSinceLast = _lastTouchUpTime != null
           ? now.difference(_lastTouchUpTime!)
           : const Duration(seconds: 1);
@@ -1151,9 +1385,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       builder: (context, constraints) {
         _canvasSize = constraints.biggest;
         return MouseRegion(
-      cursor: _cursor(state),
-      onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
-      child: Listener(
+        cursor: _cursor(state),
+        onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
+        child: Stack(children: [
+        Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: _onPointerMove,
         onPointerUp: _onPointerUp,
@@ -1186,8 +1421,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   referenceVisible: state.referenceVisible,
                   compositeResult: state.compositeResult,
                   paletteOverride: _getOrBuildPaletteOverride(state),
-                  pageLayout: state.pageLayout,
+                  // Pages are a stitch-mode concept — don't filter in edit/view.
+                  pageLayout: state.stitchMode ? state.pageLayout : null,
                   currentPage: state.currentPage,
+                  progress: state.pattern.progress,
                 ),
                 isComplex: true,
                 size: Size.infinite,
@@ -1241,7 +1478,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                     ? null
                     : _mouseScreenPos,
-                selectionRect: _dragSelectionRect ?? state.selectionRect,
+                selectionRect: _progressDragRect ?? state.progressRegion ?? _dragSelectionRect ?? state.selectionRect,
                 ghostStitches: ghostStitches,
                 ghostThreads: state.drawingMode == DrawingMode.paste
                     ? state.clipboardThreads
@@ -1255,21 +1492,25 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               ),
               size: Size.infinite,
             ),
-            // Page navigation chrome — directional arrows + page indicator.
+            // Page navigation chrome — inside Listener so multi-touch (pinch)
+            // is always tracked. Nav-zone guard in _onPointerDown prevents
+            // accidental stitch marks when tapping nav buttons.
             if (pageModeActive)
               _PageNavOverlay(
                 layout: state.pageLayout!,
                 currentPage: state.currentPage,
+                completedPages: state.pattern.progress.completedPages,
                 onLeft:  () => ref.read(editorProvider.notifier).navigatePageLeft(),
                 onRight: () => ref.read(editorProvider.notifier).navigatePageRight(),
                 onUp:    () => ref.read(editorProvider.notifier).navigatePageUp(),
                 onDown:  () => ref.read(editorProvider.notifier).navigatePageDown(),
                 onPageTap: (page) => ref.read(editorProvider.notifier).navigatePage(page),
+                onPageLongPress: (page) => ref.read(editorProvider.notifier).togglePageDone(page),
               ),
           ],
         ),
       ),
-    );
+        ])); // outer Stack, MouseRegion
     },
     );
   }
@@ -1298,20 +1539,24 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 class _PageNavOverlay extends StatelessWidget {
   final PageLayout layout;
   final int currentPage;
+  final Set<int> completedPages;
   final VoidCallback onLeft;
   final VoidCallback onRight;
   final VoidCallback onUp;
   final VoidCallback onDown;
   final void Function(int page) onPageTap;
+  final void Function(int page) onPageLongPress;
 
   const _PageNavOverlay({
     required this.layout,
     required this.currentPage,
+    required this.completedPages,
     required this.onLeft,
     required this.onRight,
     required this.onUp,
     required this.onDown,
     required this.onPageTap,
+    required this.onPageLongPress,
   });
 
   @override
@@ -1358,15 +1603,27 @@ class _PageNavOverlay extends StatelessWidget {
           child: Center(
             child: GestureDetector(
               onTap: () => _showPageGrid(context),
+              onLongPress: () => onPageLongPress(currentPage),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.black54,
+                  color: completedPages.contains(currentPage)
+                      ? Colors.green.shade700.withValues(alpha: 0.85)
+                      : Colors.black54,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  '${currentPage + 1} / $total',
-                  style: buttonStyle,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (completedPages.contains(currentPage)) ...[
+                      const Icon(Icons.check, color: Colors.white, size: 14),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      '${currentPage + 1} / $total',
+                      style: buttonStyle,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1383,6 +1640,7 @@ class _PageNavOverlay extends StatelessWidget {
       builder: (_) => _PageGridSheet(
         layout: layout,
         currentPage: currentPage,
+        completedPages: completedPages,
         onPageTap: (page) {
           Navigator.of(context).pop();
           onPageTap(page);
@@ -1429,11 +1687,13 @@ class _NavArrowButton extends StatelessWidget {
 class _PageGridSheet extends StatelessWidget {
   final PageLayout layout;
   final int currentPage;
+  final Set<int> completedPages;
   final void Function(int page) onPageTap;
 
   const _PageGridSheet({
     required this.layout,
     required this.currentPage,
+    required this.completedPages,
     required this.onPageTap,
   });
 
@@ -1471,43 +1731,53 @@ class _PageGridSheet extends StatelessWidget {
               itemCount: total,
               itemBuilder: (context, index) {
                 final isActive = index == currentPage;
+                final isDone = completedPages.contains(index);
                 final (col, row) = layout.pageCoords(index);
                 return GestureDetector(
                   onTap: () => onPageTap(index),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 120),
                     decoration: BoxDecoration(
-                      color: isActive
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerHighest,
+                      color: isDone
+                          ? Colors.green.shade100
+                          : isActive
+                              ? colorScheme.primaryContainer
+                              : colorScheme.surfaceContainerHighest,
                       border: Border.all(
-                        color: isActive
-                            ? colorScheme.primary
-                            : colorScheme.outlineVariant,
-                        width: isActive ? 2 : 1,
+                        color: isDone
+                            ? Colors.green.shade600
+                            : isActive
+                                ? colorScheme.primary
+                                : colorScheme.outlineVariant,
+                        width: isActive || isDone ? 2 : 1,
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: isActive
-                                ? colorScheme.onPrimaryContainer
-                                : colorScheme.onSurface,
+                        if (isDone)
+                          Icon(Icons.check_circle, size: 18, color: Colors.green.shade700)
+                        else
+                          Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isActive
+                                  ? colorScheme.onPrimaryContainer
+                                  : colorScheme.onSurface,
+                            ),
                           ),
-                        ),
                         Text(
                           '${col + 1}×${row + 1}',
                           style: TextStyle(
                             fontSize: 10,
-                            color: isActive
-                                ? colorScheme.onPrimaryContainer
-                                : colorScheme.onSurfaceVariant,
+                            color: isDone
+                                ? Colors.green.shade700
+                                : isActive
+                                    ? colorScheme.onPrimaryContainer
+                                    : colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],

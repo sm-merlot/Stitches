@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../models/page_config.dart';
 import '../models/pattern.dart';
+import '../models/pattern_progress.dart';
 import '../models/storage_location.dart';
 import '../providers/editor/editor_provider.dart';
 import '../services/pattern_cache.dart';
@@ -376,21 +378,26 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final box = context.findRenderObject() as RenderBox?;
     final origin =
         box != null ? box.localToGlobal(Offset.zero) & box.size : null;
-    final format = await showShareFormatPicker(context);
-    if (format == null || !context.mounted) return;
+    final result = await showShareFormatPicker(context,
+        hasProgress: state.pattern.progress.completedStitches.isNotEmpty,
+        hasPageSettings: state.pattern.pageConfig.enabled);
+    if (result == null || !context.mounted) return;
     try {
-      final pattern = state.pattern;
+      var pattern = state.pattern;
       final suggested =
           pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
       final tmpDir = await getTemporaryDirectory();
 
-      final Uint8List bytes;
-      final String fileName;
-      final String mimeType;
+      late final Uint8List bytes;
+      late final String fileName;
+      late final String mimeType;
 
-      switch (format) {
+      switch (result.format) {
         case ShareFormat.stitchesFile:
-          final yaml = FileService.toYamlString(pattern);
+          var sharePattern = pattern;
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
+          final yaml = FileService.toYamlString(sharePattern);
           // Always compress for sharing (matches release-mode behaviour).
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
           fileName = '$suggested.stitches';
@@ -409,6 +416,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           bytes = await PngExportService.export(pattern);
           fileName = '$suggested.png';
           mimeType = 'image/png';
+
       }
 
       final tmpFile = File('${tmpDir.path}/$fileName');
@@ -426,8 +434,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   /// Export to a chosen format + location (local file picker or Drive folder picker).
   Future<void> _export(BuildContext context) async {
     final state = ref.read(editorProvider);
-    final format = await showShareFormatPicker(context, title: 'Export as…');
-    if (format == null || !context.mounted) return;
+    final result = await showShareFormatPicker(context,
+        title: 'Export as…',
+        hasProgress: state.pattern.progress.completedStitches.isNotEmpty,
+        hasPageSettings: state.pattern.pageConfig.enabled);
+    if (result == null || !context.mounted) return;
 
     // Drive-backed file: show Drive folder picker first.
     if (state.driveParentFolderId != null) {
@@ -440,29 +451,32 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       );
       if (!context.mounted) return;
       if (driveResult != null) {
-        await _exportToDriveFolder(context, state, format, driveResult.$1);
+        await _exportToDriveFolder(context, state, result, driveResult.$1);
         return;
       }
       if (!saveLocally) return; // cancelled
       // saveLocally == true → fall through to local picker
     }
 
-    await _exportToLocalFile(context, state, format);
+    await _exportToLocalFile(context, state, result);
   }
 
   /// Upload an exported file to a Drive folder.
   Future<void> _exportToDriveFolder(
       BuildContext context,
       EditorState state,
-      ShareFormat format,
+      PatternShareResult result,
       DriveFolder folder) async {
     final suggested = state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     try {
-      final Uint8List bytes;
-      final String fileName;
-      switch (format) {
+      late final Uint8List bytes;
+      late final String fileName;
+      switch (result.format) {
         case ShareFormat.stitchesFile:
-          final yaml = FileService.toYamlString(state.patternForSave);
+          var sharePattern = state.patternForSave;
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
+          final yaml = FileService.toYamlString(sharePattern);
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
           fileName = '$suggested.stitches';
         case ShareFormat.oxs:
@@ -496,7 +510,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   /// Save exported bytes via the native file picker.
   Future<void> _exportToLocalFile(
-      BuildContext context, EditorState state, ShareFormat format) async {
+      BuildContext context, EditorState state, PatternShareResult result) async {
     final suggested = state.pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     // Default directory = folder of the currently open local file.
@@ -504,10 +518,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         ? File(state.filePath!).parent.path
         : null;
     try {
-      switch (format) {
+      switch (result.format) {
         case ShareFormat.stitchesFile:
+          var sharePattern = state.patternForSave;
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           if (isMobile) {
-            final yaml = FileService.toYamlString(state.patternForSave);
+            final yaml = FileService.toYamlString(sharePattern);
             final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
             final path = await FilePicker.saveFile(
               fileName: '$suggested.stitches',
@@ -529,7 +546,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             if (path == null) return;
             final finalPath =
                 path.endsWith('.stitches') ? path : '$path.stitches';
-            await FileService.saveFile(state.patternForSave, finalPath,
+            await FileService.saveFile(sharePattern, finalPath,
                 compress: state.compressOnSave);
             ref.read(editorProvider.notifier).setFilePath(finalPath);
             ref.read(editorProvider.notifier).markSaved();
@@ -1358,8 +1375,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.stitch),
+                onPressed: () {
+                  final pruned = ref
+                      .read(editorProvider.notifier)
+                      .setMode(AppMode.stitch);
+                  if (pruned > 0 && context.mounted) {
+                    showWarning(context,
+                        '$pruned completed ${pruned == 1 ? 'stitch' : 'stitches'} removed — no longer in the pattern');
+                  }
+                },
                 child: const Text('Stitch'),
               ),
               const SizedBox(width: 8),
@@ -1394,6 +1418,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             ],
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.stitch && openPdf == null) ...[
+              IconButton(
+                tooltip: 'Progress tracking',
+                icon: const Icon(Icons.checklist),
+                onPressed: () =>
+                    showProgressHelpDialog(context, ref, state: editorState),
+              ),
               IconButton(
                 tooltip: editorState.pattern.pageConfig.enabled
                     ? 'Page mode: on'

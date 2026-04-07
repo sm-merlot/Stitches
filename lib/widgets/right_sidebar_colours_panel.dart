@@ -8,6 +8,7 @@ import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/stitch_demo_screen.dart';
 import 'color_select_dialog.dart';
+import 'editor_shared_widgets.dart';
 
 enum ColoursPanelMode { design, stitch, snippet }
 
@@ -278,6 +279,28 @@ void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
   }
 }
 
+/// Counts how many completed-progress stitches (cross + back) belong to each thread.
+Map<String, int> _countDoneStitches(EditorState state) {
+  final progress = state.pattern.progress;
+  final counts = <String, int>{};
+  for (final layer in state.pattern.layers) {
+    for (final stitch in layer.stitches) {
+      final bool isDone;
+      if (stitch is BackStitch) {
+        isDone = progress.isBackstitchDone(
+            stitch.x1, stitch.y1, stitch.x2, stitch.y2);
+      } else {
+        final c = EditorState.cellCoords(stitch);
+        isDone = c != null && progress.completedStitches.contains(c);
+      }
+      if (isDone) {
+        counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
+      }
+    }
+  }
+  return counts;
+}
+
 Map<String, int> _countStitches(List<Stitch> stitches) {
   final counts = <String, int>{};
   for (final s in stitches) {
@@ -318,6 +341,10 @@ class _StitchColoursPanel extends ConsumerWidget {
 
     final threads = _compositeThreads(state);
     final stitchCounts = _countStitchesComposite(state);
+    final progress = state.pattern.progress;
+    final doneCounts = !progress.isEmpty
+        ? _countDoneStitches(state)
+        : null;
 
     // Only show the stitch focus row when both types of stitch are present.
     final allStitches = state.pattern.stitches;
@@ -393,6 +420,7 @@ class _StitchColoursPanel extends ConsumerWidget {
             selectedThreadId: state.stitchFocusThreadId,
             useDmc: useDmc,
             stitchCounts: stitchCounts,
+            doneCounts: doneCounts,
             onTap: (t) => notifier.setStitchFocusThread(
                 state.stitchFocusThreadId == t.dmcCode ? null : t.dmcCode),
             focusMode: true,
@@ -473,19 +501,52 @@ class StitchDemoButton extends StatelessWidget {
   final EditorState state;
   const StitchDemoButton({super.key, required this.state});
 
+  /// Returns the pool of stitches for the Demo button.
+  /// In stitch mode: stitches within progressRegion (page-filtered if needed).
+  /// In edit mode: selectedStitches from selectionRect.
+  /// Fallback: all pattern stitches.
+  List<Stitch> _stitchPool() {
+    final region = state.stitchMode ? state.progressRegion : state.selectionRect;
+    if (region != null) {
+      final layout = state.pageLayout;
+      final (pageCol, pageRow) = layout != null
+          ? layout.pageCoords(state.currentPage)
+          : (0, 0);
+      final stitches = <Stitch>[];
+      for (final layer in state.pattern.layers) {
+        if (!layer.visible) continue;
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) continue;
+          final coords = EditorState.cellCoords(stitch);
+          if (coords == null) continue;
+          final (sx, sy) = coords;
+          if (sx >= region.left && sx < region.right &&
+              sy >= region.top && sy < region.bottom) {
+            if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+            stitches.add(stitch);
+          }
+        }
+      }
+      return stitches;
+    }
+    if (state.selectionRect != null) return state.selectedStitches;
+    return state.pattern.stitches;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Enabled only when the user has rubber-band selected stitches on the canvas,
-    // and at least one of those stitches is not greyed out (i.e. matches the
-    // focused thread when focus mode is active).
+    // Enabled only when the user has a selection or progress region with stitches,
+    // and at least one is a FullStitch matching the focused thread (if any).
     final focusId = state.stitchFocusThreadId;
-    final enabled = state.selectionRect != null &&
-        state.selectedStitches.any((s) =>
-            s is FullStitch &&
-            (focusId == null || s.threadId == focusId));
+    final hasRegion = state.stitchMode
+        ? state.progressRegion != null
+        : state.selectionRect != null;
+    final pool = _stitchPool();
+    final enabled = hasRegion &&
+        pool.any((s) => s is FullStitch && (focusId == null || s.threadId == focusId));
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -506,6 +567,7 @@ class StitchDemoButton extends StatelessWidget {
               label: const Text('Demo', style: TextStyle(fontSize: 13)),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
               onPressed: enabled ? () => _onDemonstrate(context) : null,
             ),
@@ -537,10 +599,7 @@ class StitchDemoButton extends StatelessWidget {
   Future<void> _onDemonstrate(BuildContext context) async {
     final pattern = state.pattern;
     final focusId = state.stitchFocusThreadId;
-    final pool = state.selectionRect != null
-        ? state.selectedStitches
-        : pattern.stitches;
-    final fullStitches = pool.whereType<FullStitch>().toList();
+    final fullStitches = _stitchPool().whereType<FullStitch>().toList();
 
     Thread? thread;
     if (focusId != null) {
@@ -630,6 +689,8 @@ class _ThreadList extends StatelessWidget {
   final String? selectedThreadId;
   final bool useDmc;
   final Map<String, int> stitchCounts;
+  /// Per-thread done counts — when non-null, shows `done/total` instead of `total`.
+  final Map<String, int>? doneCounts;
   final void Function(Thread) onTap;
   final void Function(Thread)? onSwatchTap;
   final bool focusMode;
@@ -639,6 +700,7 @@ class _ThreadList extends StatelessWidget {
     required this.selectedThreadId,
     required this.useDmc,
     required this.stitchCounts,
+    this.doneCounts,
     required this.onTap,
     this.onSwatchTap,
     this.focusMode = false,
@@ -870,7 +932,9 @@ class _ThreadList extends StatelessWidget {
                       ),
                       const SizedBox(width: 2),
                       Text(
-                        '$count',
+                        doneCounts != null
+                            ? '${doneCounts![t.dmcCode] ?? 0}/$count'
+                            : '$count',
                         style: TextStyle(
                           fontSize: 10,
                           color: Theme.of(context)
@@ -1089,6 +1153,138 @@ class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
           child: const Text('OK'),
         ),
       ],
+    );
+  }
+}
+
+// ─── MarkDoneButton ──────────────────────────────────────────────────────────
+
+/// "Mark done" / "Mark not done" button shown in the stitch-mode sidebar.
+///
+/// • No selection → visible but disabled; tapping opens the progress info dialog.
+/// • Selection with stitches on the current page:
+///   - All done → shows "Unmark" (orange)
+///   - Otherwise → shows "Mark"
+/// Pressing the button does NOT deselect the region so the user can act again.
+class MarkDoneButton extends ConsumerWidget {
+  final EditorState state;
+  const MarkDoneButton({super.key, required this.state});
+
+  /// Whether the region contains any visible stitches (cross or back) on the
+  /// current page that match the focus thread (if one is active).
+  static bool _regionHasPageStitches(EditorState s) {
+    final region = s.progressRegion;
+    if (region == null) return false;
+    final layout = s.pageLayout;
+    final focusId = s.stitchFocusThreadId;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.currentPage) : (0, 0);
+    for (final layer in s.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (focusId != null && stitch.threadId != focusId) continue;
+        if (stitch is BackStitch) {
+          // Cross-stitch focus mode: backstitches don't count.
+          if (s.stitchCrossMode) continue;
+          final midX = (stitch.x1 + stitch.x2) / 2;
+          final midY = (stitch.y1 + stitch.y2) / 2;
+          if (midX >= region.left && midX < region.right &&
+              midY >= region.top && midY < region.bottom) {
+            if (layout != null &&
+                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+            return true;
+          }
+        } else {
+          // Backstitch focus mode: cross-stitches don't count.
+          if (s.stitchBackMode) continue;
+          final coords = EditorState.cellCoords(stitch);
+          if (coords == null) continue;
+          final (sx, sy) = coords;
+          if (sx >= region.left && sx < region.right &&
+              sy >= region.top && sy < region.bottom) {
+            if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  static bool _isRegionAllDone(EditorState s) {
+    final region = s.progressRegion;
+    if (region == null) return false;
+    final progress = s.pattern.progress;
+    final layout = s.pageLayout;
+    final focusId = s.stitchFocusThreadId;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.currentPage) : (0, 0);
+    bool hasAny = false;
+    for (final layer in s.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (focusId != null && stitch.threadId != focusId) continue;
+        if (stitch is BackStitch) {
+          if (s.stitchCrossMode) continue;
+          final midX = (stitch.x1 + stitch.x2) / 2;
+          final midY = (stitch.y1 + stitch.y2) / 2;
+          if (midX >= region.left && midX < region.right &&
+              midY >= region.top && midY < region.bottom) {
+            if (layout != null &&
+                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+            hasAny = true;
+            if (!progress.isBackstitchDone(stitch.x1, stitch.y1, stitch.x2, stitch.y2)) return false;
+          }
+        } else {
+          if (s.stitchBackMode) continue;
+          final coords = EditorState.cellCoords(stitch);
+          if (coords == null) continue;
+          final (sx, sy) = coords;
+          if (sx >= region.left && sx < region.right &&
+              sy >= region.top && sy < region.bottom) {
+            if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+            hasAny = true;
+            if (!progress.completedStitches.contains((sx, sy))) return false;
+          }
+        }
+      }
+    }
+    return hasAny;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = _regionHasPageStitches(state);
+    final allDone = enabled && _isRegionAllDone(state);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+      child: GestureDetector(
+        onTap: enabled
+            ? null
+            : () => showProgressHelpDialog(context, ref, state: state),
+        child: FilledButton.icon(
+          icon: Icon(allDone ? Icons.remove_done : Icons.done_all, size: 16),
+          label: Text(
+            allDone ? 'Unmark' : 'Mark',
+            style: const TextStyle(fontSize: 13),
+          ),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            backgroundColor: allDone ? Colors.orange.shade700 : null,
+          ),
+          onPressed: enabled
+              ? () {
+                  final notifier = ref.read(editorProvider.notifier);
+                  final region = state.progressRegion!;
+                  if (allDone) {
+                    notifier.markRegionNotDone(region);
+                  } else {
+                    notifier.markRegionDone(region);
+                  }
+                  // Keep the region selected so the user can act again
+                }
+              : null,
+        ),
+      ),
     );
   }
 }

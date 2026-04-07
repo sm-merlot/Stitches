@@ -69,6 +69,9 @@ class _QuickSwatches extends ConsumerWidget {
     }
     if (displayIds.isEmpty) return const SizedBox.shrink();
 
+    final progress = state.stitchMode ? state.pattern.progress : null;
+    final allStitches = state.stitchMode ? state.pattern.stitches : null;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -79,14 +82,67 @@ class _QuickSwatches extends ConsumerWidget {
                   ? Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name)
                   : null);
           if (thread == null) return const SizedBox.shrink();
+
+          // Compute progress counts in stitch mode.
+          int? doneCount;
+          int? totalCount;
+          bool isDone = false;
+          if (progress != null && allStitches != null) {
+            int total = 0;
+            int done = 0;
+            for (final s in allStitches) {
+              if (s.threadId != id) continue;
+              final coords = switch (s) {
+                FullStitch(:final x, :final y) => (x, y),
+                HalfStitch(:final x, :final y) => (x, y),
+                HalfCrossStitch(:final x, :final y) => (x, y),
+                QuarterStitch(:final x, :final y) => (x, y),
+                QuarterCrossStitch(:final x, :final y) => (x, y),
+                _ => null,
+              };
+              if (coords == null) continue;
+              total++;
+              if (progress.completedStitches.contains(coords)) done++;
+            }
+            if (total > 0) {
+              doneCount = done;
+              totalCount = total;
+              isDone = done == total;
+            }
+          }
+
+          final tooltip = progress != null && totalCount != null
+              ? '${thread.dmcCode} – ${thread.name}\n$doneCount / $totalCount done'
+              : '${thread.dmcCode} – ${thread.name}';
+
           return Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Tooltip(
-              message: '${thread.dmcCode} – ${thread.name}',
+              message: tooltip,
               child: GestureDetector(
                 onTap: () =>
                     ref.read(editorProvider.notifier).setSelectedThread(id),
-                child: _ThreadSwatch(thread: thread, size: 24),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _ThreadSwatch(thread: thread, size: 24),
+                    if (isDone)
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade600,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: const Icon(Icons.check, size: 8, color: Colors.white),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           );
