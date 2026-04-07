@@ -24,24 +24,37 @@ Future<void> refreshDrivePatternInBackground(
   required String parentFolderId,
   required String tempPath,
 }) async {
+  // ignore: avoid_print
+  print('[DriveRefresh] START fileId=$fileId');
   try {
     final service = await ref.read(googleDriveProvider.notifier).getService();
-    if (service == null) return;
+    if (service == null) {
+      // ignore: avoid_print
+      print('[DriveRefresh] BAIL: no service');
+      return;
+    }
 
     final bytes = await service.downloadFile(fileId);
+    // ignore: avoid_print
+    print('[DriveRefresh] downloaded ${bytes.length} bytes');
 
     // Bail out if the user has switched files or started editing.
     final state = ref.read(editorProvider);
-    if (state.driveFileId != fileId || state.isDirty) return;
+    // ignore: avoid_print
+    print('[DriveRefresh] state.driveFileId=${state.driveFileId} isDirty=${state.isDirty}');
+    if (state.driveFileId != fileId || state.isDirty) {
+      // ignore: avoid_print
+      print('[DriveRefresh] BAIL: file/dirty check failed');
+      return;
+    }
 
-    // Parse in background BEFORE touching disk — avoids a window where the
-    // file's mtime is newer than the cache entry but the re-parse hasn't
-    // completed yet, which would cause a spurious slow cache miss.
     final (pattern, wasCompressed) =
         await FileService.parseBytesToPattern(bytes);
 
     final stateAfterParse = ref.read(editorProvider);
     if (stateAfterParse.driveFileId != fileId || stateAfterParse.isDirty) {
+      // ignore: avoid_print
+      print('[DriveRefresh] BAIL: post-parse check failed');
       return;
     }
 
@@ -49,13 +62,16 @@ Future<void> refreshDrivePatternInBackground(
     final stat = await File(tempPath).stat();
     PatternCache.put(tempPath, pattern, wasCompressed, stat.modified);
 
-    // Final check — still the same file and still unedited?
     final current = ref.read(editorProvider);
-    if (current.driveFileId != fileId || current.isDirty) return;
+    if (current.driveFileId != fileId || current.isDirty) {
+      // ignore: avoid_print
+      print('[DriveRefresh] BAIL: final check failed');
+      return;
+    }
 
-    // Build session from the current live state to preserve whatever
-    // pan/zoom/tool the user has set since opening — not a stale on-disk
-    // snapshot that would reset their viewport.
+    // ignore: avoid_print
+    print('[DriveRefresh] APPLYING update — viewPan=(${current.viewPanX},${current.viewPanY}) scale=${current.viewScale} mode=${current.mode} filePath=${current.filePath}');
+
     final liveSession = EditorSession(
       tool: current.currentTool.name,
       selectedThreadId: current.selectedThreadId,
@@ -67,7 +83,6 @@ Future<void> refreshDrivePatternInBackground(
       viewScale: current.viewScale,
     );
 
-    // Capture mode before loadPattern — it always resets to AppMode.view.
     final liveMode = current.mode;
 
     ref.read(editorProvider.notifier).loadPattern(
@@ -79,17 +94,15 @@ Future<void> refreshDrivePatternInBackground(
           session: liveSession,
         );
 
-    // loadPattern sets pendingFitPage=0 whenever page mode is enabled, which
-    // would snap the canvas to page 0 via the PatternCanvas listener.  We've
-    // already captured the correct viewport in liveSession, so suppress the
-    // snap by clearing the pending fit immediately.
     ref.read(editorProvider.notifier).clearPendingFitPage();
 
-    // Restore the user's mode if they had already left view mode.
     if (liveMode != AppMode.view) {
       ref.read(editorProvider.notifier).setMode(liveMode);
     }
-  } catch (_) {
-    // Silently ignore — the user already has a usable cached version.
+    // ignore: avoid_print
+    print('[DriveRefresh] DONE');
+  } catch (e, st) {
+    // ignore: avoid_print
+    print('[DriveRefresh] ERROR: $e\n$st');
   }
 }
