@@ -600,6 +600,7 @@ class EditorNotifier extends Notifier<EditorState>
       showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
       stitchCrossMode: mode == AppMode.stitch ? false : state.stitchCrossMode,
       stitchBackMode: mode == AppMode.stitch ? false : state.stitchBackMode,
+      stitchFocusThreadId: mode == AppMode.stitch ? state.stitchFocusThreadId : null,
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
     _saveSession();
