@@ -1,0 +1,27 @@
+lib/services/drive_pattern_refresh.dart
+  bd1adce12b95739c 1-89
+lib/widgets/file_sidebar.dart
+  bd1adce12b95739c 9,432-435
+lib/screens/home_screen.dart
+  bd1adce12b95739c 16,455-458,549-552
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "a909bb7b92a6b01659b84b75f1256ad3483c6984",
+  "prompts": {
+    "bd1adce12b95739c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8aed093b-1b6b-4572-8aa3-452d912872e6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 143,
+      "total_deletions": 132,
+      "accepted_lines": 103,
+      "overriden_lines": 0
+    }
+  }
+}
