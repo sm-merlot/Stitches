@@ -1,0 +1,23 @@
+README.md
+  1dbb22e7e426b413 26-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "7806092817df73ff308f9cd8b2979f7015e4164d",
+  "prompts": {
+    "1dbb22e7e426b413": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33cef555-6d29-43e1-8237-78a3b862cd77",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 13,
+      "total_deletions": 5,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
