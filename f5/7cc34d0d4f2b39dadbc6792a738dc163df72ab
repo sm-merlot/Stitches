@@ -1,0 +1,23 @@
+lib/providers/editor/editor_provider.dart
+  ce9f465b5cdac53e 538-544,813-821
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "f57cc34d0d4f2b39dadbc6792a738dc163df72ab",
+  "prompts": {
+    "ce9f465b5cdac53e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "18ee4320-2e89-4f46-b25e-3c16c2c521a0",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 16,
+      "total_deletions": 1,
+      "accepted_lines": 16,
+      "overriden_lines": 0
+    }
+  }
+}
