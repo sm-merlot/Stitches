@@ -28,7 +28,6 @@ Tracking everything needed before the first public release.
 ## Quality & Testing
 
 - [ ] **Add tests** — as described in README (unit + integration coverage for core editor logic)
-- [ ] **Strip debug logging** — remove temporary `[DriveRefresh]` and `[Canvas]` console prints added during Drive refresh bug investigation (branch: `scme0/fix/drive-refresh-state-reset`)
 
 ---
 
