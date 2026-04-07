@@ -598,8 +598,8 @@ class EditorNotifier extends Notifier<EditorState>
       selectionRect: null,
       backstitchStartPoint: null,
       showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
-      stitchCrossMode: mode == AppMode.stitch ? false : state.stitchCrossMode,
-      stitchBackMode: mode == AppMode.stitch ? false : state.stitchBackMode,
+      stitchCrossMode: false,
+      stitchBackMode: false,
       stitchFocusThreadId: mode == AppMode.stitch ? state.stitchFocusThreadId : null,
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
