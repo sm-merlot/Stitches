@@ -81,6 +81,7 @@ Future<void> refreshDrivePatternInBackground(
       viewPanX: current.viewPanX,
       viewPanY: current.viewPanY,
       viewScale: current.viewScale,
+      stitchPage: current.currentPage,
     );
 
     final liveMode = current.mode;
