@@ -34,6 +34,11 @@ _Built with the assistance of [Claude Code](https://claude.ai/claude-code)_
 <td>✏️ <strong>Apple Pencil</strong> — hover preview, double-tap erase</td>
 <td>📄 <strong>PDF scanner</strong> <em>(beta)</em> — convert printed charts to patterns</td>
 </tr>
+<tr>
+<td>📊 <strong>Progress tracking</strong> — mark stitches done, track by colour and page</td>
+<td>📖 <strong>Three modes</strong> — View, Edit, and Stitch for a clean stitching workflow</td>
+<td>📑 <strong>Page mode</strong> — split large patterns into printable pages, stitch one at a time</td>
+</tr>
 </table>
 
 ## 📺 See it in action
@@ -130,16 +135,33 @@ Shot list:
 </details>
 
 <details>
-<summary>▶ Stitch mode (~20s)</summary>
+<summary>▶ Stitch mode &amp; progress tracking (~30s)</summary>
 
 <!--
 Shot list:
-1. Open a colourful finished pattern in design mode
-2. Tap the "Stitch Mode" FAB — UI simplifies
-3. Tap one colour in the palette — all other stitches dim to grey
-4. Tap a different colour — focus switches
-5. Show the keep-screen-on toggle
-6. Tap "Exit Stitch Mode" to return
+1. Open a colourful finished pattern in View mode
+2. Switch to Stitch mode via the FAB — UI simplifies, progress bar appears
+3. Tap a few stitches to mark them done — progress bar fills, percentage updates
+4. Tap one colour in the palette — all other stitches dim to grey
+5. Show colours-done and pages-done counts in the progress bar
+6. Undo a progress step, redo it
+7. Show the keep-screen-on toggle
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ Page mode (~20s)</summary>
+
+<!--
+Shot list:
+1. Open a large pattern with page mode enabled
+2. Show the page grid overlay — pattern split into printable pages
+3. In Stitch mode, tap "next page" to move through pages one at a time
+4. Show pages-done count updating in the progress bar as a page completes
+5. Show the fit-to-page button snapping the viewport to the current page
 -->
 
 <video src="VIDEO_URL_HERE" controls width="100%"></video>
@@ -290,7 +312,10 @@ The resulting pattern is saved automatically as a `.stitches` file next to the s
 - **Multi-platform** — macOS, Windows, iOS, Android
 - **Apple Pencil** — hover preview shows the cell under the pencil before touching; double-tap toggles draw/erase mode; opt-in paste mode (Settings → Apple Pencil) lets the pencil position the paste ghost without stamping — a finger tap confirms placement
 - **Touch** — rubber-band selection, copy/paste, and pan all work with finger on iPad
-- **Stitch mode** — simplified read-only view for stitching from a finished pattern; toggle via a floating action button (bottom-right); keep-screen-on icon toggle in the AppBar; composite thread palette shows the actual blended DMC colours produced by layer opacity and blend-mode settings, each with a unique symbol; tap a colour to focus it — all other stitches dim to grey, including correctly-handled multi-layer blended cells
+- **Three modes** — **View** (read-only, no accidental edits), **Edit** (full drawing tools), **Stitch** (mark stitches as done while stitching the physical piece); switch between modes via the floating action button
+- **Progress tracking** — in Stitch mode, tap any stitch to mark it done; a progress bar below the canvas shows stitches done/total, percentage complete, colours done, and pages done (in page mode); full undo/redo stack for progress operations independent of the pattern edit history; progress is saved inside the `.stitches` file
+- **Page mode** — split a large pattern into a grid of printable pages; in Stitch mode, work through pages one at a time; pages-done count shown in the progress bar; fit-to-page button snaps the viewport to the current page
+- **Stitch mode palette** — composite thread palette shows the actual blended DMC colours produced by layer opacity and blend-mode settings, each with a unique symbol; tap a colour to focus it — all other stitches dim to grey; keep-screen-on toggle in the AppBar
 - **Keyboard shortcuts** — full shortcut set on desktop and in snippet editor (undo, redo, tool switching, modes); `?` opens shortcut reference
 - **PDF viewer** — view reference PDFs alongside the pattern canvas
 - **Image viewer** — view `.png`, `.jpg`, `.gif`, `.webp`, and other image files inline in the canvas area; click any image in the sidebar to open it, click another to switch instantly
