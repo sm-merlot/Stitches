@@ -75,4 +75,4 @@ Tracking everything needed before the first public release.
 
 Branches that need to land before v1.0.0:
 
-- [ ] `scme0/fix/drive-refresh-state-reset` — fixes canvas position / mode / page resetting after Google Drive background refresh (pending debug log strip + PR)
+_None currently._
