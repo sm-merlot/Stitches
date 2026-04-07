@@ -25,7 +25,7 @@ Future<bool> showExportDialog(
     if (isMobile) {
       final bytes =
           Uint8List.fromList(utf8.encode(FormatService.encodeFile(pattern, format)));
-      await FilePicker.platform.saveFile(
+      await FilePicker.saveFile(
         fileName: '$suggested.${format.extension}',
         type: FileType.any,
         bytes: bytes,
@@ -34,7 +34,7 @@ Future<bool> showExportDialog(
         showSuccess(context, 'Exported as $suggested.${format.extension}');
       }
     } else {
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         fileName: suggested,
         type: FileType.custom,
         allowedExtensions: [format.extension],

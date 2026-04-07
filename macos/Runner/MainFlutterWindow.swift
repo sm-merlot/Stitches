@@ -10,6 +10,10 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
+    // Register the file-open method channel here — the FlutterViewController
+    // is definitely available at this point in the lifecycle.
+    (NSApp.delegate as? AppDelegate)?.registerChannel(with: flutterViewController)
+
     super.awakeFromNib()
   }
 }

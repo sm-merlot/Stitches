@@ -5,7 +5,7 @@ import 'package:file_picker/file_picker.dart';
 class ReferenceImageService {
   /// Pick an image file and decode it. Returns (path, image) or null if cancelled.
   static Future<(String, ui.Image)?> pickAndDecode() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
       allowMultiple: false,
