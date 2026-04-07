@@ -39,6 +39,15 @@ Tracking everything needed before the first public release.
 
 ---
 
+## Donations
+
+- [ ] **Tip jar (iOS + macOS + Android)** — consumable IAPs via `in_app_purchase` package (e.g. 3 tiers: $0.99 / $2.99 / $4.99); define products in App Store Connect and Play Console
+- [ ] **Donations link (Windows)** — direct link to GitHub Sponsors (no store restrictions on Windows)
+- [ ] **Set up GitHub Sponsors** — bank/payout details + tax info in GitHub Settings → Billing → GitHub Sponsors; set up tiers
+- [ ] **Add GitHub Sponsors link to README** — visible on the GitHub repo page
+
+---
+
 ## Documentation
 
 - [ ] **Rewrite README** — human-written prose; replace AI-generated sections
@@ -52,7 +61,7 @@ Tracking everything needed before the first public release.
 - [ ] **Anchor colour database** — toggle exists in Settings but always shows DMC colours (database not fully populated); either complete it, remove the toggle, or clearly mark as "coming soon" so it doesn't look like a bug
 - **Proton Drive** — blocked on their new API; explicitly post-1.0
 - **PDF Scanner** — shipped as beta; good enough for v1.0, improvements post-launch
-- [ ] **File association** — `.stitches` files should open the app directly from Finder / File Explorer when the app is not already running
+- [ ] **Windows file association** — register `.stitches` extension in the Windows installer (macOS, iOS, and Android already done)
 
 ---
 
