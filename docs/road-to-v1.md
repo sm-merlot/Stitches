@@ -65,6 +65,12 @@ Tracking everything needed before the first public release.
 
 ---
 
+## Launch
+
+- [ ] **Make repo public** — switch GitHub repository visibility from private to public
+
+---
+
 ## Merge Queue
 
 Branches that need to land before v1.0.0:
