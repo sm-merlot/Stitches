@@ -1,0 +1,23 @@
+lib/services/drive_pattern_refresh.dart
+  bd1adce12b95739c 84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "6aef40745ff61e34f1bbbb92f80f7b34682df31a",
+  "prompts": {
+    "bd1adce12b95739c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8aed093b-1b6b-4572-8aa3-452d912872e6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 7,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
