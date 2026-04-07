@@ -1328,8 +1328,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
       // When the file changes, restore the saved view position for the new file.
       if (next.filePath != prev?.filePath && next.isFileOpen) {
-        // ignore: avoid_print
-        print('[Canvas] filePath changed: ${prev?.filePath} → ${next.filePath}  viewScale=${next.viewScale}  pan=(${next.viewPanX},${next.viewPanY})');
         setState(() {
           if (next.viewScale > 0) {
             _scale = next.viewScale;
@@ -1343,8 +1341,6 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       // Fit canvas to page when page mode navigates.
       if (next.pendingFitPage != null &&
           next.pendingFitPage != prev?.pendingFitPage) {
-        // ignore: avoid_print
-        print('[Canvas] pendingFitPage fired: ${prev?.pendingFitPage} → ${next.pendingFitPage}  pageLayout=${next.pageLayout != null}');
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           // Re-read current state: if pendingFitPage was cleared before this
