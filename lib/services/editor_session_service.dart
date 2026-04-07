@@ -21,6 +21,10 @@ class EditorSession {
   final double viewPanY;
   final double viewScale;
 
+  /// Last active page index in page mode. Restored when entering stitch mode
+  /// (only applied when page mode is enabled and progress has started).
+  final int? stitchPage;
+
   const EditorSession({
     this.tool = 'fullStitch',
     this.selectedThreadId,
@@ -29,6 +33,7 @@ class EditorSession {
     this.viewPanX = 0,
     this.viewPanY = 0,
     this.viewScale = 0,
+    this.stitchPage,
   });
 
   Map<String, dynamic> toJson() => {
@@ -39,6 +44,7 @@ class EditorSession {
         'viewPanX': viewPanX,
         'viewPanY': viewPanY,
         'viewScale': viewScale,
+        if (stitchPage != null) 'stitchPage': stitchPage,
       };
 
   factory EditorSession.fromJson(Map<String, dynamic> json) => EditorSession(
@@ -49,6 +55,7 @@ class EditorSession {
         viewPanX: (json['viewPanX'] as num?)?.toDouble() ?? 0,
         viewPanY: (json['viewPanY'] as num?)?.toDouble() ?? 0,
         viewScale: (json['viewScale'] as num?)?.toDouble() ?? 0,
+        stitchPage: json['stitchPage'] as int?,
       );
 }
 

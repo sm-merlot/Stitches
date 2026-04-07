@@ -171,7 +171,13 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
         const Expanded(child: ColoursPanel(mode: ColoursPanelMode.stitch)),
         if (editorState.mode == AppMode.stitch) ...[
           const Divider(height: 1),
-          StitchDemoButton(state: editorState),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: MarkDoneButton(state: editorState)),
+              Expanded(child: StitchDemoButton(state: editorState)),
+            ],
+          ),
         ],
       ],
     );
