@@ -13,10 +13,10 @@ import '../providers/editor/editor_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/recent_items_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../services/drive_pattern_refresh.dart';
 import '../services/editor_session_service.dart';
 import '../services/file_service.dart';
 import '../services/incoming_file_service.dart';
-import '../services/pattern_cache.dart';
 import '../services/pattern_thumbnail.dart';
 import '../services/thumbnail_cache.dart';
 import '../utils/snackbars.dart';
@@ -452,8 +452,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           await _generateAndCacheThumbnail(pattern, thumbKey);
           addToRecents(thumbnailKey: thumbKey);
         }());
-        unawaited(_refreshDriveFileInBackground(
-            ref, sel.fileId, sel.parentFolderId, tempPath));
+        unawaited(refreshDrivePatternInBackground(ref,
+            fileId: sel.fileId,
+            parentFolderId: sel.parentFolderId,
+            tempPath: tempPath));
       } else {
         setState(() => _loading = true);
         try {
@@ -500,45 +502,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// Silently downloads the Drive version and reloads the editor if the user
-  /// hasn't made any edits since the file was opened.
-  static Future<void> _refreshDriveFileInBackground(
-    WidgetRef ref,
-    String fileId,
-    String parentFolderId,
-    String tempPath,
-  ) async {
-    try {
-      final service =
-          await ref.read(googleDriveProvider.notifier).getService();
-      if (service == null) return;
-      final bytes = await service.downloadFile(fileId);
-      final state = ref.read(editorProvider);
-      if (state.driveFileId != fileId || state.isDirty) return;
-      final (pattern, wasCompressed) =
-          await FileService.parseBytesToPattern(bytes);
-      final stateAfterParse = ref.read(editorProvider);
-      if (stateAfterParse.driveFileId != fileId || stateAfterParse.isDirty) {
-        return;
-      }
-      await File(tempPath).writeAsBytes(bytes);
-      final stat = await File(tempPath).stat();
-      PatternCache.put(tempPath, pattern, wasCompressed, stat.modified);
-      final current = ref.read(editorProvider);
-      if (current.driveFileId == fileId && !current.isDirty) {
-        final session =
-            await EditorSessionService.load('drive:$fileId');
-        ref.read(editorProvider.notifier).loadPattern(
-              pattern,
-              filePath: tempPath,
-              driveFileId: fileId,
-              driveParentFolderId: parentFolderId,
-              compressOnSave: wasCompressed,
-              session: session,
-            );
-      }
-    } catch (_) {}
-  }
 
   Future<void> _openRecentFile(RecentItem item) async {
     try {
@@ -583,8 +546,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   thumbnailKey: driveThumbKey);
             }
           }());
-          unawaited(
-              _refreshDriveFileInBackground(ref, item.id, '', tempPath));
+          unawaited(refreshDrivePatternInBackground(ref,
+              fileId: item.id,
+              parentFolderId: '',
+              tempPath: tempPath));
         } else {
           setState(() => _loading = true);
           try {
