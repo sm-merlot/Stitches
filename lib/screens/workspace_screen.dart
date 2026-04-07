@@ -28,7 +28,6 @@ import '../utils/snackbars.dart';
 import '../widgets/editor_shared_widgets.dart';
 import '../widgets/share_format_picker.dart';
 import 'drive_folder_picker_dialog.dart';
-import 'export_dialog.dart';
 import 'materials_list_screen.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
