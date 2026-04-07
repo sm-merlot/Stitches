@@ -448,6 +448,7 @@ class EditorNotifier extends Notifier<EditorState>
     double viewPanX = 0;
     double viewPanY = 0;
     double viewScale = 0;
+    int? stitchPage = 0;
 
     // True when the parsed YAML contained a legacy `editor:` section that
     // is no longer written by toYamlString.  We mark the file dirty so the
@@ -462,6 +463,7 @@ class EditorNotifier extends Notifier<EditorState>
       viewPanX = session.viewPanX;
       viewPanY = session.viewPanY;
       viewScale = session.viewScale;
+      stitchPage = session.stitchPage;
     } else {
       // First open after migration: read legacy YAML fields as a one-time seed.
       hasLegacyEditorSection =
@@ -483,6 +485,8 @@ class EditorNotifier extends Notifier<EditorState>
       viewPanY = pattern.editorViewPanY;
       viewScale = pattern.editorViewScale;
     }
+
+    stitchPage ??= 0;
 
     // ── Assign symbols and validate palette ──────────────────────────────────
     final withSymbols = pattern.copyWith(
@@ -531,6 +535,13 @@ class EditorNotifier extends Notifier<EditorState>
       viewScale: viewScale,
       compressOnSave: compressOnSave,
       isDirty: hasLegacyEditorSection,
+      // Only restore the saved stitch page when page mode is enabled and the
+      // user has already started marking progress on this pattern.
+      currentPage: (withSymbols.pageConfig.enabled &&
+              (withSymbols.progress.completedStitches.isNotEmpty ||
+               withSymbols.progress.completedBackstitches.isNotEmpty))
+          ? stitchPage
+          : 0,
     );
 
     // Migrate legacy session fields to app data on first open.
@@ -551,6 +562,7 @@ class EditorNotifier extends Notifier<EditorState>
             viewPanX: viewPanX,
             viewPanY: viewPanY,
             viewScale: viewScale,
+            stitchPage: stitchPage,
           ),
         ));
       }
@@ -604,6 +616,7 @@ class EditorNotifier extends Notifier<EditorState>
         viewPanX: state.viewPanX,
         viewPanY: state.viewPanY,
         viewScale: state.viewScale,
+        stitchPage: state.currentPage,
       ),
     ));
   }
@@ -659,6 +672,7 @@ class EditorNotifier extends Notifier<EditorState>
       stitchCrossMode: false,
       stitchBackMode: false,
       stitchFocusThreadId: mode == AppMode.stitch ? state.stitchFocusThreadId : null,
+      pendingFitPage: state.currentPage,
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
     _saveSession();
@@ -796,6 +810,15 @@ class EditorNotifier extends Notifier<EditorState>
     if (layout == null) return;
     final clamped = page.clamp(0, layout.totalPages - 1);
     state = state.copyWith(currentPage: clamped, pendingFitPage: clamped);
+    // Persist the current page so it is restored on next session open — but
+    // only when in stitch mode with page mode active and progress started.
+    final progress = state.pattern.progress;
+    if (state.mode == AppMode.stitch &&
+        state.pattern.pageConfig.enabled &&
+        (progress.completedStitches.isNotEmpty ||
+         progress.completedBackstitches.isNotEmpty)) {
+      _saveSession();
+    }
   }
 
   void navigateNextPage() {
