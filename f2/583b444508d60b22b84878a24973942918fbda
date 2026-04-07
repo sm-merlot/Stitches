@@ -1,0 +1,53 @@
+lib/screens/home_screen.dart
+  d71bae6cfca681e2 6,149-156,158-182,186-190,194-228,247-248,252-256,309-322,340,344-347,378,382-385,463-466,486-497,530-541,558-560,564-570,609
+lib/screens/home_screen_widgets.dart
+  d71bae6cfca681e2 224-225,236,282-324
+macos/Runner/AppDelegate.swift
+  d71bae6cfca681e2 70-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "f2583b444508d60b22b84878a24973942918fbda",
+  "prompts": {
+    "ad2996bcc93d488a": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1775478884633",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    },
+    "d6da6067a62f8507": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0402cb23-ab56-4b25-a358-eeece3c0f788",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 99,
+      "overriden_lines": 0
+    },
+    "d71bae6cfca681e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "065b8df4-b649-48b1-87e3-d331d46f4b6d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 204,
+      "total_deletions": 64,
+      "accepted_lines": 204,
+      "overriden_lines": 0
+    }
+  }
+}
