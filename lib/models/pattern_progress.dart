@@ -6,20 +6,31 @@ class PatternProgress {
   /// Cells the user has physically stitched. Stored as (x, y) pairs.
   final Set<(int, int)> completedStitches;
 
+  /// Backstitches the user has physically stitched.
+  /// Stored as normalised (x1, y1, x2, y2) — the smaller endpoint is always first.
+  final Set<(double, double, double, double)> completedBackstitches;
+
   /// Page indices (0-based) marked as fully done.
   final Set<int> completedPages;
 
   const PatternProgress({
     this.completedStitches = const {},
+    this.completedBackstitches = const {},
     this.completedPages = const {},
   });
 
   static const PatternProgress empty = PatternProgress();
 
-  bool get isEmpty => completedStitches.isEmpty && completedPages.isEmpty;
+  bool get isEmpty =>
+      completedStitches.isEmpty &&
+      completedBackstitches.isEmpty &&
+      completedPages.isEmpty;
 
   bool isStitchDone(int x, int y) => completedStitches.contains((x, y));
   bool isPageDone(int pageIndex) => completedPages.contains(pageIndex);
+
+  bool isBackstitchDone(double x1, double y1, double x2, double y2) =>
+      completedBackstitches.contains(normBackstitch(x1, y1, x2, y2));
 
   /// True when every non-backstitch belonging to [threadId] is in completedStitches.
   bool isColourDone(String threadId, Iterable<Stitch> allStitches) {
@@ -37,10 +48,13 @@ class PatternProgress {
 
   PatternProgress copyWith({
     Set<(int, int)>? completedStitches,
+    Set<(double, double, double, double)>? completedBackstitches,
     Set<int>? completedPages,
   }) =>
       PatternProgress(
         completedStitches: completedStitches ?? this.completedStitches,
+        completedBackstitches:
+            completedBackstitches ?? this.completedBackstitches,
         completedPages: completedPages ?? this.completedPages,
       );
 
@@ -58,6 +72,22 @@ class PatternProgress {
         }
       }
     }
+    final backstitches = <(double, double, double, double)>{};
+    final rawBack = yaml['completedBackstitches'] as List?;
+    if (rawBack != null) {
+      for (final s in rawBack) {
+        final parts = s.toString().split(',');
+        if (parts.length == 4) {
+          final x1 = double.tryParse(parts[0]);
+          final y1 = double.tryParse(parts[1]);
+          final x2 = double.tryParse(parts[2]);
+          final y2 = double.tryParse(parts[3]);
+          if (x1 != null && y1 != null && x2 != null && y2 != null) {
+            backstitches.add(normBackstitch(x1, y1, x2, y2));
+          }
+        }
+      }
+    }
     final pages = <int>{};
     final rawPages = yaml['completedPages'] as List?;
     if (rawPages != null) {
@@ -66,14 +96,35 @@ class PatternProgress {
         if (pi != null) pages.add(pi);
       }
     }
-    return PatternProgress(completedStitches: stitches, completedPages: pages);
+    return PatternProgress(
+      completedStitches: stitches,
+      completedBackstitches: backstitches,
+      completedPages: pages,
+    );
   }
 
   Map<String, dynamic> toYaml() => {
         'completedStitches':
             completedStitches.map((c) => '${c.$1},${c.$2}').toList(),
+        if (completedBackstitches.isNotEmpty)
+          'completedBackstitches': completedBackstitches
+              .map((b) => '${_fmt(b.$1)},${_fmt(b.$2)},${_fmt(b.$3)},${_fmt(b.$4)}')
+              .toList(),
         'completedPages': completedPages.toList()..sort(),
       };
+
+  /// Normalise a backstitch key so the lexicographically smaller endpoint
+  /// is always first — matches BackStitch's order-independent equality.
+  static (double, double, double, double) normBackstitch(
+      double x1, double y1, double x2, double y2) {
+    if (x1 < x2 || (x1 == x2 && y1 <= y2)) {
+      return (x1, y1, x2, y2);
+    }
+    return (x2, y2, x1, y1);
+  }
+
+  static String _fmt(double v) =>
+      v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
   static (int, int)? _stitchXY(Stitch stitch) => switch (stitch) {
         FullStitch(:final x, :final y) => (x, y),
@@ -89,11 +140,14 @@ class PatternProgress {
       identical(this, other) ||
       other is PatternProgress &&
           setEquals(completedStitches, other.completedStitches) &&
+          setEquals(completedBackstitches, other.completedBackstitches) &&
           setEquals(completedPages, other.completedPages);
 
   @override
   int get hashCode => Object.hash(
       Object.hashAllUnordered(
           completedStitches.map((c) => Object.hash(c.$1, c.$2))),
+      Object.hashAllUnordered(completedBackstitches
+          .map((b) => Object.hash(b.$1, b.$2, b.$3, b.$4))),
       Object.hashAllUnordered(completedPages));
 }

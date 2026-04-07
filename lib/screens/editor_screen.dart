@@ -555,8 +555,15 @@ class EditorScreen extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.stitch),
+                onPressed: () {
+                  final pruned = ref
+                      .read(editorProvider.notifier)
+                      .setMode(AppMode.stitch);
+                  if (pruned > 0 && context.mounted) {
+                    showWarning(context,
+                        '$pruned completed ${pruned == 1 ? 'stitch' : 'stitches'} removed — no longer in the pattern');
+                  }
+                },
                 child: const Text('Stitch'),
               ),
               const SizedBox(width: 8),
@@ -594,6 +601,12 @@ class EditorScreen extends ConsumerWidget {
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
             if (state.mode == AppMode.stitch) ...[
               IconButton(
+                tooltip: 'Progress tracking',
+                icon: const Icon(Icons.checklist),
+                onPressed: () =>
+                    showProgressHelpDialog(context, ref, state: state),
+              ),
+              IconButton(
                 tooltip: state.pattern.pageConfig.enabled
                     ? 'Page mode: on'
                     : 'Page mode: off',
@@ -609,11 +622,6 @@ class EditorScreen extends ConsumerWidget {
                             Theme.of(context).colorScheme.onPrimaryContainer,
                       )
                     : null,
-              ),
-              IconButton(
-                tooltip: 'How progress tracking works',
-                icon: const Icon(Icons.checklist),
-                onPressed: () => showProgressHelpDialog(context, ref),
               ),
               const EditorScreenLockButton(),
               const SizedBox(width: 4),

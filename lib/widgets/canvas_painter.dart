@@ -221,12 +221,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (!_backstichInRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
           final thread = _threadMap[stitch.threadId];
           if (thread == null) continue;
-          final c = _resolveStitchColor(stitch.threadId,
+          var c = _resolveStitchColor(stitch.threadId,
               _applyPaletteOverride(stitch.threadId, thread.color),
               isCrossStitch: false);
-          if (c != null) {
-            _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
+          if (c == null) continue;
+          if (stitchMode &&
+              progress.isBackstitchDone(
+                  stitch.x1, stitch.y1, stitch.x2, stitch.y2)) {
+            c = Color.lerp(c, aidaColor, 0.70)!;
           }
+          _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
         }
       }
     }

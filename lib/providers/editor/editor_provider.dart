@@ -610,8 +610,42 @@ class EditorNotifier extends Notifier<EditorState>
 
   /// Switch to [mode], updating drawingMode and display state accordingly.
   @override
-  void setMode(AppMode mode) {
+  /// Switches to [mode]. Returns the number of orphaned completed-stitch
+  /// entries pruned when entering stitch mode (cells no longer in the pattern).
+  int setMode(AppMode mode) {
+    int pruned = 0;
+    var pattern = state.pattern;
+    if (mode == AppMode.stitch) {
+      final validCells = <(int, int)>{};
+      final validBack = <(double, double, double, double)>{};
+      for (final layer in pattern.layers) {
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) {
+            validBack.add(PatternProgress.normBackstitch(
+                stitch.x1, stitch.y1, stitch.x2, stitch.y2));
+          } else {
+            final c = EditorState.cellCoords(stitch);
+            if (c != null) validCells.add(c);
+          }
+        }
+      }
+      final oldCompleted = pattern.progress.completedStitches;
+      final newCompleted = oldCompleted.intersection(validCells);
+      final oldBack = pattern.progress.completedBackstitches;
+      final newBack = oldBack.intersection(validBack);
+      pruned = (oldCompleted.length - newCompleted.length) +
+               (oldBack.length - newBack.length);
+      if (pruned > 0) {
+        pattern = pattern.copyWith(
+          progress: pattern.progress.copyWith(
+            completedStitches: newCompleted,
+            completedBackstitches: newBack,
+          ),
+        );
+      }
+    }
     state = state.copyWith(
+      pattern: pruned > 0 ? pattern : null,
       mode: mode,
       drawingMode: switch (mode) {
         AppMode.stitch => DrawingMode.select,
@@ -628,6 +662,7 @@ class EditorNotifier extends Notifier<EditorState>
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
     _saveSession();
+    return pruned;
   }
 
   /// Set or clear the committed progress-marking region (stitch mode).

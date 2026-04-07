@@ -65,23 +65,30 @@ class ProgressInfoBar extends ConsumerWidget {
 
     final progress = state.pattern.progress;
     // Keep the bar visible when there's undoable progress, even if cleared.
-    if (progress.completedStitches.isEmpty && !state.canUndoProgress) {
+    if (progress.isEmpty && !state.canUndoProgress) {
       return const SizedBox.shrink();
     }
 
-    // Count unique cells with non-backstitch stitches as the total.
+    // Count unique cells (cross-stitches) and individual backstitches.
     final totalCells = <(int, int)>{};
+    var totalBack = 0;
     for (final layer in state.pattern.layers) {
       for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        final c = EditorState.cellCoords(stitch);
-        if (c != null) totalCells.add(c);
+        if (stitch is BackStitch) {
+          totalBack++;
+        } else {
+          final c = EditorState.cellCoords(stitch);
+          if (c != null) totalCells.add(c);
+        }
       }
     }
     final total = totalCells.length;
     final done = progress.completedStitches.length;
-    final pct = total > 0 ? (done * 100 / total).round() : 0;
-    final fraction = total > 0 ? done / total : 0.0;
+    final doneBack = progress.completedBackstitches.length;
+    final totalAll = total + totalBack;
+    final doneAll = done + doneBack;
+    final pct = totalAll > 0 ? (doneAll * 100 / totalAll).round() : 0;
+    final fraction = totalAll > 0 ? doneAll / totalAll : 0.0;
 
     // Colours done.
     final allStitches = state.pattern.stitches;
@@ -130,7 +137,7 @@ class ProgressInfoBar extends ConsumerWidget {
                     sep,
                     Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
                     sep,
-                    Text('$done/$total stitches', style: style),
+                    Text('$done/$total stitches${totalBack > 0 ? '  ·  $doneBack/$totalBack backstitches' : ''}', style: style),
                     if (pageMode) ...[
                       sep,
                       Text('·', style: style?.copyWith(color: theme.colorScheme.outlineVariant)),
