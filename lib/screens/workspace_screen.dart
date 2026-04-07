@@ -20,10 +20,13 @@ import '../providers/pdf_viewer_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../services/file_service.dart';
+import '../services/pattern_thumbnail.dart';
+import '../services/thumbnail_cache.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
 import '../utils/editor_key_handler.dart';
+import '../providers/recent_items_provider.dart';
 import '../utils/snackbars.dart';
 import '../widgets/editor_shared_widgets.dart';
 import '../widgets/share_format_picker.dart';
@@ -72,6 +75,125 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS) &&
       MediaQuery.of(context).size.shortestSide < 600;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ws = ref.read(workspaceProvider).workspace;
+      if (ws is LocalFolder) {
+        unawaited(_refreshThumbnailsInBackground(ws.path));
+      } else if (ws is DriveFolder) {
+        unawaited(_refreshDriveThumbnailsInBackground(ws));
+      }
+    });
+  }
+
+  /// Walks [folderPath] and generates thumbnails for any `.stitches` file
+  /// not already in the cache, then adds every file to recents (with its
+  /// thumbnailKey) so the folder thumbnail strip is fully populated even for
+  /// files never explicitly opened. Fire-and-forget.
+  Future<void> _refreshThumbnailsInBackground(String folderPath) async {
+    try {
+      final dir = Directory(folderPath);
+      if (!await dir.exists()) return;
+      final notifier = ref.read(recentItemsProvider.notifier);
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.stitches')) continue;
+        final path = entity.path;
+        final key = localThumbnailKey(path);
+        // Check if cache already has the thumbnail.
+        var cached = await ThumbnailCache.load(key);
+        if (cached == null) {
+          try {
+            final (pattern, _, _) =
+                await FileService.openFileFromPath(path);
+            final bytes = await generatePatternThumbnail(pattern);
+            if (bytes != null) {
+              await ThumbnailCache.store(key, bytes);
+              cached = bytes;
+            }
+          } catch (_) {
+            // Skip files that can't be parsed.
+            continue;
+          }
+        }
+        // Add as thumbnail-only so the folder strip shows it without
+        // creating a visible standalone entry in the recents list.
+        if (cached != null && mounted) {
+          notifier.add(path, isFolder: false, thumbnailKey: key,
+              thumbnailOnly: true, parentId: folderPath);
+        }
+      }
+    } catch (_) {
+      // Silently ignore filesystem errors.
+    }
+  }
+
+  /// Recursively collects all [DrivePatternFile]s under [folder], up to
+  /// [maxDepth] levels deep. Silently skips inaccessible sub-folders.
+  Future<List<DrivePatternFile>> _collectDriveFiles(
+      dynamic service, DriveFolder folder,
+      {int maxDepth = 4}) async {
+    if (maxDepth <= 0) return [];
+    final contents = await service.listFolderContents(folder);
+    final files = contents.files.whereType<DrivePatternFile>().toList();
+    for (final sub in contents.subfolders.whereType<DriveFolder>()) {
+      try {
+        files.addAll(
+            await _collectDriveFiles(service, sub, maxDepth: maxDepth - 1));
+      } catch (_) {}
+    }
+    return files;
+  }
+
+  /// Lists [folder] on Drive (recursively) and generates thumbnails for
+  /// .stitches files, adding each as a thumbnail-only recents entry so the
+  /// folder strip shows them. Fire-and-forget.
+  Future<void> _refreshDriveThumbnailsInBackground(DriveFolder folder) async {
+    try {
+      final service =
+          await ref.read(googleDriveProvider.notifier).getService();
+      if (service == null || !mounted) return;
+      final allFiles = await _collectDriveFiles(service, folder);
+      if (!mounted) return;
+      final notifier = ref.read(recentItemsProvider.notifier);
+      // Drive folder RecentItems use bare folderId as their id (not 'drive:…').
+      final parentId = folder.folderId;
+      for (final file in allFiles) {
+        final key = driveThumbnailKey(file.fileId);
+        var cached = await ThumbnailCache.load(key);
+        if (cached == null) {
+          try {
+            final bytes = await service.downloadFile(file.fileId);
+            final tempDir = await getTemporaryDirectory();
+            final tempPath = '${tempDir.path}/${file.fileId}.stitches';
+            await File(tempPath).writeAsBytes(bytes);
+            final (pattern, _, _) =
+                await FileService.openFileFromPath(tempPath);
+            final thumbBytes = await generatePatternThumbnail(pattern);
+            if (thumbBytes != null) {
+              await ThumbnailCache.store(key, thumbBytes);
+              cached = thumbBytes;
+            }
+          } catch (_) {
+            continue;
+          }
+        }
+        if (cached != null && mounted) {
+          notifier.add(
+            file.fileId,
+            isFolder: false,
+            thumbnailKey: key,
+            thumbnailOnly: true,
+            parentId: parentId,
+          );
+        }
+      }
+    } catch (_) {
+      // Silently ignore Drive errors.
+    }
+  }
 
   void _openFolderSidebar() {
     ref.read(workspaceProvider.notifier).setSidebarVisible(true);
@@ -387,7 +509,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           if (isMobile) {
             final yaml = FileService.toYamlString(state.patternForSave);
             final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: '$suggested.stitches',
               type: FileType.any,
               bytes: bytes,
@@ -398,7 +520,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               if (context.mounted) showSuccess(context, 'Saved');
             }
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['stitches'],
@@ -420,14 +542,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           final bytes = Uint8List.fromList(utf8.encode(
               FormatService.encodeFile(state.pattern, CrossStitchFormat.oxs)));
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.oxs',
               type: FileType.any,
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.oxs');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['oxs'],
@@ -446,14 +568,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               useDmc: ref.read(settingsProvider).useDmc);
           if (!context.mounted) return;
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.pdf',
               type: FileType.any,
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.pdf');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['pdf'],
@@ -471,14 +593,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           final bytes = await PngExportService.export(state.pattern);
           if (!context.mounted) return;
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.png',
               type: FileType.any,
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.png');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['png'],

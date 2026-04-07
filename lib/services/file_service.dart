@@ -24,7 +24,7 @@ class FileService {
 
   /// Pick a .stitches or .oxs file; returns (pattern, filePath, wasCompressed), or null if cancelled.
   static Future<(CrossStitchPattern, String, bool)?> openFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: _isMobile ? FileType.any : FileType.custom,
       allowedExtensions: _isMobile ? null : _openExtensions,
       allowMultiple: false,
@@ -123,7 +123,7 @@ class FileService {
 
   /// Pick a directory and return all .stitches file paths within it, or null if cancelled.
   static Future<List<String>?> openFolder() async {
-    final dir = await FilePicker.platform.getDirectoryPath();
+    final dir = await FilePicker.getDirectoryPath();
     if (dir == null) return null;
     final directory = Directory(dir);
     final files = await directory
@@ -164,14 +164,14 @@ class FileService {
       final yaml = toYamlString(pattern);
       final bytes =
           effectiveCompress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         fileName: '$suggestedName.$_ext',
         type: FileType.any,
         bytes: Uint8List.fromList(bytes),
       );
       return path; // null if user cancelled; path if platform returns one
     }
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       fileName: suggestedName,
       type: FileType.custom,
       allowedExtensions: [_ext],

@@ -15,7 +15,7 @@ Future<void> _openSpriteSheet(BuildContext context, WidgetRef ref) async {
     if (imagePath == null) return; // cancelled
   } else {
     // No open folder — go straight to the system file picker.
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: false,
     );
@@ -120,7 +120,7 @@ class _SpriteImageSourceDialogState
           leading: const Icon(Icons.insert_drive_file_outlined),
           title: const Text('From file system'),
           onTap: () async {
-            final result = await FilePicker.platform.pickFiles(
+            final result = await FilePicker.pickFiles(
               type: FileType.image,
               allowMultiple: false,
             );

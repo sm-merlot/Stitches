@@ -341,13 +341,13 @@ class PdfService {
     final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     if (isMobile) {
       // On iOS/Android the platform manages writing; bytes must be provided.
-      await FilePicker.platform.saveFile(
+      await FilePicker.saveFile(
         fileName: '$suggestedName.pdf',
         type: FileType.any,
         bytes: bytes,
       );
     } else {
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         fileName: suggestedName,
         type: FileType.custom,
         allowedExtensions: ['pdf'],

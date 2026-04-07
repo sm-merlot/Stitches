@@ -1,6 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/thumbnail_cache.dart';
 
 class RecentItem {
   /// For local items: the file/folder path.
@@ -15,6 +21,15 @@ class RecentItem {
   /// Breadcrumb path within Drive, e.g. "My Drive › Projects › Patterns".
   final String? drivePath;
   final DateTime lastOpened;
+  /// Cache key for the thumbnail PNG (local → base64 of path; drive file → fileId).
+  /// Null for drive folders (no thumbnail).
+  final String? thumbnailKey;
+  /// If true, this entry exists only to supply thumbnails to a parent folder's
+  /// thumbnail strip. It is hidden from the visible recents list.
+  final bool thumbnailOnly;
+  /// The [id] of the parent folder RecentItem this entry belongs to.
+  /// Required for Drive folder strips where path-prefix matching doesn't work.
+  final String? parentId;
 
   const RecentItem({
     required this.id,
@@ -24,6 +39,9 @@ class RecentItem {
     this.driveEmail,
     this.driveName,
     this.drivePath,
+    this.thumbnailKey,
+    this.thumbnailOnly = false,
+    this.parentId,
   });
 
   List<String> get _localPathParts => id.split(RegExp(r'[/\\]'));
@@ -67,6 +85,9 @@ class RecentItem {
         if (driveName != null) 'driveName': driveName,
         if (drivePath != null) 'drivePath': drivePath,
         'lastOpened': lastOpened.millisecondsSinceEpoch,
+        if (thumbnailKey != null) 'thumbnailKey': thumbnailKey,
+        if (thumbnailOnly) 'thumbnailOnly': true,
+        if (parentId != null) 'parentId': parentId,
       };
 
   factory RecentItem.fromJson(Map<String, dynamic> json) => RecentItem(
@@ -79,7 +100,21 @@ class RecentItem {
         driveEmail: json['driveEmail'] as String?,
         driveName: json['driveName'] as String?,
         drivePath: json['drivePath'] as String?,
+        thumbnailKey: json['thumbnailKey'] as String?,
+        thumbnailOnly: json['thumbnailOnly'] as bool? ?? false,
+        parentId: json['parentId'] as String?,
       );
+}
+
+/// Returns true on mobile platforms (iOS / Android).
+bool get _isMobile =>
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+/// Returns the home folder path on mobile, or null on desktop/web.
+Future<String?> homeFolderPath() async {
+  if (!_isMobile) return null;
+  final dir = await getApplicationDocumentsDirectory();
+  return dir.path;
 }
 
 class RecentItemsNotifier extends Notifier<List<RecentItem>> {
@@ -114,7 +149,16 @@ class RecentItemsNotifier extends Notifier<List<RecentItem>> {
     String? driveEmail,
     String? driveName,
     String? drivePath,
+    String? thumbnailKey,
+    bool thumbnailOnly = false,
+    String? parentId,
   }) async {
+    // On mobile, suppress the home folder itself from appearing in recents.
+    if (_isMobile && !isDrive && isFolder) {
+      final home = await homeFolderPath();
+      if (home != null && id == home) return;
+    }
+
     final item = RecentItem(
       id: id,
       isFolder: isFolder,
@@ -123,15 +167,39 @@ class RecentItemsNotifier extends Notifier<List<RecentItem>> {
       driveEmail: driveEmail,
       driveName: driveName,
       drivePath: drivePath,
+      thumbnailKey: thumbnailKey,
+      thumbnailOnly: thumbnailOnly,
+      parentId: parentId,
     );
     var updated = [item, ...state.where((e) => e.id != id)];
-    if (updated.length > _maxItems) updated = updated.sublist(0, _maxItems);
+    // thumbnailOnly entries are invisible — don't count toward _maxItems.
+    final visible = updated.where((e) => !e.thumbnailOnly).toList();
+    final thumbOnly = updated.where((e) => e.thumbnailOnly).toList();
+    if (visible.length > _maxItems) {
+      updated = [...visible.sublist(0, _maxItems), ...thumbOnly];
+    }
     state = updated;
     await _save();
   }
 
   Future<void> remove(String id) async {
     state = state.where((e) => e.id != id).toList();
+    await _save();
+  }
+
+  /// Remove recents whose local paths no longer exist on disk,
+  /// and prune their thumbnail cache entries.
+  Future<void> pruneDeletedFiles() async {
+    final toRemove = state
+        .where((e) => !e.isDrive && !File(e.id).existsSync())
+        .toList();
+    if (toRemove.isEmpty) return;
+    for (final item in toRemove) {
+      if (item.thumbnailKey != null) {
+        await ThumbnailCache.remove(item.thumbnailKey!);
+      }
+    }
+    state = state.where((e) => e.isDrive || File(e.id).existsSync()).toList();
     await _save();
   }
 
