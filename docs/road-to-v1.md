@@ -50,7 +50,8 @@ Tracking everything needed before the first public release.
 ## Known Issues / Feature Gaps to Resolve Pre-1.0
 
 - [ ] **Anchor colour database** — toggle exists in Settings but always shows DMC colours (database not fully populated); either complete it, remove the toggle, or clearly mark as "coming soon" so it doesn't look like a bug
-- [ ] **Phase 4 gaps** — PDF Scanner and Proton Drive are not yet started; confirm whether these are post-1.0 or blocking (see `docs/phase4.md`)
+- **Proton Drive** — blocked on their new API; explicitly post-1.0
+- **PDF Scanner** — shipped as beta; good enough for v1.0, improvements post-launch
 - [ ] **File association** — `.stitches` files should open the app directly from Finder / File Explorer when the app is not already running
 
 ---
