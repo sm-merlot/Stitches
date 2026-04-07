@@ -1,0 +1,23 @@
+.changeset/share-export-redesign.md
+  d6da6067a62f8507 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "43acbf84eb73c158f6931515b06f65284fddd960",
+  "prompts": {
+    "d6da6067a62f8507": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0402cb23-ab56-4b25-a358-eeece3c0f788",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 0,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
