@@ -293,7 +293,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         path = await const MethodChannel('com.scme0.stitches/file_open')
             .invokeMethod<String>('pickFileOrFolder');
       } else {
-        final result = await FilePicker.platform.pickFiles(
+        final result = await FilePicker.pickFiles(
           type: FileType.custom,
           allowedExtensions: ['stitches'],
         );
@@ -360,7 +360,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _openFolder() async {
     try {
-      final dir = await FilePicker.platform.getDirectoryPath();
+      final dir = await FilePicker.getDirectoryPath();
       if (dir == null || !mounted) return;
       ref.read(workspaceProvider.notifier).openWorkspace(LocalFolder(dir));
       ref.read(recentItemsProvider.notifier).add(dir, isFolder: true);

@@ -187,13 +187,13 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
       final suggestedName =
           _aida.title.replaceAll(RegExp(r'[^\w\s-]'), '_');
       if (isMobile) {
-        await FilePicker.platform.saveFile(
+        await FilePicker.saveFile(
           fileName: '$suggestedName.gif',
           type: FileType.any,
           bytes: Uint8List.fromList(gifBytes),
         );
       } else {
-        final path = await FilePicker.platform.saveFile(
+        final path = await FilePicker.saveFile(
           fileName: suggestedName,
           type: FileType.custom,
           allowedExtensions: ['gif'],

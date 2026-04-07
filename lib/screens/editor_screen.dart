@@ -158,7 +158,7 @@ class EditorScreen extends ConsumerWidget {
           if (isMobile) {
             final yaml = FileService.toYamlString(state.patternForSave);
             final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: '$suggested.stitches', type: FileType.any, bytes: bytes);
             if (path != null) {
               ref.read(editorProvider.notifier).setFilePath(path);
@@ -166,7 +166,7 @@ class EditorScreen extends ConsumerWidget {
               if (context.mounted) showSuccess(context, 'Saved');
             }
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['stitches'],
@@ -186,11 +186,11 @@ class EditorScreen extends ConsumerWidget {
           final bytes = Uint8List.fromList(utf8.encode(
               FormatService.encodeFile(state.pattern, CrossStitchFormat.oxs)));
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.oxs', type: FileType.any, bytes: bytes);
             if (context.mounted) showSuccess(context, 'Exported $suggested.oxs');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['oxs'],
@@ -208,11 +208,11 @@ class EditorScreen extends ConsumerWidget {
               useDmc: ref.read(settingsProvider).useDmc);
           if (!context.mounted) return;
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.pdf', type: FileType.any, bytes: bytes);
             if (context.mounted) showSuccess(context, 'Exported $suggested.pdf');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['pdf'],
@@ -229,11 +229,11 @@ class EditorScreen extends ConsumerWidget {
           final bytes = await PngExportService.export(state.pattern);
           if (!context.mounted) return;
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.png', type: FileType.any, bytes: bytes);
             if (context.mounted) showSuccess(context, 'Exported $suggested.png');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['png'],

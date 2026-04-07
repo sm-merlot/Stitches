@@ -509,7 +509,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           if (isMobile) {
             final yaml = FileService.toYamlString(state.patternForSave);
             final bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: '$suggested.stitches',
               type: FileType.any,
               bytes: bytes,
@@ -520,7 +520,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               if (context.mounted) showSuccess(context, 'Saved');
             }
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['stitches'],
@@ -542,14 +542,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           final bytes = Uint8List.fromList(utf8.encode(
               FormatService.encodeFile(state.pattern, CrossStitchFormat.oxs)));
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.oxs',
               type: FileType.any,
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.oxs');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['oxs'],
@@ -568,14 +568,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               useDmc: ref.read(settingsProvider).useDmc);
           if (!context.mounted) return;
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.pdf',
               type: FileType.any,
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.pdf');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['pdf'],
@@ -593,14 +593,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           final bytes = await PngExportService.export(state.pattern);
           if (!context.mounted) return;
           if (isMobile) {
-            await FilePicker.platform.saveFile(
+            await FilePicker.saveFile(
               fileName: '$suggested.png',
               type: FileType.any,
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.png');
           } else {
-            final path = await FilePicker.platform.saveFile(
+            final path = await FilePicker.saveFile(
               fileName: suggested,
               type: FileType.custom,
               allowedExtensions: ['png'],
