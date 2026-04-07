@@ -188,74 +188,79 @@ class FileService {
 
   static String toYamlString(CrossStitchPattern pattern) {
     final buf = StringBuffer();
-    buf.writeln('name: ${_yamlStr(pattern.name)}');
-    buf.writeln('width: ${pattern.width}');
-    buf.writeln('height: ${pattern.height}');
-    buf.writeln('aidaColor: ${_yamlStr(pattern.aidaColorHex)}');
-    if (pattern.designer != null) buf.writeln('designer: ${_yamlStr(pattern.designer!)}');
-    if (pattern.description != null) buf.writeln('description: ${_yamlStr(pattern.description!)}');
-    if (pattern.difficulty != null) buf.writeln('difficulty: ${_yamlStr(pattern.difficulty!)}');
-    if (pattern.estimatedHours != null) buf.writeln('estimatedHours: ${_yamlStr(pattern.estimatedHours!)}');
-    if (pattern.copyright != null) buf.writeln('copyright: ${_yamlStr(pattern.copyright!)}');
+    buf.writeln('version: 2');
+
+    // ── patternInfo: section — metadata (equiv. to k8s metadata) ─────────────
+    buf.writeln('patternInfo:');
+    buf.writeln('  name: ${_yamlStr(pattern.name)}');
+    if (pattern.designer != null) buf.writeln('  designer: ${_yamlStr(pattern.designer!)}');
+    if (pattern.description != null) buf.writeln('  description: ${_yamlStr(pattern.description!)}');
+    if (pattern.difficulty != null) buf.writeln('  difficulty: ${_yamlStr(pattern.difficulty!)}');
+    if (pattern.estimatedHours != null) buf.writeln('  estimatedHours: ${_yamlStr(pattern.estimatedHours!)}');
+    if (pattern.copyright != null) buf.writeln('  copyright: ${_yamlStr(pattern.copyright!)}');
     if (pattern.materialsSuggestions.isNotEmpty) {
-      buf.writeln('materialsSuggestions:');
+      buf.writeln('  materialsSuggestions:');
       for (final s in pattern.materialsSuggestions) {
-        buf.writeln('  - aidaCount: ${s.aidaCount}');
-        buf.writeln('    strands: ${s.strands}');
+        buf.writeln('    - aidaCount: ${s.aidaCount}');
+        buf.writeln('      strands: ${s.strands}');
       }
     }
 
-    // editor: section intentionally omitted — view position, tool, mode, and
-    // active layer are now stored per-device in EditorSessionService.
-
+    // ── pattern: section — the design spec ───────────────────────────────────
+    buf.writeln('pattern:');
+    buf.writeln('  width: ${pattern.width}');
+    buf.writeln('  height: ${pattern.height}');
+    buf.writeln('  aidaColor: ${_yamlStr(pattern.aidaColorHex)}');
     if (pattern.referenceImagePath != null) {
-      buf.writeln('overlay:');
-      buf.writeln('  imagePath: ${_yamlStr(pattern.referenceImagePath!)}');
-      buf.writeln('  opacity: ${pattern.referenceOpacity.toStringAsFixed(2)}');
+      buf.writeln('  overlay:');
+      buf.writeln('    imagePath: ${_yamlStr(pattern.referenceImagePath!)}');
+      buf.writeln('    opacity: ${pattern.referenceOpacity.toStringAsFixed(2)}');
     }
 
-    buf.writeln('threads:');
+    buf.writeln('  threads:');
     for (final t in pattern.threads) {
       final m = t.toYaml();
-      buf.writeln('  - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
-      buf.writeln('    color: ${_yamlStr(m['color'] as String)}');
-      buf.writeln('    name: ${_yamlStr(m['name'] as String)}');
-      buf.writeln('    symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
+      buf.writeln('    - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
+      buf.writeln('      color: ${_yamlStr(m['color'] as String)}');
+      buf.writeln('      name: ${_yamlStr(m['name'] as String)}');
+      buf.writeln('      symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
     }
 
-    buf.writeln('layerItems:');
+    buf.writeln('  layerItems:');
     for (final item in pattern.layerItems) {
       switch (item) {
         case LayerLeaf(:final layer):
-          _writeLayer(buf, layer);
+          _writeLayer(buf, layer, listIndent: '    ', bodyIndent: '      ');
         case LayerGroup():
-          _writeGroup(buf, item);
+          _writeGroup(buf, item, listIndent: '    ', bodyIndent: '      ');
       }
     }
 
     if (pattern.snippets.isNotEmpty) {
-      buf.writeln('snippets:');
+      buf.writeln('  snippets:');
       for (final snippet in pattern.snippets) {
-        _writeSnippet(buf, snippet);
+        _writeSnippet(buf, snippet, base: '    ');
       }
     }
 
     if (pattern.compositeSymbols.isNotEmpty) {
-      buf.writeln('compositeSymbols:');
+      buf.writeln('  compositeSymbols:');
       for (final entry in pattern.compositeSymbols.entries) {
-        buf.writeln('  ${_yamlStr(entry.key)}: ${_yamlStr(entry.value)}');
+        buf.writeln('    ${_yamlStr(entry.key)}: ${_yamlStr(entry.value)}');
       }
     }
 
+    // ── stitching: section — act-of-stitching state ───────────────────────────
     // Page mode config — only written when ever configured (even if disabled,
     // so the user's page dimensions are preserved across saves).
     final pc = pattern.pageConfig;
     if (pc != PageConfig.disabled) {
-      buf.writeln('pageMode:');
-      buf.writeln('  enabled: ${pc.enabled}');
-      buf.writeln('  pageWidth: ${pc.pageWidth}');
-      buf.writeln('  pageHeight: ${pc.pageHeight}');
-      buf.writeln('  fuzzyAmount: ${pc.fuzzyAmount}');
+      buf.writeln('stitching:');
+      buf.writeln('  pageMode:');
+      buf.writeln('    enabled: ${pc.enabled}');
+      buf.writeln('    pageWidth: ${pc.pageWidth}');
+      buf.writeln('    pageHeight: ${pc.pageHeight}');
+      buf.writeln('    fuzzyAmount: ${pc.fuzzyAmount}');
     }
 
     return buf.toString();
@@ -298,45 +303,50 @@ class FileService {
     }
   }
 
-  static void _writeGroup(StringBuffer buf, LayerGroup group) {
-    buf.writeln('  - type: group');
-    buf.writeln('    id: ${_yamlStr(group.id)}');
-    buf.writeln('    name: ${_yamlStr(group.name)}');
-    buf.writeln('    collapsed: ${group.collapsed}');
-    buf.writeln('    groupVisible: ${group.groupVisible}');
-    if (group.groupLocked) buf.writeln('    groupLocked: true');
+  static void _writeGroup(StringBuffer buf, LayerGroup group,
+      {String listIndent = '  ', String bodyIndent = '    '}) {
+    buf.writeln('$listIndent- type: group');
+    buf.writeln('${bodyIndent}id: ${_yamlStr(group.id)}');
+    buf.writeln('${bodyIndent}name: ${_yamlStr(group.name)}');
+    buf.writeln('${bodyIndent}collapsed: ${group.collapsed}');
+    buf.writeln('${bodyIndent}groupVisible: ${group.groupVisible}');
+    if (group.groupLocked) buf.writeln('${bodyIndent}groupLocked: true');
     if (group.layers.isEmpty) {
-      buf.writeln('    layers: []');
+      buf.writeln('${bodyIndent}layers: []');
     } else {
-      buf.writeln('    layers:');
+      buf.writeln('${bodyIndent}layers:');
+      final innerList = '$bodyIndent  ';
+      final innerBody = '$bodyIndent    ';
       for (final layer in group.layers) {
-        _writeLayer(buf, layer, listIndent: '      ', bodyIndent: '        ');
+        _writeLayer(buf, layer, listIndent: innerList, bodyIndent: innerBody);
       }
     }
   }
 
-  static void _writeSnippet(StringBuffer buf, Snippet snippet) {
-    buf.writeln('  - id: ${_yamlStr(snippet.id)}');
-    buf.writeln('    name: ${_yamlStr(snippet.name)}');
-    buf.writeln('    width: ${snippet.width}');
-    buf.writeln('    height: ${snippet.height}');
-    buf.writeln('    activePalette: ${snippet.activePaletteIndex}');
-    buf.writeln('    palettes:');
+  static void _writeSnippet(StringBuffer buf, Snippet snippet,
+      {String base = '  '}) {
+    final body = '$base  ';
+    buf.writeln('$base- id: ${_yamlStr(snippet.id)}');
+    buf.writeln('${body}name: ${_yamlStr(snippet.name)}');
+    buf.writeln('${body}width: ${snippet.width}');
+    buf.writeln('${body}height: ${snippet.height}');
+    buf.writeln('${body}activePalette: ${snippet.activePaletteIndex}');
+    buf.writeln('${body}palettes:');
     for (final palette in snippet.palettes) {
-      buf.writeln('      - id: ${_yamlStr(palette.id)}');
-      buf.writeln('        name: ${_yamlStr(palette.name)}');
-      buf.writeln('        threads:');
+      buf.writeln('$body  - id: ${_yamlStr(palette.id)}');
+      buf.writeln('$body    name: ${_yamlStr(palette.name)}');
+      buf.writeln('$body    threads:');
       for (final t in palette.threads) {
         final m = t.toYaml();
-        buf.writeln("          - dmcCode: ${_yamlStr(m['dmcCode'] as String)}");
-        buf.writeln("            color: ${_yamlStr(m['color'] as String)}");
-        buf.writeln("            name: ${_yamlStr(m['name'] as String)}");
-        buf.writeln("            symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}");
+        buf.writeln('$body      - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
+        buf.writeln('$body        color: ${_yamlStr(m['color'] as String)}');
+        buf.writeln('$body        name: ${_yamlStr(m['name'] as String)}');
+        buf.writeln('$body        symbol: ${_yamlStr((m['symbol'] as String?) ?? '')}');
       }
     }
-    buf.writeln('    stitches:');
+    buf.writeln('${body}stitches:');
     for (final s in snippet.stitches) {
-      _writeStitch(buf, s, indent: '      ');
+      _writeStitch(buf, s, indent: '$body  ');
     }
   }
 

@@ -244,6 +244,28 @@ class CrossStitchPattern {
   }
 
   factory CrossStitchPattern.fromYaml(Map<String, dynamic> yaml) {
+    final version = yaml['version'] as int?;
+    if (version == 2) {
+      final patternInfoMap = yaml['patternInfo'] != null
+          ? Map<String, dynamic>.from(yaml['patternInfo'] as Map)
+          : <String, dynamic>{};
+      final patternMap =
+          Map<String, dynamic>.from(yaml['pattern'] as Map? ?? {});
+      final stitchingMap = yaml['stitching'] != null
+          ? Map<String, dynamic>.from(yaml['stitching'] as Map)
+          : <String, dynamic>{};
+      // Flatten v2 nested structure into the same shape _fromFlat expects.
+      final flat = <String, dynamic>{
+        ...patternInfoMap,
+        ...patternMap,
+        'pageMode': stitchingMap['pageMode'],
+      };
+      return _migrateDiscontinuedThreads(_fromFlat(flat));
+    }
+    return _migrateDiscontinuedThreads(_fromFlat(yaml));
+  }
+
+  static CrossStitchPattern _fromFlat(Map<String, dynamic> yaml) {
     final editor = yaml['editor'] as Map?;
     final aidaHex = yaml['aidaColor'] as String?;
 
@@ -348,7 +370,7 @@ class CrossStitchPattern {
           ? PageConfig.fromYaml(yaml['pageMode'] as Map)
           : PageConfig.disabled,
     );
-    return _migrateDiscontinuedThreads(parsed);
+    return parsed;
   }
 
   /// Remaps any discontinued DMC thread codes in [p] to their replacements.
