@@ -1346,10 +1346,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         // ignore: avoid_print
         print('[Canvas] pendingFitPage fired: ${prev?.pendingFitPage} → ${next.pendingFitPage}  pageLayout=${next.pageLayout != null}');
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _fitToPage(next, next.pendingFitPage!);
-            ref.read(editorProvider.notifier).clearPendingFitPage();
-          }
+          if (!mounted) return;
+          // Re-read current state: if pendingFitPage was cleared before this
+          // frame fired (e.g. by a background Drive refresh that wants to
+          // preserve the current viewport), skip the fit entirely.
+          final current = ref.read(editorProvider);
+          if (current.pendingFitPage == null) return;
+          _fitToPage(current, current.pendingFitPage!);
+          ref.read(editorProvider.notifier).clearPendingFitPage();
         });
       }
     });
