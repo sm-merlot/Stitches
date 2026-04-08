@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import 'ai/ai_provider.dart';
+import 'color_space.dart';
 import 'grid_symbol_matcher.dart';
 
 /// Scans a cropped cross-stitch grid image cell by cell.
@@ -138,7 +139,7 @@ List<List<dynamic>> _runCellScan(_ScanParams p) {
 
   // Pre-convert legend colours to CIE Lab once.
   final legendLab = List.generate(p.legendR.length,
-      (i) => _rgbToLab(p.legendR[i], p.legendG[i], p.legendB[i]));
+      (i) => rgbToLab(p.legendR[i], p.legendG[i], p.legendB[i]));
 
   final results = <List<dynamic>>[];
 
@@ -218,17 +219,10 @@ List<List<dynamic>> _runCellScan(_ScanParams p) {
       final mb = inkB[mid];
 
       // Find closest legend thread by CIE-76 Lab distance.
-      final inkLab   = _rgbToLab(mr, mg, mb);
-      double bestDist = double.infinity;
-      int    bestIdx  = 0;
-
-      for (int i = 0; i < legendLab.length; i++) {
-        final d = _labDist(inkLab, legendLab[i]);
-        if (d < bestDist) {
-          bestDist = d;
-          bestIdx  = i;
-        }
-      }
+      final inkLab  = rgbToLab(mr, mg, mb);
+      final bestIdx = nearestLabIndex(legendLab, inkLab);
+      if (bestIdx < 0) continue;
+      final bestDist = labDistance(inkLab, legendLab[bestIdx]);
 
       // Normalise distance to a confidence score.
       // Lab distance of 0 → 1.0; distance of 40 → 0.0 (linear).
@@ -243,39 +237,3 @@ List<List<dynamic>> _runCellScan(_ScanParams p) {
   return results;
 }
 
-// ─── Colour helpers (isolate-safe, no Flutter) ────────────────────────────────
-
-List<double> _rgbToLab(int r, int g, int b) {
-  // sRGB → linear
-  double lin(int c) {
-    final v = c / 255.0;
-    return v <= 0.04045
-        ? v / 12.92
-        : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
-  }
-
-  final lr = lin(r), lg = lin(g), lb = lin(b);
-
-  // Linear RGB → XYZ D65
-  final X = lr * 0.4124564 + lg * 0.3575761 + lb * 0.1804375;
-  final Y = lr * 0.2126729 + lg * 0.7151522 + lb * 0.0721750;
-  final Z = lr * 0.0193339 + lg * 0.1191920 + lb * 0.9503041;
-
-  // XYZ → L*a*b* (D65 white point)
-  double f(double t) => t > 0.008856
-      ? math.pow(t, 1.0 / 3.0).toDouble()
-      : 7.787 * t + 16.0 / 116.0;
-
-  final fx = f(X / 0.95047);
-  final fy = f(Y / 1.00000);
-  final fz = f(Z / 1.08883);
-
-  return [116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)];
-}
-
-double _labDist(List<double> a, List<double> b) {
-  final dL = a[0] - b[0];
-  final da = a[1] - b[1];
-  final db = a[2] - b[2];
-  return math.sqrt(dL * dL + da * da + db * db);
-}

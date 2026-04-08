@@ -22,36 +22,9 @@ mixin _DrawingMethods {
   /// luminance contrast ratio — correctly separates achromatic greys from
   /// chromatic colours (red, blue, etc.) at the same luminance.
   double _labDeltaE(Color a, Color b) {
-    (double l, double ca, double cb) toLab(Color c) {
-      final ri = (c.r * 255).round();
-      final gi = (c.g * 255).round();
-      final bi = (c.b * 255).round();
-      double lin(int v) {
-        final t = v / 255.0;
-        return t <= 0.04045
-            ? t / 12.92
-            : math.pow((t + 0.055) / 1.055, 2.4).toDouble();
-      }
-
-      final rl = lin(ri), gl = lin(gi), bl = lin(bi);
-      final x = rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375;
-      final y = rl * 0.2126729 + gl * 0.7151522 + bl * 0.0721750;
-      final z = rl * 0.0193339 + gl * 0.1191920 + bl * 0.9503041;
-      double f(double t) {
-        const d = 6.0 / 29.0;
-        return t > d * d * d
-            ? math.pow(t, 1.0 / 3.0).toDouble()
-            : t / (3 * d * d) + 4.0 / 29.0;
-      }
-
-      final fx = f(x / 0.95047), fy = f(y), fz = f(z / 1.08883);
-      return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz));
-    }
-
-    final (la, aa, ba) = toLab(a);
-    final (lb, ab, bb) = toLab(b);
-    final dl = la - lb, da = aa - ab, db = ba - bb;
-    return math.sqrt(dl * dl + da * da + db * db);
+    LabColor toLab(Color c) =>
+        rgbToLab((c.r * 255).round(), (c.g * 255).round(), (c.b * 255).round());
+    return labDistance(toLab(a), toLab(b));
   }
 
   // ─── Thread line with highlight ─────────────────────────────────────────────

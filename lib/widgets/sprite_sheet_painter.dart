@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/dashed_line.dart';
+
 class SpriteSheetPainter extends CustomPainter {
   final Size imageSize;
   final double zoom;
@@ -108,26 +110,21 @@ class SpriteSheetPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-    const dashLen = 6.0;
-    const gapLen = 4.0;
 
-    void drawDashedLine(Offset a, Offset b) {
-      final dir = (b - a);
-      final total = dir.distance;
-      final unit = dir / total;
-      double d = 0;
-      while (d < total) {
-        final start = a + unit * d;
-        final end = a + unit * (d + dashLen).clamp(0, total);
-        canvas.drawLine(start, end, paint);
-        d += dashLen + gapLen;
-      }
+    void drawEdge(Offset a, Offset b) {
+      forEachDashSegment(
+        a.dx, a.dy, b.dx, b.dy,
+        dashLen: 6.0,
+        gapLen: 4.0,
+        onSegment: (sx, sy, ex, ey) =>
+            canvas.drawLine(Offset(sx, sy), Offset(ex, ey), paint),
+      );
     }
 
-    drawDashedLine(rect.topLeft, rect.topRight);
-    drawDashedLine(rect.topRight, rect.bottomRight);
-    drawDashedLine(rect.bottomRight, rect.bottomLeft);
-    drawDashedLine(rect.bottomLeft, rect.topLeft);
+    drawEdge(rect.topLeft, rect.topRight);
+    drawEdge(rect.topRight, rect.bottomRight);
+    drawEdge(rect.bottomRight, rect.bottomLeft);
+    drawEdge(rect.bottomLeft, rect.topLeft);
   }
 
   void _drawCornerHandles(Canvas canvas, Rect rect, Color color) {

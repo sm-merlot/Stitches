@@ -10,6 +10,7 @@ import '../models/snippet.dart';
 import '../models/snippet_palette.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
+import 'color_space.dart';
 
 /// Pre-computed CIE Lab entry for a single DMC colour.
 typedef _LabEntry = ({
@@ -35,36 +36,9 @@ class SpriteImporter {
       final r = (dmc.color.r * 255).round();
       final g = (dmc.color.g * 255).round();
       final b = (dmc.color.b * 255).round();
-      final (l, a, bb) = _rgbToLab(r, g, b);
+      final (l, a, bb) = rgbToLab(r, g, b);
       return (code: dmc.code, name: dmc.name, color: dmc.color, l: l, a: a, b: bb);
     }).toList();
-  }
-
-  // ── Colour space conversion ──────────────────────────────────────────────────
-
-  /// sRGB (0–255 ints) → CIE Lab (D65 illuminant).
-  static (double l, double a, double b) _rgbToLab(int r, int g, int b) {
-    double lin(int c) {
-      final v = c / 255.0;
-      return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4).toDouble();
-    }
-
-    final rl = lin(r), gl = lin(g), bl = lin(b);
-
-    // Linear RGB → XYZ (D65)
-    final x = rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375;
-    final y = rl * 0.2126729 + gl * 0.7151522 + bl * 0.0721750;
-    final z = rl * 0.0193339 + gl * 0.1191920 + bl * 0.9503041;
-
-    // XYZ → Lab
-    double f(double t) {
-      const d = 6.0 / 29.0;
-      return t > d * d * d ? pow(t, 1.0 / 3.0).toDouble() : t / (3 * d * d) + 4.0 / 29.0;
-    }
-
-    const xn = 0.95047, yn = 1.00000, zn = 1.08883;
-    final fx = f(x / xn), fy = f(y / yn), fz = f(z / zn);
-    return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz));
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────
@@ -74,7 +48,7 @@ class SpriteImporter {
   static DmcColor? matchPixel(int r, int g, int b, int a) {
     if (a < 128) return null;
     final palette = _labPalette();
-    final (pl, pa, pb) = _rgbToLab(r, g, b);
+    final (pl, pa, pb) = rgbToLab(r, g, b);
 
     double best = double.infinity;
     _LabEntry? bestEntry;
@@ -239,7 +213,7 @@ class SpriteImporter {
       final r = (c.r * 255).round();
       final g = (c.g * 255).round();
       final b = (c.b * 255).round();
-      final (l, a, bb) = _rgbToLab(r, g, b);
+      final (l, a, bb) = rgbToLab(r, g, b);
       return (color: c, l: l, a: a, b: bb);
     }).toList();
 
@@ -256,7 +230,7 @@ class SpriteImporter {
         // real colour data. The drop threshold below handles background exclusion.
 
         final (pl, pa, pb) =
-            _rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
+            rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
 
         double best = double.infinity;
         int bestIdx = 0;
@@ -472,7 +446,7 @@ class SpriteImporter {
       final r = (c.r * 255).round();
       final g = (c.g * 255).round();
       final b = (c.b * 255).round();
-      final (l, a, bb) = _rgbToLab(r, g, b);
+      final (l, a, bb) = rgbToLab(r, g, b);
       return (thread: dmcThreads[i], l: l, a: a, b: bb);
     });
 
@@ -487,7 +461,7 @@ class SpriteImporter {
         // The drop threshold below provides background exclusion instead.
 
         final (pl, pa, pb) =
-            _rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
+            rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
 
         double best = double.infinity;
         Thread? bestThread;
