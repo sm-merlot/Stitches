@@ -8,6 +8,7 @@ import '../models/pattern_progress.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../data/symbols.dart';
+import '../services/color_space.dart';
 import '../services/stitch_compositor.dart';
 
 part 'canvas_painter_drawing_methods.dart';
