@@ -1,0 +1,27 @@
+lib/widgets/canvas_painter.dart
+  63bed9c36d15f157 14,109-119
+lib/widgets/canvas_viewport.dart
+  63bed9c36d15f157 10,21,75,79,87,96
+lib/widgets/pattern_canvas.dart
+  63bed9c36d15f157 15,328-334,336,338-339,341-344,379-381
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "47a2ff412838f667db53d6513b6854f5ac3a666f",
+  "prompts": {
+    "63bed9c36d15f157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f3fbb28-821c-4597-8c93-073e6e2806d0",
+        "model": "<synthetic>"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 149,
+      "total_deletions": 49,
+      "accepted_lines": 39,
+      "overriden_lines": 0
+    }
+  }
+}
