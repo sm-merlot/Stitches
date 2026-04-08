@@ -1,0 +1,29 @@
+lib/services/dashed_line.dart
+  63bed9c36d15f157 1-45
+lib/widgets/sprite_sheet_painter.dart
+  63bed9c36d15f157 3-4,114-121,124-127
+lib/widgets/stitch_demo_painter.dart
+  63bed9c36d15f157 4,288-294
+lib/services/gif_renderer.dart
+  63bed9c36d15f157 10,303-317
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "a2b9250f03c50d1bbb39493a9008767b06f3b255",
+  "prompts": {
+    "63bed9c36d15f157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f3fbb28-821c-4597-8c93-073e6e2806d0",
+        "model": "<synthetic>"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 83,
+      "total_deletions": 64,
+      "accepted_lines": 83,
+      "overriden_lines": 0
+    }
+  }
+}
