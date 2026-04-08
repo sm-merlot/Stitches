@@ -18,6 +18,8 @@ import '../services/drive_cache.dart';
 import '../providers/recent_items_provider.dart';
 import '../services/file_service.dart';
 import '../services/format_service.dart';
+import 'dialogs/confirm_dialog.dart';
+import 'dialogs/input_dialog.dart';
 import '../services/pattern_thumbnail.dart';
 import '../services/thumbnail_cache.dart';
 import '../utils/snackbars.dart';
@@ -492,35 +494,12 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
   Future<void> _renameFile(
       BuildContext context, PatternFile file, StorageLocation? workspace) async {
-    final controller = TextEditingController(text: file.displayName);
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Rename File'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'New name',
-            border: OutlineInputBorder(),
-          ),
-          autofocus: true,
-          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Rename'),
-          ),
-        ],
-      ),
+    final newName = await inputDialog(
+      context,
+      title: 'Rename File',
+      initialValue: file.displayName,
     );
-
-    controller.dispose();
-    if (newName == null || newName.isEmpty || !context.mounted) return;
+    if (newName == null || !context.mounted) return;
 
     if (file is LocalPatternFile) {
       try {
@@ -558,25 +537,12 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
 
   Future<void> _deleteFile(
       BuildContext context, PatternFile file, StorageLocation? workspace) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete File'),
-        content: Text('Delete "${file.displayName}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete File',
+      message: 'Delete "${file.displayName}"? This cannot be undone.',
     );
-
-    if (confirmed != true || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
 
     if (file is LocalPdfFile) {
       try {
@@ -696,35 +662,12 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
   Future<void> _renameFolder(BuildContext context, StorageLocation folder) async {
     if (folder is! LocalFolder) return;
 
-    final controller = TextEditingController(text: folder.displayName);
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Rename Folder'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'New name',
-            border: OutlineInputBorder(),
-          ),
-          autofocus: true,
-          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Rename'),
-          ),
-        ],
-      ),
+    final newName = await inputDialog(
+      context,
+      title: 'Rename Folder',
+      initialValue: folder.displayName,
     );
-
-    controller.dispose();
-    if (newName == null || newName.isEmpty || !context.mounted) return;
+    if (newName == null || !context.mounted) return;
 
     try {
       final parent = folder.path.substring(
@@ -789,25 +732,12 @@ class _FileSidebarState extends ConsumerState<FileSidebar> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Folder'),
-        content: Text('Delete "${folder.displayName}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete Folder',
+      message: 'Delete "${folder.displayName}"?',
     );
-
-    if (confirmed != true || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
 
     try {
       await dir.delete();

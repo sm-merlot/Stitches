@@ -479,7 +479,7 @@ class _AddPaletteDialogState extends State<_AddPaletteDialog> {
     final base = widget.primaryPalette.threads[slotIndex];
     final result = await showDialog<Thread>(
       context: context,
-      builder: (_) => _DmcPickerDialog(initialThread: base),
+      builder: (_) => DmcPickerDialog(initialThread: base),
     );
     if (result != null) {
       setState(() => _picked[slotIndex] = result);
@@ -579,89 +579,3 @@ class _AddPaletteDialogState extends State<_AddPaletteDialog> {
   }
 }
 
-// ─── Simple DMC colour picker dialog ──────────────────────────────────────
-
-class _DmcPickerDialog extends StatefulWidget {
-  final Thread initialThread;
-  const _DmcPickerDialog({required this.initialThread});
-
-  @override
-  State<_DmcPickerDialog> createState() => _DmcPickerDialogState();
-}
-
-class _DmcPickerDialogState extends State<_DmcPickerDialog> {
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  List<DmcColor> get _filtered {
-    final q = _query.toLowerCase();
-    if (q.isEmpty) return dmcColors;
-    return dmcColors.where((c) {
-      return c.code.toLowerCase().contains(q) || c.name.toLowerCase().contains(q);
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = _filtered;
-
-    return AlertDialog(
-      title: const Text('Pick DMC colour'),
-      content: SizedBox(
-        width: 320,
-        height: 400,
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Search by code or name…',
-                prefixIcon: Icon(Icons.search),
-                isDense: true,
-              ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (context, i) {
-                  final c = filtered[i];
-                  return ListTile(
-                    dense: true,
-                    leading: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: c.color,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black12),
-                      ),
-                    ),
-                    title: Text('DMC ${c.code}', style: const TextStyle(fontSize: 13)),
-                    subtitle: Text(c.name, style: const TextStyle(fontSize: 11)),
-                    onTap: () => Navigator.of(context).pop(
-                      Thread(dmcCode: c.code, color: c.color, name: c.name),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-      ],
-    );
-  }
-}
