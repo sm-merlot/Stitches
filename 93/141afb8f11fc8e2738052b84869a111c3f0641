@@ -1,0 +1,27 @@
+lib/models/pattern_progress.dart
+  63bed9c36d15f157 3,42
+lib/models/stitch_geometry.dart
+  63bed9c36d15f157 1-21
+lib/widgets/canvas_painter.dart
+  63bed9c36d15f157 9,173,256,636
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "93141afb8f11fc8e2738052b84869a111c3f0641",
+  "prompts": {
+    "63bed9c36d15f157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f3fbb28-821c-4597-8c93-073e6e2806d0",
+        "model": "<synthetic>"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 27,
+      "total_deletions": 23,
+      "accepted_lines": 27,
+      "overriden_lines": 0
+    }
+  }
+}
