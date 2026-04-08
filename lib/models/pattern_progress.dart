@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'stitch.dart';
+import 'stitch_geometry.dart';
 
 @immutable
 class PatternProgress {
@@ -38,7 +39,7 @@ class PatternProgress {
     for (final stitch in allStitches) {
       if (stitch.threadId != threadId) continue;
       if (stitch is BackStitch) continue;
-      final coords = _stitchXY(stitch);
+      final coords = stitchXY(stitch);
       if (coords == null) continue;
       hasAny = true;
       if (!completedStitches.contains(coords)) return false;
@@ -125,15 +126,6 @@ class PatternProgress {
 
   static String _fmt(double v) =>
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
-
-  static (int, int)? _stitchXY(Stitch stitch) => switch (stitch) {
-        FullStitch(:final x, :final y) => (x, y),
-        HalfStitch(:final x, :final y) => (x, y),
-        HalfCrossStitch(:final x, :final y) => (x, y),
-        QuarterStitch(:final x, :final y) => (x, y),
-        QuarterCrossStitch(:final x, :final y) => (x, y),
-        BackStitch() => null,
-      };
 
   @override
   bool operator ==(Object other) =>

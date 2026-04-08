@@ -6,6 +6,7 @@ import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/pattern_progress.dart';
 import '../models/stitch.dart';
+import '../models/stitch_geometry.dart';
 import '../models/thread.dart';
 import '../data/symbols.dart';
 import '../services/color_space.dart';
@@ -169,7 +170,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         for (final stitch in layer.stitches) {
           if (stitch is BackStitch) continue;
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
-          final coords = _stitchXY(stitch);
+          final coords = stitchXY(stitch);
           if (coords != null && !_stitchOnPage(coords.$1, coords.$2)) continue;
           final thread = _threadMap[stitch.threadId];
           if (thread == null) continue;
@@ -252,7 +253,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
           // Skip symbol if a higher visible layer has a FullStitch at this cell
           if (stitch is FullStitch && occluded.contains((stitch.x << 16) | stitch.y)) continue;
-          final sCoords = _stitchXY(stitch);
+          final sCoords = stitchXY(stitch);
           if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
 
           // For blended cells, use the composite cache (stable symbol
@@ -632,7 +633,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     for (final stitch in layer.stitches) {
       if (stitch is BackStitch) continue;
       if (!_inCellRange(stitch, minX, minY, maxX, maxY)) continue;
-      final xy = _stitchXY(stitch);
+      final xy = stitchXY(stitch);
       if (xy == null || !_stitchOnPage(xy.$1, xy.$2)) continue;
 
       final thread = _threadMap[stitch.threadId];
@@ -893,16 +894,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   static Color _greyColor(Color c) => _unfocusedGrey;
 
   // ── Page mode helpers ──────────────────────────────────────────────────────
-
-  /// Returns the (x, y) cell coordinates of [stitch], or null for BackStitch.
-  static (int, int)? _stitchXY(Stitch stitch) => switch (stitch) {
-    FullStitch(:final x, :final y) => (x, y),
-    HalfStitch(:final x, :final y) => (x, y),
-    HalfCrossStitch(:final x, :final y) => (x, y),
-    QuarterStitch(:final x, :final y) => (x, y),
-    QuarterCrossStitch(:final x, :final y) => (x, y),
-    BackStitch() => null,
-  };
 
   /// Returns true if stitch at (x=col, y=row) should be drawn on the current page.
   bool _stitchOnPage(int col, int row) {
