@@ -1,0 +1,23 @@
+docs/specs/test-coverage.md
+  63bed9c36d15f157 1-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "2145b347aca540ed6ee95d525e4bfaa95bc71da6",
+  "prompts": {
+    "63bed9c36d15f157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f3fbb28-821c-4597-8c93-073e6e2806d0",
+        "model": "<synthetic>"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 225,
+      "total_deletions": 0,
+      "accepted_lines": 225,
+      "overriden_lines": 0
+    }
+  }
+}
