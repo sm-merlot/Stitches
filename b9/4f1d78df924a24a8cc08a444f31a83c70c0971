@@ -1,0 +1,23 @@
+run
+  1dbb22e7e426b413 24,37-38,40-41,46-53,56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.4",
+  "base_commit_sha": "b94f1d78df924a24a8cc08a444f31a83c70c0971",
+  "prompts": {
+    "1dbb22e7e426b413": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33cef555-6d29-43e1-8237-78a3b862cd77",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 16,
+      "total_deletions": 2,
+      "accepted_lines": 15,
+      "overriden_lines": 1
+    }
+  }
+}
