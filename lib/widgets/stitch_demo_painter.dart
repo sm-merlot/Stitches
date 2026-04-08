@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/stitch_plan.dart';
+import '../services/dashed_line.dart';
 import '../services/gif_renderer.dart' show kDemoSubFrames;
 import '../services/stitch_renderer.dart';
 
@@ -284,27 +285,13 @@ class StitchDemoPainter extends CustomPainter {
     required double dashLen,
     required double gapLen,
   }) {
-    final dx = x2 - x1;
-    final dy = y2 - y1;
-    final dist = Offset(dx, dy).distance;
-    if (dist < 1e-9) return;
-    final ux = dx / dist;
-    final uy = dy / dist;
-    var d = 0.0;
-    var drawing = true;
-    while (d < dist) {
-      final segLen =
-          drawing ? dashLen.clamp(0.0, dist - d) : gapLen.clamp(0.0, dist - d);
-      if (drawing && segLen > 0) {
-        canvas.drawLine(
-          Offset(x1 + ux * d, y1 + uy * d),
-          Offset(x1 + ux * (d + segLen), y1 + uy * (d + segLen)),
-          paint,
-        );
-      }
-      d += segLen;
-      drawing = !drawing;
-    }
+    forEachDashSegment(
+      x1, y1, x2, y2,
+      dashLen: dashLen,
+      gapLen: gapLen,
+      onSegment: (sx, sy, ex, ey) =>
+          canvas.drawLine(Offset(sx, sy), Offset(ex, ey), paint),
+    );
   }
 
   @override

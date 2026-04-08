@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 
 import '../models/stitch_plan.dart';
+import 'dashed_line.dart';
 import 'stitch_renderer.dart';
 
 /// Number of interpolated frames rendered per stitch segment.
@@ -299,32 +300,21 @@ void _drawDashedLine(
   double dashLen = 8,
   double gapLen = 5,
 }) {
-  final dx = x2 - x1;
-  final dy = y2 - y1;
-  final dist = math.sqrt(dx * dx + dy * dy);
-  if (dist < 0.001) return;
-  final ux = dx / dist;
-  final uy = dy / dist;
-  var d = 0.0;
-  var drawing = true;
-  while (d < dist) {
-    final segLen =
-        drawing ? math.min(dashLen, dist - d) : math.min(gapLen, dist - d);
-    if (drawing) {
-      img.drawLine(
-        image,
-        x1: (x1 + ux * d).round(),
-        y1: (y1 + uy * d).round(),
-        x2: (x1 + ux * (d + segLen)).round(),
-        y2: (y1 + uy * (d + segLen)).round(),
-        color: color,
-        thickness: thickness,
-        antialias: true,
-      );
-    }
-    d += segLen;
-    drawing = !drawing;
-  }
+  forEachDashSegment(
+    x1, y1, x2, y2,
+    dashLen: dashLen,
+    gapLen: gapLen,
+    onSegment: (sx, sy, ex, ey) => img.drawLine(
+      image,
+      x1: sx.round(),
+      y1: sy.round(),
+      x2: ex.round(),
+      y2: ey.round(),
+      color: color,
+      thickness: thickness,
+      antialias: true,
+    ),
+  );
 }
 
 /// Canonical edge key: order-independent so A→B == B→A.
