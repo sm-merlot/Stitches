@@ -556,8 +556,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
     // Build rects for the entire layer (no viewport culling here — the caller
     // still culls so only visible rects reach canvas.drawRect).
-    final halfCell    = cellSize * 0.5;
-    final quarterCell = cellSize * 0.5;
     final byColor = <Color, List<Rect>>{};
 
     for (final stitch in layer.stitches) {
@@ -569,52 +567,22 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           isCrossStitch: true);
       if (c == null) continue;
 
+      final rect = _stitchToBlockRect(stitch, cellSize);
+      if (rect == null) continue;
+
       Color effectiveColor = c;
-      Rect? rect;
-      switch (stitch) {
-        case FullStitch(:final x, :final y):
-          final key = '$x,$y';
-          final blended = blendMap[key];
-          if (blended != null && stitchFocusThreadId != null) {
-            final compositeThread = compositeResult?.compositeThreads[key];
-            final isFocused = compositeThread?.dmcCode == stitchFocusThreadId;
-            effectiveColor = isFocused ? blended : _greyColor(blended);
-          } else {
-            effectiveColor = blended ?? c;
-          }
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
-
-        case HalfStitch(:final x, :final y, isForward: true):
-          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
-        case HalfStitch(:final x, :final y, isForward: false):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
-
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.left):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.right):
-          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.top):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell);
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell);
-
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, quarterCell, quarterCell);
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
-          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize, quarterCell, quarterCell);
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize + quarterCell, quarterCell, quarterCell);
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
-          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize + quarterCell, quarterCell, quarterCell);
-
-        default:
-          rect = null;
+      if (stitch is FullStitch) {
+        final key = '${stitch.x},${stitch.y}';
+        final blended = blendMap[key];
+        if (blended != null && stitchFocusThreadId != null) {
+          final compositeThread = compositeResult?.compositeThreads[key];
+          final isFocused = compositeThread?.dmcCode == stitchFocusThreadId;
+          effectiveColor = isFocused ? blended : _greyColor(blended);
+        } else {
+          effectiveColor = blended ?? c;
+        }
       }
-      if (rect != null) (byColor[effectiveColor] ??= []).add(rect);
+      (byColor[effectiveColor] ??= []).add(rect);
     }
 
     _blockRectsByLayer[layer] = byColor;
@@ -660,8 +628,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     final minPy = minY * cellSize;
     final maxPx = maxX * cellSize;
     final maxPy = maxY * cellSize;
-    final halfCell    = cellSize * 0.5;
-    final quarterCell = cellSize * 0.5;
 
     for (final stitch in layer.stitches) {
       if (stitch is BackStitch) continue;
@@ -676,55 +642,70 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           isCrossStitch: true);
       if (c == null) continue;
 
-      Color effectiveColor = c;
-      Rect? rect;
-      switch (stitch) {
-        case FullStitch(:final x, :final y):
-          final key = '$x,$y';
-          final blended = blendMap[key];
-          if (blended != null && stitchFocusThreadId != null) {
-            final compositeThread = compositeResult?.compositeThreads[key];
-            final isFocused = compositeThread?.dmcCode == stitchFocusThreadId;
-            effectiveColor = isFocused ? blended : _greyColor(blended);
-          } else {
-            effectiveColor = blended ?? c;
-          }
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
-
-        case HalfStitch(:final x, :final y, isForward: true):
-          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
-        case HalfStitch(:final x, :final y, isForward: false):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
-
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.left):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.right):
-          rect = Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.top):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell);
-        case HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell);
-
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize, quarterCell, quarterCell);
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
-          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize, quarterCell, quarterCell);
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
-          rect = Rect.fromLTWH(x * cellSize, y * cellSize + quarterCell, quarterCell, quarterCell);
-        case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
-        case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
-          rect = Rect.fromLTWH(x * cellSize + quarterCell, y * cellSize + quarterCell, quarterCell, quarterCell);
-
-        default:
-          rect = null;
-      }
+      final rect = _stitchToBlockRect(stitch, cellSize);
       if (rect == null) continue;
+
+      Color effectiveColor = c;
+      if (stitch is FullStitch) {
+        final key = '${stitch.x},${stitch.y}';
+        final blended = blendMap[key];
+        if (blended != null && stitchFocusThreadId != null) {
+          final compositeThread = compositeResult?.compositeThreads[key];
+          final isFocused = compositeThread?.dmcCode == stitchFocusThreadId;
+          effectiveColor = isFocused ? blended : _greyColor(blended);
+        } else {
+          effectiveColor = blended ?? c;
+        }
+      }
+
       if (rect.right <= minPx || rect.left >= maxPx ||
           rect.bottom <= minPy || rect.top >= maxPy) { continue; }
       canvas.drawRect(rect, Paint()..color = effectiveColor);
+    }
+  }
+
+  /// Returns the block-mode rect for [stitch] in canvas/pattern space, or null
+  /// if the stitch type has no block representation (e.g. [BackStitch]).
+  ///
+  /// Block mode renders each stitch as a solid colour rect — used at far-zoom
+  /// where stitch shapes are sub-pixel.  Each fractional-stitch type fills its
+  /// corresponding region of the cell (a quarter stitch fills its quadrant, a
+  /// half stitch fills its half), so the four quadrants of a cell tile cleanly.
+  static Rect? _stitchToBlockRect(Stitch stitch, double cellSize) {
+    final halfCell = cellSize * 0.5;
+    switch (stitch) {
+      case FullStitch(:final x, :final y):
+        return Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
+
+      case HalfStitch(:final x, :final y, isForward: true):
+        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
+      case HalfStitch(:final x, :final y, isForward: false):
+        return Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
+
+      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.left):
+        return Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
+      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.right):
+        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
+      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.top):
+        return Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell);
+      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom):
+        return Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell);
+
+      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
+      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
+        return Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, halfCell);
+      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
+      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
+        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, halfCell);
+      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
+      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
+        return Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, halfCell, halfCell);
+      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
+      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
+        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize + halfCell, halfCell, halfCell);
+
+      case BackStitch():
+        return null;
     }
   }
 
