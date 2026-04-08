@@ -1,0 +1,33 @@
+lib/services/pdf/pdf_chart.dart
+  63bed9c36d15f157 1-439
+lib/services/pdf/pdf_color_table.dart
+  63bed9c36d15f157 1-344
+lib/services/pdf/pdf_title_page.dart
+  63bed9c36d15f157 1-413
+lib/services/pdf/pdf_helpers.dart
+  63bed9c36d15f157 1-114
+lib/services/pdf_service.dart
+  63bed9c36d15f157 20-24
+lib/services/pdf/pdf_markdown.dart
+  63bed9c36d15f157 1-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "36624c08fbcdc5f9e1aaff650779769bc55cc978",
+  "prompts": {
+    "63bed9c36d15f157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f3fbb28-821c-4597-8c93-073e6e2806d0",
+        "model": "<synthetic>"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 1573,
+      "total_deletions": 1563,
+      "accepted_lines": 1573,
+      "overriden_lines": 0
+    }
+  }
+}
