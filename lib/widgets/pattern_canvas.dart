@@ -12,6 +12,7 @@ import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import 'canvas_painter.dart';
+import 'canvas_viewport.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {
   const PatternCanvas({super.key});
@@ -324,28 +325,23 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     return _paletteOverride = map.isEmpty ? null : map;
   }
 
-  Offset _screenToCanvas(Offset screen) {
-    return (screen - _panOffset) / _scale;
-  }
+  /// Builds a [CanvasViewport] snapshot from the current pan/zoom state.
+  /// Cheap — `CanvasViewport` is just three doubles + an Offset.
+  CanvasViewport get _viewport => CanvasViewport(
+        cellSize: _cellSize,
+        panOffset: _panOffset,
+        scale: _scale,
+      );
 
-  Offset _canvasToGridPoint(Offset canvas) {
-    final gx = (canvas.dx / _cellSize * 2).round() / 2.0;
-    final gy = (canvas.dy / _cellSize * 2).round() / 2.0;
-    return Offset(gx, gy);
-  }
+  Offset _screenToCanvas(Offset screen) => _viewport.screenToCanvas(screen);
 
-  (int, int) _canvasToCell(Offset canvas) {
-    return (
-      (canvas.dx / _cellSize).floor(),
-      (canvas.dy / _cellSize).floor(),
-    );
-  }
+  Offset _canvasToGridPoint(Offset canvas) =>
+      _viewport.canvasToGridPoint(canvas);
 
-  (double, double) _subCellPos(Offset canvas, int cellX, int cellY) {
-    final subX = (canvas.dx / _cellSize) - cellX;
-    final subY = (canvas.dy / _cellSize) - cellY;
-    return (subX.clamp(0.0, 1.0), subY.clamp(0.0, 1.0));
-  }
+  (int, int) _canvasToCell(Offset canvas) => _viewport.canvasToCell(canvas);
+
+  (double, double) _subCellPos(Offset canvas, int cellX, int cellY) =>
+      _viewport.subCellPos(canvas, cellX, cellY);
 
   QuadrantPosition _detectQuadrant(double subX, double subY) {
     if (subX < 0.5 && subY < 0.5) return QuadrantPosition.topLeft;
@@ -380,10 +376,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   void _zoomAround(Offset focalPoint, double factor) {
-    final newScale = (_scale * factor).clamp(0.1, 20.0);
-    final scaleFactor = newScale / _scale;
-    _panOffset = focalPoint - (focalPoint - _panOffset) * scaleFactor;
-    _scale = newScale;
+    final next = _viewport.zoomedAround(focalPoint, factor);
+    _panOffset = next.panOffset;
+    _scale = next.scale;
     _scheduleRebuild();
   }
 
