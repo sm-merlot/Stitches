@@ -219,17 +219,10 @@ List<List<dynamic>> _runCellScan(_ScanParams p) {
       final mb = inkB[mid];
 
       // Find closest legend thread by CIE-76 Lab distance.
-      final inkLab   = rgbToLab(mr, mg, mb);
-      double bestDist = double.infinity;
-      int    bestIdx  = 0;
-
-      for (int i = 0; i < legendLab.length; i++) {
-        final d = labDistance(inkLab, legendLab[i]);
-        if (d < bestDist) {
-          bestDist = d;
-          bestIdx  = i;
-        }
-      }
+      final inkLab  = rgbToLab(mr, mg, mb);
+      final bestIdx = nearestLabIndex(legendLab, inkLab);
+      if (bestIdx < 0) continue;
+      final bestDist = labDistance(inkLab, legendLab[bestIdx]);
 
       // Normalise distance to a confidence score.
       // Lab distance of 0 → 1.0; distance of 40 → 0.0 (linear).

@@ -53,3 +53,18 @@ double labDistanceSquared(LabColor a, LabColor b) {
 /// CIE-76 ΔE between two Lab colours.
 double labDistance(LabColor a, LabColor b) =>
     math.sqrt(labDistanceSquared(a, b));
+
+/// Returns the index of the entry in [labValues] whose Lab distance to
+/// [target] is smallest. Returns `-1` if [labValues] is empty.
+int nearestLabIndex(List<LabColor> labValues, LabColor target) {
+  var bestIdx = -1;
+  var best = double.infinity;
+  for (var i = 0; i < labValues.length; i++) {
+    final d = labDistanceSquared(labValues[i], target);
+    if (d < best) {
+      best = d;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
