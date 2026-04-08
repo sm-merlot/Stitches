@@ -1,0 +1,31 @@
+lib/services/grid_cell_scanner.dart
+  63bed9c36d15f157 7,142,222,227
+lib/widgets/canvas_painter.dart
+  63bed9c36d15f157 11
+lib/widgets/canvas_painter_drawing_methods.dart
+  63bed9c36d15f157 25-27
+lib/services/color_space.dart
+  63bed9c36d15f157 1-55
+lib/services/sprite_importer.dart
+  63bed9c36d15f157 13,39,51,216,233,449,464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "41863feaeb146078e39e0ce4a8b4958b8bec31fd",
+  "prompts": {
+    "63bed9c36d15f157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f3fbb28-821c-4597-8c93-073e6e2806d0",
+        "model": "<synthetic>"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 70,
+      "total_deletions": 102,
+      "accepted_lines": 70,
+      "overriden_lines": 0
+    }
+  }
+}
