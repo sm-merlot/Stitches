@@ -63,26 +63,12 @@ class _GroupRowState extends State<_GroupRow> {
     final content = layerCount == 0
         ? 'This will delete the empty group "${group.name}".'
         : 'This will delete "${group.name}" and all $layerCount layer(s) inside it.';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete group?'),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style:
-                TextButton.styleFrom(foregroundColor: Colors.red.shade600),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete group?',
+      message: content,
     );
-    if (confirmed == true) {
+    if (confirmed) {
       widget.notifier.deleteGroup(widget.group.id);
     }
   }

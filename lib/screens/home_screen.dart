@@ -20,6 +20,7 @@ import '../services/incoming_file_service.dart';
 import '../services/pattern_thumbnail.dart';
 import '../services/thumbnail_cache.dart';
 import '../utils/snackbars.dart';
+import '../widgets/dialogs/confirm_dialog.dart';
 import 'drive_picker_dialog.dart';
 import 'editor_screen.dart';
 import 'new_pattern_dialog.dart';
@@ -807,27 +808,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             const _SectionLabel(label: 'RECENT'),
                             TextButton(
                               onPressed: () async {
-                                final confirmed = await showDialog<bool>(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    title: const Text('Clear Recent'),
-                                    content: const Text(
-                                        'Remove all items from the recent list?'),
-                                    actions: [
-                                      TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context)
-                                                  .pop(false),
-                                          child: const Text('Cancel')),
-                                      TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context)
-                                                  .pop(true),
-                                          child: const Text('Clear')),
-                                    ],
-                                  ),
+                                final confirmed = await confirmDestructive(
+                                  context,
+                                  title: 'Clear Recent',
+                                  message:
+                                      'Remove all items from the recent list?',
+                                  confirmLabel: 'Clear',
                                 );
-                                if (confirmed == true) {
+                                if (confirmed) {
                                   for (final item in [...recents]) {
                                     ref
                                         .read(recentItemsProvider.notifier)

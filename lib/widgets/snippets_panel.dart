@@ -6,6 +6,7 @@ import '../models/snippet.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../screens/snippet_editor_screen.dart';
+import 'dialogs/input_dialog.dart';
 import 'snippet_thumbnail.dart';
 
 part 'snippets_panel_widgets.dart';
@@ -187,40 +188,20 @@ class SnippetsPanel extends ConsumerWidget {
     );
   }
 
-  void _showRename(BuildContext context, WidgetRef ref, Snippet snippet) {
-    final controller = TextEditingController(text: snippet.name);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rename snippet'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Name',
-            hintText: 'Leave empty for no name',
-          ),
-          onSubmitted: (_) => _commitRename(ctx, ref, snippet, controller.text),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () =>
-                  _commitRename(ctx, ref, snippet, controller.text),
-              child: const Text('Rename')),
-        ],
-      ),
+  Future<void> _showRename(
+      BuildContext context, WidgetRef ref, Snippet snippet) async {
+    final newName = await inputDialog(
+      context,
+      title: 'Rename snippet',
+      initialValue: snippet.name,
+      confirmLabel: 'Rename',
+      hintText: 'Leave empty for no name',
+      allowEmpty: true,
     );
-  }
-
-  void _commitRename(
-      BuildContext context, WidgetRef ref, Snippet snippet, String name) {
+    if (newName == null) return;
     ref
         .read(editorProvider.notifier)
-        .updateSnippet(snippet.copyWith(name: name.trim()));
-    Navigator.of(context).pop();
+        .updateSnippet(snippet.copyWith(name: newName));
   }
 
   void _showResize(BuildContext context, WidgetRef ref, Snippet snippet) {

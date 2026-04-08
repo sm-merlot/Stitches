@@ -6,6 +6,7 @@ import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/snackbars.dart';
+import 'dialogs/confirm_dialog.dart';
 
 // ─── Shared popup menu row ────────────────────────────────────────────────────
 
@@ -216,28 +217,14 @@ class _ClearProgressButton extends StatelessWidget {
         foregroundColor: Theme.of(context).colorScheme.error,
       ),
       onPressed: () async {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Clear all progress?'),
-            content: const Text(
-                'This will remove all stitches marked as done. This can be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                ),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Clear'),
-              ),
-            ],
-          ),
+        final confirmed = await confirmDestructive(
+          context,
+          title: 'Clear all progress?',
+          message:
+              'This will remove all stitches marked as done. This can be undone.',
+          confirmLabel: 'Clear',
         );
-        if (confirmed == true) {
+        if (confirmed) {
           ref.read(editorProvider.notifier).clearProgress();
           if (context.mounted) Navigator.of(context).pop();
         }
