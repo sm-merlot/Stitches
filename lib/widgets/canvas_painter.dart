@@ -11,6 +11,7 @@ import '../models/thread.dart';
 import '../data/symbols.dart';
 import '../services/color_space.dart';
 import '../services/stitch_compositor.dart';
+import 'canvas_viewport.dart';
 
 part 'canvas_painter_drawing_methods.dart';
 part 'canvas_painter_overlay.dart';
@@ -105,16 +106,17 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     canvas.clipRect(Offset.zero & size);
 
     // ── Compute visible cell range for culling ──────────────────────────────
-    final visLeft   = -panOffset.dx / scale;
-    final visTop    = -panOffset.dy / scale;
-    final visRight  = (size.width  - panOffset.dx) / scale;
-    final visBottom = (size.height - panOffset.dy) / scale;
-
-    // Add 1-cell buffer to avoid visible seams at edges.
-    final minCX = ((visLeft  / cellSize).floor() - 1).clamp(0, pattern.width);
-    final minCY = ((visTop   / cellSize).floor() - 1).clamp(0, pattern.height);
-    final maxCX = ((visRight / cellSize).ceil()  + 1).clamp(0, pattern.width);
-    final maxCY = ((visBottom/ cellSize).ceil()  + 1).clamp(0, pattern.height);
+    final viewport = CanvasViewport(
+      cellSize: cellSize,
+      panOffset: panOffset,
+      scale: scale,
+    );
+    final range =
+        viewport.visibleCellRange(size, pattern.width, pattern.height);
+    final minCX = range.minX;
+    final minCY = range.minY;
+    final maxCX = range.maxX;
+    final maxCY = range.maxY;
 
     canvas.save();
     canvas.translate(panOffset.dx, panOffset.dy);
