@@ -6,6 +6,7 @@ import '../models/layer.dart';
 import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
 import '../providers/editor/editor_provider.dart';
+import 'dialogs/confirm_dialog.dart';
 
 part 'layers_panel_helpers.dart';
 part 'layers_panel_rows.dart';
