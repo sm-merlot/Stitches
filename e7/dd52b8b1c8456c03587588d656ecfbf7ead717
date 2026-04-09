@@ -1,0 +1,29 @@
+lib/providers/editor/editor_provider_drawing.dart
+  3539e974d4cd53d7 19-20,212-233,236
+lib/providers/editor/editor_provider_snippets.dart
+  3539e974d4cd53d7 388,393-415,423-424,454-456
+lib/widgets/right_sidebar_colours_panel.dart
+  3539e974d4cd53d7 665-679
+lib/screens/snippet_editor_screen.dart
+  3539e974d4cd53d7 81,89-91,98-105,135-139,144-150,153-160,184,514-532,534-551,570,608-638
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "e7dd52b8b1c8456c03587588d656ecfbf7ead717",
+  "prompts": {
+    "3539e974d4cd53d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "45881241-c31b-46fe-abb1-fc58b147280f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 263,
+      "total_deletions": 103,
+      "accepted_lines": 191,
+      "overriden_lines": 0
+    }
+  }
+}
