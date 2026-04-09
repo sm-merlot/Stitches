@@ -1,0 +1,23 @@
+.changeset/snippet-editor-mode.md
+  3539e974d4cd53d7 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "99d7d8e58942fd629d0e915c045ddd76a92a9f71",
+  "prompts": {
+    "3539e974d4cd53d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "45881241-c31b-46fe-abb1-fc58b147280f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 13,
+      "total_deletions": 0,
+      "accepted_lines": 13,
+      "overriden_lines": 0
+    }
+  }
+}
