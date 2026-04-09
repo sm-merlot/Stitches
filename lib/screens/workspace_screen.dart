@@ -1276,7 +1276,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ),
                 const SizedBox(width: 2),
               ],
-              Text(_title(editorState, wsState, openPdf)),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: Text(
+                  _title(editorState, wsState, openPdf),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               // ── Block mode toggle — in title area, consistent across modes ──
               if (editorState.isFileOpen && openPdf == null) ...[
                 const SizedBox(width: 4),
