@@ -1,0 +1,23 @@
+docs/road-to-v1.md
+  16a0722e5dc8a5e5 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "85901f09a7f18ab16e1dfd7eb8865cdb2f83228b",
+  "prompts": {
+    "16a0722e5dc8a5e5": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1775572117826",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 6,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
