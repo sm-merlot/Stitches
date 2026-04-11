@@ -171,6 +171,27 @@ class _DesignColoursPanel extends ConsumerWidget {
           ),
           const Divider(height: 1),
         ],
+        // ── Stitch count summary + sort ─────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
+          child: Row(
+            children: [
+              Icon(Icons.grid_4x4, size: 13,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '${stitchCounts.values.fold<int>(0, (a, b) => a + b)} stitches',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                ),
+              ),
+              _SortPopup(useDmc: useDmc),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
         Expanded(
           child: _ThreadList(
             threads: threads,
@@ -360,20 +381,23 @@ class _StitchColoursPanel extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Total stitch count summary ──────────────────────────────────────
+        // ── Total stitch count summary + sort ───────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+          padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
           child: Row(
             children: [
               Icon(Icons.grid_4x4, size: 13,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
               const SizedBox(width: 4),
-              Text(
-                '$totalCross stitches${totalBack > 0 ? '  •  $totalBack backstitches' : ''}',
-                style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+              Expanded(
+                child: Text(
+                  '$totalCross stitches${totalBack > 0 ? '  •  $totalBack backstitches' : ''}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                ),
               ),
+              _SortPopup(useDmc: useDmc, doneCounts: doneCounts),
             ],
           ),
         ),
@@ -731,7 +755,6 @@ class _ThreadList extends ConsumerWidget {
     }
 
     final settings = ref.watch(settingsProvider);
-    final settingsNotifier = ref.read(settingsProvider.notifier);
     final sortMode = settings.colourSortMode;
     final completedLast = settings.completedColoursLast;
 
@@ -810,70 +833,8 @@ class _ThreadList extends ConsumerWidget {
         }
       });
 
-    final theme = Theme.of(context);
-
     return Column(
       children: [
-        // ── Sort controls ──────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 4, 2),
-          child: Row(
-            children: [
-              Text('Sort:',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.6))),
-              const SizedBox(width: 4),
-              Expanded(
-                child: SegmentedButton<ColourSortMode>(
-                  segments: [
-                    ButtonSegment(
-                      value: ColourSortMode.byId,
-                      label: Text(useDmc ? 'DMC' : 'Anchor'),
-                    ),
-                    const ButtonSegment(
-                      value: ColourSortMode.byStitchCount,
-                      label: Text('Count'),
-                    ),
-                  ],
-                  selected: {sortMode},
-                  onSelectionChanged: (s) =>
-                      settingsNotifier.setColourSortMode(s.first),
-                  style: const ButtonStyle(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-              ),
-              if (doneCounts != null) ...[
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: 'Completed colours last',
-                  child: IconButton(
-                    icon: Icon(
-                      completedLast
-                          ? Icons.vertical_align_bottom
-                          : Icons.vertical_align_bottom_outlined,
-                      size: 18,
-                      color: completedLast
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurface
-                              .withValues(alpha: 0.4),
-                    ),
-                    onPressed: () => settingsNotifier
-                        .setCompletedColoursLast(!completedLast),
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                        minWidth: 32, minHeight: 32),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const Divider(height: 1),
         // ── Thread list ────────────────────────────────────────────────
         Expanded(child: ListView.builder(
       padding: EdgeInsets.zero,
@@ -1392,6 +1353,91 @@ class MarkDoneButton extends ConsumerWidget {
                 }
               : null,
         ),
+      ),
+    );
+  }
+}
+
+// ─── Sort popup ────────────────────────────────────────────────────────────
+
+class _ToggleCompletedLast {
+  const _ToggleCompletedLast();
+}
+
+class _SortPopup extends ConsumerWidget {
+  final bool useDmc;
+  final Map<String, int>? doneCounts;
+
+  const _SortPopup({required this.useDmc, this.doneCounts});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final settingsNotifier = ref.read(settingsProvider.notifier);
+    final sortMode = settings.colourSortMode;
+    final completedLast = settings.completedColoursLast;
+    final theme = Theme.of(context);
+
+    return PopupMenuButton<Object>(
+      tooltip: 'Sort options',
+      icon: Icon(Icons.sort, size: 16,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+      iconSize: 16,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+      style: const ButtonStyle(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+      itemBuilder: (_) => [
+        _sortMenuItem(
+          label: useDmc ? 'Sort by DMC code' : 'Sort by Anchor code',
+          isSelected: sortMode == ColourSortMode.byId,
+          value: ColourSortMode.byId,
+        ),
+        _sortMenuItem(
+          label: 'Sort by stitch count',
+          isSelected: sortMode == ColourSortMode.byStitchCount,
+          value: ColourSortMode.byStitchCount,
+        ),
+        if (doneCounts != null) ...[
+          const PopupMenuDivider(),
+          _sortMenuItem(
+            label: 'Completed colours last',
+            isSelected: completedLast,
+            value: const _ToggleCompletedLast(),
+          ),
+        ],
+      ],
+      onSelected: (value) {
+        if (value is ColourSortMode) {
+          settingsNotifier.setColourSortMode(value);
+        } else if (value is _ToggleCompletedLast) {
+          settingsNotifier.setCompletedColoursLast(!completedLast);
+        }
+      },
+    );
+  }
+
+  static PopupMenuItem<Object> _sortMenuItem({
+    required String label,
+    required bool isSelected,
+    required Object value,
+  }) {
+    return PopupMenuItem<Object>(
+      value: value,
+      height: 36,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            child: isSelected
+                ? const Icon(Icons.check, size: 16)
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 13)),
+        ],
       ),
     );
   }
