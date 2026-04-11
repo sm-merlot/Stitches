@@ -166,7 +166,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // ── Stitches — iterate layers bottom to top ──────────────────────────────
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
-      if (blockMode || effectivePx < kBlockThreshold) {
+      if (stitchMode || blockMode || effectivePx < kBlockThreshold) {
         _drawLayerStitchesAsBlocks(canvas, layer, blendedColors, minCX, minCY, maxCX, maxCY);
       } else {
         for (final stitch in layer.stitches) {
@@ -241,13 +241,13 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
     // ── Stitch symbols (all visible layers) ──────────────────────────────────
     // Shown when zoomed in enough (>= 8 px/cell) AND:
-    //   • blockMode off  → always show (both edit and stitch mode)
-    //   • blockMode on   → only in stitch mode (B&W: black on white for undone,
-    //                       no symbol for done) — edit mode keeps a clean block view
+    //   • stitch mode     → always (B&W: black on white for undone, none for done)
+    //   • blockMode off   → always (edit/view mode)
+    //   • blockMode on    → hidden (edit/view mode keeps a clean block view)
     // Symbols from lower layers are skipped when a higher layer has a FullStitch
     // at the same cell (prevents lower-layer symbols bleeding through).
-    final bwSymbols = stitchMode && blockMode;
-    if (effectivePx >= 8 && (!blockMode || stitchMode)) {
+    final bwSymbols = stitchMode;
+    if (effectivePx >= 8 && (stitchMode || !blockMode)) {
       for (int layerIdx = 0; layerIdx < pattern.layers.length; layerIdx++) {
         final layer = pattern.layers[layerIdx];
         if (!layer.visible) continue;
@@ -298,23 +298,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
     }
 
-    // ── Done-stitch dimming (Realistic stitch mode only) ─────────────────────
-    // Draw a semi-transparent aida-coloured overlay on each completed cell so
-    // done stitches appear at ~30% of their full brightness, making remaining
-    // work visually prominent. Skipped in block mode where B&W rendering
-    // handles done/undone distinction directly.
-    if (stitchMode && !blockMode && progress.completedStitches.isNotEmpty) {
-      final dimPaint = Paint()
-        ..color = aidaColor.withValues(alpha: 0.70);
-      for (final (cx, cy) in progress.completedStitches) {
-        if (cx < minCX || cx >= maxCX || cy < minCY || cy >= maxCY) continue;
-        if (!_stitchOnPage(cx, cy)) continue;
-        canvas.drawRect(
-          Rect.fromLTWH(cx * cellSize, cy * cellSize, cellSize, cellSize),
-          dimPaint,
-        );
-      }
-    }
+
 
     // ── Focus region outline ────────────────────────────────────────────────
     // When a thread is focused whose colour blends into the background, draw a
@@ -555,7 +539,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Invalidate if pattern or any display-mode flag that affects colours changed.
     // In stitch+block mode, progress changes affect block colours (B&W rendering)
     // so we include the completed-stitch count as a cheap invalidation proxy.
-    final progressLen = (stitchMode && blockMode)
+    final progressLen = (stitchMode)
         ? progress.completedStitches.length
         : -1;
     final modeChanged = !identical(_blockCachePattern, pattern) ||
@@ -609,7 +593,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
 
       // B&W stitch mode: undone → white, done → full colour.
-      if (stitchMode && blockMode) {
+      if (stitchMode) {
         final xy = stitchXY(stitch);
         final isDone = xy != null && progress.completedStitches.contains(xy);
         if (!isDone) effectiveColor = Colors.white;
@@ -692,7 +676,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
 
       // B&W stitch mode: undone → white, done → full colour.
-      if (stitchMode && blockMode) {
+      if (stitchMode) {
         final isDone = progress.completedStitches.contains(xy);
         if (!isDone) effectiveColor = Colors.white;
       }
