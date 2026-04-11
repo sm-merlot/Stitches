@@ -78,6 +78,7 @@ class _SnippetEditorBody extends ConsumerStatefulWidget {
 
 class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   late final TextEditingController _nameController;
+  final FocusNode _nameFocusNode = FocusNode();
   // null = custom size chosen via dialog
   int? _selectedPresetIndex = 1; // default 16×16
   int _canvasW = 16;
@@ -85,11 +86,23 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   // Dirty-state proxy: stitch fingerprint at load time (D3).
   int _initialStitchHash = 0;
 
+  /// Max width of the title area (display + editor). Beyond this the static
+  /// label ellipsises; the inline editor scrolls.
+  static const double _kTitleMaxWidth = 280;
+
   @override
   void initState() {
     super.initState();
     final s = widget.snippet;
     _nameController = TextEditingController(text: s?.name ?? 'New snippet');
+    // Rebuild on name changes so the title field can shrink/grow to fit the
+    // text and the block-mode button sits flush against it.
+    _nameController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _nameFocusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (s != null) {
@@ -119,13 +132,32 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         // New snippet — load empty pattern at selected size.
         _loadEmptyPattern();
       }
+      // Snippet editor is always in edit mode — loadPattern defaults to
+      // AppMode.view, which hides the toolbar and swaps the sidebar to the
+      // Colours-only stitch layout. Flip to edit so the toolbar and the
+      // Palettes/Colours tabs render.
+      ref.read(editorProvider.notifier).setMode(AppMode.edit);
       if (widget.initialBlockMode) {
         ref.read(editorProvider.notifier).toggleBlockMode();
       }
       // Initialise local palette state for this snippet editor session.
+      //
+      // loadPattern runs _assignSymbols, so state.pattern.threads now carry
+      // their symbols — but s.palettes[0].threads are the raw pre-symbol
+      // threads from the file. The Colours panel reads palette threads, so
+      // we rebuild palette[0] from the symbolised pattern threads and let
+      // initSnippetPalettesLocal propagate those symbols to every secondary
+      // palette by slot (symbol belongs to the slot, not the thread).
       final editorNotifier = ref.read(editorProvider.notifier);
       if (s != null) {
-        editorNotifier.initSnippetPalettesLocal(s.palettes, s.activePaletteIndex);
+        final symbolised = ref.read(editorProvider).pattern.threads;
+        final palettes = s.palettes.isNotEmpty
+            ? [
+                s.palettes[0].copyWith(threads: symbolised),
+                ...s.palettes.skip(1),
+              ]
+            : [SnippetPalette.create(name: 'Palette 1', threads: symbolised)];
+        editorNotifier.initSnippetPalettesLocal(palettes, s.activePaletteIndex);
       } else {
         editorNotifier.initSnippetPalettesLocal(
             [SnippetPalette.create(name: 'Palette 1')], 0);
@@ -149,6 +181,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   @override
   void dispose() {
     _nameController.dispose();
+    _nameFocusNode.dispose();
     super.dispose();
   }
 
@@ -478,16 +511,44 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       },
       child: Scaffold(
         appBar: AppBar(
-        title: SizedBox(
-          width: 200,
-          child: TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              hintText: 'Snippet name',
-              border: InputBorder.none,
+        titleSpacing: 0,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Fixed-width dirty indicator slot — always present so the
+            // title/block-mode row doesn't shift when the dot appears.
+            SizedBox(
+              width: 8,
+              height: 8,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 120),
+                opacity: _isDirty() ? 1.0 : 0.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
             ),
-            style: theme.textTheme.titleMedium,
-          ),
+            const SizedBox(width: 4),
+            _buildTitle(theme),
+            const SizedBox(width: 4),
+            // ── Block mode toggle — title area, matches main editor ─────
+            IconButton(
+              tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
+              isSelected: state.blockMode,
+              icon: const Icon(Icons.grid_view_outlined),
+              selectedIcon: const Icon(Icons.grid_view),
+              onPressed: () => notifier.toggleBlockMode(),
+              style: state.blockMode
+                  ? IconButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primaryContainer,
+                      foregroundColor: theme.colorScheme.onPrimaryContainer,
+                    )
+                  : null,
+            ),
+          ],
         ),
         actions: [
           if (isNew) ...[
@@ -505,21 +566,8 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
               icon: const Icon(Icons.aspect_ratio),
               onPressed: () => _showResizeDialog(context),
             ),
-          IconButton(
-            tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
-            isSelected: state.blockMode,
-            icon: const Icon(Icons.grid_view_outlined),
-            selectedIcon: const Icon(Icons.grid_view),
-            onPressed: () => notifier.toggleBlockMode(),
-            style: state.blockMode
-                ? IconButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primaryContainer,
-                    foregroundColor: theme.colorScheme.onPrimaryContainer,
-                  )
-                : null,
-          ),
           TextButton(
-            onPressed: () => _save(context),
+            onPressed: _isDirty() ? () => _save(context) : null,
             child: const Text('Save'),
           ),
           const SizedBox(width: 8),
@@ -553,6 +601,37 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
           ],
         ),
       ),
+      ),
+    );
+  }
+
+  /// Borderless, always-editable title field. Sized to fit the current text
+  /// with a cap of [_kTitleMaxWidth] so the block-mode button stays flush to
+  /// the name. When the text exceeds the cap the caret scrolls horizontally
+  /// — same affordance as a plain AppBar [Text], but editable in place.
+  Widget _buildTitle(ThemeData theme) {
+    final style = theme.textTheme.titleMedium;
+    final text =
+        _nameController.text.isEmpty ? 'Snippet name' : _nameController.text;
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final width = (tp.width + 12).clamp(60.0, _kTitleMaxWidth);
+    return SizedBox(
+      width: width,
+      child: TextField(
+        controller: _nameController,
+        focusNode: _nameFocusNode,
+        decoration: const InputDecoration(
+          hintText: 'Snippet name',
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        style: style,
+        onSubmitted: (_) => _nameFocusNode.unfocus(),
       ),
     );
   }
