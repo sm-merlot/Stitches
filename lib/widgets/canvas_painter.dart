@@ -285,11 +285,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
     }
 
-    // ── Done-stitch dimming (Stitch mode only) ──────────────────────────────
+    // ── Done-stitch dimming (Realistic stitch mode only) ─────────────────────
     // Draw a semi-transparent aida-coloured overlay on each completed cell so
     // done stitches appear at ~30% of their full brightness, making remaining
-    // work visually prominent.
-    if (stitchMode && progress.completedStitches.isNotEmpty) {
+    // work visually prominent. Skipped in block mode where B&W rendering
+    // handles done/undone distinction directly.
+    if (stitchMode && !blockMode && progress.completedStitches.isNotEmpty) {
       final dimPaint = Paint()
         ..color = aidaColor.withValues(alpha: 0.70);
       for (final (cx, cy) in progress.completedStitches) {
@@ -393,6 +394,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   static bool _blockCacheBackMode = false;
   static bool _blockCacheCrossMode = false;
   static Map<String, Color>? _blockCachePaletteOverride;
+  static int _blockCacheProgressLen = -1;
   // Key is the Layer object itself (identity-compared via map lookup).
   static final Map<Layer, Map<Color, List<Rect>>> _blockRectsByLayer = {};
 
@@ -538,12 +540,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   Map<Color, List<Rect>> _getOrBuildBlockRects(
       Layer layer, Map<String, Color> blendMap) {
     // Invalidate if pattern or any display-mode flag that affects colours changed.
+    // In stitch+block mode, progress changes affect block colours (B&W rendering)
+    // so we include the completed-stitch count as a cheap invalidation proxy.
+    final progressLen = (stitchMode && blockMode)
+        ? progress.completedStitches.length
+        : -1;
     final modeChanged = !identical(_blockCachePattern, pattern) ||
         _blockCacheFocusId != stitchFocusThreadId ||
         _blockCacheStitchMode != stitchMode ||
         _blockCacheBackMode != stitchBackMode ||
         _blockCacheCrossMode != stitchCrossMode ||
-        !identical(_blockCachePaletteOverride, paletteOverride);
+        !identical(_blockCachePaletteOverride, paletteOverride) ||
+        _blockCacheProgressLen != progressLen;
     if (modeChanged) {
       _blockRectsByLayer.clear();
       _blockCachePattern = pattern;
@@ -552,6 +560,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       _blockCacheBackMode = stitchBackMode;
       _blockCacheCrossMode = stitchCrossMode;
       _blockCachePaletteOverride = paletteOverride;
+      _blockCacheProgressLen = progressLen;
     }
 
     final cached = _blockRectsByLayer[layer];
@@ -585,6 +594,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           effectiveColor = blended ?? c;
         }
       }
+
+      // B&W stitch mode: undone → white, done → full colour.
+      if (stitchMode && blockMode) {
+        final xy = stitchXY(stitch);
+        final isDone = xy != null && progress.completedStitches.contains(xy);
+        if (!isDone) effectiveColor = Colors.white;
+      }
+
       (byColor[effectiveColor] ??= []).add(rect);
     }
 
@@ -659,6 +676,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         } else {
           effectiveColor = blended ?? c;
         }
+      }
+
+      // B&W stitch mode: undone → white, done → full colour.
+      if (stitchMode && blockMode) {
+        final isDone = progress.completedStitches.contains(xy);
+        if (!isDone) effectiveColor = Colors.white;
       }
 
       if (rect.right <= minPx || rect.left >= maxPx ||
