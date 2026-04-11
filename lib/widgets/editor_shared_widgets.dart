@@ -152,13 +152,13 @@ class _ProgressHelpDialog extends StatelessWidget {
           const _ProgressHelpRow(
               icon: Icons.touch_app_outlined,
               label: 'Tap',
-              detail: 'Mark / unmark one stitch'),
+              detail: 'Mark / frog one stitch'),
           const SizedBox(height: 12),
           const _ProgressHelpRow(
               icon: Icons.mouse_outlined,
               label: 'Double-tap',
               detail:
-                  'Flood fill — marks all connected stitches of the same colour (or unmarks if already done)'),
+                  'Flood fill — marks all connected stitches of the same colour (or frogs if already done)'),
           const SizedBox(height: 12),
           const _ProgressHelpRow(
               icon: Icons.crop_outlined,
