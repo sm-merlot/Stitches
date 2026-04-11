@@ -246,7 +246,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     //   • blockMode on    → hidden (edit/view mode keeps a clean block view)
     // Symbols from lower layers are skipped when a higher layer has a FullStitch
     // at the same cell (prevents lower-layer symbols bleeding through).
-    final bwSymbols = stitchMode;
+    final bwSymbols = stitchMode && !blockMode;
     if (effectivePx >= 8 && (stitchMode || !blockMode)) {
       for (int layerIdx = 0; layerIdx < pattern.layers.length; layerIdx++) {
         final layer = pattern.layers[layerIdx];
@@ -298,7 +298,22 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
     }
 
-
+    // ── Done-stitch dimming (block stitch mode only) ────────────────────────
+    // In stitch+block mode (full colour), draw a semi-transparent aida overlay
+    // on completed cells so done stitches appear dimmed. Skipped in B&W mode
+    // where done/undone is handled by the colour itself.
+    if (stitchMode && blockMode && progress.completedStitches.isNotEmpty) {
+      final dimPaint = Paint()
+        ..color = aidaColor.withValues(alpha: 0.70);
+      for (final (cx, cy) in progress.completedStitches) {
+        if (cx < minCX || cx >= maxCX || cy < minCY || cy >= maxCY) continue;
+        if (!_stitchOnPage(cx, cy)) continue;
+        canvas.drawRect(
+          Rect.fromLTWH(cx * cellSize, cy * cellSize, cellSize, cellSize),
+          dimPaint,
+        );
+      }
+    }
 
     // ── Focus region outline ────────────────────────────────────────────────
     // When a thread is focused whose colour blends into the background, draw a
@@ -537,9 +552,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   Map<Color, List<Rect>> _getOrBuildBlockRects(
       Layer layer, Map<String, Color> blendMap) {
     // Invalidate if pattern or any display-mode flag that affects colours changed.
-    // In stitch+block mode, progress changes affect block colours (B&W rendering)
-    // so we include the completed-stitch count as a cheap invalidation proxy.
-    final progressLen = (stitchMode)
+    // In B&W stitch mode, progress changes affect block colours so we include
+    // the completed-stitch count as a cheap invalidation proxy.
+    final progressLen = (stitchMode && !blockMode)
         ? progress.completedStitches.length
         : -1;
     final modeChanged = !identical(_blockCachePattern, pattern) ||
@@ -593,7 +608,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
 
       // B&W stitch mode: undone → white, done → full colour.
-      if (stitchMode) {
+      if (stitchMode && !blockMode) {
         final xy = stitchXY(stitch);
         final isDone = xy != null && progress.completedStitches.contains(xy);
         if (!isDone) effectiveColor = Colors.white;
@@ -676,7 +691,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
 
       // B&W stitch mode: undone → white, done → full colour.
-      if (stitchMode) {
+      if (stitchMode && !blockMode) {
         final isDone = progress.completedStitches.contains(xy);
         if (!isDone) effectiveColor = Colors.white;
       }

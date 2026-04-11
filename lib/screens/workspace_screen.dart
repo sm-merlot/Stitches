@@ -1288,9 +1288,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               if (editorState.isFileOpen && openPdf == null) ...[
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: !editorState.blockMode
-                      ? 'Realistic mode: on'
-                      : 'Realistic mode: off',
+                  tooltip: editorState.stitchMode
+                      ? (!editorState.blockMode ? 'B&W mode: on' : 'B&W mode: off')
+                      : (!editorState.blockMode ? 'Realistic mode: on' : 'Realistic mode: off'),
                   isSelected: !editorState.blockMode,
                   icon: const Icon(Icons.grid_view_outlined),
                   selectedIcon: const Icon(Icons.grid_view),
