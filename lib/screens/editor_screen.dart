@@ -512,8 +512,12 @@ class EditorScreen extends ConsumerWidget {
                     ? (!state.blockMode ? 'B&W mode: on' : 'B&W mode: off')
                     : (!state.blockMode ? 'Realistic mode: on' : 'Realistic mode: off'),
                 isSelected: !state.blockMode,
-                icon: const Icon(Icons.grid_view_outlined),
-                selectedIcon: const Icon(Icons.grid_view),
+                icon: Icon(state.stitchMode
+                    ? Icons.invert_colors_outlined
+                    : Icons.grid_view_outlined),
+                selectedIcon: Icon(state.stitchMode
+                    ? Icons.invert_colors
+                    : Icons.grid_view),
                 onPressed: () =>
                     ref.read(editorProvider.notifier).toggleBlockMode(),
                 style: !state.blockMode

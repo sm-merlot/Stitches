@@ -1292,8 +1292,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       ? (!editorState.blockMode ? 'B&W mode: on' : 'B&W mode: off')
                       : (!editorState.blockMode ? 'Realistic mode: on' : 'Realistic mode: off'),
                   isSelected: !editorState.blockMode,
-                  icon: const Icon(Icons.grid_view_outlined),
-                  selectedIcon: const Icon(Icons.grid_view),
+                  icon: Icon(editorState.stitchMode
+                      ? Icons.invert_colors_outlined
+                      : Icons.grid_view_outlined),
+                  selectedIcon: Icon(editorState.stitchMode
+                      ? Icons.invert_colors
+                      : Icons.grid_view),
                   onPressed: () =>
                       ref.read(editorProvider.notifier).toggleBlockMode(),
                   style: !editorState.blockMode

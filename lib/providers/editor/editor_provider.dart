@@ -329,6 +329,7 @@ class EditorNotifier extends Notifier<EditorState>
       selectionRect: null,
       backstitchStartPoint: null,
       progressRegion: null,
+      blockMode: mode == AppMode.stitch ? false : null,
       showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
       stitchCrossMode: false,
       stitchBackMode: false,
