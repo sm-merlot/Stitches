@@ -103,7 +103,7 @@ class EditorNotifier extends Notifier<EditorState>
     // ── Resolve session state ────────────────────────────────────────────────
     // Files always open in View mode regardless of saved session.
     DrawingTool tool = DrawingTool.fullStitch;
-    bool blockMode = false;
+    bool blockMode = true;
     String? selectedThreadId;
     String? rawActiveLayerId;
     double viewPanX = 0;
@@ -131,7 +131,7 @@ class EditorNotifier extends Notifier<EditorState>
           pattern.editorTool != null ||
           pattern.editorSelectedThreadId != null ||
           pattern.editorStitchMode ||
-          pattern.editorBlockMode ||
+          !pattern.editorBlockMode ||
           pattern.editorActiveLayerId != null ||
           pattern.editorViewPanX != 0 ||
           pattern.editorViewPanY != 0 ||
