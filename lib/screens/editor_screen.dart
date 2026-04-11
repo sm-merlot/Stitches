@@ -505,15 +505,15 @@ class EditorScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              // ── Block mode toggle — in title area, consistent across modes ──
+              // ── Realistic mode toggle — in title area, consistent across modes ──
               IconButton(
-                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
-                isSelected: state.blockMode,
+                tooltip: !state.blockMode ? 'Realistic mode: on' : 'Realistic mode: off',
+                isSelected: !state.blockMode,
                 icon: const Icon(Icons.grid_view_outlined),
                 selectedIcon: const Icon(Icons.grid_view),
                 onPressed: () =>
                     ref.read(editorProvider.notifier).toggleBlockMode(),
-                style: state.blockMode
+                style: !state.blockMode
                     ? IconButton.styleFrom(
                         backgroundColor: state.mode == AppMode.stitch
                             ? Theme.of(context).colorScheme.primary
