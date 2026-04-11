@@ -171,6 +171,27 @@ class _DesignColoursPanel extends ConsumerWidget {
           ),
           const Divider(height: 1),
         ],
+        // ── Stitch count summary + sort ─────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
+          child: Row(
+            children: [
+              Icon(Icons.grid_4x4, size: 13,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '${stitchCounts.values.fold<int>(0, (a, b) => a + b)} stitches',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                ),
+              ),
+              _SortPopup(useDmc: useDmc),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
         Expanded(
           child: _ThreadList(
             threads: threads,
@@ -360,20 +381,23 @@ class _StitchColoursPanel extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Total stitch count summary ──────────────────────────────────────
+        // ── Total stitch count summary + sort ───────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+          padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
           child: Row(
             children: [
               Icon(Icons.grid_4x4, size: 13,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
               const SizedBox(width: 4),
-              Text(
-                '$totalCross stitches${totalBack > 0 ? '  •  $totalBack backstitches' : ''}',
-                style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+              Expanded(
+                child: Text(
+                  '$totalCross stitches${totalBack > 0 ? '  •  $totalBack backstitches' : ''}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                ),
               ),
+              _SortPopup(useDmc: useDmc, doneCounts: doneCounts),
             ],
           ),
         ),
@@ -698,7 +722,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
 
 // ─── Shared thread list ───────────────────────────────────────────────────────
 
-class _ThreadList extends StatelessWidget {
+class _ThreadList extends ConsumerWidget {
   final List<Thread> threads;
   final String? selectedThreadId;
   final bool useDmc;
@@ -721,7 +745,7 @@ class _ThreadList extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (threads.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -729,6 +753,11 @@ class _ThreadList extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 12)),
       );
     }
+
+    final settings = ref.watch(settingsProvider);
+    final sortMode = settings.colourSortMode;
+    final completedLast = settings.completedColoursLast;
+
     // Pre-compute duplicate symbols across the displayed list.
     final symbolCounts = <String, int>{};
     for (final t in threads) {
@@ -756,7 +785,20 @@ class _ThreadList extends StatelessWidget {
       return g >= 0 && conflictingGroups.contains(g);
     }
 
+    bool isThreadComplete(Thread t) {
+      if (doneCounts == null) return false;
+      final total = stitchCounts[t.dmcCode] ?? 0;
+      final done = doneCounts![t.dmcCode] ?? 0;
+      return total > 0 && done >= total;
+    }
+
     final sorted = [...threads]..sort((a, b) {
+        // Completed colours last (only when doneCounts available and toggle on).
+        if (completedLast && doneCounts != null) {
+          final aDone = isThreadComplete(a);
+          final bDone = isThreadComplete(b);
+          if (aDone != bDone) return aDone ? 1 : -1;
+        }
         // No-symbol (incl. PDF-incompatible) first, then duplicates, then similar, then normal.
         final aNoSym = !symbolIsVisible(a.symbol) || symbolIsPdfUnsupported(a.symbol);
         final bNoSym = !symbolIsVisible(b.symbol) || symbolIsPdfUnsupported(b.symbol);
@@ -767,6 +809,13 @@ class _ThreadList extends StatelessWidget {
         final aSim = !aDup && isSimilarOnly(a);
         final bSim = !bDup && isSimilarOnly(b);
         if (aSim != bSim) return aSim ? -1 : 1;
+        // Secondary: sort by chosen mode.
+        if (sortMode == ColourSortMode.byStitchCount) {
+          final ca = stitchCounts[a.dmcCode] ?? 0;
+          final cb = stitchCounts[b.dmcCode] ?? 0;
+          if (ca != cb) return cb.compareTo(ca); // descending
+        }
+        // Fallback / byId: numeric code sort.
         if (useDmc) {
           final ia = int.tryParse(a.dmcCode) ?? 999999;
           final ib = int.tryParse(b.dmcCode) ?? 999999;
@@ -783,7 +832,11 @@ class _ThreadList extends StatelessWidget {
               : (anchorA ?? '').compareTo(anchorB ?? '');
         }
       });
-    return ListView.builder(
+
+    return Column(
+      children: [
+        // ── Thread list ────────────────────────────────────────────────
+        Expanded(child: ListView.builder(
       padding: EdgeInsets.zero,
       itemCount: sorted.length,
       itemBuilder: (_, i) {
@@ -964,6 +1017,8 @@ class _ThreadList extends StatelessWidget {
           ),
         );
       },
+    )),
+      ],
     );
   }
 }
@@ -1298,6 +1353,91 @@ class MarkDoneButton extends ConsumerWidget {
                 }
               : null,
         ),
+      ),
+    );
+  }
+}
+
+// ─── Sort popup ────────────────────────────────────────────────────────────
+
+class _ToggleCompletedLast {
+  const _ToggleCompletedLast();
+}
+
+class _SortPopup extends ConsumerWidget {
+  final bool useDmc;
+  final Map<String, int>? doneCounts;
+
+  const _SortPopup({required this.useDmc, this.doneCounts});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final settingsNotifier = ref.read(settingsProvider.notifier);
+    final sortMode = settings.colourSortMode;
+    final completedLast = settings.completedColoursLast;
+    final theme = Theme.of(context);
+
+    return PopupMenuButton<Object>(
+      tooltip: 'Sort options',
+      icon: Icon(Icons.sort, size: 16,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+      iconSize: 16,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+      style: const ButtonStyle(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+      itemBuilder: (_) => [
+        _sortMenuItem(
+          label: useDmc ? 'Sort by DMC code' : 'Sort by Anchor code',
+          isSelected: sortMode == ColourSortMode.byId,
+          value: ColourSortMode.byId,
+        ),
+        _sortMenuItem(
+          label: 'Sort by stitch count',
+          isSelected: sortMode == ColourSortMode.byStitchCount,
+          value: ColourSortMode.byStitchCount,
+        ),
+        if (doneCounts != null) ...[
+          const PopupMenuDivider(),
+          _sortMenuItem(
+            label: 'Completed colours last',
+            isSelected: completedLast,
+            value: const _ToggleCompletedLast(),
+          ),
+        ],
+      ],
+      onSelected: (value) {
+        if (value is ColourSortMode) {
+          settingsNotifier.setColourSortMode(value);
+        } else if (value is _ToggleCompletedLast) {
+          settingsNotifier.setCompletedColoursLast(!completedLast);
+        }
+      },
+    );
+  }
+
+  static PopupMenuItem<Object> _sortMenuItem({
+    required String label,
+    required bool isSelected,
+    required Object value,
+  }) {
+    return PopupMenuItem<Object>(
+      value: value,
+      height: 36,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            child: isSelected
+                ? const Icon(Icons.check, size: 16)
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 13)),
+        ],
       ),
     );
   }
