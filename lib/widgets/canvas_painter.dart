@@ -242,9 +242,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // ── Stitch symbols (all visible layers) ──────────────────────────────────
     // Shown when zoomed in enough (>= 8 px/cell) AND:
     //   • blockMode off  → always show (both edit and stitch mode)
-    //   • blockMode on   → only in stitch mode (edit mode keeps a clean block view)
+    //   • blockMode on   → only in stitch mode (B&W: black on white for undone,
+    //                       no symbol for done) — edit mode keeps a clean block view
     // Symbols from lower layers are skipped when a higher layer has a FullStitch
     // at the same cell (prevents lower-layer symbols bleeding through).
+    final bwSymbols = stitchMode && blockMode;
     if (effectivePx >= 8 && (!blockMode || stitchMode)) {
       for (int layerIdx = 0; layerIdx < pattern.layers.length; layerIdx++) {
         final layer = pattern.layers[layerIdx];
@@ -257,6 +259,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (stitch is FullStitch && occluded.contains((stitch.x << 16) | stitch.y)) continue;
           final sCoords = stitchXY(stitch);
           if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
+
+          // B&W stitch mode: skip symbols for done cells entirely.
+          if (bwSymbols && sCoords != null &&
+              progress.completedStitches.contains(sCoords)) {
+            continue;
+          }
 
           // For blended cells, use the composite cache (stable symbol
           // assignments) when available; fall back to nearest-thread lookup
@@ -273,14 +281,19 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || !symbolIsVisible(thread.symbol)) continue;
 
-          // For blended cells use the composite thread's DMC code for focus
-          // checks so the symbol shows as focused when the composited colour
-          // matches the selected thread — not the raw per-layer threadId.
-          final focusId = compositeThread?.dmcCode ?? stitch.threadId;
-          final c = _resolveStitchColor(focusId,
-              _applyPaletteOverride(stitch.threadId, thread.color),
-              isCrossStitch: true);
-          if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
+          if (bwSymbols) {
+            // B&W: black symbol, no background box.
+            _drawStitchSymbolBW(canvas, stitch, thread.symbol);
+          } else {
+            // For blended cells use the composite thread's DMC code for focus
+            // checks so the symbol shows as focused when the composited colour
+            // matches the selected thread — not the raw per-layer threadId.
+            final focusId = compositeThread?.dmcCode ?? stitch.threadId;
+            final c = _resolveStitchColor(focusId,
+                _applyPaletteOverride(stitch.threadId, thread.color),
+                isCrossStitch: true);
+            if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
+          }
         }
       }
     }
@@ -851,6 +864,23 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           ..color = textColor.withValues(alpha: 0.25)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 0.5 / scale);
+    tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
+  }
+
+  /// B&W variant: black text on the white block background, no background box.
+  void _drawStitchSymbolBW(Canvas canvas, Stitch stitch, String symbol) {
+    final center = _symbolCenter(stitch);
+    final fontSize = math.max(4.0, cellSize * 0.46);
+    final tp = TextPainter(
+      text: TextSpan(
+          text: symbol,
+          style: TextStyle(
+              fontSize: fontSize,
+              color: const Color(0xFF000000),
+              fontWeight: FontWeight.bold,
+              height: 1.0)),
+      textDirection: TextDirection.ltr,
+    )..layout();
     tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
   }
 
