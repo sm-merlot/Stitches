@@ -1177,7 +1177,7 @@ class _SymbolPickerDialogState extends State<_SymbolPickerDialog> {
 ///
 /// • No selection → visible but disabled; tapping opens the progress info dialog.
 /// • Selection with stitches on the current page:
-///   - All done → shows "Unmark" (orange)
+///   - All done → shows "Frog" (orange)
 ///   - Otherwise → shows "Mark"
 /// Pressing the button does NOT deselect the region so the user can act again.
 class MarkDoneButton extends ConsumerWidget {
@@ -1277,7 +1277,7 @@ class MarkDoneButton extends ConsumerWidget {
         child: FilledButton.icon(
           icon: Icon(allDone ? Icons.remove_done : Icons.done_all, size: 16),
           label: Text(
-            allDone ? 'Unmark' : 'Mark',
+            allDone ? 'Frog' : 'Mark',
             style: const TextStyle(fontSize: 13),
           ),
           style: FilledButton.styleFrom(
