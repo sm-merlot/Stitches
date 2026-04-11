@@ -16,6 +16,8 @@ mixin DrawingMixin on Notifier<EditorState> {
   void refreshCompositeCache(); // provided by LayersMixin
   void _saveSession();          // provided by EditorNotifier
   void setMode(AppMode mode);   // provided by EditorNotifier
+  List<SnippetPalette> syncPaletteSymbolsToPrimary(
+      List<SnippetPalette> palettes); // provided by SnippetsMixin
 
   // ─── Private helpers (unique to this mixin) ───────────────────────────────
 
@@ -207,8 +209,31 @@ mixin DrawingMixin on Notifier<EditorState> {
           .toList(),
     );
 
+    // Mirror the primary slot change into snippetPalettes[0] so the
+    // snippet editor's Colours panel (which reads from palette threads)
+    // stays in sync with pattern.threads. syncPaletteSymbolsToPrimary
+    // then propagates the unchanged slot symbol across all secondaries.
+    var snippetPalettes = state.snippetPalettes;
+    if (snippetPalettes.isNotEmpty) {
+      final primary = List<Thread>.from(snippetPalettes[0].threads);
+      final pIdx = primary.indexWhere((t) => t.dmcCode == oldDmcCode);
+      if (pIdx != -1) {
+        final pNewExists = primary.any((t) => t.dmcCode == newDmcCode);
+        if (pNewExists) {
+          primary.removeAt(pIdx);
+        } else {
+          primary[pIdx] = newThread;
+        }
+        snippetPalettes = syncPaletteSymbolsToPrimary([
+          snippetPalettes[0].copyWith(threads: primary),
+          ...snippetPalettes.skip(1),
+        ]);
+      }
+    }
+
     state = state.copyWith(
       pattern: remappedPattern,
+      snippetPalettes: snippetPalettes,
       selectedThreadId:
           state.selectedThreadId == oldDmcCode ? newDmcCode : state.selectedThreadId,
       undoStack: _buildUndoStack(),

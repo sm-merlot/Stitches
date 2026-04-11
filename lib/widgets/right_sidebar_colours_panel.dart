@@ -662,7 +662,21 @@ class _SnippetColoursPanel extends ConsumerWidget {
         ? palettes[activeIdx].threads
         : state.pattern.threads;
 
-    final stitchCounts = _countStitches(state.pattern.stitches);
+    // Stitches always reference primary-palette DMC codes. For a secondary
+    // palette we remap counts slot-by-slot: secondary[i] inherits the count
+    // from primary[i], so the list shows identical numbers regardless of
+    // which palette is active.
+    final rawCounts = _countStitches(state.pattern.stitches);
+    final Map<String, int> stitchCounts;
+    if (activeIdx == 0 || palettes.isEmpty) {
+      stitchCounts = rawCounts;
+    } else {
+      final primary = palettes[0].threads;
+      stitchCounts = {
+        for (var i = 0; i < threads.length && i < primary.length; i++)
+          threads[i].dmcCode: rawCounts[primary[i].dmcCode] ?? 0,
+      };
+    }
 
     return _ThreadList(
       threads: threads,

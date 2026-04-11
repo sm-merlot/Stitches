@@ -496,7 +496,14 @@ class EditorScreen extends ConsumerWidget {
                   ),
                 const SizedBox(width: 2),
               ],
-              Text(_title(state)),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: Text(
+                  _title(state),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               const SizedBox(width: 4),
               // ── Block mode toggle — in title area, consistent across modes ──
               IconButton(

@@ -385,9 +385,34 @@ mixin SnippetsMixin on Notifier<EditorState> {
 
   void initSnippetPalettesLocal(List<SnippetPalette> palettes, int activeIndex) {
     state = state.copyWith(
-      snippetPalettes: palettes,
+      snippetPalettes: syncPaletteSymbolsToPrimary(palettes),
       snippetActivePaletteIndex: activeIndex,
     );
+  }
+
+  /// Symbols belong to the *slot*, not the thread: every palette's slot `i`
+  /// shares the symbol from the primary palette's slot `i`. This keeps the
+  /// Colours list and the canvas stable when the user switches palettes —
+  /// only the swatch colour changes, the symbol stays put.
+  ///
+  /// Slots in secondary palettes that don't exist in the primary (shouldn't
+  /// happen, but be defensive) keep whatever symbol they already had.
+  List<SnippetPalette> syncPaletteSymbolsToPrimary(
+      List<SnippetPalette> palettes) {
+    if (palettes.length < 2) return palettes;
+    final primary = palettes[0].threads;
+    return [
+      palettes[0],
+      for (var k = 1; k < palettes.length; k++)
+        palettes[k].copyWith(
+          threads: [
+            for (var i = 0; i < palettes[k].threads.length; i++)
+              i < primary.length
+                  ? palettes[k].threads[i].copyWith(symbol: primary[i].symbol)
+                  : palettes[k].threads[i],
+          ],
+        ),
+    ];
   }
 
   void setSnippetActivePaletteLocal(int index) {
@@ -395,7 +420,8 @@ mixin SnippetsMixin on Notifier<EditorState> {
   }
 
   void addSnippetPaletteLocal(SnippetPalette palette) {
-    final newPalettes = [...state.snippetPalettes, palette];
+    final newPalettes =
+        syncPaletteSymbolsToPrimary([...state.snippetPalettes, palette]);
     state = state.copyWith(
       snippetPalettes: newPalettes,
       snippetActivePaletteIndex: newPalettes.length - 1,
@@ -425,7 +451,9 @@ mixin SnippetsMixin on Notifier<EditorState> {
     if (paletteIndex < 0 || paletteIndex >= palettes.length) return;
     final threads = List<Thread>.from(palettes[paletteIndex].threads);
     if (slotIndex < 0 || slotIndex >= threads.length) return;
-    threads[slotIndex] = newThread;
+    // Preserve the slot's existing symbol — the symbol belongs to the slot,
+    // not the thread, so swapping the swatch colour must not change it.
+    threads[slotIndex] = newThread.copyWith(symbol: threads[slotIndex].symbol);
     palettes[paletteIndex] = palettes[paletteIndex].copyWith(threads: threads);
     // Non-zero palettes don't modify the pattern; push a palette-only undo entry.
     if (paletteIndex > 0) {
