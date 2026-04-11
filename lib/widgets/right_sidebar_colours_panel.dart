@@ -698,7 +698,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
 
 // ─── Shared thread list ───────────────────────────────────────────────────────
 
-class _ThreadList extends StatelessWidget {
+class _ThreadList extends ConsumerWidget {
   final List<Thread> threads;
   final String? selectedThreadId;
   final bool useDmc;
@@ -721,7 +721,7 @@ class _ThreadList extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (threads.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -729,6 +729,12 @@ class _ThreadList extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 12)),
       );
     }
+
+    final settings = ref.watch(settingsProvider);
+    final settingsNotifier = ref.read(settingsProvider.notifier);
+    final sortMode = settings.colourSortMode;
+    final completedLast = settings.completedColoursLast;
+
     // Pre-compute duplicate symbols across the displayed list.
     final symbolCounts = <String, int>{};
     for (final t in threads) {
@@ -756,7 +762,20 @@ class _ThreadList extends StatelessWidget {
       return g >= 0 && conflictingGroups.contains(g);
     }
 
+    bool isThreadComplete(Thread t) {
+      if (doneCounts == null) return false;
+      final total = stitchCounts[t.dmcCode] ?? 0;
+      final done = doneCounts![t.dmcCode] ?? 0;
+      return total > 0 && done >= total;
+    }
+
     final sorted = [...threads]..sort((a, b) {
+        // Completed colours last (only when doneCounts available and toggle on).
+        if (completedLast && doneCounts != null) {
+          final aDone = isThreadComplete(a);
+          final bDone = isThreadComplete(b);
+          if (aDone != bDone) return aDone ? 1 : -1;
+        }
         // No-symbol (incl. PDF-incompatible) first, then duplicates, then similar, then normal.
         final aNoSym = !symbolIsVisible(a.symbol) || symbolIsPdfUnsupported(a.symbol);
         final bNoSym = !symbolIsVisible(b.symbol) || symbolIsPdfUnsupported(b.symbol);
@@ -767,6 +786,13 @@ class _ThreadList extends StatelessWidget {
         final aSim = !aDup && isSimilarOnly(a);
         final bSim = !bDup && isSimilarOnly(b);
         if (aSim != bSim) return aSim ? -1 : 1;
+        // Secondary: sort by chosen mode.
+        if (sortMode == ColourSortMode.byStitchCount) {
+          final ca = stitchCounts[a.dmcCode] ?? 0;
+          final cb = stitchCounts[b.dmcCode] ?? 0;
+          if (ca != cb) return cb.compareTo(ca); // descending
+        }
+        // Fallback / byId: numeric code sort.
         if (useDmc) {
           final ia = int.tryParse(a.dmcCode) ?? 999999;
           final ib = int.tryParse(b.dmcCode) ?? 999999;
@@ -783,7 +809,73 @@ class _ThreadList extends StatelessWidget {
               : (anchorA ?? '').compareTo(anchorB ?? '');
         }
       });
-    return ListView.builder(
+
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        // ── Sort controls ──────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 4, 2),
+          child: Row(
+            children: [
+              Text('Sort:',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface
+                          .withValues(alpha: 0.6))),
+              const SizedBox(width: 4),
+              Expanded(
+                child: SegmentedButton<ColourSortMode>(
+                  segments: [
+                    ButtonSegment(
+                      value: ColourSortMode.byId,
+                      label: Text(useDmc ? 'DMC' : 'Anchor'),
+                    ),
+                    const ButtonSegment(
+                      value: ColourSortMode.byStitchCount,
+                      label: Text('Count'),
+                    ),
+                  ],
+                  selected: {sortMode},
+                  onSelectionChanged: (s) =>
+                      settingsNotifier.setColourSortMode(s.first),
+                  style: const ButtonStyle(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+              if (doneCounts != null) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: 'Completed colours last',
+                  child: IconButton(
+                    icon: Icon(
+                      completedLast
+                          ? Icons.vertical_align_bottom
+                          : Icons.vertical_align_bottom_outlined,
+                      size: 18,
+                      color: completedLast
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface
+                              .withValues(alpha: 0.4),
+                    ),
+                    onPressed: () => settingsNotifier
+                        .setCompletedColoursLast(!completedLast),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                        minWidth: 32, minHeight: 32),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        // ── Thread list ────────────────────────────────────────────────
+        Expanded(child: ListView.builder(
       padding: EdgeInsets.zero,
       itemCount: sorted.length,
       itemBuilder: (_, i) {
@@ -964,6 +1056,8 @@ class _ThreadList extends StatelessWidget {
           ),
         );
       },
+    )),
+      ],
     );
   }
 }
