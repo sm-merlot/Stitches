@@ -607,11 +607,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         }
       }
 
-      // B&W stitch mode: undone → white, done → full colour.
+      // B&W stitch mode: undone → subtle greyscale, done → full colour.
       if (stitchMode && !blockMode) {
         final xy = stitchXY(stitch);
         final isDone = xy != null && progress.completedStitches.contains(xy);
-        if (!isDone) effectiveColor = Colors.white;
+        if (!isDone) effectiveColor = _bwGreyscale(effectiveColor);
       }
 
       (byColor[effectiveColor] ??= []).add(rect);
@@ -690,10 +690,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         }
       }
 
-      // B&W stitch mode: undone → white, done → full colour.
+      // B&W stitch mode: undone → subtle greyscale, done → full colour.
       if (stitchMode && !blockMode) {
         final isDone = progress.completedStitches.contains(xy);
-        if (!isDone) effectiveColor = Colors.white;
+        if (!isDone) effectiveColor = _bwGreyscale(effectiveColor);
       }
 
       if (rect.right <= minPx || rect.left >= maxPx ||
@@ -946,6 +946,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // when multiple layers each contributed their own luminance-based grey).
   static const Color _unfocusedGrey = Color(0xA0B8B8B8);
   static Color _greyColor(Color c) => _unfocusedGrey;
+
+  /// Subtle greyscale for B&W stitch mode: maps each colour to a very light
+  /// grey so that different thread colours remain distinguishable.
+  /// Luminance is compressed into the 0.82–0.96 range.
+  static Color _bwGreyscale(Color c) {
+    final l = c.computeLuminance(); // 0.0 (dark) – 1.0 (light)
+    final grey = (0.72 + l * 0.22).clamp(0.0, 1.0);
+    final v = (grey * 255).round();
+    return Color.fromARGB(255, v, v, v);
+  }
 
   // ── Page mode helpers ──────────────────────────────────────────────────────
 
