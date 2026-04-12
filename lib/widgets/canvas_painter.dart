@@ -55,6 +55,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     for (final t in pattern.threads) t.dmcCode: t,
   };
 
+  /// True when in B&W stitch mode (stitch mode with block mode off).
+  bool get _isBWStitchMode => stitchMode && !blockMode;
+
   CanvasStaticPainter({
     required this.pattern,
     required this.cellSize,
@@ -234,6 +237,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
                   stitch.x1, stitch.y1, stitch.x2, stitch.y2)) {
             c = Color.lerp(c, aidaColor, 0.70)!;
           }
+          // B&W stitch mode: draw an orange outline behind focused backstitches
+          // so they stand out against the greyscale background.
+          if (_isBWStitchMode && _isBackstitchFocused(stitch)) {
+            _drawBackstitchOutline(canvas, stitch);
+          }
           _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
         }
       }
@@ -319,7 +327,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // When a thread is focused whose colour blends into the background, draw a
     // perimeter outline around all connected groups of focused cells so the
     // user can locate them in the grey fog of unfocused stitches.
-    if (stitchFocusThreadId != null) {
+    // In B&W mode any active focus (thread, cross, or back) triggers this.
+    if (stitchFocusThreadId != null || (_isBWStitchMode && (stitchBackMode || stitchCrossMode))) {
       _drawFocusedRegionBorderIfNeeded(canvas, blendedColors);
     }
 
@@ -448,29 +457,33 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   /// focused cells share a single outline rather than having separate borders.
   void _drawFocusedRegionBorderIfNeeded(
       Canvas canvas, Map<String, Color> blendMap) {
-    final focusId = stitchFocusThreadId!;
-    final focusThread = _threadMap[focusId];
-    if (focusThread == null) return;
+    final focusId = stitchFocusThreadId;
 
-    // Trigger: focused colour is perceptually close to the aida background OR
-    // close to the uniform grey that unfocused stitches are drawn as.
-    // Using CIE Lab ΔE so chromatic colours (red, blue, etc.) at the same
-    // luminance as a grey are correctly excluded.
-    // Threshold 45 calibrated so DMC 413 (#4C4C50, ΔE≈42.5) just triggers;
-    // vivid hues are ΔE 70+ from the grey fog and are excluded.
-    // Aida check uses a tight threshold (15) — only near-identical colours.
-    final needsOutline =
-        _labDeltaE(focusThread.color, aidaColor) < 15 ||
-        _labDeltaE(focusThread.color, _unfocusedGreyOpaque) < 45;
-    if (!needsOutline) return;
+    // Colour mode: only outline when focused colour is perceptually close
+    // to aida or the unfocused-grey.
+    // B&W stitch mode: always outline — greyscale can't distinguish threads.
+    if (!_isBWStitchMode) {
+      if (focusId == null) return;
+      final focusThread = _threadMap[focusId];
+      if (focusThread == null) return;
+      final needsOutline =
+          _labDeltaE(focusThread.color, aidaColor) < 15 ||
+          _labDeltaE(focusThread.color, _unfocusedGreyOpaque) < 45;
+      if (!needsOutline) return;
+    }
 
-    // Collect every focused cell encoded as (x<<16)|y for O(1) neighbour lookup
-    // without string allocations in this hot path.
+    // Collect every focused cross-stitch cell encoded as (x<<16)|y for O(1)
+    // neighbour lookup without string allocations in this hot path.
+    // A cell is "focused" if _resolveStitchColor would return its original
+    // colour (not grey/null): thread focus, cross mode, and back mode all
+    // factor in.
     final focusedKeys = <int>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
+        // Back mode greys out cross-stitches — they're not focused.
+        if (stitchBackMode) continue;
         final (cx, cy) = switch (stitch) {
           FullStitch(:final x, :final y) => (x, y),
           HalfStitch(:final x, :final y) => (x, y),
@@ -480,13 +493,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           BackStitch() => (-1, -1),
         };
         if (cx < 0) continue;
-        final strKey = '$cx,$cy'; // still needed for blendedColors lookup
         final intKey = (cx << 16) | cy;
-        // Blended cells: focus is determined by the composited DMC code.
-        // Non-blended: focus is determined by the raw thread ID.
-        if (blendMap.containsKey(strKey)) {
-          if (compositeResult?.compositeThreads[strKey]?.dmcCode == focusId) focusedKeys.add(intKey);
-        } else if (stitch.threadId == focusId) {
+
+        if (focusId != null) {
+          // Thread focus active: only cells matching the focused thread.
+          final strKey = '$cx,$cy';
+          if (blendMap.containsKey(strKey)) {
+            if (compositeResult?.compositeThreads[strKey]?.dmcCode == focusId) focusedKeys.add(intKey);
+          } else if (stitch.threadId == focusId) {
+            focusedKeys.add(intKey);
+          }
+        } else {
+          // No thread focus but cross mode: all cross-stitch cells are focused.
           focusedKeys.add(intKey);
         }
       }
@@ -538,6 +556,26 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         ..strokeWidth = 2.0 / scale
         ..strokeCap = StrokeCap.square,
     );
+  }
+
+  /// Whether a backstitch is considered "focused" for B&W outline purposes.
+  bool _isBackstitchFocused(BackStitch stitch) {
+    if (stitchBackMode) return true;
+    return stitchFocusThreadId != null && stitch.threadId == stitchFocusThreadId;
+  }
+
+  static final _bwOutlinePaint = Paint()
+    ..color = const Color(0xFFFF6B00)
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
+  /// Draws a bright orange outline behind a backstitch for B&W focus visibility.
+  void _drawBackstitchOutline(Canvas canvas, BackStitch stitch) {
+    final from = Offset(stitch.x1 * cellSize, stitch.y1 * cellSize);
+    final to = Offset(stitch.x2 * cellSize, stitch.y2 * cellSize);
+    final width = math.max(1.5, cellSize * 0.15);
+    _bwOutlinePaint.strokeWidth = width * 2.2;
+    canvas.drawLine(from, to, _bwOutlinePaint);
   }
 
   // ── Block-mode stitch rendering ────────────────────────────────────────────
