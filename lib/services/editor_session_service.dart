@@ -28,7 +28,7 @@ class EditorSession {
   const EditorSession({
     this.tool = 'fullStitch',
     this.selectedThreadId,
-    this.blockMode = false,
+    this.blockMode = true,
     this.activeLayerId,
     this.viewPanX = 0,
     this.viewPanY = 0,
@@ -50,7 +50,7 @@ class EditorSession {
   factory EditorSession.fromJson(Map<String, dynamic> json) => EditorSession(
         tool: json['tool'] as String? ?? 'fullStitch',
         selectedThreadId: json['selectedThreadId'] as String?,
-        blockMode: json['blockMode'] as bool? ?? false,
+        blockMode: json['blockMode'] as bool? ?? true,
         activeLayerId: json['activeLayerId'] as String?,
         viewPanX: (json['viewPanX'] as num?)?.toDouble() ?? 0,
         viewPanY: (json['viewPanY'] as num?)?.toDouble() ?? 0,

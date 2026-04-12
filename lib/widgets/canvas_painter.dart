@@ -55,6 +55,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     for (final t in pattern.threads) t.dmcCode: t,
   };
 
+  /// True when in B&W stitch mode (stitch mode with block mode off).
+  bool get _isBWStitchMode => stitchMode && !blockMode;
+
   CanvasStaticPainter({
     required this.pattern,
     required this.cellSize,
@@ -166,7 +169,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // ── Stitches — iterate layers bottom to top ──────────────────────────────
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
-      if (blockMode || effectivePx < kBlockThreshold) {
+      if (stitchMode || blockMode || effectivePx < kBlockThreshold) {
         _drawLayerStitchesAsBlocks(canvas, layer, blendedColors, minCX, minCY, maxCX, maxCY);
       } else {
         for (final stitch in layer.stitches) {
@@ -234,6 +237,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
                   stitch.x1, stitch.y1, stitch.x2, stitch.y2)) {
             c = Color.lerp(c, aidaColor, 0.70)!;
           }
+          // B&W stitch mode: draw an orange outline behind focused backstitches
+          // so they stand out against the greyscale background.
+          if (_isBWStitchMode && _isBackstitchFocused(stitch)) {
+            _drawBackstitchOutline(canvas, stitch);
+          }
           _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
         }
       }
@@ -241,11 +249,13 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
     // ── Stitch symbols (all visible layers) ──────────────────────────────────
     // Shown when zoomed in enough (>= 8 px/cell) AND:
-    //   • blockMode off  → always show (both edit and stitch mode)
-    //   • blockMode on   → only in stitch mode (edit mode keeps a clean block view)
+    //   • stitch mode     → always (B&W: black on white for undone, none for done)
+    //   • blockMode off   → always (edit/view mode)
+    //   • blockMode on    → hidden (edit/view mode keeps a clean block view)
     // Symbols from lower layers are skipped when a higher layer has a FullStitch
     // at the same cell (prevents lower-layer symbols bleeding through).
-    if (effectivePx >= 8 && (!blockMode || stitchMode)) {
+    final bwSymbols = stitchMode && !blockMode;
+    if (effectivePx >= 8 && (stitchMode || !blockMode)) {
       for (int layerIdx = 0; layerIdx < pattern.layers.length; layerIdx++) {
         final layer = pattern.layers[layerIdx];
         if (!layer.visible) continue;
@@ -257,6 +267,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (stitch is FullStitch && occluded.contains((stitch.x << 16) | stitch.y)) continue;
           final sCoords = stitchXY(stitch);
           if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
+
+          // B&W stitch mode: skip symbols for done cells entirely.
+          if (bwSymbols && sCoords != null &&
+              progress.completedStitches.contains(sCoords)) {
+            continue;
+          }
 
           // For blended cells, use the composite cache (stable symbol
           // assignments) when available; fall back to nearest-thread lookup
@@ -273,23 +289,28 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || !symbolIsVisible(thread.symbol)) continue;
 
-          // For blended cells use the composite thread's DMC code for focus
-          // checks so the symbol shows as focused when the composited colour
-          // matches the selected thread — not the raw per-layer threadId.
-          final focusId = compositeThread?.dmcCode ?? stitch.threadId;
-          final c = _resolveStitchColor(focusId,
-              _applyPaletteOverride(stitch.threadId, thread.color),
-              isCrossStitch: true);
-          if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
+          if (bwSymbols) {
+            // B&W: black symbol, no background box.
+            _drawStitchSymbolBW(canvas, stitch, thread.symbol);
+          } else {
+            // For blended cells use the composite thread's DMC code for focus
+            // checks so the symbol shows as focused when the composited colour
+            // matches the selected thread — not the raw per-layer threadId.
+            final focusId = compositeThread?.dmcCode ?? stitch.threadId;
+            final c = _resolveStitchColor(focusId,
+                _applyPaletteOverride(stitch.threadId, thread.color),
+                isCrossStitch: true);
+            if (c != null) _drawStitchSymbol(canvas, stitch, thread.symbol, c);
+          }
         }
       }
     }
 
-    // ── Done-stitch dimming (Stitch mode only) ──────────────────────────────
-    // Draw a semi-transparent aida-coloured overlay on each completed cell so
-    // done stitches appear at ~30% of their full brightness, making remaining
-    // work visually prominent.
-    if (stitchMode && progress.completedStitches.isNotEmpty) {
+    // ── Done-stitch dimming (block stitch mode only) ────────────────────────
+    // In stitch+block mode (full colour), draw a semi-transparent aida overlay
+    // on completed cells so done stitches appear dimmed. Skipped in B&W mode
+    // where done/undone is handled by the colour itself.
+    if (stitchMode && blockMode && progress.completedStitches.isNotEmpty) {
       final dimPaint = Paint()
         ..color = aidaColor.withValues(alpha: 0.70);
       for (final (cx, cy) in progress.completedStitches) {
@@ -306,7 +327,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // When a thread is focused whose colour blends into the background, draw a
     // perimeter outline around all connected groups of focused cells so the
     // user can locate them in the grey fog of unfocused stitches.
-    if (stitchFocusThreadId != null) {
+    // In B&W mode any active focus (thread, cross, or back) triggers this.
+    if (stitchFocusThreadId != null || (_isBWStitchMode && (stitchBackMode || stitchCrossMode))) {
       _drawFocusedRegionBorderIfNeeded(canvas, blendedColors);
     }
 
@@ -393,6 +415,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   static bool _blockCacheBackMode = false;
   static bool _blockCacheCrossMode = false;
   static Map<String, Color>? _blockCachePaletteOverride;
+  static int _blockCacheProgressLen = -1;
   // Key is the Layer object itself (identity-compared via map lookup).
   static final Map<Layer, Map<Color, List<Rect>>> _blockRectsByLayer = {};
 
@@ -434,29 +457,33 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   /// focused cells share a single outline rather than having separate borders.
   void _drawFocusedRegionBorderIfNeeded(
       Canvas canvas, Map<String, Color> blendMap) {
-    final focusId = stitchFocusThreadId!;
-    final focusThread = _threadMap[focusId];
-    if (focusThread == null) return;
+    final focusId = stitchFocusThreadId;
 
-    // Trigger: focused colour is perceptually close to the aida background OR
-    // close to the uniform grey that unfocused stitches are drawn as.
-    // Using CIE Lab ΔE so chromatic colours (red, blue, etc.) at the same
-    // luminance as a grey are correctly excluded.
-    // Threshold 45 calibrated so DMC 413 (#4C4C50, ΔE≈42.5) just triggers;
-    // vivid hues are ΔE 70+ from the grey fog and are excluded.
-    // Aida check uses a tight threshold (15) — only near-identical colours.
-    final needsOutline =
-        _labDeltaE(focusThread.color, aidaColor) < 15 ||
-        _labDeltaE(focusThread.color, _unfocusedGreyOpaque) < 45;
-    if (!needsOutline) return;
+    // Colour mode: only outline when focused colour is perceptually close
+    // to aida or the unfocused-grey.
+    // B&W stitch mode: always outline — greyscale can't distinguish threads.
+    if (!_isBWStitchMode) {
+      if (focusId == null) return;
+      final focusThread = _threadMap[focusId];
+      if (focusThread == null) return;
+      final needsOutline =
+          _labDeltaE(focusThread.color, aidaColor) < 15 ||
+          _labDeltaE(focusThread.color, _unfocusedGreyOpaque) < 45;
+      if (!needsOutline) return;
+    }
 
-    // Collect every focused cell encoded as (x<<16)|y for O(1) neighbour lookup
-    // without string allocations in this hot path.
+    // Collect every focused cross-stitch cell encoded as (x<<16)|y for O(1)
+    // neighbour lookup without string allocations in this hot path.
+    // A cell is "focused" if _resolveStitchColor would return its original
+    // colour (not grey/null): thread focus, cross mode, and back mode all
+    // factor in.
     final focusedKeys = <int>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
+        // Back mode greys out cross-stitches — they're not focused.
+        if (stitchBackMode) continue;
         final (cx, cy) = switch (stitch) {
           FullStitch(:final x, :final y) => (x, y),
           HalfStitch(:final x, :final y) => (x, y),
@@ -466,13 +493,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           BackStitch() => (-1, -1),
         };
         if (cx < 0) continue;
-        final strKey = '$cx,$cy'; // still needed for blendedColors lookup
         final intKey = (cx << 16) | cy;
-        // Blended cells: focus is determined by the composited DMC code.
-        // Non-blended: focus is determined by the raw thread ID.
-        if (blendMap.containsKey(strKey)) {
-          if (compositeResult?.compositeThreads[strKey]?.dmcCode == focusId) focusedKeys.add(intKey);
-        } else if (stitch.threadId == focusId) {
+
+        if (focusId != null) {
+          // Thread focus active: only cells matching the focused thread.
+          final strKey = '$cx,$cy';
+          if (blendMap.containsKey(strKey)) {
+            if (compositeResult?.compositeThreads[strKey]?.dmcCode == focusId) focusedKeys.add(intKey);
+          } else if (stitch.threadId == focusId) {
+            focusedKeys.add(intKey);
+          }
+        } else {
+          // No thread focus but cross mode: all cross-stitch cells are focused.
           focusedKeys.add(intKey);
         }
       }
@@ -526,6 +558,26 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     );
   }
 
+  /// Whether a backstitch is considered "focused" for B&W outline purposes.
+  bool _isBackstitchFocused(BackStitch stitch) {
+    if (stitchBackMode) return true;
+    return stitchFocusThreadId != null && stitch.threadId == stitchFocusThreadId;
+  }
+
+  static final _bwOutlinePaint = Paint()
+    ..color = const Color(0xFFFF6B00)
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
+  /// Draws a bright orange outline behind a backstitch for B&W focus visibility.
+  void _drawBackstitchOutline(Canvas canvas, BackStitch stitch) {
+    final from = Offset(stitch.x1 * cellSize, stitch.y1 * cellSize);
+    final to = Offset(stitch.x2 * cellSize, stitch.y2 * cellSize);
+    final width = math.max(1.5, cellSize * 0.15);
+    _bwOutlinePaint.strokeWidth = width * 2.2;
+    canvas.drawLine(from, to, _bwOutlinePaint);
+  }
+
   // ── Block-mode stitch rendering ────────────────────────────────────────────
   // Renders each occupied cell as a solid colour rect — used when zoomed out
   // far enough that stitch shapes are sub-pixel and too small to be meaningful.
@@ -538,12 +590,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   Map<Color, List<Rect>> _getOrBuildBlockRects(
       Layer layer, Map<String, Color> blendMap) {
     // Invalidate if pattern or any display-mode flag that affects colours changed.
+    // In B&W stitch mode, progress changes affect block colours so we include
+    // the completed-stitch count as a cheap invalidation proxy.
+    final progressLen = (stitchMode && !blockMode)
+        ? progress.completedStitches.length
+        : -1;
     final modeChanged = !identical(_blockCachePattern, pattern) ||
         _blockCacheFocusId != stitchFocusThreadId ||
         _blockCacheStitchMode != stitchMode ||
         _blockCacheBackMode != stitchBackMode ||
         _blockCacheCrossMode != stitchCrossMode ||
-        !identical(_blockCachePaletteOverride, paletteOverride);
+        !identical(_blockCachePaletteOverride, paletteOverride) ||
+        _blockCacheProgressLen != progressLen;
     if (modeChanged) {
       _blockRectsByLayer.clear();
       _blockCachePattern = pattern;
@@ -552,6 +610,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       _blockCacheBackMode = stitchBackMode;
       _blockCacheCrossMode = stitchCrossMode;
       _blockCachePaletteOverride = paletteOverride;
+      _blockCacheProgressLen = progressLen;
     }
 
     final cached = _blockRectsByLayer[layer];
@@ -585,6 +644,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           effectiveColor = blended ?? c;
         }
       }
+
+      // B&W stitch mode: undone → subtle greyscale, done → full colour.
+      if (stitchMode && !blockMode) {
+        final xy = stitchXY(stitch);
+        final isDone = xy != null && progress.completedStitches.contains(xy);
+        if (!isDone) effectiveColor = _bwGreyscale(effectiveColor);
+      }
+
       (byColor[effectiveColor] ??= []).add(rect);
     }
 
@@ -659,6 +726,12 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         } else {
           effectiveColor = blended ?? c;
         }
+      }
+
+      // B&W stitch mode: undone → subtle greyscale, done → full colour.
+      if (stitchMode && !blockMode) {
+        final isDone = progress.completedStitches.contains(xy);
+        if (!isDone) effectiveColor = _bwGreyscale(effectiveColor);
       }
 
       if (rect.right <= minPx || rect.left >= maxPx ||
@@ -831,6 +904,23 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
   }
 
+  /// B&W variant: black text on the white block background, no background box.
+  void _drawStitchSymbolBW(Canvas canvas, Stitch stitch, String symbol) {
+    final center = _symbolCenter(stitch);
+    final fontSize = math.max(4.0, cellSize * 0.46);
+    final tp = TextPainter(
+      text: TextSpan(
+          text: symbol,
+          style: TextStyle(
+              fontSize: fontSize,
+              color: const Color(0xFF000000),
+              fontWeight: FontWeight.bold,
+              height: 1.0)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
+  }
+
   Offset _symbolCenter(Stitch stitch) {
     return switch (stitch) {
       FullStitch(:final x, :final y) =>
@@ -894,6 +984,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // when multiple layers each contributed their own luminance-based grey).
   static const Color _unfocusedGrey = Color(0xA0B8B8B8);
   static Color _greyColor(Color c) => _unfocusedGrey;
+
+  /// Subtle greyscale for B&W stitch mode: maps each colour to a very light
+  /// grey so that different thread colours remain distinguishable.
+  /// Luminance is compressed into the 0.82–0.96 range.
+  static Color _bwGreyscale(Color c) {
+    final l = c.computeLuminance(); // 0.0 (dark) – 1.0 (light)
+    final grey = (0.72 + l * 0.22).clamp(0.0, 1.0);
+    final v = (grey * 255).round();
+    return Color.fromARGB(255, v, v, v);
+  }
 
   // ── Page mode helpers ──────────────────────────────────────────────────────
 

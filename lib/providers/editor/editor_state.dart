@@ -101,7 +101,7 @@ class EditorState {
     this.showCompositeThreads = true,
     this.compositeResult,
     this.mode = AppMode.view,
-    this.blockMode = false,
+    this.blockMode = true,
     this.stitchCrossMode = false,
     this.stitchBackMode = false,
     this.stitchFocusThreadId,

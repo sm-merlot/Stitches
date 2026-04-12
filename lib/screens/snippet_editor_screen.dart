@@ -534,14 +534,14 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             const SizedBox(width: 4),
             _buildTitle(theme),
             const SizedBox(width: 4),
-            // ── Block mode toggle — title area, matches main editor ─────
+            // ── Realistic mode toggle — title area, matches main editor ──
             IconButton(
-              tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
-              isSelected: state.blockMode,
+              tooltip: !state.blockMode ? 'Realistic mode: on' : 'Realistic mode: off',
+              isSelected: !state.blockMode,
               icon: const Icon(Icons.grid_view_outlined),
               selectedIcon: const Icon(Icons.grid_view),
               onPressed: () => notifier.toggleBlockMode(),
-              style: state.blockMode
+              style: !state.blockMode
                   ? IconButton.styleFrom(
                       backgroundColor: theme.colorScheme.primaryContainer,
                       foregroundColor: theme.colorScheme.onPrimaryContainer,
