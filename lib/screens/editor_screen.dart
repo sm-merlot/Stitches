@@ -505,15 +505,22 @@ class EditorScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              // ── Block mode toggle — in title area, consistent across modes ──
+              // ── View mode toggle — in title area, consistent across modes ──
+              // Edit/view: block vs realistic. Stitch: block vs B&W.
               IconButton(
-                tooltip: state.blockMode ? 'Block mode: on' : 'Block mode: off',
-                isSelected: state.blockMode,
-                icon: const Icon(Icons.grid_view_outlined),
-                selectedIcon: const Icon(Icons.grid_view),
+                tooltip: state.stitchMode
+                    ? (!state.blockMode ? 'B&W mode: on' : 'B&W mode: off')
+                    : (!state.blockMode ? 'Realistic mode: on' : 'Realistic mode: off'),
+                isSelected: !state.blockMode,
+                icon: Icon(state.stitchMode
+                    ? Icons.invert_colors_outlined
+                    : Icons.grid_view_outlined),
+                selectedIcon: Icon(state.stitchMode
+                    ? Icons.invert_colors
+                    : Icons.grid_view),
                 onPressed: () =>
                     ref.read(editorProvider.notifier).toggleBlockMode(),
-                style: state.blockMode
+                style: !state.blockMode
                     ? IconButton.styleFrom(
                         backgroundColor: state.mode == AppMode.stitch
                             ? Theme.of(context).colorScheme.primary
