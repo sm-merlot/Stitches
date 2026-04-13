@@ -187,9 +187,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
               _applyPaletteOverride(stitch.threadId, thread.color),
               isCrossStitch: false);
           if (c == null) continue;
-          if (stitchMode &&
-              progress.isBackstitchDone(
-                  stitch.x1, stitch.y1, stitch.x2, stitch.y2)) {
+          final isDone = stitchMode && progress.isBackstitchDone(
+              stitch.x1, stitch.y1, stitch.x2, stitch.y2);
+          if (_isBWStitchMode && !isDone) {
+            c = _bwGreyscale(c);
+          } else if (isDone) {
             c = Color.lerp(c, aidaColor, 0.70)!;
           }
           // B&W stitch mode: draw an orange outline behind focused backstitches

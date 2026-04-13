@@ -219,8 +219,8 @@ void _drawStitchPreview(
 
   if (realistic) {
     // Cross-type stitches as lens-shaped thread lines.
-    final endW = math.max(0.3, cellSize * 0.08);
-    final midW = math.max(0.6, cellSize * 0.18);
+    final endW = math.max(0.4, cellSize * 0.10);
+    final midW = math.max(0.8, cellSize * 0.24);
     for (final s in nonBack) {
       final cx = _stitches(s);
       final cy = _stitchY(s);

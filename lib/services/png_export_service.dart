@@ -42,8 +42,8 @@ class PngExportService {
     // ── Cross-type stitches ───────────────────────────────────────────────
     if (realistic) {
       final fillPaint = Paint()..style = PaintingStyle.fill;
-      final endW = math.max(0.4, cellSize * 0.08);
-      final midW = math.max(0.8, cellSize * 0.18);
+      final endW = math.max(0.8, cellSize * 0.14);
+      final midW = math.max(1.6, cellSize * 0.32);
 
       for (final s in nonBack) {
         final cx = _stitchX(s);
@@ -75,7 +75,7 @@ class PngExportService {
     final bsPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = math.max(0.4, cellSize * 0.06);
+      ..strokeWidth = math.max(0.6, cellSize * 0.08);
 
     for (final bs in backstitches) {
       final thread = threadMap[bs.threadId];
