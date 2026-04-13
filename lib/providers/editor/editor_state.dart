@@ -40,6 +40,10 @@ class EditorState {
   final int eraserSize;
   /// When true, erase mode uses flood-fill erase instead of the square eraser.
   final bool fillEraseActive;
+  /// When true, backstitch drawing chains: the end point of one backstitch
+  /// becomes the start point of the next. Toggled via toolbar (touch) or
+  /// held via Ctrl (desktop).
+  final bool backstitchChainMode;
 
   /// Last-known canvas view position — written on pointer-up, read on file open.
   /// Scale == 0 means no saved position (use PatternCanvas default).
@@ -115,6 +119,7 @@ class EditorState {
     this.snippetActivePaletteIndex = 0,
     this.eraserSize = 1,
     this.fillEraseActive = false,
+    this.backstitchChainMode = false,
     this.viewPanX = 0,
     this.viewPanY = 0,
     this.viewScale = 0,
@@ -263,6 +268,7 @@ class EditorState {
     int? snippetActivePaletteIndex,
     int? eraserSize,
     bool? fillEraseActive,
+    bool? backstitchChainMode,
     double? viewPanX,
     double? viewPanY,
     double? viewScale,
@@ -323,6 +329,7 @@ class EditorState {
       snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
       eraserSize: eraserSize ?? this.eraserSize,
       fillEraseActive: fillEraseActive ?? this.fillEraseActive,
+      backstitchChainMode: backstitchChainMode ?? this.backstitchChainMode,
       viewPanX: viewPanX ?? this.viewPanX,
       viewPanY: viewPanY ?? this.viewPanY,
       viewScale: viewScale ?? this.viewScale,

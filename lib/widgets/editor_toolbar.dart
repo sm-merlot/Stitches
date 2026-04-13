@@ -218,6 +218,17 @@ class EditorToolbar extends ConsumerWidget {
                             onTap: () => notifier.setTool(DrawingTool.backstitch),
                             builder: (c) => Icon(Icons.gesture, size: 17, color: c),
                           ),
+                          if (state.currentTool == DrawingTool.backstitch) ...[
+                            const SizedBox(width: 2),
+                            _ToolbarButton(
+                              tooltip: _isTouchPlatform
+                                  ? 'Chain mode (tap ends become next start)'
+                                  : 'Chain mode (hold Ctrl, or toggle)',
+                              selected: state.backstitchChainMode,
+                              onTap: () => notifier.toggleBackstitchChainMode(),
+                              builder: (c) => Icon(Icons.link, size: 17, color: c),
+                            ),
+                          ],
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Fill colour  [8]'),

@@ -144,9 +144,13 @@ class FileService {
       {bool compress = true}) async {
     // Release builds always compress regardless of the per-file flag.
     final effectiveCompress = kDebugMode ? compress : true;
-    final yaml = toYamlString(pattern);
-    final bytes =
-        effectiveCompress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
+    // Serialise + compress off the main thread so stitch-marking stays smooth.
+    final bytes = await Isolate.run(() {
+      final yaml = toYamlString(pattern);
+      return effectiveCompress
+          ? gzip.encode(utf8.encode(yaml))
+          : utf8.encode(yaml);
+    });
     await File(path).writeAsBytes(bytes, flush: true);
     final stat = await File(path).stat();
     PatternCache.put(path, pattern, effectiveCompress, stat.modified);
@@ -161,9 +165,12 @@ class FileService {
     final suggestedName = pattern.name.replaceAll(RegExp(r'[^\w\s-]'), '_');
     if (_isMobile) {
       // On iOS/Android the platform manages writing; bytes must be provided.
-      final yaml = toYamlString(pattern);
-      final bytes =
-          effectiveCompress ? gzip.encode(utf8.encode(yaml)) : utf8.encode(yaml);
+      final bytes = await Isolate.run(() {
+        final yaml = toYamlString(pattern);
+        return effectiveCompress
+            ? gzip.encode(utf8.encode(yaml))
+            : utf8.encode(yaml);
+      });
       final path = await FilePicker.saveFile(
         fileName: '$suggestedName.$_ext',
         type: FileType.any,

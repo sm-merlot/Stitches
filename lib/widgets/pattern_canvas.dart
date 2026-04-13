@@ -56,7 +56,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   (int, int)?  _lastProgressDownCell;
   bool         _pendingDoubleClick = false;
   bool?        _wasProgressCellDone; // state of the cell BEFORE the last single-click toggle
-  static const int _kDoubleClickMs = 400;
+  static const int _kDoubleClickMs = 500;
 
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
@@ -432,12 +432,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
       if (state.backstitchStartPoint == null) {
         notifier.setBackstitchStart(gridPt);
+        // Clear stale hover so preview doesn't flash to the old end point.
+        _backstitchHoverPoint = null;
       } else {
         final start = state.backstitchStartPoint!;
         final sx = start.dx;
         final sy = start.dy;
         if (sx == gx && sy == gy) {
           notifier.setBackstitchStart(null);
+          _backstitchHoverPoint = null;
         } else if (state.selectedThreadId != null) {
           notifier.addStitch(BackStitch(
             x1: sx,
@@ -446,7 +449,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             y2: gy,
             threadId: state.selectedThreadId!,
           ));
-          notifier.setBackstitchStart(null);
+          // Chain mode: end point becomes new start for next backstitch.
+          // Activated by holding Ctrl (desktop) or chain toggle (touch).
+          final chain = _ctrlHeld || state.backstitchChainMode;
+          notifier.setBackstitchStart(chain ? gridPt : null);
+          if (!chain) _backstitchHoverPoint = null;
         }
       }
       return;
@@ -1022,12 +1029,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         return;
       }
 
-      _handleDrawAt(event.localPosition);
-
+      // Backstitch is click-to-click, not drag-to-draw — only update hover.
       if (ref.read(editorProvider).currentTool == DrawingTool.backstitch) {
         final canvas = _screenToCanvas(event.localPosition);
         _backstitchHoverPoint = _canvasToGridPoint(canvas);
         _scheduleRebuild();
+      } else {
+        _handleDrawAt(event.localPosition);
       }
       return;
     }
@@ -1084,7 +1092,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           _progressDragRect = newRect;
           _scheduleRebuild();
         }
-      } else {
+      } else if (ref.read(editorProvider).currentTool != DrawingTool.backstitch) {
+        // Backstitch is click-to-click, not drag-to-draw.
         _handleDrawAt(event.localPosition);
       }
     }
