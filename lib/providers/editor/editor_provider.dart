@@ -103,7 +103,7 @@ class EditorNotifier extends Notifier<EditorState>
     // ── Resolve session state ────────────────────────────────────────────────
     // Files always open in View mode regardless of saved session.
     DrawingTool tool = DrawingTool.fullStitch;
-    bool blockMode = true;
+    bool colourMode = false;
     String? selectedThreadId;
     String? rawActiveLayerId;
     double viewPanX = 0;
@@ -118,7 +118,7 @@ class EditorNotifier extends Notifier<EditorState>
 
     if (session != null) {
       try { tool = DrawingTool.values.byName(session.tool); } catch (_) {}
-      blockMode       = session.blockMode;
+      colourMode       = session.colourMode;
       selectedThreadId = session.selectedThreadId;
       rawActiveLayerId = session.activeLayerId;
       viewPanX = session.viewPanX;
@@ -139,7 +139,7 @@ class EditorNotifier extends Notifier<EditorState>
       if (pattern.editorTool != null) {
         try { tool = DrawingTool.values.byName(pattern.editorTool!); } catch (_) {}
       }
-      blockMode        = pattern.editorBlockMode;
+      colourMode        = !pattern.editorBlockMode;
       selectedThreadId = pattern.editorSelectedThreadId;
       rawActiveLayerId = pattern.editorActiveLayerId;
       viewPanX = pattern.editorViewPanX;
@@ -181,7 +181,7 @@ class EditorNotifier extends Notifier<EditorState>
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
       mode: AppMode.view,
-      blockMode: blockMode,
+      colourMode: colourMode,
       drawingMode: hasClipboard ? DrawingMode.paste : DrawingMode.pan,
       clipboard: hasClipboard ? prevClipboard : null,
       clipboardThreads: hasClipboard ? prevClipboardThreads : null,
@@ -218,7 +218,7 @@ class EditorNotifier extends Notifier<EditorState>
           EditorSession(
             tool: tool.name,
             selectedThreadId: threadId,
-            blockMode: blockMode,
+            colourMode: colourMode,
             activeLayerId: resolvedLayerId.isEmpty ? null : resolvedLayerId,
             viewPanX: viewPanX,
             viewPanY: viewPanY,
@@ -272,7 +272,7 @@ class EditorNotifier extends Notifier<EditorState>
       EditorSession(
         tool: state.currentTool.name,
         selectedThreadId: state.selectedThreadId,
-        blockMode: state.blockMode,
+        colourMode: state.colourMode,
         activeLayerId: state.activeLayerId.isEmpty ? null : state.activeLayerId,
         viewPanX: state.viewPanX,
         viewPanY: state.viewPanY,
@@ -329,7 +329,7 @@ class EditorNotifier extends Notifier<EditorState>
       selectionRect: null,
       backstitchStartPoint: null,
       progressRegion: null,
-      blockMode: mode == AppMode.stitch ? false : null,
+      colourMode: mode == AppMode.stitch ? false : null,
       showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
       stitchCrossMode: false,
       stitchBackMode: false,

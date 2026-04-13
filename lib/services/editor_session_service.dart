@@ -15,7 +15,7 @@ class EditorSession {
   /// DrawingTool.name value.
   final String tool;
   final String? selectedThreadId;
-  final bool blockMode;
+  final bool colourMode;
   final String? activeLayerId;
   final double viewPanX;
   final double viewPanY;
@@ -28,7 +28,7 @@ class EditorSession {
   const EditorSession({
     this.tool = 'fullStitch',
     this.selectedThreadId,
-    this.blockMode = true,
+    this.colourMode = false,
     this.activeLayerId,
     this.viewPanX = 0,
     this.viewPanY = 0,
@@ -39,7 +39,7 @@ class EditorSession {
   Map<String, dynamic> toJson() => {
         'tool': tool,
         if (selectedThreadId != null) 'selectedThreadId': selectedThreadId,
-        'blockMode': blockMode,
+        'colourMode': colourMode,
         if (activeLayerId != null) 'activeLayerId': activeLayerId,
         'viewPanX': viewPanX,
         'viewPanY': viewPanY,
@@ -50,7 +50,8 @@ class EditorSession {
   factory EditorSession.fromJson(Map<String, dynamic> json) => EditorSession(
         tool: json['tool'] as String? ?? 'fullStitch',
         selectedThreadId: json['selectedThreadId'] as String?,
-        blockMode: json['blockMode'] as bool? ?? true,
+        colourMode: json['colourMode'] as bool?
+            ?? (json['blockMode'] != null ? !(json['blockMode'] as bool) : false),
         activeLayerId: json['activeLayerId'] as String?,
         viewPanX: (json['viewPanX'] as num?)?.toDouble() ?? 0,
         viewPanY: (json['viewPanY'] as num?)?.toDouble() ?? 0,

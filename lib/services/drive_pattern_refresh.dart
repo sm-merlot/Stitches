@@ -59,7 +59,7 @@ Future<void> refreshDrivePatternInBackground(
     final liveSession = EditorSession(
       tool: current.currentTool.name,
       selectedThreadId: current.selectedThreadId,
-      blockMode: current.blockMode,
+      colourMode: current.colourMode,
       activeLayerId:
           current.activeLayerId.isEmpty ? null : current.activeLayerId,
       viewPanX: current.viewPanX,
