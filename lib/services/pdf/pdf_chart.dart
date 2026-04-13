@@ -347,93 +347,75 @@ int _stitchY(Stitch s) => switch (s) {
 
 // ── Realistic stitch line-art ─────────────────────────────────────────────
 
-/// Draws stitch shapes as diagonal line-art (X, half-X, etc.).
+/// Draws a single thread line as a lens shape (thin at endpoints, thicker in
+/// the middle) to mimic real thread bulging where it crosses.
+/// Fill colour must be set by the caller.
+void _drawThreadLensPdf(PdfGraphics canvas,
+    double x1, double y1, double x2, double y2, double endW, double midW) {
+  final dx = x2 - x1;
+  final dy = y2 - y1;
+  final len = math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return;
+  final px = -dy / len;
+  final py = dx / len;
+  final eOff = endW / 2;
+  final mOff = midW / 2;
+  final mx = (x1 + x2) / 2;
+  final my = (y1 + y2) / 2;
+
+  canvas.moveTo(x1 + px * eOff, y1 + py * eOff);
+  canvas.curveTo(mx + px * mOff, my + py * mOff,
+      mx + px * mOff, my + py * mOff, x2 + px * eOff, y2 + py * eOff);
+  canvas.curveTo(mx - px * mOff, my - py * mOff,
+      mx - px * mOff, my - py * mOff, x1 - px * eOff, y1 - py * eOff);
+  canvas.closePath();
+  canvas.fillPath();
+}
+
+/// Draws stitch shapes as lens-shaped thread lines.
 /// gx/gy = bottom-left of the cell in PDF coords (y increases up).
-/// Stroke colour and width must be set by the caller.
-void _drawRealisticStitch(
-    PdfGraphics canvas, Stitch s, double gx, double gy, double cs) {
+/// Fill colour must be set by the caller; endW/midW control thread thickness.
+void _drawRealisticStitch(PdfGraphics canvas, Stitch s,
+    double gx, double gy, double cs, double endW, double midW) {
+  void lens(double x1, double y1, double x2, double y2) =>
+      _drawThreadLensPdf(canvas, x1, y1, x2, y2, endW, midW);
+
   switch (s) {
     case FullStitch():
-      canvas.moveTo(gx, gy);
-      canvas.lineTo(gx + cs, gy + cs);
-      canvas.strokePath();
-      canvas.moveTo(gx, gy + cs);
-      canvas.lineTo(gx + cs, gy);
-      canvas.strokePath();
-
-    case HalfStitch(isForward: true): // "/"
-      canvas.moveTo(gx, gy);
-      canvas.lineTo(gx + cs, gy + cs);
-      canvas.strokePath();
-
-    case HalfStitch(isForward: false): // "\"
-      canvas.moveTo(gx, gy + cs);
-      canvas.lineTo(gx + cs, gy);
-      canvas.strokePath();
-
+      lens(gx, gy, gx + cs, gy + cs);
+      lens(gx, gy + cs, gx + cs, gy);
+    case HalfStitch(isForward: true):
+      lens(gx, gy, gx + cs, gy + cs);
+    case HalfStitch(isForward: false):
+      lens(gx, gy + cs, gx + cs, gy);
     case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-      canvas.moveTo(gx, gy + cs / 2);
-      canvas.lineTo(gx + cs / 2, gy + cs);
-      canvas.strokePath();
+      lens(gx, gy + cs / 2, gx + cs / 2, gy + cs);
     case QuarterStitch(quadrant: QuadrantPosition.topRight):
-      canvas.moveTo(gx + cs / 2, gy + cs);
-      canvas.lineTo(gx + cs, gy + cs / 2);
-      canvas.strokePath();
+      lens(gx + cs / 2, gy + cs, gx + cs, gy + cs / 2);
     case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
-      canvas.moveTo(gx, gy + cs / 2);
-      canvas.lineTo(gx + cs / 2, gy);
-      canvas.strokePath();
+      lens(gx, gy + cs / 2, gx + cs / 2, gy);
     case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
-      canvas.moveTo(gx + cs / 2, gy);
-      canvas.lineTo(gx + cs, gy + cs / 2);
-      canvas.strokePath();
-
+      lens(gx + cs / 2, gy, gx + cs, gy + cs / 2);
     case HalfCrossStitch(half: HalfOrientation.left):
-      canvas.moveTo(gx, gy);
-      canvas.lineTo(gx + cs / 2, gy + cs);
-      canvas.strokePath();
-      canvas.moveTo(gx, gy + cs);
-      canvas.lineTo(gx + cs / 2, gy);
-      canvas.strokePath();
+      lens(gx, gy, gx + cs / 2, gy + cs);
+      lens(gx, gy + cs, gx + cs / 2, gy);
     case HalfCrossStitch(half: HalfOrientation.right):
-      canvas.moveTo(gx + cs / 2, gy);
-      canvas.lineTo(gx + cs, gy + cs);
-      canvas.strokePath();
-      canvas.moveTo(gx + cs / 2, gy + cs);
-      canvas.lineTo(gx + cs, gy);
-      canvas.strokePath();
+      lens(gx + cs / 2, gy, gx + cs, gy + cs);
+      lens(gx + cs / 2, gy + cs, gx + cs, gy);
     case HalfCrossStitch(half: HalfOrientation.top):
-      canvas.moveTo(gx, gy + cs / 2);
-      canvas.lineTo(gx + cs, gy + cs);
-      canvas.strokePath();
-      canvas.moveTo(gx, gy + cs);
-      canvas.lineTo(gx + cs, gy + cs / 2);
-      canvas.strokePath();
+      lens(gx, gy + cs / 2, gx + cs, gy + cs);
+      lens(gx, gy + cs, gx + cs, gy + cs / 2);
     case HalfCrossStitch(half: HalfOrientation.bottom):
-      canvas.moveTo(gx, gy);
-      canvas.lineTo(gx + cs, gy + cs / 2);
-      canvas.strokePath();
-      canvas.moveTo(gx, gy + cs / 2);
-      canvas.lineTo(gx + cs, gy);
-      canvas.strokePath();
-
+      lens(gx, gy, gx + cs, gy + cs / 2);
+      lens(gx, gy + cs / 2, gx + cs, gy);
     case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-      canvas.moveTo(gx, gy + cs / 2);
-      canvas.lineTo(gx + cs / 2, gy + cs);
-      canvas.strokePath();
+      lens(gx, gy + cs / 2, gx + cs / 2, gy + cs);
     case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-      canvas.moveTo(gx + cs / 2, gy + cs);
-      canvas.lineTo(gx + cs, gy + cs / 2);
-      canvas.strokePath();
+      lens(gx + cs / 2, gy + cs, gx + cs, gy + cs / 2);
     case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-      canvas.moveTo(gx, gy + cs / 2);
-      canvas.lineTo(gx + cs / 2, gy);
-      canvas.strokePath();
+      lens(gx, gy + cs / 2, gx + cs / 2, gy);
     case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-      canvas.moveTo(gx + cs / 2, gy);
-      canvas.lineTo(gx + cs, gy + cs / 2);
-      canvas.strokePath();
-
+      lens(gx + cs / 2, gy, gx + cs, gy + cs / 2);
     case BackStitch():
       break;
   }

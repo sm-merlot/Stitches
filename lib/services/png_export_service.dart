@@ -41,11 +41,9 @@ class PngExportService {
 
     // ── Cross-type stitches ───────────────────────────────────────────────
     if (realistic) {
-      final strokeWidth = math.max(0.5, cellSize * 0.12);
-      final strokePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = strokeWidth;
+      final fillPaint = Paint()..style = PaintingStyle.fill;
+      final endW = math.max(0.4, cellSize * 0.08);
+      final midW = math.max(0.8, cellSize * 0.18);
 
       for (final s in nonBack) {
         final cx = _stitchX(s);
@@ -53,10 +51,10 @@ class PngExportService {
         final thread = threadMap[s.threadId];
         if (thread == null) continue;
         final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
-        strokePaint.color = effectiveColor;
+        fillPaint.color = effectiveColor;
         final gx = cx * cellSize;
         final gy = cy * cellSize;
-        _drawStitch(canvas, s, gx, gy, cellSize, strokePaint);
+        _drawRealisticStitch(canvas, s, gx, gy, cellSize, fillPaint, endW, midW);
       }
     } else {
       final fillPaint = Paint();
@@ -73,11 +71,11 @@ class PngExportService {
       }
     }
 
-    // ── Backstitches ──────────────────────────────────────────────────────
+    // ── Backstitches (single thread — thinner than cross-stitches) ────────
     final bsPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = math.max(0.75, cellSize * 0.18);
+      ..strokeWidth = math.max(0.4, cellSize * 0.06);
 
     for (final bs in backstitches) {
       final thread = threadMap[bs.threadId];
@@ -125,58 +123,87 @@ class PngExportService {
         BackStitch() => 0,
       };
 
-  // ── Stitch rendering ──────────────────────────────────────────────────────
+  /// Draws a single thread line as a lens shape — thin at endpoints, thicker
+  /// in the middle — mimicking how real thread bulges where it crosses.
+  static void _drawThreadLens(
+    Canvas canvas,
+    Offset from,
+    Offset to,
+    Paint paint,
+    double endWidth,
+    double midWidth,
+  ) {
+    final dx = to.dx - from.dx;
+    final dy = to.dy - from.dy;
+    final len = math.sqrt(dx * dx + dy * dy);
+    if (len < 0.001) return;
+    // Perpendicular unit vector.
+    final px = -dy / len;
+    final py = dx / len;
 
-  static void _drawStitch(
+    final eOff = endWidth / 2;
+    final mOff = midWidth / 2;
+    final mid = Offset((from.dx + to.dx) / 2, (from.dy + to.dy) / 2);
+
+    final path = Path()
+      ..moveTo(from.dx + px * eOff, from.dy + py * eOff)
+      ..quadraticBezierTo(
+          mid.dx + px * mOff, mid.dy + py * mOff, to.dx + px * eOff, to.dy + py * eOff)
+      ..quadraticBezierTo(
+          mid.dx - px * mOff, mid.dy - py * mOff, from.dx - px * eOff, from.dy - py * eOff)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  /// Realistic stitch rendering using lens-shaped thread lines.
+  static void _drawRealisticStitch(
     Canvas canvas,
     Stitch s,
     double gx,
     double gy,
     double cs,
     Paint paint,
+    double endW,
+    double midW,
   ) {
+    void lens(Offset a, Offset b) => _drawThreadLens(canvas, a, b, paint, endW, midW);
+
     switch (s) {
       case FullStitch():
-        canvas.drawLine(Offset(gx, gy), Offset(gx + cs, gy + cs), paint);
-        canvas.drawLine(Offset(gx, gy + cs), Offset(gx + cs, gy), paint);
-
-      case HalfStitch(isForward: true): // "/"
-        canvas.drawLine(Offset(gx, gy + cs), Offset(gx + cs, gy), paint);
-
-      case HalfStitch(isForward: false): // "\"
-        canvas.drawLine(Offset(gx, gy), Offset(gx + cs, gy + cs), paint);
-
+        lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
+        lens(Offset(gx, gy + cs), Offset(gx + cs, gy));
+      case HalfStitch(isForward: true):
+        lens(Offset(gx, gy + cs), Offset(gx + cs, gy));
+      case HalfStitch(isForward: false):
+        lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
       case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-        canvas.drawLine(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy), paint);
+        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy));
       case QuarterStitch(quadrant: QuadrantPosition.topRight):
-        canvas.drawLine(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs / 2), paint);
+        lens(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs / 2));
       case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
-        canvas.drawLine(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy + cs), paint);
+        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy + cs));
       case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
-        canvas.drawLine(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2), paint);
-
+        lens(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2));
       case HalfCrossStitch(half: HalfOrientation.left):
-        canvas.drawLine(Offset(gx, gy), Offset(gx + cs / 2, gy + cs), paint);
-        canvas.drawLine(Offset(gx, gy + cs), Offset(gx + cs / 2, gy), paint);
+        lens(Offset(gx, gy), Offset(gx + cs / 2, gy + cs));
+        lens(Offset(gx, gy + cs), Offset(gx + cs / 2, gy));
       case HalfCrossStitch(half: HalfOrientation.right):
-        canvas.drawLine(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs), paint);
-        canvas.drawLine(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy), paint);
+        lens(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs));
+        lens(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy));
       case HalfCrossStitch(half: HalfOrientation.top):
-        canvas.drawLine(Offset(gx, gy + cs / 2), Offset(gx + cs, gy), paint);
-        canvas.drawLine(Offset(gx, gy), Offset(gx + cs, gy + cs / 2), paint);
+        lens(Offset(gx, gy + cs / 2), Offset(gx + cs, gy));
+        lens(Offset(gx, gy), Offset(gx + cs, gy + cs / 2));
       case HalfCrossStitch(half: HalfOrientation.bottom):
-        canvas.drawLine(Offset(gx, gy + cs), Offset(gx + cs, gy + cs / 2), paint);
-        canvas.drawLine(Offset(gx, gy + cs / 2), Offset(gx + cs, gy + cs), paint);
-
+        lens(Offset(gx, gy + cs), Offset(gx + cs, gy + cs / 2));
+        lens(Offset(gx, gy + cs / 2), Offset(gx + cs, gy + cs));
       case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-        canvas.drawLine(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy), paint);
+        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy));
       case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-        canvas.drawLine(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs / 2), paint);
+        lens(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs / 2));
       case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-        canvas.drawLine(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy + cs), paint);
+        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy + cs));
       case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-        canvas.drawLine(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2), paint);
-
+        lens(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2));
       case BackStitch():
         break;
     }

@@ -218,19 +218,19 @@ void _drawStitchPreview(
   canvas.fillPath();
 
   if (realistic) {
-    // Cross-type stitches as line-art using composited (deduplicated) stitches.
-    canvas.setLineCap(PdfLineCap.round);
-    canvas.setLineWidth(math.max(0.3, cellSize * 0.12));
+    // Cross-type stitches as lens-shaped thread lines.
+    final endW = math.max(0.3, cellSize * 0.08);
+    final midW = math.max(0.6, cellSize * 0.18);
     for (final s in nonBack) {
       final cx = _stitches(s);
       final cy = _stitchY(s);
       final thread = threadMap[s.threadId];
       if (thread == null) continue;
       final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
-      canvas.setStrokeColor(_pdfColor(effectiveColor));
+      canvas.setFillColor(_pdfColor(effectiveColor));
       final gx = originX + cx * cellSize;
       final gy = originY + (rows - cy - 1) * cellSize;
-      _drawRealisticStitch(canvas, s, gx, gy, cellSize);
+      _drawRealisticStitch(canvas, s, gx, gy, cellSize, endW, midW);
     }
   } else {
     // Block rendering: solid colour rects.
@@ -247,8 +247,9 @@ void _drawStitchPreview(
     }
   }
 
-  // Backstitches
-  canvas.setLineWidth(math.max(0.5, cellSize * 0.22));
+  // Backstitches (single thread — thinner than cross-stitches)
+  canvas.setLineCap(PdfLineCap.round);
+  canvas.setLineWidth(math.max(0.3, cellSize * 0.06));
   for (final bs in backstitches) {
     final thread = threadMap[bs.threadId];
     if (thread == null) continue;
