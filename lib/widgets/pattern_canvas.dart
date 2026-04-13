@@ -56,7 +56,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   (int, int)?  _lastProgressDownCell;
   bool         _pendingDoubleClick = false;
   bool?        _wasProgressCellDone; // state of the cell BEFORE the last single-click toggle
-  static const int _kDoubleClickMs = 400;
+  static const int _kDoubleClickMs = 500;
 
   // Cursor/hover tracking
   Offset? _backstitchHoverPoint;
@@ -446,7 +446,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             y2: gy,
             threadId: state.selectedThreadId!,
           ));
-          notifier.setBackstitchStart(null);
+          // Chain mode: end point becomes new start for next backstitch.
+          // Activated by holding Ctrl (desktop) or chain toggle (touch).
+          final chain = _ctrlHeld || state.backstitchChainMode;
+          notifier.setBackstitchStart(chain ? gridPt : null);
         }
       }
       return;

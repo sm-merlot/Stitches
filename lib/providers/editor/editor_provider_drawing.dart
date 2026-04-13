@@ -506,6 +506,10 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(backstitchStartPoint: point);
   }
 
+  void toggleBackstitchChainMode() {
+    state = state.copyWith(backstitchChainMode: !state.backstitchChainMode);
+  }
+
   void resizePattern(int newWidth, int newHeight, int anchorX, int anchorY) {
     final old = state.pattern;
     final dx = (anchorX / 2.0 * (newWidth - old.width)).round();
