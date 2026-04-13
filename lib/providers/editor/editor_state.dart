@@ -24,7 +24,7 @@ class EditorState {
   final bool showCompositeThreads;
   final CompositeResult? compositeResult;
   final AppMode mode;
-  final bool blockMode;
+  final bool colourMode;
   final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
   final bool stitchBackMode;  // Back: greys normal stitches, backstitches shown in colour
   final String? stitchFocusThreadId;
@@ -105,7 +105,7 @@ class EditorState {
     this.showCompositeThreads = true,
     this.compositeResult,
     this.mode = AppMode.view,
-    this.blockMode = true,
+    this.colourMode = false,
     this.stitchCrossMode = false,
     this.stitchBackMode = false,
     this.stitchFocusThreadId,
@@ -254,7 +254,7 @@ class EditorState {
     bool? showCompositeThreads,
     Object? compositeResult = _sentinel,
     AppMode? mode,
-    bool? blockMode,
+    bool? colourMode,
     bool? stitchCrossMode,
     bool? stitchBackMode,
     Object? stitchFocusThreadId = _sentinel,
@@ -307,7 +307,7 @@ class EditorState {
           ? this.compositeResult
           : compositeResult as CompositeResult?,
       mode: mode ?? this.mode,
-      blockMode: blockMode ?? this.blockMode,
+      colourMode: colourMode ?? this.colourMode,
       stitchCrossMode: stitchCrossMode ?? this.stitchCrossMode,
       stitchBackMode: stitchBackMode ?? this.stitchBackMode,
       stitchFocusThreadId: stitchFocusThreadId == _sentinel

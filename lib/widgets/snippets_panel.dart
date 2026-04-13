@@ -112,7 +112,7 @@ class SnippetsPanel extends ConsumerWidget {
     final editorState = ref.read(editorProvider);
     final allSnippets = editorState.pattern.snippets;
     final siblings = allSnippets.where((s) => s.id != snippet?.id).toList();
-    final blockMode = editorState.blockMode;
+    final colourMode = editorState.colourMode;
     final aidaColor = editorState.pattern.aidaColor;
 
     navigator.pop(); // close the panel
@@ -125,7 +125,7 @@ class SnippetsPanel extends ConsumerWidget {
         builder: (_) => SnippetEditorScreen(
           snippet: snippet,
           siblingSnippets: siblings,
-          initialBlockMode: blockMode,
+          initialBlockMode: colourMode,
           aidaColor: aidaColor,
         ),
         fullscreenDialog: true,

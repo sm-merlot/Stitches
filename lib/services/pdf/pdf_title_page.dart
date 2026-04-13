@@ -16,6 +16,7 @@ void _drawTitlePage(
   required int pageNum,
   required int totalPages,
   required _PdfFonts fonts,
+  required bool realistic,
 }) {
   const titleFs = 18.0;
   const subtitleFs = 9.0;
@@ -91,6 +92,7 @@ void _drawTitlePage(
     threadMap: threadMap,
     blendedColors: blendedColors,
     cellSize: previewCellSize,
+    realistic: realistic,
   );
 
   // ── Metadata block ────────────────────────────────────────────────────

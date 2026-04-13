@@ -138,7 +138,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       // Palettes/Colours tabs render.
       ref.read(editorProvider.notifier).setMode(AppMode.edit);
       if (widget.initialBlockMode) {
-        ref.read(editorProvider.notifier).toggleBlockMode();
+        ref.read(editorProvider.notifier).toggleColourMode();
       }
       // Initialise local palette state for this snippet editor session.
       //
@@ -536,12 +536,12 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             const SizedBox(width: 4),
             // ── Realistic mode toggle — title area, matches main editor ──
             IconButton(
-              tooltip: !state.blockMode ? 'Realistic mode: on' : 'Realistic mode: off',
-              isSelected: !state.blockMode,
-              icon: const Icon(Icons.grid_view_outlined),
-              selectedIcon: const Icon(Icons.grid_view),
-              onPressed: () => notifier.toggleBlockMode(),
-              style: !state.blockMode
+              tooltip: state.colourMode ? 'Colour mode: on' : 'Colour mode: off',
+              isSelected: state.colourMode,
+              icon: const Icon(Icons.invert_colors_outlined),
+              selectedIcon: const Icon(Icons.invert_colors),
+              onPressed: () => notifier.toggleColourMode(),
+              style: state.colourMode
                   ? IconButton.styleFrom(
                       backgroundColor: theme.colorScheme.primaryContainer,
                       foregroundColor: theme.colorScheme.onPrimaryContainer,

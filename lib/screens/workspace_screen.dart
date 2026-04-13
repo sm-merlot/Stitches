@@ -409,11 +409,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           mimeType = 'application/xml';
         case ShareFormat.pdf:
           bytes = await PdfService.buildPdfBytes(pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           fileName = '$suggested.pdf';
           mimeType = 'application/pdf';
         case ShareFormat.png:
-          bytes = await PngExportService.export(pattern);
+          bytes = await PngExportService.export(pattern,
+              realistic: result.realisticStitches);
           fileName = '$suggested.png';
           mimeType = 'image/png';
 
@@ -485,10 +487,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           fileName = '$suggested.oxs';
         case ShareFormat.pdf:
           bytes = await PdfService.buildPdfBytes(state.pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           fileName = '$suggested.pdf';
         case ShareFormat.png:
-          bytes = await PngExportService.export(state.pattern);
+          bytes = await PngExportService.export(state.pattern,
+              realistic: result.realisticStitches);
           fileName = '$suggested.png';
       }
       if (!context.mounted) return;
@@ -582,7 +586,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           }
         case ShareFormat.pdf:
           final bytes = await PdfService.buildPdfBytes(state.pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           if (!context.mounted) return;
           if (isMobile) {
             await FilePicker.saveFile(
@@ -607,7 +612,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             }
           }
         case ShareFormat.png:
-          final bytes = await PngExportService.export(state.pattern);
+          final bytes = await PngExportService.export(state.pattern,
+              realistic: result.realisticStitches);
           if (!context.mounted) return;
           if (isMobile) {
             await FilePicker.saveFile(
@@ -1284,32 +1290,20 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // ── Block mode toggle — in title area, consistent across modes ──
-              if (editorState.isFileOpen && openPdf == null) ...[
+              // ── Colour mode toggle — stitch mode only (B&W default vs colour) ──
+              if (editorState.isFileOpen && openPdf == null && editorState.stitchMode) ...[
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: editorState.stitchMode
-                      ? (!editorState.blockMode ? 'B&W mode: on' : 'B&W mode: off')
-                      : (!editorState.blockMode ? 'Realistic mode: on' : 'Realistic mode: off'),
-                  isSelected: !editorState.blockMode,
-                  icon: Icon(editorState.stitchMode
-                      ? Icons.invert_colors_outlined
-                      : Icons.grid_view_outlined),
-                  selectedIcon: Icon(editorState.stitchMode
-                      ? Icons.invert_colors
-                      : Icons.grid_view),
+                  tooltip: editorState.colourMode ? 'Colour mode: on' : 'Colour mode: off',
+                  isSelected: editorState.colourMode,
+                  icon: const Icon(Icons.invert_colors_outlined),
+                  selectedIcon: const Icon(Icons.invert_colors),
                   onPressed: () =>
-                      ref.read(editorProvider.notifier).toggleBlockMode(),
-                  style: !editorState.blockMode
+                      ref.read(editorProvider.notifier).toggleColourMode(),
+                  style: editorState.colourMode
                       ? IconButton.styleFrom(
-                          backgroundColor: editorState.mode == AppMode.stitch
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.primaryContainer,
-                          foregroundColor: editorState.mode == AppMode.stitch
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .onPrimaryContainer,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         )
                       : null,
                 ),

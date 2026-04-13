@@ -13,11 +13,14 @@ class PatternShareResult {
   final bool stripProgress;
   /// If true, remove page settings from the exported .stitches file.
   final bool stripPageSettings;
+  /// If true, render PDF/PNG with realistic stitch line-art instead of blocks.
+  final bool realisticStitches;
 
   const PatternShareResult({
     required this.format,
     this.stripProgress = false,
     this.stripPageSettings = false,
+    this.realisticStitches = true,
   });
 }
 
@@ -95,20 +98,24 @@ class _ShareFormatSheetState extends State<_ShareFormatSheet> {
   ShareFormat _format = ShareFormat.stitchesFile;
   bool _stripProgress = true;
   bool _stripPageSettings = false;
+  bool _realisticStitches = true;
 
   void _confirm() {
     Navigator.of(context).pop(PatternShareResult(
       format: _format,
       stripProgress: _stripProgress,
       stripPageSettings: _stripPageSettings,
+      realisticStitches: _realisticStitches,
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final showOptions = _format == ShareFormat.stitchesFile &&
+    final showStitchesOptions = _format == ShareFormat.stitchesFile &&
         (widget.hasProgress || widget.hasPageSettings);
+    final showRealisticOption =
+        _format == ShareFormat.pdf || _format == ShareFormat.png;
 
     return SafeArea(
       child: Padding(
@@ -143,7 +150,7 @@ class _ShareFormatSheetState extends State<_ShareFormatSheet> {
                 ),
               ),
             ),
-            if (showOptions) ...[
+            if (showStitchesOptions) ...[
               const SizedBox(height: 12),
               const Divider(height: 1),
               _DataOptionsSection(
@@ -153,6 +160,17 @@ class _ShareFormatSheetState extends State<_ShareFormatSheet> {
                 stripPageSettings: _stripPageSettings,
                 onProgressChanged: (v) => setState(() => _stripProgress = v),
                 onPageSettingsChanged: (v) => setState(() => _stripPageSettings = v),
+              ),
+            ],
+            if (showRealisticOption) ...[
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Realistic stitches'),
+                subtitle: const Text('Line-art cross-stitch rendering'),
+                value: _realisticStitches,
+                onChanged: (v) => setState(() => _realisticStitches = v ?? true),
               ),
             ],
             const SizedBox(height: 16),
@@ -189,20 +207,24 @@ class _ShareFormatDialogState extends State<_ShareFormatDialog> {
   ShareFormat _format = ShareFormat.stitchesFile;
   bool _stripProgress = true;
   bool _stripPageSettings = false;
+  bool _realisticStitches = true;
 
   void _confirm() {
     Navigator.of(context).pop(PatternShareResult(
       format: _format,
       stripProgress: _stripProgress,
       stripPageSettings: _stripPageSettings,
+      realisticStitches: _realisticStitches,
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final showOptions = _format == ShareFormat.stitchesFile &&
+    final showStitchesOptions = _format == ShareFormat.stitchesFile &&
         (widget.hasProgress || widget.hasPageSettings);
+    final showRealisticOption =
+        _format == ShareFormat.pdf || _format == ShareFormat.png;
 
     return AlertDialog(
       title: Text(widget.title ?? 'Share as…'),
@@ -233,7 +255,7 @@ class _ShareFormatDialogState extends State<_ShareFormatDialog> {
                 ),
               ),
             ),
-            if (showOptions) ...[
+            if (showStitchesOptions) ...[
               const SizedBox(height: 12),
               const Divider(height: 1),
               _DataOptionsSection(
@@ -243,6 +265,17 @@ class _ShareFormatDialogState extends State<_ShareFormatDialog> {
                 stripPageSettings: _stripPageSettings,
                 onProgressChanged: (v) => setState(() => _stripProgress = v),
                 onPageSettingsChanged: (v) => setState(() => _stripPageSettings = v),
+              ),
+            ],
+            if (showRealisticOption) ...[
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Realistic stitches'),
+                subtitle: const Text('Line-art cross-stitch rendering'),
+                value: _realisticStitches,
+                onChanged: (v) => setState(() => _realisticStitches = v ?? true),
               ),
             ],
           ],
