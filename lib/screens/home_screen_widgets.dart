@@ -324,24 +324,26 @@ class _OpenModalState extends State<_OpenModal> {
 
           if (widget.driveConfigured) ...[
             const SizedBox(height: 10),
-            if (widget.driveConnected)
-              _SourceRow(
-                icon: Icons.cloud_outlined,
-                label: 'Google Drive',
-                subtitle: widget.driveEmail ?? 'Connected',
-                subtitleColor: Colors.green.shade600,
-                expanded: false,
-                onTap: () {
-                  _dismiss();
-                  widget.onOpenDrive();
-                },
-                subRows: const [],
-              )
-            else
-              _DriveNotConnectedRow(onConnect: () {
+            _SourceRow(
+              icon: Icons.cloud_outlined,
+              label: 'Google Drive',
+              subtitle: widget.driveConnected
+                  ? (widget.driveEmail ?? 'Connected')
+                  : 'Sign in to access',
+              subtitleColor: widget.driveConnected
+                  ? Colors.green.shade600
+                  : null,
+              expanded: false,
+              onTap: () {
                 _dismiss();
-                widget.onConnectDrive();
-              }),
+                if (widget.driveConnected) {
+                  widget.onOpenDrive();
+                } else {
+                  widget.onConnectDrive();
+                }
+              },
+              subRows: const [],
+            ),
           ],
 
           const SizedBox(height: 8),
@@ -474,71 +476,6 @@ class _SubRow extends StatelessWidget {
   }
 }
 
-class _DriveNotConnectedRow extends StatelessWidget {
-  final VoidCallback onConnect;
-
-  const _DriveNotConnectedRow({required this.onConnect});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.35),
-          width: 1.5,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.cloud_outlined,
-                size: 22,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Google Drive',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.55))),
-                Text('Not connected',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.4))),
-              ],
-            ),
-          ),
-          FilledButton(
-            onPressed: onConnect,
-            style: FilledButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              textStyle: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600),
-              minimumSize: Size.zero,
-            ),
-            child: const Text('Connect'),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Recent item tile ─────────────────────────────────────────────────────────
 

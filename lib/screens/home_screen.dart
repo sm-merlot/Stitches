@@ -648,6 +648,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _connectDrive() async {
     try {
       await ref.read(googleDriveProvider.notifier).connect();
+      if (!mounted) return;
+      // After successful login, open the Drive picker directly.
+      if (ref.read(googleDriveProvider).status == DriveStatus.connected) {
+        _openDrive();
+      }
     } catch (e) {
       if (!mounted) return;
       showError(context, 'Could not connect to Google Drive: $e');
