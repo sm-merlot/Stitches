@@ -1284,32 +1284,20 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // ── Block mode toggle — in title area, consistent across modes ──
-              if (editorState.isFileOpen && openPdf == null) ...[
+              // ── Colour mode toggle — stitch mode only (B&W default vs colour) ──
+              if (editorState.isFileOpen && openPdf == null && editorState.stitchMode) ...[
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: editorState.stitchMode
-                      ? (!editorState.blockMode ? 'B&W mode: on' : 'B&W mode: off')
-                      : (!editorState.blockMode ? 'Realistic mode: on' : 'Realistic mode: off'),
-                  isSelected: !editorState.blockMode,
-                  icon: Icon(editorState.stitchMode
-                      ? Icons.invert_colors_outlined
-                      : Icons.grid_view_outlined),
-                  selectedIcon: Icon(editorState.stitchMode
-                      ? Icons.invert_colors
-                      : Icons.grid_view),
+                  tooltip: editorState.colourMode ? 'Colour mode: on' : 'Colour mode: off',
+                  isSelected: editorState.colourMode,
+                  icon: const Icon(Icons.invert_colors_outlined),
+                  selectedIcon: const Icon(Icons.invert_colors),
                   onPressed: () =>
-                      ref.read(editorProvider.notifier).toggleBlockMode(),
-                  style: !editorState.blockMode
+                      ref.read(editorProvider.notifier).toggleColourMode(),
+                  style: editorState.colourMode
                       ? IconButton.styleFrom(
-                          backgroundColor: editorState.mode == AppMode.stitch
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.primaryContainer,
-                          foregroundColor: editorState.mode == AppMode.stitch
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .onPrimaryContainer,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         )
                       : null,
                 ),

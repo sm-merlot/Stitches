@@ -625,10 +625,10 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
   }
 
-  // ─── Stitch / block mode ──────────────────────────────────────────────────
+  // ─── Colour mode (stitch mode: B&W vs colour) ──────────────────────────────
 
-  void toggleBlockMode() {
-    state = state.copyWith(blockMode: !state.blockMode);
+  void toggleColourMode() {
+    state = state.copyWith(colourMode: !state.colourMode);
     _saveSession();
   }
 

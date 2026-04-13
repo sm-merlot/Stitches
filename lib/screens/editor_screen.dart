@@ -505,29 +505,19 @@ class EditorScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              // ── View mode toggle — in title area, consistent across modes ──
-              // Edit/view: block vs realistic. Stitch: block vs B&W.
+              // ── Colour mode toggle — stitch mode only (B&W default vs colour) ──
+              if (state.stitchMode)
               IconButton(
-                tooltip: state.stitchMode
-                    ? (!state.blockMode ? 'B&W mode: on' : 'B&W mode: off')
-                    : (!state.blockMode ? 'Realistic mode: on' : 'Realistic mode: off'),
-                isSelected: !state.blockMode,
-                icon: Icon(state.stitchMode
-                    ? Icons.invert_colors_outlined
-                    : Icons.grid_view_outlined),
-                selectedIcon: Icon(state.stitchMode
-                    ? Icons.invert_colors
-                    : Icons.grid_view),
+                tooltip: state.colourMode ? 'Colour mode: on' : 'Colour mode: off',
+                isSelected: state.colourMode,
+                icon: const Icon(Icons.invert_colors_outlined),
+                selectedIcon: const Icon(Icons.invert_colors),
                 onPressed: () =>
-                    ref.read(editorProvider.notifier).toggleBlockMode(),
-                style: !state.blockMode
+                    ref.read(editorProvider.notifier).toggleColourMode(),
+                style: state.colourMode
                     ? IconButton.styleFrom(
-                        backgroundColor: state.mode == AppMode.stitch
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor: state.mode == AppMode.stitch
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onPrimaryContainer,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       )
                     : null,
               ),
