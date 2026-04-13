@@ -151,10 +151,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Below kNoBackstitch: backstitch lines are invisible at this zoom.
     const kNoBackstitch    = 3.0;
     // Below kMajorOnly: hide minor (per-cell) grid lines, show major (×10) only.
-    const kMajorOnly       = 8.0;
+    const kMajorOnly       = 14.0;
     // Below kNoGrid: grid lines add no information and just darken the view.
-    // 3.5 = the point where labels would thin to every-20 — hide everything instead.
-    const kNoGrid          = 3.5;
+    const kNoGrid          = 6.0;
 
     // ── Blended-colour map from shared CompositeResult ──────────────────────
     // Only cells where multiple visible layers have a FullStitch are included.
@@ -356,14 +355,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     final isDark = aidaColor.computeLuminance() <= 0.4;
     final minorColor = isDark ? const Color(0xFF666666) : const Color(0xFFCCCCCC);
     final majorColor = isDark ? const Color(0xFF888888) : const Color(0xFF999999);
+    // Smooth alpha fade near visibility thresholds so grid doesn't pop in/out.
+    final effectivePx = cellSize * scale;
+    final minorAlpha = majorOnly ? 0.0 : (effectivePx - 14.0).clamp(0.0, 4.0) / 4.0;
+    final majorAlpha = (effectivePx - 6.0).clamp(0.0, 4.0) / 4.0;
     // Scale-invariant stroke widths: always ~1px / ~1.5px on screen.
     final minorPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..color = minorColor
+      ..color = minorColor.withValues(alpha: minorAlpha)
       ..strokeWidth = 1.0 / scale;
     final majorPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..color = majorColor
+      ..color = majorColor.withValues(alpha: majorAlpha)
       ..strokeWidth = 1.5 / scale;
 
     final minorPath = majorOnly ? null : Path();
