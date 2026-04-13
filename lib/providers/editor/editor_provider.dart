@@ -182,7 +182,7 @@ class EditorNotifier extends Notifier<EditorState>
       recentThreadIds: threadId != null ? [threadId] : [],
       mode: AppMode.view,
       colourMode: colourMode,
-      drawingMode: hasClipboard ? DrawingMode.paste : DrawingMode.pan,
+      drawingMode: DrawingMode.pan,
       clipboard: hasClipboard ? prevClipboard : null,
       clipboardThreads: hasClipboard ? prevClipboardThreads : null,
       clipboardFromSnippet: hasClipboard && prevClipboardFromSnippet,

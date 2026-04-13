@@ -94,6 +94,8 @@ mixin SelectionMixin on Notifier<EditorState> {
   /// Reads the system clipboard and enters paste mode if valid stitches data is found.
   /// Falls back to the in-memory clipboard if the system clipboard has other content.
   Future<void> enterPasteMode() async {
+    // Paste only works in edit mode.
+    if (!state.editMode) return;
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data?.text != null) {
       final parsed = _parseClipboard(data!.text!);
@@ -115,6 +117,7 @@ mixin SelectionMixin on Notifier<EditorState> {
   /// Stamps the clipboard contents at offset [dx],[dy] from origin (0,0).
   /// Any clipboard threads not yet in the pattern are added automatically.
   void commitPaste(int dx, int dy) {
+    if (!state.editMode) return;
     final clips = state.clipboard;
     if (clips == null || clips.isEmpty) return;
     final maxX = state.pattern.width;
