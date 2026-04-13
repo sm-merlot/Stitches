@@ -381,16 +381,26 @@ class EditorScreen extends ConsumerWidget {
 
   Future<bool> _onWillPop(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
-    if (!state.isDirty) return true;
+
+    // In stitch mode, "close" exits stitch mode instead of leaving the editor.
+    if (state.stitchMode) {
+      ref.read(editorProvider.notifier).setMode(AppMode.view);
+      return false;
+    }
+
+    // Always confirm before closing — even when clean — to prevent
+    // accidental navigation away from the editor.
     final isUnsavedNew = state.filePath == null && state.driveParentFolderId == null;
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Unsaved Changes'),
+        title: Text(state.isDirty ? 'Unsaved Changes' : 'Close Pattern'),
         content: Text(
-          isUnsavedNew
-              ? 'This pattern hasn\'t been saved. Leave now and your work will be lost.'
-              : 'You have unsaved changes. Leave without saving?',
+          state.isDirty
+              ? (isUnsavedNew
+                  ? 'This pattern hasn\'t been saved. Leave now and your work will be lost.'
+                  : 'You have unsaved changes. Leave without saving?')
+              : 'Close this pattern and return to the workspace?',
         ),
         actions: [
           TextButton(
@@ -399,15 +409,17 @@ class EditorScreen extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Leave', style: TextStyle(color: Colors.red)),
+            child: Text(state.isDirty ? 'Leave' : 'Close',
+                style: state.isDirty ? const TextStyle(color: Colors.red) : null),
           ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(context).pop(false);
-              await _save(context, ref);
-            },
-            child: Text(isUnsavedNew ? 'Save As…' : 'Save'),
-          ),
+          if (state.isDirty)
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(context).pop(false);
+                await _save(context, ref);
+              },
+              child: Text(isUnsavedNew ? 'Save As…' : 'Save'),
+            ),
         ],
       ),
     );
@@ -440,6 +452,15 @@ class EditorScreen extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Close pattern',
+            onPressed: () async {
+              final shouldPop = await _onWillPop(context, ref);
+              if (shouldPop && context.mounted) Navigator.of(context).pop();
+            },
+          ),
           titleSpacing: 0,
           title: Row(
             mainAxisSize: MainAxisSize.min,
