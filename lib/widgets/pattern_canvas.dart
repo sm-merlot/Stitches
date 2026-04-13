@@ -953,6 +953,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       _gestureStartOffset = _panOffset;
     } else if (_activePointers.length == 2) {
       _hadMultiTouch = true;
+      // Cancel any stitch-mode progress anchor set by the first finger so
+      // a pan/pinch doesn't accidentally mark cells on pointer-up.
+      _progressAnchor = null;
+      _progressAnchorScreen = null;
+      _progressBackstitch = null;
+      _hasDraggedProgress = false;
+      _progressDragRect = null;
       final pts = _activePointers.values.toList();
       _pinchStartDistance = (pts[0] - pts[1]).distance;
       _pinchStartCenter = (pts[0] + pts[1]) / 2;
@@ -1042,7 +1049,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     // ── Touch gestures ───────────────────────────────────────────────────────
     if (_activePointers.length >= 2) {
-      _hadMultiTouch = true;
+      if (!_hadMultiTouch) {
+        _hadMultiTouch = true;
+        _progressAnchor = null;
+        _progressAnchorScreen = null;
+        _progressBackstitch = null;
+        _hasDraggedProgress = false;
+        _progressDragRect = null;
+      }
       // Pinch to zoom + two-finger pan
       final pts = _activePointers.values.toList();
       final currentDist = (pts[0] - pts[1]).distance;
