@@ -133,10 +133,12 @@ class EditorScreen extends ConsumerWidget {
           fileName = '$suggested.oxs';
         case ShareFormat.pdf:
           bytes = await PdfService.buildPdfBytes(state.pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           fileName = '$suggested.pdf';
         case ShareFormat.png:
-          bytes = await PngExportService.export(state.pattern);
+          bytes = await PngExportService.export(state.pattern,
+              realistic: result.realisticStitches);
           fileName = '$suggested.png';
       }
       if (!context.mounted) return;
@@ -216,7 +218,8 @@ class EditorScreen extends ConsumerWidget {
           }
         case ShareFormat.pdf:
           final bytes = await PdfService.buildPdfBytes(state.pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           if (!context.mounted) return;
           if (isMobile) {
             await FilePicker.saveFile(
@@ -237,7 +240,8 @@ class EditorScreen extends ConsumerWidget {
             }
           }
         case ShareFormat.png:
-          final bytes = await PngExportService.export(state.pattern);
+          final bytes = await PngExportService.export(state.pattern,
+              realistic: result.realisticStitches);
           if (!context.mounted) return;
           if (isMobile) {
             await FilePicker.saveFile(
@@ -352,11 +356,13 @@ class EditorScreen extends ConsumerWidget {
           mimeType = 'application/octet-stream';
         case ShareFormat.pdf:
           bytes = await PdfService.buildPdfBytes(pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           fileName = '$suggested.pdf';
           mimeType = 'application/pdf';
         case ShareFormat.png:
-          bytes = await PngExportService.export(pattern);
+          bytes = await PngExportService.export(pattern,
+              realistic: result.realisticStitches);
           fileName = '$suggested.png';
           mimeType = 'image/png';
       }

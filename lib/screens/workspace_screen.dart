@@ -409,11 +409,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           mimeType = 'application/xml';
         case ShareFormat.pdf:
           bytes = await PdfService.buildPdfBytes(pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           fileName = '$suggested.pdf';
           mimeType = 'application/pdf';
         case ShareFormat.png:
-          bytes = await PngExportService.export(pattern);
+          bytes = await PngExportService.export(pattern,
+              realistic: result.realisticStitches);
           fileName = '$suggested.png';
           mimeType = 'image/png';
 
@@ -485,10 +487,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           fileName = '$suggested.oxs';
         case ShareFormat.pdf:
           bytes = await PdfService.buildPdfBytes(state.pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           fileName = '$suggested.pdf';
         case ShareFormat.png:
-          bytes = await PngExportService.export(state.pattern);
+          bytes = await PngExportService.export(state.pattern,
+              realistic: result.realisticStitches);
           fileName = '$suggested.png';
       }
       if (!context.mounted) return;
@@ -582,7 +586,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           }
         case ShareFormat.pdf:
           final bytes = await PdfService.buildPdfBytes(state.pattern,
-              useDmc: ref.read(settingsProvider).useDmc);
+              useDmc: ref.read(settingsProvider).useDmc,
+              realistic: result.realisticStitches);
           if (!context.mounted) return;
           if (isMobile) {
             await FilePicker.saveFile(
@@ -607,7 +612,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             }
           }
         case ShareFormat.png:
-          final bytes = await PngExportService.export(state.pattern);
+          final bytes = await PngExportService.export(state.pattern,
+              realistic: result.realisticStitches);
           if (!context.mounted) return;
           if (isMobile) {
             await FilePicker.saveFile(

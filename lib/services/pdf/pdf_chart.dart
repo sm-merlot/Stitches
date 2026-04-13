@@ -26,6 +26,7 @@ void _drawChartPage(
   required int pageNum,
   required int totalPages,
   required _PdfFonts fonts,
+  required bool realistic,
 }) {
   final cols = endX - startX;
   final rows = endY - startY;

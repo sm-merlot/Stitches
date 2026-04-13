@@ -29,6 +29,7 @@ class PdfService {
   static Future<Uint8List> buildPdfBytes(
     CrossStitchPattern pattern, {
     bool useDmc = true,
+    bool realistic = true,
   }) async {
     final doc = pw.Document(title: pattern.name);
     final fonts = (
@@ -161,6 +162,7 @@ class PdfService {
       pageNum: 1,
       totalPages: totalPages,
       fonts: fonts,
+      realistic: realistic,
     );
 
     // ── Cross stitch colour table pages ───────────────────────────────────
@@ -322,6 +324,7 @@ class PdfService {
           pageNum: pageNum,
           totalPages: totalPages,
           fonts: fonts,
+          realistic: realistic,
         );
       }
     }

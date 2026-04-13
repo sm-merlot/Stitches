@@ -206,6 +206,7 @@ void _drawStitchPreview(
   required Map<String, Thread> threadMap,
   required Map<String, Color> blendedColors,
   required double cellSize,
+  bool realistic = true,
 }) {
   final pw2 = pattern.width * cellSize;
   final ph2 = pattern.height * cellSize;
@@ -216,20 +217,34 @@ void _drawStitchPreview(
   canvas.drawRect(originX, originY, pw2, ph2);
   canvas.fillPath();
 
-  // Cross-type stitches as line-art using composited (deduplicated) stitches.
-  canvas.setLineCap(PdfLineCap.round);
-  canvas.setLineWidth(math.max(0.3, cellSize * 0.12));
-  for (final s in nonBack) {
-    final cx = _stitches(s);
-    final cy = _stitchY(s);
-    final thread = threadMap[s.threadId];
-    if (thread == null) continue;
-    // Use blended color for cells where multiple layers overlap.
-    final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
-    canvas.setStrokeColor(_pdfColor(effectiveColor));
-    final gx = originX + cx * cellSize;
-    final gy = originY + (rows - cy - 1) * cellSize;
-    _drawRealisticStitch(canvas, s, gx, gy, cellSize);
+  if (realistic) {
+    // Cross-type stitches as line-art using composited (deduplicated) stitches.
+    canvas.setLineCap(PdfLineCap.round);
+    canvas.setLineWidth(math.max(0.3, cellSize * 0.12));
+    for (final s in nonBack) {
+      final cx = _stitches(s);
+      final cy = _stitchY(s);
+      final thread = threadMap[s.threadId];
+      if (thread == null) continue;
+      final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+      canvas.setStrokeColor(_pdfColor(effectiveColor));
+      final gx = originX + cx * cellSize;
+      final gy = originY + (rows - cy - 1) * cellSize;
+      _drawRealisticStitch(canvas, s, gx, gy, cellSize);
+    }
+  } else {
+    // Block rendering: solid colour rects.
+    for (final s in nonBack) {
+      final cx = _stitches(s);
+      final cy = _stitchY(s);
+      final thread = threadMap[s.threadId];
+      if (thread == null) continue;
+      final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+      canvas.setFillColor(_pdfColor(effectiveColor));
+      final gx = originX + cx * cellSize;
+      final gy = originY + (rows - cy - 1) * cellSize;
+      _fillStitch(canvas, s, gx, gy, cellSize);
+    }
   }
 
   // Backstitches

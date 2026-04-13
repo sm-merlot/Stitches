@@ -19,6 +19,7 @@ class PngExportService {
   static Future<Uint8List> export(
     CrossStitchPattern pattern, {
     double cellSize = 20.0,
+    bool realistic = true,
   }) async {
     final composite = StitchCompositor.compute(pattern);
     final nonBack = composite.dedupedNonBack;
@@ -39,22 +40,37 @@ class PngExportService {
     );
 
     // ── Cross-type stitches ───────────────────────────────────────────────
-    final strokeWidth = math.max(0.5, cellSize * 0.12);
-    final strokePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = strokeWidth;
+    if (realistic) {
+      final strokeWidth = math.max(0.5, cellSize * 0.12);
+      final strokePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = strokeWidth;
 
-    for (final s in nonBack) {
-      final cx = _stitchX(s);
-      final cy = _stitchY(s);
-      final thread = threadMap[s.threadId];
-      if (thread == null) continue;
-      final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
-      strokePaint.color = effectiveColor;
-      final gx = cx * cellSize;
-      final gy = cy * cellSize;
-      _drawStitch(canvas, s, gx, gy, cellSize, strokePaint);
+      for (final s in nonBack) {
+        final cx = _stitchX(s);
+        final cy = _stitchY(s);
+        final thread = threadMap[s.threadId];
+        if (thread == null) continue;
+        final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+        strokePaint.color = effectiveColor;
+        final gx = cx * cellSize;
+        final gy = cy * cellSize;
+        _drawStitch(canvas, s, gx, gy, cellSize, strokePaint);
+      }
+    } else {
+      final fillPaint = Paint();
+      for (final s in nonBack) {
+        final cx = _stitchX(s);
+        final cy = _stitchY(s);
+        final thread = threadMap[s.threadId];
+        if (thread == null) continue;
+        final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+        fillPaint.color = effectiveColor;
+        final gx = cx * cellSize;
+        final gy = cy * cellSize;
+        _fillBlock(canvas, s, gx, gy, cellSize, fillPaint);
+      }
     }
 
     // ── Backstitches ──────────────────────────────────────────────────────
@@ -161,6 +177,52 @@ class PngExportService {
       case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
         canvas.drawLine(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2), paint);
 
+      case BackStitch():
+        break;
+    }
+  }
+
+  /// Block rendering: fills the stitch's sub-region as a solid rect.
+  static void _fillBlock(
+    Canvas canvas,
+    Stitch s,
+    double gx,
+    double gy,
+    double cs,
+    Paint paint,
+  ) {
+    final half = cs / 2;
+    switch (s) {
+      case FullStitch():
+        canvas.drawRect(Rect.fromLTWH(gx, gy, cs, cs), paint);
+      case HalfStitch(isForward: true):
+        canvas.drawRect(Rect.fromLTWH(gx, gy, cs, cs), paint);
+      case HalfStitch(isForward: false):
+        canvas.drawRect(Rect.fromLTWH(gx, gy, cs, cs), paint);
+      case QuarterStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.drawRect(Rect.fromLTWH(gx, gy, half, half), paint);
+      case QuarterStitch(quadrant: QuadrantPosition.topRight):
+        canvas.drawRect(Rect.fromLTWH(gx + half, gy, half, half), paint);
+      case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.drawRect(Rect.fromLTWH(gx, gy + half, half, half), paint);
+      case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.drawRect(Rect.fromLTWH(gx + half, gy + half, half, half), paint);
+      case HalfCrossStitch(half: HalfOrientation.left):
+        canvas.drawRect(Rect.fromLTWH(gx, gy, half, cs), paint);
+      case HalfCrossStitch(half: HalfOrientation.right):
+        canvas.drawRect(Rect.fromLTWH(gx + half, gy, half, cs), paint);
+      case HalfCrossStitch(half: HalfOrientation.top):
+        canvas.drawRect(Rect.fromLTWH(gx, gy, cs, half), paint);
+      case HalfCrossStitch(half: HalfOrientation.bottom):
+        canvas.drawRect(Rect.fromLTWH(gx, gy + half, cs, half), paint);
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.drawRect(Rect.fromLTWH(gx, gy, half, half), paint);
+      case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
+        canvas.drawRect(Rect.fromLTWH(gx + half, gy, half, half), paint);
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.drawRect(Rect.fromLTWH(gx, gy + half, half, half), paint);
+      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.drawRect(Rect.fromLTWH(gx + half, gy + half, half, half), paint);
       case BackStitch():
         break;
     }
