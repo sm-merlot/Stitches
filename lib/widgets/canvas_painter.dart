@@ -55,8 +55,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     for (final t in pattern.threads) t.dmcCode: t,
   };
 
-  /// True when in B&W stitch mode (stitch mode with block mode off).
-  bool get _isBWStitchMode => stitchMode && !colourMode;
+  /// Stitch mode is always B&W now (no block/colour toggle).
+  /// Kept as alias for readability in rendering code.
+  bool get _isBWStitchMode => stitchMode;
 
   CanvasStaticPainter({
     required this.pattern,
@@ -189,17 +190,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (c == null) continue;
           final isDone = stitchMode && progress.isBackstitchDone(
               stitch.x1, stitch.y1, stitch.x2, stitch.y2);
-          if (_isBWStitchMode) {
-            if (isDone) {
-              // Done backstitches keep their colour in B&W mode.
-            } else if (stitchFocusThreadId != null &&
-                stitchFocusThreadId == stitch.threadId) {
-              c = _muteColor(c);
-            } else {
+          if (stitchMode) {
+            if (!isDone) {
+              // All undone backstitches → greyscale regardless of focus.
               c = _bwGreyscale(c);
+            } else if (stitchFocusThreadId != null &&
+                stitchFocusThreadId != stitch.threadId) {
+              // Done + non-focused → muted colour for orientation.
+              c = _muteColor(c);
             }
-          } else if (isDone) {
-            c = Color.lerp(c, aidaColor, 0.70)!;
+            // Done + focused (or no focus) → keep full colour.
           }
           // B&W stitch mode: draw an orange outline behind focused backstitches
           // so they stand out against the greyscale background.
@@ -249,25 +249,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           final thread = compositeThread ?? _threadMap[stitch.threadId];
           if (thread == null || !symbolIsVisible(thread.symbol)) continue;
 
-          _drawStitchSymbolBW(canvas, stitch, thread.symbol);
+          // Non-focused undone symbols → grey; focused (or no focus) → black.
+          final hasFocus = stitchFocusThreadId != null;
+          final isFocused = hasFocus && stitch.threadId == stitchFocusThreadId;
+          final symbolColor = hasFocus && !isFocused
+              ? const Color(0xFF999999)
+              : const Color(0xFF000000);
+          _drawStitchSymbolBW(canvas, stitch, thread.symbol, symbolColor);
         }
-      }
-    }
-
-    // ── Done-stitch dimming (block stitch mode only) ────────────────────────
-    // In stitch+block mode (full colour), draw a semi-transparent aida overlay
-    // on completed cells so done stitches appear dimmed. Skipped in B&W mode
-    // where done/undone is handled by the colour itself.
-    if (stitchMode && colourMode && progress.completedStitches.isNotEmpty) {
-      final dimPaint = Paint()
-        ..color = aidaColor.withValues(alpha: 0.70);
-      for (final (cx, cy) in progress.completedStitches) {
-        if (cx < minCX || cx >= maxCX || cy < minCY || cy >= maxCY) continue;
-        if (!_stitchOnPage(cx, cy)) continue;
-        canvas.drawRect(
-          Rect.fromLTWH(cx * cellSize, cy * cellSize, cellSize, cellSize),
-          dimPaint,
-        );
       }
     }
 
@@ -544,7 +533,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // Invalidate if pattern or any display-mode flag that affects colours changed.
     // In B&W stitch mode, progress changes affect block colours so we include
     // the completed-stitch count as a cheap invalidation proxy.
-    final progressLen = (stitchMode && !colourMode)
+    final progressLen = stitchMode
         ? progress.completedStitches.length
         : -1;
     final modeChanged = !identical(_blockCachePattern, pattern) ||
@@ -597,19 +586,36 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         }
       }
 
-      // B&W stitch mode: undone → subtle greyscale, done → full colour.
-      // When a thread is focused, keep its colour (slightly muted) so the
-      // user can orientate by the real colours while stitching.
-      if (stitchMode && !colourMode) {
+      // B&W stitch mode colouring.
+      // Undone → greyscale (regardless of focus).
+      // Done + focused (or no focus) → full colour.
+      // Done + non-focused → muted colour for orientation.
+      if (stitchMode) {
         final xy = stitchXY(stitch);
         final isDone = xy != null && progress.completedStitches.contains(xy);
-        final isFocused = stitchFocusThreadId != null &&
-            stitchFocusThreadId == stitch.threadId;
-        if (!isDone && !isFocused) {
-          effectiveColor = _bwGreyscale(effectiveColor);
-        } else if (!isDone && isFocused) {
-          // Slightly muted so the bright outline still pops.
-          effectiveColor = _muteColor(effectiveColor);
+        if (!isDone) {
+          effectiveColor = _bwGreyscale(
+              _applyPaletteOverride(stitch.threadId, thread.color));
+        } else {
+          // Recover the real colour (may have been greyed by _resolveStitchColor).
+          final realColor = (stitch is FullStitch
+                  ? blendMap['${stitch.x},${stitch.y}']
+                  : null) ??
+              _applyPaletteOverride(stitch.threadId, thread.color);
+          final hasFocus = stitchFocusThreadId != null;
+          // For blended cells, check composite thread; else check stitch threadId.
+          final isFocused = hasFocus &&
+              (stitch is FullStitch
+                  ? (compositeResult?.compositeThreads['${stitch.x},${stitch.y}']
+                              ?.dmcCode ==
+                          stitchFocusThreadId ||
+                      stitch.threadId == stitchFocusThreadId)
+                  : stitch.threadId == stitchFocusThreadId);
+          if (hasFocus && !isFocused) {
+            effectiveColor = _muteColor(realColor);
+          } else {
+            effectiveColor = realColor;
+          }
         }
       }
 
@@ -689,16 +695,30 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         }
       }
 
-      // B&W stitch mode: undone → subtle greyscale, done → full colour.
-      // Focused thread keeps its colour (slightly muted) for orientation.
-      if (stitchMode && !colourMode) {
+      // B&W stitch mode colouring (same logic as _getOrBuildBlockRects).
+      if (stitchMode) {
         final isDone = progress.completedStitches.contains(xy);
-        final isFocused = stitchFocusThreadId != null &&
-            stitchFocusThreadId == stitch.threadId;
-        if (!isDone && !isFocused) {
-          effectiveColor = _bwGreyscale(effectiveColor);
-        } else if (!isDone && isFocused) {
-          effectiveColor = _muteColor(effectiveColor);
+        if (!isDone) {
+          effectiveColor = _bwGreyscale(
+              _applyPaletteOverride(stitch.threadId, thread.color));
+        } else {
+          final realColor = (stitch is FullStitch
+                  ? blendMap['${stitch.x},${stitch.y}']
+                  : null) ??
+              _applyPaletteOverride(stitch.threadId, thread.color);
+          final hasFocus = stitchFocusThreadId != null;
+          final isFocused = hasFocus &&
+              (stitch is FullStitch
+                  ? (compositeResult?.compositeThreads['${stitch.x},${stitch.y}']
+                              ?.dmcCode ==
+                          stitchFocusThreadId ||
+                      stitch.threadId == stitchFocusThreadId)
+                  : stitch.threadId == stitchFocusThreadId);
+          if (hasFocus && !isFocused) {
+            effectiveColor = _muteColor(realColor);
+          } else {
+            effectiveColor = realColor;
+          }
         }
       }
 
@@ -841,8 +861,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   // ── Stitch symbols ─────────────────────────────────────────────────────────
 
-  /// B&W stitch mode: black text on the greyscale block background, no background box.
-  void _drawStitchSymbolBW(Canvas canvas, Stitch stitch, String symbol) {
+  /// B&W stitch mode: symbol text on the greyscale block background.
+  /// [color] is black for focused/unfocused-no-focus, grey for non-focused.
+  void _drawStitchSymbolBW(Canvas canvas, Stitch stitch, String symbol, Color color) {
     final center = _symbolCenter(stitch);
     final fontSize = math.max(4.0, cellSize * 0.46);
     final tp = TextPainter(
@@ -850,7 +871,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           text: symbol,
           style: TextStyle(
               fontSize: fontSize,
-              color: const Color(0xFF000000),
+              color: color,
               fontWeight: FontWeight.bold,
               height: 1.0)),
       textDirection: TextDirection.ltr,
