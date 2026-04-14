@@ -225,11 +225,11 @@ class _WorkspaceStitchOpsScreenState
   }
 
   Future<void> _loadAll() async {
-    switch (widget.workspace) {
-      case LocalFolder():
-        await _loadLocal(widget.workspace as LocalFolder);
-      case DriveFolder():
-        await _loadDrive(widget.workspace as DriveFolder);
+    final ws = widget.workspace;
+    if (ws is LocalFolder) {
+      await _loadLocal(ws);
+    } else if (ws is DriveFolder) {
+      await _loadDrive(ws);
     }
   }
 

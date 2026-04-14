@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/pattern.dart';
-import '../models/pattern_progress.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
