@@ -84,22 +84,45 @@ class _QuickSwatches extends ConsumerWidget {
           if (thread == null) return const SizedBox.shrink();
 
           // Compute progress counts in stitch mode.
+          // Use composite cache for FullStitches to avoid double-counting
+          // cells shared across layers (topmost thread wins).
           int? doneCount;
           int? totalCount;
           bool isDone = false;
           if (progress != null && allStitches != null) {
             int total = 0;
             int done = 0;
+            // FullStitches via composite cache (deduplicated).
+            final cache = state.compositeResult?.compositeThreads;
+            if (cache != null && cache.isNotEmpty) {
+              for (final entry in cache.entries) {
+                if (entry.value.dmcCode != id) continue;
+                total++;
+                final parts = entry.key.split(',');
+                if (parts.length == 2) {
+                  final x = int.tryParse(parts[0]);
+                  final y = int.tryParse(parts[1]);
+                  if (x != null && y != null &&
+                      progress.completedStitches.contains((x, y))) {
+                    done++;
+                  }
+                }
+              }
+            } else {
+              final seen = <(int, int)>{};
+              for (final s in allStitches) {
+                if (s is! FullStitch || s.threadId != id) continue;
+                final cell = (s.x, s.y);
+                if (!seen.add(cell)) continue;
+                total++;
+                if (progress.completedStitches.contains(cell)) done++;
+              }
+            }
+            // Non-FullStitch cross-stitch types (no dedup needed).
             for (final s in allStitches) {
+              if (s is FullStitch || s is BackStitch) continue;
               if (s.threadId != id) continue;
-              final coords = switch (s) {
-                FullStitch(:final x, :final y) => (x, y),
-                HalfStitch(:final x, :final y) => (x, y),
-                HalfCrossStitch(:final x, :final y) => (x, y),
-                QuarterStitch(:final x, :final y) => (x, y),
-                QuarterCrossStitch(:final x, :final y) => (x, y),
-                _ => null,
-              };
+              final coords = EditorState.cellCoords(s);
               if (coords == null) continue;
               total++;
               if (progress.completedStitches.contains(coords)) done++;

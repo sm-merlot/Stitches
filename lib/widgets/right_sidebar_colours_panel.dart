@@ -304,17 +304,48 @@ void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
 Map<String, int> _countDoneStitches(EditorState state) {
   final progress = state.pattern.progress;
   final counts = <String, int>{};
-  for (final layer in state.pattern.layers) {
-    for (final stitch in layer.stitches) {
-      final bool isDone;
-      if (stitch is BackStitch) {
-        isDone = progress.isBackstitchDone(
-            stitch.x1, stitch.y1, stitch.x2, stitch.y2);
-      } else {
-        final c = EditorState.cellCoords(stitch);
-        isDone = c != null && progress.completedStitches.contains(c);
+
+  // FullStitches: use composite cache (topmost thread per cell) to match
+  // _countStitchesComposite — avoids double-counting overlapping layers.
+  final cache = state.compositeResult?.compositeThreads;
+  if (cache != null && cache.isNotEmpty) {
+    for (final entry in cache.entries) {
+      final parts = entry.key.split(',');
+      if (parts.length != 2) continue;
+      final x = int.tryParse(parts[0]);
+      final y = int.tryParse(parts[1]);
+      if (x == null || y == null) continue;
+      if (progress.completedStitches.contains((x, y))) {
+        final id = entry.value.dmcCode;
+        counts[id] = (counts[id] ?? 0) + 1;
       }
-      if (isDone) {
+    }
+  } else {
+    // No composite cache — fall back to raw iteration but deduplicate by cell.
+    final seen = <(int, int)>{};
+    for (final layer in state.pattern.layers) {
+      for (final stitch in layer.stitches) {
+        if (stitch is! FullStitch) continue;
+        final cell = (stitch.x, stitch.y);
+        if (!seen.add(cell)) continue; // already counted from earlier layer
+        if (progress.completedStitches.contains(cell)) {
+          counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
+        }
+      }
+    }
+  }
+
+  // Non-FullStitch types: count individually (same as _countStitchesComposite).
+  for (final stitch in state.pattern.stitches) {
+    if (stitch is FullStitch) continue;
+    if (stitch is BackStitch) {
+      if (progress.isBackstitchDone(
+          stitch.x1, stitch.y1, stitch.x2, stitch.y2)) {
+        counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
+      }
+    } else {
+      final c = EditorState.cellCoords(stitch);
+      if (c != null && progress.completedStitches.contains(c)) {
         counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
       }
     }
