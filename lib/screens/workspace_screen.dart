@@ -1346,24 +1346,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // ── Colour mode toggle — stitch mode only (B&W default vs colour) ──
-              if (editorState.isFileOpen && openPdf == null && editorState.stitchMode) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: editorState.colourMode ? 'Colour mode: on' : 'Colour mode: off',
-                  isSelected: editorState.colourMode,
-                  icon: const Icon(Icons.invert_colors_outlined),
-                  selectedIcon: const Icon(Icons.invert_colors),
-                  onPressed: () =>
-                      ref.read(editorProvider.notifier).toggleColourMode(),
-                  style: editorState.colourMode
-                      ? IconButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                        )
-                      : null,
-                ),
-              ],
             ],
           ),
           backgroundColor: editorState.mode == AppMode.stitch

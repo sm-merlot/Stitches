@@ -539,22 +539,6 @@ class EditorScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              // ── Colour mode toggle — stitch mode only (B&W default vs colour) ──
-              if (state.stitchMode)
-              IconButton(
-                tooltip: state.colourMode ? 'Colour mode: on' : 'Colour mode: off',
-                isSelected: state.colourMode,
-                icon: const Icon(Icons.invert_colors_outlined),
-                selectedIcon: const Icon(Icons.invert_colors),
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).toggleColourMode(),
-                style: state.colourMode
-                    ? IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      )
-                    : null,
-              ),
             ],
           ),
           backgroundColor: state.mode == AppMode.stitch
