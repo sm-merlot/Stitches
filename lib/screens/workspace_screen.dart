@@ -699,10 +699,50 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   /// Flushes any pending auto-save immediately before navigating away.
   Future<bool> _onWillPop(BuildContext context) async {
+    final state = ref.read(editorProvider);
+
+    // In edit or stitch mode, back exits to view mode instead of leaving.
+    if (state.editMode || state.stitchMode) {
+      ref.read(editorProvider.notifier).setMode(AppMode.view);
+      return false;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(state.isDirty ? 'Unsaved Changes' : 'Close Workspace'),
+        content: Text(
+          state.isDirty
+              ? 'You have unsaved changes. Leave without saving?'
+              : 'Close this workspace and return home?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(state.isDirty ? 'Leave' : 'Close',
+                style: state.isDirty ? const TextStyle(color: Colors.red) : null),
+          ),
+          if (state.isDirty)
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(context).pop(false);
+                await _save(context, quiet: false);
+              },
+              child: const Text('Save'),
+            ),
+        ],
+      ),
+    );
+    if (confirmed != true) return false;
+
     _autoSaveTimer?.cancel();
     _autoSaveTimer = null;
-    final state = ref.read(editorProvider);
-    if (state.isDirty && state.isFileOpen) {
+    if (state.isDirty && state.isFileOpen && context.mounted) {
+      // User chose "Leave" — still auto-save silently before closing.
       await _save(context, quiet: true);
     }
     PatternCache.clear();
@@ -1238,6 +1278,22 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: (editorState.editMode || editorState.stitchMode)
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back to view',
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).setMode(AppMode.view),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Close workspace',
+                  onPressed: () async {
+                    final shouldPop = await _onWillPop(context);
+                    if (shouldPop && context.mounted) Navigator.of(context).pop();
+                  },
+                ),
           titleSpacing: 0,
           title: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1413,12 +1469,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 icon: const Icon(Icons.aspect_ratio),
                 onPressed: () => _showResizeDialog(context, editorState),
               ),
-              const SizedBox(width: 4),
-              FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Done'),
-              ),
               const SizedBox(width: 8),
             ],
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
@@ -1447,12 +1497,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     : null,
               ),
               const EditorScreenLockButton(),
-              const SizedBox(width: 4),
-              FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Done'),
-              ),
               const SizedBox(width: 8),
             ],
           ],
