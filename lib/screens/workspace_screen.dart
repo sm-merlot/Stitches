@@ -701,8 +701,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Future<bool> _onWillPop(BuildContext context) async {
     final state = ref.read(editorProvider);
 
-    // In stitch mode, close exits stitch mode instead of leaving.
-    if (state.stitchMode) {
+    // In edit or stitch mode, back exits to view mode instead of leaving.
+    if (state.editMode || state.stitchMode) {
       ref.read(editorProvider.notifier).setMode(AppMode.view);
       return false;
     }
@@ -1279,14 +1279,21 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: 'Close workspace',
-            onPressed: () async {
-              final shouldPop = await _onWillPop(context);
-              if (shouldPop && context.mounted) Navigator.of(context).pop();
-            },
-          ),
+          leading: (editorState.editMode || editorState.stitchMode)
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back to view',
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).setMode(AppMode.view),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Close workspace',
+                  onPressed: () async {
+                    final shouldPop = await _onWillPop(context);
+                    if (shouldPop && context.mounted) Navigator.of(context).pop();
+                  },
+                ),
           titleSpacing: 0,
           title: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1462,12 +1469,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 icon: const Icon(Icons.aspect_ratio),
                 onPressed: () => _showResizeDialog(context, editorState),
               ),
-              const SizedBox(width: 4),
-              FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Done'),
-              ),
               const SizedBox(width: 8),
             ],
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
@@ -1496,12 +1497,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     : null,
               ),
               const EditorScreenLockButton(),
-              const SizedBox(width: 4),
-              FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Done'),
-              ),
               const SizedBox(width: 8),
             ],
           ],

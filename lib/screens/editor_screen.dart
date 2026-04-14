@@ -382,8 +382,8 @@ class EditorScreen extends ConsumerWidget {
   Future<bool> _onWillPop(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
 
-    // In stitch mode, "close" exits stitch mode instead of leaving the editor.
-    if (state.stitchMode) {
+    // In edit or stitch mode, back exits to view mode instead of leaving.
+    if (state.editMode || state.stitchMode) {
       ref.read(editorProvider.notifier).setMode(AppMode.view);
       return false;
     }
@@ -453,14 +453,21 @@ class EditorScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: 'Close pattern',
-            onPressed: () async {
-              final shouldPop = await _onWillPop(context, ref);
-              if (shouldPop && context.mounted) Navigator.of(context).pop();
-            },
-          ),
+          leading: state.mode == AppMode.view
+              ? IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Close pattern',
+                  onPressed: () async {
+                    final shouldPop = await _onWillPop(context, ref);
+                    if (shouldPop && context.mounted) Navigator.of(context).pop();
+                  },
+                )
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back to view',
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).setMode(AppMode.view),
+                ),
           titleSpacing: 0,
           title: Row(
             mainAxisSize: MainAxisSize.min,
@@ -621,12 +628,6 @@ class EditorScreen extends ConsumerWidget {
                 icon: const Icon(Icons.aspect_ratio),
                 onPressed: () => _showResizeDialog(context, ref, state),
               ),
-              const SizedBox(width: 4),
-              FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Done'),
-              ),
               const SizedBox(width: 8),
             ],
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
@@ -655,12 +656,6 @@ class EditorScreen extends ConsumerWidget {
                     : null,
               ),
               const EditorScreenLockButton(),
-              const SizedBox(width: 4),
-              FilledButton(
-                onPressed: () =>
-                    ref.read(editorProvider.notifier).setMode(AppMode.view),
-                child: const Text('Done'),
-              ),
               const SizedBox(width: 8),
             ],
           ],
