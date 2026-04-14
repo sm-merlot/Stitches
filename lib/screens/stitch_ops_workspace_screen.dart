@@ -246,7 +246,7 @@ class _WorkspaceStitchOpsScreenState
     final patterns = <CrossStitchPattern>[];
     for (final path in paths) {
       try {
-        final (pattern, _, __) = await FileService.openFileFromPath(path);
+        final (pattern, _, _) = await FileService.openFileFromPath(path);
         patterns.add(pattern);
       } catch (_) {
         // Skip unreadable files silently.
@@ -297,7 +297,7 @@ class _WorkspaceStitchOpsScreenState
         final bytes = await service.downloadFile(file.fileId);
         final tempPath = '${tempDir.path}/${file.fileId}.stitches';
         await File(tempPath).writeAsBytes(bytes, flush: true);
-        final (pattern, _, __) = await FileService.openFileFromPath(tempPath);
+        final (pattern, _, _) = await FileService.openFileFromPath(tempPath);
         patterns.add(pattern);
       } catch (_) {
         // Skip files that can't be downloaded or parsed.

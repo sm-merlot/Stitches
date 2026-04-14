@@ -154,7 +154,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     prevCount = entry.stitchCount;
   }
 
-  int _sumDays(int days) {
+  int sumDays(int days) {
     int sum = 0;
     for (int i = 0; i < days; i++) {
       final d = today.subtract(Duration(days: i));
@@ -166,9 +166,9 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
   }
 
   final todayDelta = dailyMap[todayIso] ?? 0;
-  final weekDelta = _sumDays(7);
-  final monthDelta = _sumDays(30);
-  final yearDelta = _sumDays(365);
+  final weekDelta = sumDays(7);
+  final monthDelta = sumDays(30);
+  final yearDelta = sumDays(365);
 
   // ── Start / last active ──────────────────────────────────────────────────
   final startDate = log.isNotEmpty ? parseIsoDate(log.first.isoDate) : null;
@@ -183,7 +183,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
       activeDays == 0 ? 0.0 : totalDone / activeDays;
 
   // Recent rate: sum of last 14 days divided by 14 (includes zero days).
-  final recentTotal = _sumDays(14);
+  final recentTotal = sumDays(14);
   final recentDailyRate = recentTotal / 14.0;
 
   // ── Estimated completion ─────────────────────────────────────────────────
@@ -448,7 +448,7 @@ class _RateSection extends StatelessWidget {
               Expanded(
                 child: _RateRow(
                   label: 'Recent rate (14d)',
-                  value: stats.recentDailyRate.toStringAsFixed(1) + '/day',
+                  value: '${stats.recentDailyRate.toStringAsFixed(1)}/day',
                 ),
               ),
             ],
