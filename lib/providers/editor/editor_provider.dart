@@ -14,6 +14,7 @@ import '../../models/page_config.dart';
 import '../../models/page_layout.dart';
 import '../../models/pattern.dart';
 import '../../models/pattern_progress.dart';
+import '../../models/progress_log.dart';
 import '../../models/snippet.dart';
 import '../../models/snippet_palette.dart';
 import '../../models/snippet_palette_resolver.dart';

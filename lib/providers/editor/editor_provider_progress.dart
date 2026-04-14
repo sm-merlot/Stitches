@@ -5,6 +5,40 @@ part of 'editor_provider.dart';
 // Stitch progress tracking: toggle done, region mark, flood fill, page toggle.
 
 mixin ProgressMixin on Notifier<EditorState> {
+  // ─── StitchOps log helpers ─────────────────────────────────────────────────
+
+  /// Updates the pattern-level [progressLog] with today's high-watermark entry.
+  ///
+  /// Called from [_applyProgress] so every stitch-marking action is reflected
+  /// in the log.  Because the log lives on the pattern (not inside
+  /// [PatternProgress]), it is never rolled back by undo/redo — a correct
+  /// record of peak daily productivity is preserved.
+  List<ProgressLogEntry> _updatedLog(PatternProgress newProgress) {
+    final today = todayIsoDate();
+    final newCount = newProgress.completedStitches.length;
+    final newBackCount = newProgress.completedBackstitches.length;
+    final existing = state.pattern.progressLog
+        .where((e) => e.isoDate == today)
+        .firstOrNull;
+    // High-watermark: only write if the count has increased today.
+    final peakCount =
+        newCount > (existing?.stitchCount ?? 0) ? newCount : (existing?.stitchCount ?? 0);
+    final peakBackCount =
+        newBackCount > (existing?.backstitchCount ?? 0) ? newBackCount : (existing?.backstitchCount ?? 0);
+    if (existing != null &&
+        peakCount == existing.stitchCount &&
+        peakBackCount == existing.backstitchCount) {
+      return state.pattern.progressLog; // no change
+    }
+    return [
+      ...state.pattern.progressLog.where((e) => e.isoDate != today),
+      ProgressLogEntry(
+        isoDate: today,
+        stitchCount: peakCount,
+        backstitchCount: peakBackCount,
+      ),
+    ];
+  }
 
   // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -294,7 +328,11 @@ mixin ProgressMixin on Notifier<EditorState> {
   ///   so the two operations appear as one undo step.
   void _applyProgress(PatternProgress progress,
       {required bool pushUndo, bool squashPrev = false}) {
-    final newPattern = state.pattern.copyWith(progress: progress);
+    // Update today's high-watermark log entry BEFORE building the new pattern.
+    // The log is stored on the pattern (not inside PatternProgress) so it is
+    // never rolled back by undo/redo.
+    final updatedLog = _updatedLog(progress);
+    final newPattern = state.pattern.copyWith(progress: progress, progressLog: updatedLog);
     if (pushUndo) {
       final newUndoStack = [
         ...state._progressUndoStack,

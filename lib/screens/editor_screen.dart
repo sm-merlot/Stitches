@@ -28,6 +28,7 @@ import 'page_mode_dialog.dart';
 import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
+import 'stitch_ops_screen.dart';
 
 
 // No overflow menu — all actions are direct app bar buttons.
@@ -122,7 +123,7 @@ class EditorScreen extends ConsumerWidget {
       switch (result.format) {
         case ShareFormat.stitchesFile:
           var sharePattern = state.patternForSave;
-          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty, progressLog: const []);
           if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           final yaml = FileService.toYamlString(sharePattern);
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
@@ -166,7 +167,7 @@ class EditorScreen extends ConsumerWidget {
       switch (result.format) {
         case ShareFormat.stitchesFile:
           var sharePattern = state.patternForSave;
-          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty, progressLog: const []);
           if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           if (isMobile) {
             final yaml = FileService.toYamlString(sharePattern);
@@ -343,7 +344,7 @@ class EditorScreen extends ConsumerWidget {
       switch (result.format) {
         case ShareFormat.stitchesFile:
           var sharePattern = pattern;
-          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty, progressLog: const []);
           if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           final yaml = FileService.toYamlString(sharePattern);
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
@@ -557,6 +558,11 @@ class EditorScreen extends ConsumerWidget {
                 icon: const Icon(Icons.shopping_bag_outlined),
                 onPressed: () => showMaterialsList(context, state),
               ),
+              IconButton(
+                tooltip: 'StitchOps — progress stats',
+                icon: const Icon(Icons.bar_chart_outlined),
+                onPressed: () => showStitchOps(context, state.pattern),
+              ),
               // Share button: iOS, Android, macOS only
               if (!kIsWeb && !Platform.isWindows)
                 IconButton(
@@ -621,6 +627,11 @@ class EditorScreen extends ConsumerWidget {
                 icon: const Icon(Icons.checklist),
                 onPressed: () =>
                     showProgressHelpDialog(context, ref, state: state),
+              ),
+              IconButton(
+                tooltip: 'StitchOps — progress stats',
+                icon: const Icon(Icons.bar_chart_outlined),
+                onPressed: () => showStitchOps(context, state.pattern),
               ),
               IconButton(
                 tooltip: state.pattern.pageConfig.enabled
