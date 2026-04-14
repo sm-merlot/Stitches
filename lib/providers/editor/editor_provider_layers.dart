@@ -152,7 +152,7 @@ mixin LayersMixin on Notifier<EditorState> {
         _updateLayer(state.pattern, id, (l) => l.copyWith(visible: !l.visible));
     state = state.copyWith(
         pattern: newPattern, isDirty: true, compositeResult: null);
-    if (state.showCompositeThreads) refreshCompositeCache();
+    refreshCompositeCache();
   }
 
   void toggleLayerLocked(String id) {
@@ -166,7 +166,7 @@ mixin LayersMixin on Notifier<EditorState> {
         _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
     state = state.copyWith(
         pattern: newPattern, isDirty: true, compositeResult: null);
-    if (state.showCompositeThreads) refreshCompositeCache();
+    refreshCompositeCache();
   }
 
   void setLayerOpacity(String id, double opacity) {
@@ -175,11 +175,9 @@ mixin LayersMixin on Notifier<EditorState> {
         _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
     state = state.copyWith(
         pattern: newPattern, isDirty: true, compositeResult: null);
-    if (state.showCompositeThreads) {
-      _opacityDebounce?.cancel();
-      _opacityDebounce =
-          Timer(const Duration(milliseconds: 150), refreshCompositeCache);
-    }
+    _opacityDebounce?.cancel();
+    _opacityDebounce =
+        Timer(const Duration(milliseconds: 150), refreshCompositeCache);
   }
 
   /// [delta] = +1 moves layer up (toward top/front), -1 moves down.
@@ -193,7 +191,7 @@ mixin LayersMixin on Notifier<EditorState> {
       redoStack: [],
       compositeResult: null,
     );
-    if (state.showCompositeThreads) refreshCompositeCache();
+    refreshCompositeCache();
   }
 
   void duplicateLayer(String id) {
@@ -249,6 +247,7 @@ mixin LayersMixin on Notifier<EditorState> {
       redoStack: [],
       compositeResult: null,
     );
+    refreshCompositeCache();
   }
 
   void setActiveLayer(String id) {
@@ -428,6 +427,7 @@ mixin LayersMixin on Notifier<EditorState> {
       isDirty: true,
       compositeResult: null,
     );
+    refreshCompositeCache();
   }
 
   void toggleGroupLocked(String groupId) {
