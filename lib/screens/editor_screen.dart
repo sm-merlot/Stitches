@@ -400,7 +400,7 @@ class EditorScreen extends ConsumerWidget {
               ? (isUnsavedNew
                   ? 'This pattern hasn\'t been saved. Leave now and your work will be lost.'
                   : 'You have unsaved changes. Leave without saving?')
-              : 'Close this pattern and return to the workspace?',
+              : 'Close this pattern and return home?',
         ),
         actions: [
           TextButton(
