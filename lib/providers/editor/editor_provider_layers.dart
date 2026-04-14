@@ -427,6 +427,7 @@ mixin LayersMixin on Notifier<EditorState> {
       isDirty: true,
       compositeResult: null,
     );
+    refreshCompositeCache();
   }
 
   void toggleGroupLocked(String groupId) {
