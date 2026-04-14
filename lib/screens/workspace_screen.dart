@@ -1496,20 +1496,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             // ── No file open: workspace-level StitchOps ──────────────────────
             if (!editorState.isFileOpen &&
                 openPdf == null &&
-                wsState.workspace is LocalFolder)
+                wsState.workspace != null)
               IconButton(
                 tooltip: 'StitchOps — workspace stats',
                 icon: const Icon(Icons.bar_chart_outlined),
-                onPressed: () async {
-                  final folder = wsState.workspace as LocalFolder;
-                  final paths = await FileService.openFolderFromPath(folder.path);
-                  if (!context.mounted) return;
-                  showWorkspaceStitchOps(
-                    context,
-                    paths,
-                    folder.displayName,
-                  );
-                },
+                onPressed: () =>
+                    showWorkspaceStitchOps(context, wsState.workspace!),
               ),
           ],
         ),

@@ -1,14 +1,20 @@
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
+import '../models/storage_location.dart';
+import '../providers/google_drive_provider.dart';
 import '../services/file_service.dart';
+import '../services/google_drive_service.dart';
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 void showWorkspaceStitchOps(
-    BuildContext context, List<String> filePaths, String workspaceName) {
+    BuildContext context, StorageLocation workspace) {
   final isWide = MediaQuery.of(context).size.shortestSide >= 600;
   if (isWide) {
     showDialog<void>(
@@ -16,10 +22,7 @@ void showWorkspaceStitchOps(
       builder: (_) => Dialog(
         child: SizedBox(
           width: 580,
-          child: WorkspaceStitchOpsScreen(
-            filePaths: filePaths,
-            workspaceName: workspaceName,
-          ),
+          child: WorkspaceStitchOpsScreen(workspace: workspace),
         ),
       ),
     );
@@ -27,10 +30,7 @@ void showWorkspaceStitchOps(
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => WorkspaceStitchOpsScreen(
-          filePaths: filePaths,
-          workspaceName: workspaceName,
-        ),
+        builder: (_) => WorkspaceStitchOpsScreen(workspace: workspace),
       ),
     );
   }
@@ -63,14 +63,10 @@ class _WorkspaceStats {
   final int totalStitches;
   final int completedStitches;
   final int completedPatterns;
-
-  /// Combined stitches added today / this week / this month / this year
-  /// across all patterns.
   final int todayDelta;
   final int weekDelta;
   final int monthDelta;
   final int yearDelta;
-
   final List<_PatternSummary> patterns;
 
   const _WorkspaceStats({
@@ -102,7 +98,6 @@ _PatternSummary _summarisePattern(CrossStitchPattern p) {
   final lastActiveDate =
       log.isNotEmpty ? parseIsoDate(log.last.isoDate) : null;
 
-  // Build daily deltas
   int prevCount = 0;
   final dailyMap = <String, int>{};
   for (final entry in log) {
@@ -159,7 +154,6 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     completedStitches += summary.completedStitches;
     if (summary.isComplete) completedPatterns++;
 
-    // Build daily map for this pattern
     final log = [...p.progressLog]
       ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
     int prevCount = 0;
@@ -176,7 +170,6 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     yearDelta += _sumFromMap(dailyMap, today, 365);
   }
 
-  // Sort: active recently first, then by name
   summaries.sort((a, b) {
     if (a.recentDelta != b.recentDelta) {
       return b.recentDelta.compareTo(a.recentDelta);
@@ -208,23 +201,18 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-class WorkspaceStitchOpsScreen extends StatefulWidget {
-  final List<String> filePaths;
-  final String workspaceName;
+class WorkspaceStitchOpsScreen extends ConsumerStatefulWidget {
+  final StorageLocation workspace;
 
-  const WorkspaceStitchOpsScreen({
-    super.key,
-    required this.filePaths,
-    required this.workspaceName,
-  });
+  const WorkspaceStitchOpsScreen({super.key, required this.workspace});
 
   @override
-  State<WorkspaceStitchOpsScreen> createState() =>
+  ConsumerState<WorkspaceStitchOpsScreen> createState() =>
       _WorkspaceStitchOpsScreenState();
 }
 
 class _WorkspaceStitchOpsScreenState
-    extends State<WorkspaceStitchOpsScreen> {
+    extends ConsumerState<WorkspaceStitchOpsScreen> {
   _WorkspaceStats? _stats;
   String? _error;
   int _loaded = 0;
@@ -237,9 +225,19 @@ class _WorkspaceStitchOpsScreenState
   }
 
   Future<void> _loadAll() async {
-    final paths = widget.filePaths
-        .where((p) => p.endsWith('.stitches'))
-        .toList();
+    switch (widget.workspace) {
+      case LocalFolder():
+        await _loadLocal(widget.workspace as LocalFolder);
+      case DriveFolder():
+        await _loadDrive(widget.workspace as DriveFolder);
+    }
+  }
+
+  // ── Local folder loading ──────────────────────────────────────────────────
+
+  Future<void> _loadLocal(LocalFolder folder) async {
+    final paths = await FileService.openFolderFromPath(folder.path);
+    if (!mounted) return;
     setState(() {
       _total = paths.length;
       _loaded = 0;
@@ -258,10 +256,78 @@ class _WorkspaceStitchOpsScreenState
     }
 
     if (!mounted) return;
-    setState(() {
-      _stats = _aggregateStats(patterns);
-    });
+    setState(() => _stats = _aggregateStats(patterns));
   }
+
+  // ── Google Drive loading ──────────────────────────────────────────────────
+
+  Future<void> _loadDrive(DriveFolder folder) async {
+    GoogleDriveService? service;
+    try {
+      service = await ref.read(googleDriveProvider.notifier).getService();
+    } catch (_) {}
+
+    if (!mounted) return;
+    if (service == null) {
+      setState(() => _error = 'Not signed in to Google Drive.');
+      return;
+    }
+
+    // Enumerate all .stitches files under this folder (recursive).
+    List<DrivePatternFile> allFiles;
+    try {
+      allFiles = await _collectDriveFiles(service, folder);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not list Drive folder: $e');
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _total = allFiles.length;
+      _loaded = 0;
+    });
+
+    final tempDir = await getTemporaryDirectory();
+    final patterns = <CrossStitchPattern>[];
+
+    for (final file in allFiles) {
+      try {
+        final bytes = await service.downloadFile(file.fileId);
+        final tempPath = '${tempDir.path}/${file.fileId}.stitches';
+        await File(tempPath).writeAsBytes(bytes, flush: true);
+        final (pattern, _, __) = await FileService.openFileFromPath(tempPath);
+        patterns.add(pattern);
+      } catch (_) {
+        // Skip files that can't be downloaded or parsed.
+      }
+      if (!mounted) return;
+      setState(() => _loaded++);
+    }
+
+    if (!mounted) return;
+    setState(() => _stats = _aggregateStats(patterns));
+  }
+
+  /// Recursively collects all [DrivePatternFile]s under [folder],
+  /// up to [maxDepth] levels deep.
+  Future<List<DrivePatternFile>> _collectDriveFiles(
+      GoogleDriveService service, DriveFolder folder,
+      {int maxDepth = 4}) async {
+    if (maxDepth <= 0) return [];
+    final contents = await service.listFolderContents(folder);
+    final files = contents.files.whereType<DrivePatternFile>().toList();
+    for (final sub in contents.subfolders.whereType<DriveFolder>()) {
+      try {
+        files.addAll(await _collectDriveFiles(service, sub,
+            maxDepth: maxDepth - 1));
+      } catch (_) {}
+    }
+    return files;
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -276,7 +342,7 @@ class _WorkspaceStitchOpsScreenState
             const Text('StitchOps',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             Text(
-              widget.workspaceName,
+              widget.workspace.displayName,
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: colorScheme.onSurfaceVariant),
               maxLines: 1,
@@ -286,9 +352,12 @@ class _WorkspaceStitchOpsScreenState
         ),
         leading: Navigator.canPop(context) ? const CloseButton() : null,
       ),
-      body: _stats == null
-          ? _LoadingView(loaded: _loaded, total: _total)
-          : _StatsView(stats: _stats!, colorScheme: colorScheme),
+      body: _error != null
+          ? _ErrorView(message: _error!, colorScheme: colorScheme)
+          : _stats == null
+              ? _LoadingView(loaded: _loaded, total: _total,
+                  isDrive: widget.workspace is DriveFolder)
+              : _StatsView(stats: _stats!, colorScheme: colorScheme),
     );
   }
 }
@@ -298,7 +367,9 @@ class _WorkspaceStitchOpsScreenState
 class _LoadingView extends StatelessWidget {
   final int loaded;
   final int total;
-  const _LoadingView({required this.loaded, required this.total});
+  final bool isDrive;
+  const _LoadingView({required this.loaded, required this.total,
+      required this.isDrive});
 
   @override
   Widget build(BuildContext context) {
@@ -312,7 +383,7 @@ class _LoadingView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Scanning patterns…',
+            isDrive ? 'Downloading patterns from Drive…' : 'Scanning patterns…',
             style: TextStyle(color: colorScheme.onSurfaceVariant),
           ),
           if (total > 0)
@@ -322,6 +393,34 @@ class _LoadingView extends StatelessWidget {
                   fontSize: 12, color: colorScheme.onSurfaceVariant),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Error view ───────────────────────────────────────────────────────────────
+
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final ColorScheme colorScheme;
+  const _ErrorView({required this.message, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_outlined,
+                size: 48, color: colorScheme.error),
+            const SizedBox(height: 16),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }
@@ -498,7 +597,6 @@ class _PatternRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          // Status indicator
           Icon(
             isDone
                 ? Icons.check_circle
@@ -513,7 +611,6 @@ class _PatternRow extends StatelessWidget {
                     : colorScheme.outlineVariant,
           ),
           const SizedBox(width: 8),
-          // Name
           Expanded(
             flex: 3,
             child: Column(
@@ -536,7 +633,6 @@ class _PatternRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Progress bar
           Expanded(
             flex: 3,
             child: ClipRRect(
@@ -551,7 +647,6 @@ class _PatternRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Count
           SizedBox(
             width: 72,
             child: Text(
