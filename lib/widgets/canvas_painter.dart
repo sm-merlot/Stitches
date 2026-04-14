@@ -189,8 +189,15 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (c == null) continue;
           final isDone = stitchMode && progress.isBackstitchDone(
               stitch.x1, stitch.y1, stitch.x2, stitch.y2);
-          if (_isBWStitchMode && !isDone) {
-            c = _bwGreyscale(c);
+          if (_isBWStitchMode) {
+            if (isDone) {
+              // Done backstitches keep their colour in B&W mode.
+            } else if (stitchFocusThreadId != null &&
+                stitchFocusThreadId == stitch.threadId) {
+              c = _muteColor(c);
+            } else {
+              c = _bwGreyscale(c);
+            }
           } else if (isDone) {
             c = Color.lerp(c, aidaColor, 0.70)!;
           }
@@ -591,10 +598,19 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
 
       // B&W stitch mode: undone → subtle greyscale, done → full colour.
+      // When a thread is focused, keep its colour (slightly muted) so the
+      // user can orientate by the real colours while stitching.
       if (stitchMode && !colourMode) {
         final xy = stitchXY(stitch);
         final isDone = xy != null && progress.completedStitches.contains(xy);
-        if (!isDone) effectiveColor = _bwGreyscale(effectiveColor);
+        final isFocused = stitchFocusThreadId != null &&
+            stitchFocusThreadId == stitch.threadId;
+        if (!isDone && !isFocused) {
+          effectiveColor = _bwGreyscale(effectiveColor);
+        } else if (!isDone && isFocused) {
+          // Slightly muted so the bright outline still pops.
+          effectiveColor = _muteColor(effectiveColor);
+        }
       }
 
       (byColor[effectiveColor] ??= []).add(rect);
@@ -674,9 +690,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       }
 
       // B&W stitch mode: undone → subtle greyscale, done → full colour.
+      // Focused thread keeps its colour (slightly muted) for orientation.
       if (stitchMode && !colourMode) {
         final isDone = progress.completedStitches.contains(xy);
-        if (!isDone) effectiveColor = _bwGreyscale(effectiveColor);
+        final isFocused = stitchFocusThreadId != null &&
+            stitchFocusThreadId == stitch.threadId;
+        if (!isDone && !isFocused) {
+          effectiveColor = _bwGreyscale(effectiveColor);
+        } else if (!isDone && isFocused) {
+          effectiveColor = _muteColor(effectiveColor);
+        }
       }
 
       if (rect.right <= minPx || rect.left >= maxPx ||
@@ -898,6 +921,15 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   // when multiple layers each contributed their own luminance-based grey).
   static const Color _unfocusedGrey = Color(0xA0B8B8B8);
   static Color _greyColor(Color c) => _unfocusedGrey;
+
+  /// Slightly desaturates a colour for focused stitches in B&W mode so they
+  /// remain identifiable but don't overpower the bright focus outline.
+  static Color _muteColor(Color c) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl.withSaturation((hsl.saturation * 0.5).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness * 0.85 + 0.10).clamp(0.0, 1.0))
+        .toColor();
+  }
 
   /// Subtle greyscale for B&W stitch mode: maps each colour to a very light
   /// grey so that different thread colours remain distinguishable.
