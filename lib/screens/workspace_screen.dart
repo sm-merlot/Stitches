@@ -36,6 +36,7 @@ import 'drive_folder_picker_dialog.dart';
 import 'materials_list_screen.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
+import '../services/pdf_pattern_keeper_parser.dart';
 import '../services/pdf_scanner.dart';
 import 'pattern_scan_symbol_screen.dart';
 import '../widgets/editor_canvas_area.dart';
@@ -1055,23 +1056,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ),
         );
         if (pattern != null && context.mounted) {
-          // Auto-save the new pattern next to the source PDF.
-          final savePath =
-              '${File(pdfPath).parent.path}${Platform.pathSeparator}$title.stitches';
-          final scanCompress = ref.read(settingsProvider).compressNewFiles;
-          try {
-            await FileService.saveFile(pattern, savePath, compress: scanCompress);
-          } catch (_) {
-            // Saving failed (e.g. read-only location) — load without a file path.
-          }
-          if (!context.mounted) return;
-          ref.read(editorProvider.notifier).loadPattern(
-            pattern,
-            filePath: File(savePath).existsSync() ? savePath : null,
-            compressOnSave: scanCompress,
-          );
-          ref.read(pdfViewerProvider.notifier).set(null);
-    ref.read(imageViewerProvider.notifier).set(null);
+          await _saveAndOpenScannedPattern(context, pattern, pdfPath, title);
         }
       } else {
         // ── Multiple grids: each page becomes a Snippet ──────────────────────
@@ -1100,6 +1085,27 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     } finally {
       _removeScanOverlay();
     }
+  }
+
+  /// Save [pattern] next to [sourcePath] and open it in the editor.
+  Future<void> _saveAndOpenScannedPattern(BuildContext context,
+      CrossStitchPattern pattern, String sourcePath, String title) async {
+    final savePath =
+        '${File(sourcePath).parent.path}${Platform.pathSeparator}$title.stitches';
+    final compress = ref.read(settingsProvider).compressNewFiles;
+    try {
+      await FileService.saveFile(pattern, savePath, compress: compress);
+    } catch (_) {
+      // Read-only location — load without a file path.
+    }
+    if (!context.mounted) return;
+    ref.read(editorProvider.notifier).loadPattern(
+      pattern,
+      filePath: File(savePath).existsSync() ? savePath : null,
+      compressOnSave: compress,
+    );
+    ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(null);
   }
 
   /// Dialog shown when the AI did not detect pattern dimensions.
@@ -1371,6 +1377,27 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 icon: const Icon(Icons.document_scanner_outlined),
                 tooltip: 'Scan page as pattern (Beta)',
                 onPressed: () async {
+                  // Tier 1: try PatternKeeper text-layer parsing (zero user input).
+                  _showScanOverlay(context, 'Detecting PDF format…');
+                  final pkResult = await PatternKeeperParser.tryParse(
+                      openPdf.localPath);
+                  _removeScanOverlay();
+                  if (!context.mounted) return;
+
+                  if (pkResult != null) {
+                    final pattern = await Navigator.of(context)
+                        .push<CrossStitchPattern>(MaterialPageRoute(
+                      builder: (_) => PatternScanPreviewScreen(
+                          result: pkResult, patternName: openPdf.title),
+                    ));
+                    if (pattern != null && context.mounted) {
+                      await _saveAndOpenScannedPattern(
+                          context, pattern, openPdf.localPath, openPdf.title);
+                    }
+                    return;
+                  }
+
+                  // Tier 2: fall back to manual raster scan.
                   final picked = await PdfPagePickerDialog.show(
                     context,
                     pdfPath: openPdf.localPath,

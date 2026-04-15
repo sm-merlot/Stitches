@@ -90,11 +90,16 @@ In rough order of bang-for-buck:
 
 ## Concrete recommendation
 
-Update `project_pdf_scanner_redesign.md` to a **two-tier import pipeline**:
+A **two-tier import pipeline** — Tier 1 is now implemented:
 
-- **Tier 1 (text-native PDFs):** parse `/Producer` → if known, apply preset;
-  extract text positions for symbols; parse legend table by header names.
-  ~95% of pro patterns hit this path with near-zero user friction.
+- **Tier 1 (text-native PDFs) — ✅ DONE** (`lib/services/pdf_pattern_keeper_parser.dart`):
+  Load each page's structured text layer via pdfrx `loadStructuredText()`.
+  Detect the legend table (rows where a fragment matches a known DMC code),
+  build a symbol→DMC map, then parse the chart grid from character positions.
+  Multi-page grids are stitched together with automatic overlap detection.
+  Zero user input required — falls through silently to Tier 2 if detection
+  fails.  `/Producer` fingerprinting not yet implemented (not needed in
+  practice — the legend-detection heuristic is sufficient).
 - **Tier 2 (raster PDFs / photos):** existing sample-one-cell template-
   matching design, with the human-assisted grid overlay borrowed from PK.
 
