@@ -886,18 +886,25 @@ class _PatternRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          Icon(
-            isDone
-                ? Icons.check_circle
+          Tooltip(
+            message: isDone
+                ? 'Complete'
                 : summary.recentDelta > 0
-                    ? Icons.pending
-                    : Icons.radio_button_unchecked,
-            size: 16,
-            color: isDone
-                ? colorScheme.secondary
-                : summary.recentDelta > 0
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant,
+                    ? 'Active in the last 14 days'
+                    : 'No recent activity',
+            child: Icon(
+              isDone
+                  ? Icons.check_circle
+                  : summary.recentDelta > 0
+                      ? Icons.pending
+                      : Icons.radio_button_unchecked,
+              size: 16,
+              color: isDone
+                  ? colorScheme.secondary
+                  : summary.recentDelta > 0
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
