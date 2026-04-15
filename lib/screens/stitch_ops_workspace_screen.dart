@@ -329,10 +329,30 @@ class WorkspaceStitchOpsScreen extends ConsumerStatefulWidget {
 
 class _WorkspaceStitchOpsScreenState
     extends ConsumerState<WorkspaceStitchOpsScreen> {
-  _WorkspaceStats? _stats;
+  List<CrossStitchPattern>? _allPatterns;
+  Map<String, _PatternSummary>? _allSummaries;
+  final Set<String> _excludedNames = {};
   String? _error;
   int _loaded = 0;
   int _total = 0;
+
+  _WorkspaceStats? get _stats {
+    final all = _allPatterns;
+    if (all == null) return null;
+    final included =
+        _excludedNames.isEmpty ? all : all.where((p) => !_excludedNames.contains(p.name)).toList();
+    return _aggregateStats(included);
+  }
+
+  void _togglePattern(String name, bool included) {
+    setState(() {
+      if (included) {
+        _excludedNames.remove(name);
+      } else {
+        _excludedNames.add(name);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -370,7 +390,10 @@ class _WorkspaceStitchOpsScreenState
     }
 
     if (!mounted) return;
-    setState(() => _stats = _aggregateStats(patterns));
+    setState(() {
+      _allPatterns = patterns;
+      _allSummaries = {for (final p in patterns) p.name: _summarisePattern(p)};
+    });
   }
 
   // ── Google Drive loading ──────────────────────────────────────────────────
@@ -421,7 +444,10 @@ class _WorkspaceStitchOpsScreenState
     }
 
     if (!mounted) return;
-    setState(() => _stats = _aggregateStats(patterns));
+    setState(() {
+      _allPatterns = patterns;
+      _allSummaries = {for (final p in patterns) p.name: _summarisePattern(p)};
+    });
   }
 
   Future<List<DrivePatternFile>> _collectDriveFiles(
@@ -471,7 +497,14 @@ class _WorkspaceStitchOpsScreenState
                   loaded: _loaded,
                   total: _total,
                   isDrive: widget.workspace is DriveFolder)
-              : _StatsView(stats: _stats!, colorScheme: colorScheme),
+              : _StatsView(
+                  stats: _stats!,
+                  colorScheme: colorScheme,
+                  allPatterns: _allPatterns!,
+                  allSummaries: _allSummaries!,
+                  excludedNames: _excludedNames,
+                  onToggle: _togglePattern,
+                ),
     );
   }
 }
@@ -546,7 +579,19 @@ class _ErrorView extends StatelessWidget {
 class _StatsView extends StatelessWidget {
   final _WorkspaceStats stats;
   final ColorScheme colorScheme;
-  const _StatsView({required this.stats, required this.colorScheme});
+  final List<CrossStitchPattern> allPatterns;
+  final Map<String, _PatternSummary> allSummaries;
+  final Set<String> excludedNames;
+  final void Function(String name, bool included) onToggle;
+
+  const _StatsView({
+    required this.stats,
+    required this.colorScheme,
+    required this.allPatterns,
+    required this.allSummaries,
+    required this.excludedNames,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -631,7 +676,14 @@ class _StatsView extends StatelessWidget {
           if (heatmapCard != null) ...[heatmapCard, gap],
 
           // Per-pattern list.
-          _PatternListCard(stats: stats, colorScheme: colorScheme),
+          _PatternListCard(
+            stats: stats,
+            colorScheme: colorScheme,
+            allPatterns: allPatterns,
+            allSummaries: allSummaries,
+            excludedNames: excludedNames,
+            onToggle: onToggle,
+          ),
         ],
       );
     });
@@ -839,14 +891,39 @@ class _WsChartCard extends StatelessWidget {
 
 // ─── Per-pattern list card ────────────────────────────────────────────────────
 
-class _PatternListCard extends StatelessWidget {
+class _PatternListCard extends StatefulWidget {
   final _WorkspaceStats stats;
   final ColorScheme colorScheme;
-  const _PatternListCard({required this.stats, required this.colorScheme});
+  final List<CrossStitchPattern> allPatterns;
+  final Map<String, _PatternSummary> allSummaries;
+  final Set<String> excludedNames;
+  final void Function(String name, bool included) onToggle;
+
+  const _PatternListCard({
+    required this.stats,
+    required this.colorScheme,
+    required this.allPatterns,
+    required this.allSummaries,
+    required this.excludedNames,
+    required this.onToggle,
+  });
+
+  @override
+  State<_PatternListCard> createState() => _PatternListCardState();
+}
+
+class _PatternListCardState extends State<_PatternListCard> {
+  bool _filterExpanded = false;
 
   @override
   Widget build(BuildContext context) {
-    if (stats.patterns.isEmpty) {
+    final colorScheme = widget.colorScheme;
+    final allPatterns = widget.allPatterns;
+    final excludedNames = widget.excludedNames;
+    final includedCount = allPatterns.length - excludedNames.length;
+    final isFiltering = excludedNames.isNotEmpty;
+
+    if (allPatterns.isEmpty) {
       return Card(
         margin: EdgeInsets.zero,
         child: Padding(
@@ -858,6 +935,20 @@ class _PatternListCard extends StatelessWidget {
         ),
       );
     }
+
+    // Build display list: included rows first (in stats-computed order),
+    // then excluded rows sorted by name.
+    final includedNames =
+        widget.stats.patterns.map((s) => s.name).toSet();
+    final orderedSummaries = <_PatternSummary>[
+      ...widget.stats.patterns,
+      ...widget.allSummaries.entries
+          .where((e) => !includedNames.contains(e.key))
+          .map((e) => e.value)
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name)),
+    ];
+
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -865,10 +956,68 @@ class _PatternListCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader('Patterns'),
-            const SizedBox(height: 8),
-            ...stats.patterns
-                .map((p) => _PatternRow(summary: p, colorScheme: colorScheme)),
+            // Header row.
+            Row(
+              children: [
+                Expanded(child: _SectionHeader('Patterns')),
+                if (isFiltering) ...[
+                  Text(
+                    '$includedCount of ${allPatterns.length}',
+                    style: TextStyle(fontSize: 11, color: colorScheme.primary),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                IconButton(
+                  icon: Icon(
+                    _filterExpanded
+                        ? Icons.filter_list_off
+                        : Icons.filter_list,
+                    size: 18,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: _filterExpanded ? 'Hide filter' : 'Filter patterns',
+                  onPressed: () =>
+                      setState(() => _filterExpanded = !_filterExpanded),
+                ),
+              ],
+            ),
+            // Select all / none row.
+            if (_filterExpanded) ...[
+              Row(
+                children: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact),
+                    onPressed: () {
+                      for (final p in allPatterns) {
+                        widget.onToggle(p.name, true);
+                      }
+                    },
+                    child: const Text('Select all'),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact),
+                    onPressed: () {
+                      for (final p in allPatterns) {
+                        widget.onToggle(p.name, false);
+                      }
+                    },
+                    child: const Text('Select none'),
+                  ),
+                ],
+              ),
+              Divider(height: 8, color: colorScheme.outlineVariant),
+            ],
+            const SizedBox(height: 4),
+            // Pattern rows.
+            ...orderedSummaries.map((s) => _PatternRow(
+                  summary: s,
+                  colorScheme: colorScheme,
+                  showCheckbox: _filterExpanded,
+                  isIncluded: !excludedNames.contains(s.name),
+                  onToggle: (included) => widget.onToggle(s.name, included),
+                )),
           ],
         ),
       ),
@@ -879,86 +1028,117 @@ class _PatternListCard extends StatelessWidget {
 class _PatternRow extends StatelessWidget {
   final _PatternSummary summary;
   final ColorScheme colorScheme;
-  const _PatternRow({required this.summary, required this.colorScheme});
+  final bool showCheckbox;
+  final bool isIncluded;
+  final void Function(bool included) onToggle;
+
+  const _PatternRow({
+    required this.summary,
+    required this.colorScheme,
+    required this.showCheckbox,
+    required this.isIncluded,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final pct = summary.pct;
     final isDone = summary.isComplete;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Tooltip(
-            message: isDone
-                ? 'Complete'
-                : summary.recentDelta > 0
-                    ? 'Active in the last 14 days'
-                    : 'No recent activity',
-            child: Icon(
-              isDone
-                  ? Icons.check_circle
-                  : summary.recentDelta > 0
-                      ? Icons.pending
-                      : Icons.radio_button_unchecked,
-              size: 16,
-              color: isDone
-                  ? colorScheme.secondary
-                  : summary.recentDelta > 0
-                      ? colorScheme.primary
-                      : colorScheme.outlineVariant,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  summary.name,
-                  style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                if (summary.lastActiveDate != null)
-                  Text(
-                    'Last: ${_shortDate(summary.lastActiveDate!)}',
-                    style: TextStyle(
-                        fontSize: 10, color: colorScheme.onSurfaceVariant),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: pct,
-                minHeight: 6,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                    isDone ? colorScheme.secondary : colorScheme.primary),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
+
+    Widget row = Row(
+      children: [
+        if (showCheckbox)
           SizedBox(
-            width: 72,
-            child: Text(
-              '${_fmt(summary.completedStitches)}/${_fmt(summary.totalStitches)}',
-              style: TextStyle(
-                  fontSize: 11,
-                  color: isDone
-                      ? colorScheme.secondary
-                      : colorScheme.onSurfaceVariant,
-                  fontWeight: isDone ? FontWeight.w600 : null),
-              textAlign: TextAlign.end,
+            width: 32,
+            child: Checkbox(
+              value: isIncluded,
+              onChanged: (v) => onToggle(v ?? true),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
             ),
           ),
-        ],
+        Tooltip(
+          message: isDone
+              ? 'Complete'
+              : summary.recentDelta > 0
+                  ? 'Active in the last 14 days'
+                  : 'No recent activity',
+          child: Icon(
+            isDone
+                ? Icons.check_circle
+                : summary.recentDelta > 0
+                    ? Icons.pending
+                    : Icons.radio_button_unchecked,
+            size: 16,
+            color: isDone
+                ? colorScheme.secondary
+                : summary.recentDelta > 0
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                summary.name,
+                style: const TextStyle(fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              if (summary.lastActiveDate != null)
+                Text(
+                  'Last: ${_shortDate(summary.lastActiveDate!)}',
+                  style: TextStyle(
+                      fontSize: 10, color: colorScheme.onSurfaceVariant),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 6,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                  isDone ? colorScheme.secondary : colorScheme.primary),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 72,
+          child: Text(
+            '${_fmt(summary.completedStitches)}/${_fmt(summary.totalStitches)}',
+            style: TextStyle(
+                fontSize: 11,
+                color: isDone
+                    ? colorScheme.secondary
+                    : colorScheme.onSurfaceVariant,
+                fontWeight: isDone ? FontWeight.w600 : null),
+            textAlign: TextAlign.end,
+          ),
+        ),
+      ],
+    );
+
+    if (showCheckbox && !isIncluded) {
+      row = Opacity(opacity: 0.4, child: row);
+    }
+
+    return InkWell(
+      onTap: showCheckbox ? () => onToggle(!isIncluded) : null,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: row,
       ),
     );
   }
