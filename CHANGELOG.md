@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- b5330a1: Use distinct icon for B&W toggle in stitch mode (`invert_colors`) vs realistic toggle in edit/view mode (`grid_view`). Default to B&W mode when entering stitch mode.
+- 357fd67: Add colour list sort options to the sidebar. Threads can now be sorted by colour ID (DMC/Anchor) or by stitch count. In stitch mode, a toggle allows pushing fully-completed colours to the bottom of the list. Both preferences persist across sessions.
+- f6e12b8: update navigation: quit to home = x + warning, exit stitch or edit mode = <- (back arrow)
+- 13842c6: Internal refactor: structural splits to make large files more navigable.
+
+  - New `lib/widgets/canvas_viewport.dart` — `CanvasViewport` value type encapsulating pan/zoom/cell-size math (screen↔canvas↔cell transforms, viewport culling, focal-point zoom). Replaces inline transform math in `pattern_canvas.dart` and `canvas_painter.dart`.
+  - `EditorState` extracted from `lib/providers/editor/editor_provider.dart` into its own `editor_state.dart` part file (~340 lines moved out, main provider drops from ~990 → ~660 lines).
+  - `lib/services/pdf_service.dart` (1923 lines) split into 5 focused part files under `lib/services/pdf/`: `pdf_chart.dart`, `pdf_color_table.dart`, `pdf_title_page.dart`, `pdf_markdown.dart`, `pdf_helpers.dart`. `PdfService` class now ~365 lines containing only orchestration (`buildPdfBytes`, `exportPattern`) plus the test helper.
+
+  Pure refactor — no behaviour changes.
+
+- 1ecdece: Internal refactor: extract dialog helpers and remove confirm/input boilerplate.
+
+  - New `lib/widgets/dialogs/confirm_dialog.dart` — `confirmDestructive()` helper consolidating 6 inline AlertDialog destructive prompts (delete file/folder/layer-group/palette, clear progress, clear recent).
+  - New `lib/widgets/dialogs/input_dialog.dart` — `inputDialog()` helper consolidating 3 single-text-field rename prompts (file/folder/snippet), with an `allowEmpty` flag preserving the snippet "leave empty for no name" behaviour.
+  - New `lib/widgets/dialogs/dmc_picker_dialog.dart` — extracted shared `DmcPickerDialog` widget, de-duplicating two of three local copies (palettes panel + snippet dialogs).
+  - Removed `docs/refactor-plan.md` — multi-phase refactor tracker is now obsolete.
+
+  The phase-3 `StitchRenderer` abstraction was investigated and intentionally skipped: the three rendering sites share switch structure but differ on graphics API, coordinate system, and detail level — an interface would formalize the relationship without removing code.
+
+  Pure refactor — no behaviour changes.
+
+- 31ae406: Remove realistic stitch rendering from canvas — always render blocks. Rename `blockMode` to `colourMode` (B&W default in stitch mode, colour toggle on). Add "Realistic stitches" checkbox to PDF/PNG export dialog. Improve realistic rendering with lens-shaped threads (thicker in middle) and thinner backstitches.
+- 2ea2c1b: Add StitchOps: in-depth stitching progress analytics
+
+  A new **StitchOps** screen gives you detailed insight into your stitching progress, accessible via the chart icon in the toolbar (view mode and stitch mode).
+
+  **Per-pattern stats**
+
+  - Overview: completed / total / remaining stitch count with a progress bar, started date, and last-active date
+  - Velocity: stitches completed today, this week, this month, and this year
+  - ETA: estimated completion date based on your recent 14-day rate, plus average stitches per active day
+  - Daily bar chart: last 60 days of per-day stitch counts with month labels
+  - Cumulative line chart: overall progress curve over the lifetime of the project
+  - Activity heatmap: 16-week GitHub-style contribution grid
+  - Thread breakdown: per-DMC-colour progress bars and counts, sorted by size
+  - Interactive hover tooltips on all charts (desktop/mouse)
+
+  **Workspace stats**
+  A second chart icon appears in the workspace toolbar when no file is open. It scans every `.stitches` file in the workspace (local or Google Drive) and shows a combined view across all patterns:
+
+  - Total patterns, how many are complete, overall stitch count and completion percentage
+  - Combined velocity (today / week / month / year) across all patterns
+  - Current and longest stitching streak 🔥
+  - Daily bar chart, cumulative line chart, and activity heatmap — aggregated across every pattern
+  - Per-pattern list sorted by recent activity, with individual progress bars
+  - **Pattern filter**: tap the filter icon to show checkboxes on each pattern row; toggle individual patterns in or out to focus the aggregate stats on a specific subset. "Select all / Select none" for quick bulk changes.
+  - Google Drive workspaces cache downloaded files on first open — subsequent loads are instant
+
+  **How progress history is tracked**
+  Each time you mark stitches done, the app records a daily high-watermark entry (date + cumulative stitch count) in the pattern file. The log lives outside the undo stack, so undoing stitches never erases your history. The log is stripped when exporting or sharing a pattern so personal stitching history stays private.
+
+- 018f046: Remove block mode from stitch mode and clean up colouring/styling in focus mode
+
+### Patch Changes
+
+- cc979d8: Fix canvas interaction bugs: grid lines fade out smoothly at low zoom (raised thresholds + alpha ramp), move YAML serialization to isolate so auto-save no longer blocks stitch marking, widen double-click window to 500ms, and add backstitch chain mode (Ctrl on desktop, toggle button on touch).
+- 84ff3e4: Fix issue where deselection by clicking would also mark stitch on canvas.
+- 3af1b18: Fix copy-paste functionality with view mode and other documents.
+- 45a3f70: Bump `file_picker` from 11.0.1 to 11.0.2
+
+  A package that allows you to use a native file explorer to pick single or multiple absolute file paths, with extension filtering support.
+
+- 104cdb0: fix issue where layers don't merge correctly after changing layer and layer group visibility.
+- 84a4900: Use the cross-stitch term "Frog" instead of "Unmark" for undoing completed stitches. "Frogging" is the widely used community term for ripping out stitches, so this makes the UI feel more natural to stitchers.
+- abaf7ae: ensure pan and zoom gestures don't mark stitches as done in stitche mode.
+- a1c8782: Internal refactor: extract shared utilities to reduce duplication.
+
+  - New `lib/services/color_space.dart` consolidates 3 copies of CIE Lab conversion + ΔE distance, plus a `nearestLabIndex` helper.
+  - New `lib/services/dashed_line.dart` consolidates 3 copies of dashed-line drawing into a Flutter-free segment iterator.
+  - New `lib/models/stitch_geometry.dart` consolidates the duplicated `stitchXY` helper.
+  - `canvas_painter.dart` block-mode rendering: collapsed two ~70-line stitch→rect switches into a single `_stitchToBlockRect` helper.
+
+  Pure refactor — no behaviour changes.
+
+- a1ba698: fix remaining stitch counts when marking stitches as done.
+- ff6b0f7: ensure drive option is always available even when logged out when clicking "open" on home page.
+- ea90b72: Fix several issues with the snippet editor and tighten up the title bar across all three editors.
+
+  **Snippet editor — now renders as an editor instead of a viewer.** The snippet editor wraps itself in a fresh `ProviderScope`, so it inherited `loadPattern`'s default `AppMode.view` — which hid the toolbar and swapped the right sidebar to the Colours-only stitch layout. It now calls `setMode(AppMode.edit)` after load so the toolbar and Palettes/Colours tabs render, and the block-mode toggle has moved from `actions` into the title row (flush against the name) to match the main/workspace editors.
+
+  **Slot-aligned palette symbols and stitch counts.** Symbols belong to the _slot_, not the thread, so every palette shares the primary palette's symbols at each slot index. Switching palettes in the snippet editor now only changes colours, not symbols — and stitch counts are remapped slot-by-slot so secondary palettes show identical numbers to the primary. A new `syncPaletteSymbolsToPrimary` helper is wired into palette init, add-palette, and swap-thread-colour so the invariant holds across all edit paths.
+
+  **`replaceThread` drift fixed.** When the snippet-editor Colours panel swaps a DMC on the primary palette, the change is now mirrored into `snippetPalettes[0]` and the (preserved) slot symbol is fanned back out to every secondary palette. Pattern, primary, and secondaries stay aligned mid-session instead of waiting for save to re-sync.
+
+  **Title bar polish across all three editors.** The pattern-name title in the main and workspace editors is now clamped to 280px with `TextOverflow.ellipsis`, so long names can't push the block-mode button off-screen. The snippet editor's name is a borderless always-on `TextField` (no more tap-to-edit `InkWell`), auto-sized to the text with the same 280px cap. A fixed 8×8 dirty-dot slot at the start of the snippet title row fades in/out without shifting the row, and the Save button is disabled when the snippet has no unsaved changes.
+
 ## 0.5.0
 
 ### Minor Changes
