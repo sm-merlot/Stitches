@@ -103,11 +103,13 @@ class PdfService {
         .toList()
       ..sort(dmcSort);
 
-    // Build per-export symbol map
+    // Build per-export symbol map.
+    // In PatternKeeper mode every thread must have a symbol (auto-assigned if
+    // the thread has none), so the PK text-layer import can identify every cell.
     final pdfSymbols = _buildPdfSymbolMap([
       ...crossThreads,
       ...backThreads.where((t) => !crossThreads.any((c) => c.dmcCode == t.dmcCode)),
-    ]);
+    ], autoAssignMissing: patternKeeperMode);
 
     // ── Page layout constants ───────────────────────────────────────────────
     const pageFormat = PdfPageFormat.a4; // portrait
@@ -122,9 +124,10 @@ class PdfService {
 
     final cellByW = usableW / pattern.width;
     final cellByH = usableH / pattern.height;
-    // Target: fill the page comfortably. Clamp 4–12 pt per cell.
-    // PatternKeeper requires ≤60 stitches per page — enforce that cap in PK mode.
-    final cellSize = math.min(12.0, math.max(4.0, math.min(cellByW, cellByH)));
+    // PatternKeeper mode: minimum 7 pt per cell so symbols are legible.
+    // Standard mode: minimum 4 pt (allows very large patterns to fit).
+    final minCellSize = patternKeeperMode ? 7.0 : 4.0;
+    final cellSize = math.min(12.0, math.max(minCellSize, math.min(cellByW, cellByH)));
 
     final maxStitchesPerPage = patternKeeperMode ? 60 : pattern.width.clamp(1, 99999);
     final colsPerPage = (usableW / cellSize).floor().clamp(1, math.min(pattern.width, maxStitchesPerPage));
@@ -258,9 +261,9 @@ class PdfService {
       lastTableCanvas = backCanvas;
     }
 
-    // ── Materials section (optional) ──────────────────────────────────────
+    // ── Materials section (optional, not included in PatternKeeper mode) ─────
 
-    if (pattern.materialsSuggestions.isNotEmpty && lastTableCanvas != null) {
+    if (!patternKeeperMode && pattern.materialsSuggestions.isNotEmpty && lastTableCanvas != null) {
       final allThreads = [...crossThreads, ...backThreads]
           .fold<Map<String, Thread>>({}, (m, t) => m..[t.dmcCode] = t)
           .values
@@ -339,6 +342,7 @@ class PdfService {
           totalPages: totalPages,
           fonts: fonts,
           realistic: realistic,
+          patternKeeperMode: patternKeeperMode,
         );
       }
     }

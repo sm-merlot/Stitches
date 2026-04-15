@@ -27,6 +27,7 @@ void _drawChartPage(
   required int totalPages,
   required _PdfFonts fonts,
   required bool realistic,
+  bool patternKeeperMode = false,
 }) {
   final cols = endX - startX;
   final rows = endY - startY;
@@ -50,12 +51,13 @@ void _drawChartPage(
     fonts: fonts,
   );
 
-  // ── Aida background ──────────────────────────────────────────────────
-  canvas.setFillColor(_pdfColor(pattern.aidaColor));
+  // ── Background ───────────────────────────────────────────────────────
+  // PatternKeeper mode: white background, no colour fills — symbols only.
+  canvas.setFillColor(patternKeeperMode ? PdfColors.white : _pdfColor(pattern.aidaColor));
   canvas.drawRect(gridOriginX, gridOriginY, gridW, gridH);
   canvas.fillPath();
 
-  // ── Stitch fills (each stitch drawn individually, preserving partial shapes) ─
+  // ── Stitch cells ─────────────────────────────────────────────────────
   for (final s in nonBack) {
     final cx = _stitches(s);
     final cy = _stitchY(s);
@@ -67,12 +69,14 @@ void _drawChartPage(
     final gy = gridOriginY + (rows - (cy - startY) - 1) * cellSize;
 
     final cellKey = '$cx,$cy';
-    // Use nearest-DMC colour (matches canvas), falling back to raw blend or
-    // the source thread colour when no nearest-DMC match was found.
     final effectiveColor =
         blendedCellColors[cellKey] ?? blendedColors[cellKey] ?? thread.color;
-    canvas.setFillColor(_pdfColor(effectiveColor));
-    _fillStitch(canvas, s, gx, gy, cellSize);
+
+    // Colour fill: skip in PatternKeeper mode (B&W symbols only).
+    if (!patternKeeperMode) {
+      canvas.setFillColor(_pdfColor(effectiveColor));
+      _fillStitch(canvas, s, gx, gy, cellSize);
+    }
 
     // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt).
     // Blended cells use the composite symbol so the PDF grid matches the canvas.
@@ -81,8 +85,15 @@ void _drawChartPage(
       final subSize = _stitchSubRegionSize(s, cellSize);
       if (subSize >= 4) {
         final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
-        final lum = effectiveColor.computeLuminance();
-        final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
+        // In PK mode always use black text (white background).
+        // In standard mode contrast against the fill colour.
+        final PdfColor textColor;
+        if (patternKeeperMode) {
+          textColor = PdfColors.black;
+        } else {
+          final lum = effectiveColor.computeLuminance();
+          textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
+        }
         final fs = math.max(3.5, subSize * 0.44);
         canvas.setFillColor(textColor);
         final symFont = _fontFor(sym, fonts.regular, fonts.symbol);
@@ -93,8 +104,10 @@ void _drawChartPage(
   }
 
   // ── Backstitch lines (drawn above fills, before grid lines) ──────────
-  canvas.setLineWidth(math.max(0.6, cellSize * 0.15));
+  // PatternKeeper does not support backstitches; skip in PK mode.
+  if (!patternKeeperMode) canvas.setLineWidth(math.max(0.6, cellSize * 0.15));
   for (final bs in backstitches) {
+    if (patternKeeperMode) break;
     final minBx = math.min(bs.x1, bs.x2);
     final maxBx = math.max(bs.x1, bs.x2);
     final minBy = math.min(bs.y1, bs.y2);

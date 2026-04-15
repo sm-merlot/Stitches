@@ -102,12 +102,38 @@ double _textWidth(PdfFont font, double fontSize, String text) =>
 
 // kPdfUnsupportedSymbols is the canonical source — defined in symbols.dart.
 
-Map<String, String> _buildPdfSymbolMap(List<Thread> threads) {
-  return {
-    for (final t in threads)
-      if (symbolIsVisible(t.symbol) && !kPdfUnsupportedSymbols.contains(t.symbol))
-        t.dmcCode: t.symbol,
-  };
+Map<String, String> _buildPdfSymbolMap(
+  List<Thread> threads, {
+  bool autoAssignMissing = false,
+}) {
+  final usedSymbols = <String>{};
+  final result = <String, String>{};
+
+  // First pass: use each thread's assigned symbol where valid.
+  for (final t in threads) {
+    if (symbolIsVisible(t.symbol) && !kPdfUnsupportedSymbols.contains(t.symbol)) {
+      result[t.dmcCode] = t.symbol;
+      usedSymbols.add(t.symbol);
+    }
+  }
+
+  if (!autoAssignMissing) return result;
+
+  // Second pass (PatternKeeper mode): every thread must have a symbol so the
+  // PK text-layer import can identify every cell.  Pick from the pool in order,
+  // skipping already-used symbols.
+  final pool = kPatternSymbols
+      .where((s) => !kPdfUnsupportedSymbols.contains(s) && !usedSymbols.contains(s))
+      .toList();
+  int poolIdx = 0;
+
+  for (final t in threads) {
+    if (result.containsKey(t.dmcCode)) continue; // already assigned
+    if (poolIdx >= pool.length) break;            // pool exhausted
+    result[t.dmcCode] = pool[poolIdx++];
+  }
+
+  return result;
 }
 
 PdfColor _pdfColor(Color c) =>
