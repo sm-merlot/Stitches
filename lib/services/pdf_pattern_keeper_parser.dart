@@ -19,8 +19,9 @@ import 'ai/ai_provider.dart';
 class PatternKeeperParser {
   PatternKeeperParser._();
 
-  static const _kMinColors = 2;    // legend entries needed
-  static const _kMinGridCells = 8; // symbols per page to count as a grid page
+  static const _kMinColors = 5;        // legend entries needed (raise to reduce false positives)
+  static const _kMinGridCells = 8;     // symbols per page to count as a grid page
+  static const _kMinFillRatio = 0.02;  // assembled stitches / (w×h) must exceed this
 
   // ─── Public entry point ───────────────────────────────────────────────────
 
@@ -70,6 +71,15 @@ class PatternKeeperParser {
         return null;
       }
 
+      // Reject sparse results: likely a raster PDF with incidental text matches.
+      final fillRatio = result.stitches.length / (result.width * result.height);
+      if (fillRatio < _kMinFillRatio) {
+        debugPrint('[PKParser] fill ratio too low '
+            '(${result.stitches.length}/${result.width * result.height} = '
+            '${(fillRatio * 100).toStringAsFixed(1)}%) — not PK format');
+        return null;
+      }
+
       debugPrint('[PKParser] success: ${result.width}×${result.height}, '
           '${result.stitches.length} stitches, ${result.threads.length} threads');
       return result;
@@ -107,15 +117,16 @@ class PatternKeeperParser {
         for (final dmcFrag in dmcFrags) {
           final dmcCode = dmcFrag.text.trim();
 
-          // Symbol: the leftmost short (1–3 char) non-numeric fragment
-          // in the same row that is not itself a DMC code.
+          // Symbol: the leftmost short (1–3 char) fragment in the same row
+          // that is not the DMC-code fragment and not itself a valid DMC code.
+          // Note: we intentionally allow digit characters (e.g. '5', '8') —
+          // PK symbol fonts often map digits to cross-stitch symbols.
           String? symbol;
           double? symbolX;
           for (final f in row) {
             if (f == dmcFrag) continue;
             final t = f.text.trim();
             if (t.isEmpty || t.length > 3) continue;
-            if (_isNumeric(t)) continue;
             if (dmcColorByCode(t) != null) continue;
             if (symbol == null || f.bounds.left < symbolX!) {
               symbol = t;
@@ -392,7 +403,6 @@ class PatternKeeperParser {
     return candidate;
   }
 
-  static bool _isNumeric(String s) => RegExp(r'^\d+$').hasMatch(s);
 }
 
 // ─── Internal models ──────────────────────────────────────────────────────────
