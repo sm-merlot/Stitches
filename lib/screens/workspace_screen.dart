@@ -53,6 +53,8 @@ import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
 import 'page_mode_dialog.dart';
+import 'stitch_ops_screen.dart';
+import 'stitch_ops_workspace_screen.dart';
 
 part 'workspace_screen_components.dart';
 
@@ -395,7 +397,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       switch (result.format) {
         case ShareFormat.stitchesFile:
           var sharePattern = pattern;
-          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty, progressLog: const []);
           if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           final yaml = FileService.toYamlString(sharePattern);
           // Always compress for sharing (matches release-mode behaviour).
@@ -476,7 +478,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       switch (result.format) {
         case ShareFormat.stitchesFile:
           var sharePattern = state.patternForSave;
-          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty, progressLog: const []);
           if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           final yaml = FileService.toYamlString(sharePattern);
           bytes = Uint8List.fromList(gzip.encode(utf8.encode(yaml)));
@@ -525,7 +527,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       switch (result.format) {
         case ShareFormat.stitchesFile:
           var sharePattern = state.patternForSave;
-          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty);
+          if (result.stripProgress) sharePattern = sharePattern.copyWith(progress: PatternProgress.empty, progressLog: const []);
           if (result.stripPageSettings) sharePattern = sharePattern.copyWith(pageConfig: PageConfig.disabled);
           if (isMobile) {
             final yaml = FileService.toYamlString(sharePattern);
@@ -1346,6 +1348,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (wsState.workspace != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'StitchOps — workspace stats',
+                  icon: const Icon(Icons.stacked_bar_chart),
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      showWorkspaceStitchOps(context, wsState.workspace!),
+                ),
+              ],
             ],
           ),
           backgroundColor: editorState.mode == AppMode.stitch
@@ -1386,7 +1399,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
               const EditorScreenLockButton(),
             ],
-            // ── View mode: info + materials + share + export + Edit + Stitch ──
+            // ── View mode: info + materials + stitch-ops + share + export + Edit + Stitch ──
             if (editorState.isFileOpen && editorState.mode == AppMode.view && openPdf == null) ...[
               IconButton(
                 tooltip: 'Pattern Info',
@@ -1397,6 +1410,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 tooltip: 'Materials list',
                 icon: const Icon(Icons.shopping_bag_outlined),
                 onPressed: () => showMaterialsList(context, editorState),
+              ),
+              IconButton(
+                tooltip: 'StitchOps — progress stats',
+                icon: const Icon(Icons.bar_chart_outlined),
+                onPressed: () => showStitchOps(context, editorState.pattern,
+                    onClearProgress: () =>
+                        ref.read(editorProvider.notifier).clearProgress()),
               ),
               // Share: iOS, Android, macOS only
               if (!kIsWeb && !Platform.isWindows)
@@ -1456,10 +1476,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.stitch && openPdf == null) ...[
               IconButton(
-                tooltip: 'Progress tracking',
-                icon: const Icon(Icons.checklist),
-                onPressed: () =>
-                    showProgressHelpDialog(context, ref, state: editorState),
+                tooltip: 'StitchOps — progress stats',
+                icon: const Icon(Icons.bar_chart_outlined),
+                onPressed: () => showStitchOps(context, editorState.pattern,
+                    onClearProgress: () =>
+                        ref.read(editorProvider.notifier).clearProgress()),
               ),
               IconButton(
                 tooltip: editorState.pattern.pageConfig.enabled

@@ -264,9 +264,22 @@ class FileService {
     // ── stitching: section — act-of-stitching state ───────────────────────────
     final pc = pattern.pageConfig;
     final prog = pattern.progress;
-    final hasStitching = pc != PageConfig.disabled || !prog.isEmpty;
+    final log = pattern.progressLog;
+    final hasStitching = pc != PageConfig.disabled || !prog.isEmpty || log.isNotEmpty;
     if (hasStitching) {
       buf.writeln('stitching:');
+      if (log.isNotEmpty) {
+        // Sort by date ascending before writing.
+        final sorted = [...log]..sort((a, b) => a.isoDate.compareTo(b.isoDate));
+        buf.writeln('  progressLog:');
+        for (final entry in sorted) {
+          buf.write("    - {date: '${entry.isoDate}', stitches: ${entry.stitchCount}");
+          if (entry.backstitchCount > 0) {
+            buf.write(', backstitches: ${entry.backstitchCount}');
+          }
+          buf.writeln('}');
+        }
+      }
       if (pc != PageConfig.disabled) {
         buf.writeln('  pageMode:');
         buf.writeln('    enabled: ${pc.enabled}');

@@ -5,6 +5,7 @@ import 'layer.dart';
 import 'layer_item.dart';
 import 'page_config.dart';
 import 'pattern_progress.dart';
+import 'progress_log.dart';
 import 'snippet.dart';
 import 'stitch.dart';
 import 'thread.dart';
@@ -66,6 +67,11 @@ class CrossStitchPattern {
   /// Progress tracking — which stitches and pages the user has physically done.
   final PatternProgress progress;
 
+  /// StitchOps daily progress log.  Each entry is a date → high-watermark
+  /// cumulative count.  Stored at the pattern level (not inside progress) so
+  /// it is NOT affected by undo/redo operations.
+  final List<ProgressLogEntry> progressLog;
+
   const CrossStitchPattern({
     required this.name,
     required this.width,
@@ -93,6 +99,7 @@ class CrossStitchPattern {
     this.materialsSuggestions = const [],
     this.pageConfig = PageConfig.disabled,
     this.progress = PatternProgress.empty,
+    this.progressLog = const [],
   });
 
   /// Flattened list of all layers, applying group visibility overrides.
@@ -192,6 +199,7 @@ class CrossStitchPattern {
     List<({int aidaCount, int strands})>? materialsSuggestions,
     PageConfig? pageConfig,
     PatternProgress? progress,
+    List<ProgressLogEntry>? progressLog,
   }) {
     return CrossStitchPattern(
       name: name ?? this.name,
@@ -230,6 +238,7 @@ class CrossStitchPattern {
       materialsSuggestions: materialsSuggestions ?? this.materialsSuggestions,
       pageConfig: pageConfig ?? this.pageConfig,
       progress: progress ?? this.progress,
+      progressLog: progressLog ?? this.progressLog,
     );
   }
 
@@ -267,6 +276,7 @@ class CrossStitchPattern {
         ...patternMap,
         'pageMode': stitchingMap['pageMode'],
         'progress': stitchingMap['progress'],
+        'progressLog': stitchingMap['progressLog'],
       };
       return _migrateDiscontinuedThreads(_fromFlat(flat));
     }
@@ -380,6 +390,11 @@ class CrossStitchPattern {
       progress: yaml['progress'] != null
           ? PatternProgress.fromYaml(yaml['progress'] as Map)
           : PatternProgress.empty,
+      progressLog: (yaml['progressLog'] as List?)
+              ?.map((e) =>
+                  ProgressLogEntry.fromYaml(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          const [],
     );
     return parsed;
   }
