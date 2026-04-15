@@ -58,9 +58,30 @@ Tracking everything needed before the first public release.
 ## Known Issues / Feature Gaps to Resolve Pre-1.0
 
 - [ ] **Anchor colour database** – toggle exists in Settings but always shows DMC colours (database not fully populated); either complete it, remove the toggle, or clearly mark as "coming soon" so it doesn't look like a bug
-- [ ] **Windows file association** – register `.stitches` extension in the Windows installer (macOS, iOS, and Android already done)
+- [ ] **Windows file association** – register `.stitches` extension in the Windows installer (macOS, iOS, and Android already handle this via file associations)
 - [ ] **PDF Import Improvements** – add support for PatternKeeper as a minimum. What else can we improve in this space? (see [pdf-import-research](./specs/pdf-import-research.md))
-- [ ] **Add more PatternKeeper-style features** – progress stats (item 9) delivered via StitchOps; remaining items: B&W stitch mode, parking stitches, visual home screen, colour-sort options, session timer (see [ideas-from-pattern-progress-trackers](./specs/ideas-from-pattern-progress-trackers.md))
+- [ ] **Remaining PatternKeeper-style features** – parking stitches, key view, rescan/adjust grid, session timer, long-press options (see [ideas-from-pattern-progress-trackers](./specs/ideas-from-pattern-progress-trackers.md) — items 1, 3, 7, 8, 9 timer, 10)
+
+---
+
+## Recently Shipped (reference)
+
+Features landed since initial planning — no longer blockers, kept here for context:
+
+- ✅ Three-mode architecture: View / Edit / Stitch (#36)
+- ✅ File format v2 with progress tracking (#35)
+- ✅ Stitch progress tracking with frogging support (#42)
+- ✅ StitchOps analytics: per-pattern + workspace aggregate stats, charts, pattern filter (#64)
+- ✅ B&W stitch mode — unmarked stitches show B&W symbol, done cells fill with colour (#53); realistic mode removed (#54)
+- ✅ Unified Share/Export with all formats (#39)
+- ✅ Home screen uplift: thumbnails, unified pickers, workspace improvements (#40)
+- ✅ Page mode in stitch view (#34)
+- ✅ Colour list sort options: by ID, by count, completed last (#52)
+- ✅ Frog terminology (#51)
+- ✅ Focus-mode outline for near-grey threads (#21)
+- ✅ PDF export improvements (#20)
+- ✅ Materials list / skein calculator (#19)
+- ✅ Open `.stitches` from Finder, Files app, and Android file managers (#33)
 
 ---
 
@@ -74,4 +95,4 @@ Tracking everything needed before the first public release.
 
 Branches that need to land before v1.0.0:
 
-- `claude/add-stitch-stats-fgQj3` — StitchOps (progress analytics): per-pattern stats, workspace aggregate view with charts, pattern filter, Drive caching
+_None currently._
