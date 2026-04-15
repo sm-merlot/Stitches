@@ -95,6 +95,17 @@ corrupt session data.
 
 Rough size: 80–150 lines.
 
+**P1.4 — Progress log and StitchOps aggregation**
+
+The `ProgressLogEntry` model, `logCountAsOf`, `_aggregateStats`, and `_summarisePattern` are pure-Dart functions with meaningful edge cases (frogging, same-day high-watermark, empty log, all patterns excluded). Should cover:
+
+- `logCountAsOf` with empty log, single entry, mid-range query, after-last query
+- Daily delta computation when stitchCount goes up and down (frogging scenario)
+- Streak calculation: gap in activity breaks streak, today counts, multi-day
+- `_aggregateStats` with zero patterns, one pattern, patterns with no log entries
+
+Rough size: 150–250 lines. Pure Dart — no fakes needed.
+
 ### Priority 2 — pure-Dart services without I/O
 
 These are easy to test (no Flutter, no async, no fakes needed) and are called
@@ -132,6 +143,8 @@ present:
 - `color_picker_screen` — DMC list renders, search filters
 - `pattern_info_dialog`, `resize_canvas_dialog`, `new_pattern_dialog` —
   dialogs build and validate input
+- `stitch_ops_screen` — renders with a fixture pattern that has a progress log; charts appear when data is present, empty-state message when not
+- `stitch_ops_workspace_screen` — renders loading state, then stats view with filter toggle; toggling a pattern updates the displayed counts
 
 Approach: use `pumpWidget` with `ProviderScope` overrides for any service
 the screen reads. No real navigation, no real I/O.
