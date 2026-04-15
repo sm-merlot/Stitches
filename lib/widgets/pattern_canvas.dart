@@ -786,6 +786,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final inStitchMode = editorState.stitchMode;
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
+          // If a progress region is active, clear it on tap without toggling
+          // the cell underneath.
+          if (editorState.progressRegion != null) {
+            ref.read(editorProvider.notifier).setProgressRegion(null);
+            return;
+          }
           if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
             final bs = _getBackstitchHit(event.localPosition);
             if (bs == null) _checkProgressDoubleClick(event.localPosition);
@@ -875,6 +881,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         final inStitchMode = editorState.stitchMode;
         // In stitch mode, select-drag marks a region done instead of selecting.
         if (inStitchMode) {
+          // If a progress region is active, clear it on tap without toggling
+          // the cell underneath.
+          if (editorState.progressRegion != null) {
+            ref.read(editorProvider.notifier).setProgressRegion(null);
+            return;
+          }
           if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
             final bs = _getBackstitchHit(event.localPosition);
             if (bs == null) _checkProgressDoubleClick(event.localPosition);
