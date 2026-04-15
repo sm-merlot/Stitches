@@ -26,10 +26,16 @@ part 'pdf/pdf_title_page.dart';
 class PdfService {
   /// Generate PDF and save via file picker.
   /// Build a PDF for [pattern] and return the raw bytes.
+  ///
+  /// When [patternKeeperMode] is true, the output is formatted for import into
+  /// PatternKeeper: no title page, ≤60 stitches per page, and the legend table
+  /// uses 'Symbol'/'Number' column headers with the TTF symbol character as
+  /// selectable text (PatternKeeper's required format).
   static Future<Uint8List> buildPdfBytes(
     CrossStitchPattern pattern, {
     bool useDmc = true,
     bool realistic = true,
+    bool patternKeeperMode = false,
   }) async {
     final doc = pw.Document(title: pattern.name);
     final fonts = (
@@ -117,10 +123,12 @@ class PdfService {
     final cellByW = usableW / pattern.width;
     final cellByH = usableH / pattern.height;
     // Target: fill the page comfortably. Clamp 4–12 pt per cell.
+    // PatternKeeper requires ≤60 stitches per page — enforce that cap in PK mode.
     final cellSize = math.min(12.0, math.max(4.0, math.min(cellByW, cellByH)));
 
-    final colsPerPage = (usableW / cellSize).floor().clamp(1, pattern.width);
-    final rowsPerPage = (usableH / cellSize).floor().clamp(1, pattern.height);
+    final maxStitchesPerPage = patternKeeperMode ? 60 : pattern.width.clamp(1, 99999);
+    final colsPerPage = (usableW / cellSize).floor().clamp(1, math.min(pattern.width, maxStitchesPerPage));
+    final rowsPerPage = (usableH / cellSize).floor().clamp(1, math.min(pattern.height, maxStitchesPerPage));
     final pagesCols = (pattern.width / colsPerPage).ceil();
     final pagesRows = (pattern.height / rowsPerPage).ceil();
     final totalGridPages = pagesCols * pagesRows;
@@ -143,27 +151,31 @@ class PdfService {
     final crossTablePageCount = tablePageCount(crossThreads).clamp(1, 9999);
     final backTablePageCount = tablePageCount(backThreads);
     final colourTablePages = crossTablePageCount + backTablePageCount;
-    final totalPages = 1 + colourTablePages + totalGridPages;
+    // PatternKeeper mode skips the title page — page numbering starts at 1 for colour tables.
+    final titlePageOffset = patternKeeperMode ? 0 : 1;
+    final totalPages = titlePageOffset + colourTablePages + totalGridPages;
 
-    // ── Page 1: Title page ────────────────────────────────────────────────
+    // ── Page 1: Title page (skipped in PatternKeeper mode) ───────────────────
 
-    final titlePage = PdfPage(doc.document, pageFormat: pageFormat);
-    _drawTitlePage(
-      titlePage.getGraphics(),
-      page: titlePage,
-      format: pageFormat,
-      pattern: pattern,
-      nonBack: nonBack,
-      backstitches: backstitches,
-      threadMap: threadMap,
-      blendedColors: blendedColors,
-      margin: margin,
-      footerH: footerH,
-      pageNum: 1,
-      totalPages: totalPages,
-      fonts: fonts,
-      realistic: realistic,
-    );
+    if (!patternKeeperMode) {
+      final titlePage = PdfPage(doc.document, pageFormat: pageFormat);
+      _drawTitlePage(
+        titlePage.getGraphics(),
+        page: titlePage,
+        format: pageFormat,
+        pattern: pattern,
+        nonBack: nonBack,
+        backstitches: backstitches,
+        threadMap: threadMap,
+        blendedColors: blendedColors,
+        margin: margin,
+        footerH: footerH,
+        pageNum: 1,
+        totalPages: totalPages,
+        fonts: fonts,
+        realistic: realistic,
+      );
+    }
 
     // ── Cross stitch colour table pages ───────────────────────────────────
 
@@ -171,7 +183,7 @@ class PdfService {
     double lastTableY = 0;
 
     for (int i = 0; i < crossTablePageCount; i++) {
-      final pageNum = 2 + i;
+      final pageNum = titlePageOffset + 1 + i;
       final List<Thread> pageThreads;
       final bool twoCol;
       if (crossThreads.length <= rowsPerCol) {
@@ -202,6 +214,7 @@ class PdfService {
         pageNum: pageNum,
         totalPages: totalPages,
         fonts: fonts,
+        patternKeeperMode: patternKeeperMode,
       );
       lastTableCanvas = crossCanvas;
     }
@@ -209,7 +222,7 @@ class PdfService {
     // ── Backstitch colour table pages (optional) ──────────────────────────
 
     for (int i = 0; i < backTablePageCount; i++) {
-      final pageNum = 2 + crossTablePageCount + i;
+      final pageNum = titlePageOffset + 1 + crossTablePageCount + i;
       final List<Thread> pageThreads;
       final bool twoCol;
       if (backThreads.length <= rowsPerCol) {
@@ -240,6 +253,7 @@ class PdfService {
         pageNum: pageNum,
         totalPages: totalPages,
         fonts: fonts,
+        patternKeeperMode: patternKeeperMode,
       );
       lastTableCanvas = backCanvas;
     }
@@ -279,7 +293,7 @@ class PdfService {
         margin: margin,
         headerH: headerH,
         footerH: footerH,
-        pageNum: 1 + colourTablePages + 1,
+        pageNum: titlePageOffset + colourTablePages + 1,
         totalPages: totalPages,
         fonts: fonts,
         drawInitialFooter: !enoughRoom,
@@ -288,13 +302,13 @@ class PdfService {
 
     // ── Chart pages ───────────────────────────────────────────────────────
 
-    final chartPageOffset = 1 + colourTablePages + 1; // 1-based
+    final chartPageOffset = titlePageOffset + colourTablePages + 1; // 1-based
     for (int pr = 0; pr < pagesRows; pr++) {
       for (int pc = 0; pc < pagesCols; pc++) {
-        final startX = pc * colsPerPage;
-        final startY = pr * rowsPerPage;
-        final endX = math.min(startX + colsPerPage, pattern.width);
-        final endY = math.min(startY + rowsPerPage, pattern.height);
+        final startX = pc * colsPerPage.toInt();
+        final startY = pr * rowsPerPage.toInt();
+        final endX = math.min(startX + colsPerPage.toInt(), pattern.width);
+        final endY = math.min(startY + rowsPerPage.toInt(), pattern.height);
         final pageNum = chartPageOffset + pr * pagesCols + pc;
 
         final page = PdfPage(doc.document, pageFormat: pageFormat);

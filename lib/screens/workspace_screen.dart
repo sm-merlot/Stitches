@@ -427,8 +427,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       final tmpFile = File('${tmpDir.path}/$fileName');
       await tmpFile.writeAsBytes(bytes, flush: true);
 
+      final shareFiles = <XFile>[XFile(tmpFile.path, mimeType: mimeType, name: fileName)];
+      if (result.format == ShareFormat.pdf && result.patternKeeperPdf) {
+        final pkBytes = await PdfService.buildPdfBytes(pattern,
+            useDmc: ref.read(settingsProvider).useDmc,
+            patternKeeperMode: true);
+        final pkName = '${suggested}_PatternKeeper.pdf';
+        final pkFile = File('${tmpDir.path}/$pkName');
+        await pkFile.writeAsBytes(pkBytes, flush: true);
+        shareFiles.add(XFile(pkFile.path, mimeType: 'application/pdf', name: pkName));
+      }
+
       await SharePlus.instance.share(ShareParams(
-        files: [XFile(tmpFile.path, mimeType: mimeType, name: fileName)],
+        files: shareFiles,
         sharePositionOrigin: origin,
       ));
     } catch (e) {
@@ -507,6 +518,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       if (!context.mounted) return;
       if (id != null) {
         showSuccess(context, 'Exported to Drive as $fileName');
+        if (result.format == ShareFormat.pdf && result.patternKeeperPdf && context.mounted) {
+          final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+              useDmc: ref.read(settingsProvider).useDmc,
+              patternKeeperMode: true);
+          final pkFileName = '${suggested}_PatternKeeper.pdf';
+          final pkId = await ref.read(googleDriveProvider.notifier)
+              .uploadRawFile(name: pkFileName, bytes: pkBytes, parentFolderId: folder.folderId);
+          if (context.mounted && pkId != null) {
+            showSuccess(context, 'Also exported PatternKeeper PDF');
+          }
+        }
       } else {
         showError(context, 'Drive export failed');
       }
@@ -599,6 +621,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.pdf');
+            if (result.patternKeeperPdf && context.mounted) {
+              final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+                  useDmc: ref.read(settingsProvider).useDmc,
+                  patternKeeperMode: true);
+              if (context.mounted) {
+                await FilePicker.saveFile(
+                  fileName: '${suggested}_PatternKeeper.pdf', type: FileType.any, bytes: pkBytes);
+                if (context.mounted) showSuccess(context, 'Exported PatternKeeper PDF');
+              }
+            }
           } else {
             final path = await FilePicker.saveFile(
               fileName: suggested,
@@ -612,6 +644,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             if (context.mounted) {
               showSuccess(context,
                   'Exported ${finalPath.split(Platform.pathSeparator).last}');
+            }
+            if (result.patternKeeperPdf && context.mounted) {
+              final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+                  useDmc: ref.read(settingsProvider).useDmc,
+                  patternKeeperMode: true);
+              final pkPath = finalPath.replaceFirst(RegExp(r'\.pdf$'), '_PatternKeeper.pdf');
+              await File(pkPath).writeAsBytes(pkBytes);
+              if (context.mounted) {
+                showSuccess(context, 'Also saved ${pkPath.split(Platform.pathSeparator).last}');
+              }
             }
           }
         case ShareFormat.png:
