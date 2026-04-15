@@ -24,15 +24,15 @@ These apps are built specifically for scanning pdfs and then tracking progress w
 8. Rescan/adjust grid for scan etc.
    - This might be useful if the initial scan wasn't fully correct.
    - Have to think about how to manage this, if they also have made edits.
-9. More progress stats:
-   - Stitches in day/session
-   - history of weekly/daily/session stitches
-   - averages etc
-   - timer (how much time spent stitching)
-   - total days stitching
-   - estimates (at current rate, how long until finished)
-   - graphs!
-   - analytics (compare progress between charts, stitchers, etc) maybe?? 
+9. More progress stats — **mostly done via StitchOps** (branch `claude/add-stitch-stats-fgQj3`):
+   - ✅ Stitches today / this week / this month / this year (velocity card)
+   - ✅ History of daily stitches (60-day bar chart, 16-week activity heatmap)
+   - ✅ Averages — avg stitches per active day in ETA card
+   - ✅ Estimates — ETA based on 14-day rate, shown on cumulative chart
+   - ✅ Total days stitching / streaks (current streak + longest streak)
+   - ✅ Graphs — daily bar, cumulative line, activity heatmap; all with hover tooltips
+   - ✅ Analytics — workspace StitchOps aggregates all patterns; filter to compare subsets
+   - ❌ Timer (how much time spent stitching) — not yet implemented
 10. Generally lets review how we mark stitches compared to other apps.
     - I feel like what we have is a bit more intuitive out the gate.
     - But they have a "select all colour" button which feels not super useful but I'm not sure.

@@ -60,7 +60,7 @@ Tracking everything needed before the first public release.
 - [ ] **Anchor colour database** – toggle exists in Settings but always shows DMC colours (database not fully populated); either complete it, remove the toggle, or clearly mark as "coming soon" so it doesn't look like a bug
 - [ ] **Windows file association** – register `.stitches` extension in the Windows installer (macOS, iOS, and Android already done)
 - [ ] **PDF Import Improvements** – add support for PatternKeeper as a minimum. What else can we improve in this space? (see [pdf-import-research](./specs/pdf-import-research.md))
-- [ ] **Add more PatternKeeper-style features** – add support for PatternKeeper-style features (see [ideas-from-pattern-progress-trackers](./specs/ideas-from-pattern-progress-trackers.md))
+- [ ] **Add more PatternKeeper-style features** – progress stats (item 9) delivered via StitchOps; remaining items: B&W stitch mode, parking stitches, visual home screen, colour-sort options, session timer (see [ideas-from-pattern-progress-trackers](./specs/ideas-from-pattern-progress-trackers.md))
 
 ---
 
@@ -74,4 +74,4 @@ Tracking everything needed before the first public release.
 
 Branches that need to land before v1.0.0:
 
-_None currently._
+- `claude/add-stitch-stats-fgQj3` — StitchOps (progress analytics): per-pattern stats, workspace aggregate view with charts, pattern filter, Drive caching
