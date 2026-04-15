@@ -407,9 +407,12 @@ class _WorkspaceStitchOpsScreenState
 
     for (final file in allFiles) {
       try {
-        final bytes = await service.downloadFile(file.fileId);
         final tempPath = '${tempDir.path}/${file.fileId}.stitches';
-        await File(tempPath).writeAsBytes(bytes, flush: true);
+        final cached = File(tempPath);
+        if (!await cached.exists()) {
+          final bytes = await service.downloadFile(file.fileId);
+          await cached.writeAsBytes(bytes, flush: true);
+        }
         final (pattern, _, _) = await FileService.openFileFromPath(tempPath);
         patterns.add(pattern);
       } catch (_) {}
