@@ -16,7 +16,7 @@ make a non-trivial change to drawing, layers, snippets, or file format and
 trust `flutter test` to catch the obvious mistakes before manual smoke
 testing.
 
-## Baseline (as of phase 3)
+## Baseline (current)
 
 Existing test files under `test/` (~2,750 lines total):
 
@@ -35,6 +35,8 @@ Existing test files under `test/` (~2,750 lines total):
 What this means: **pure model and pure-Dart service logic is well covered**.
 **Anything stateful, async, or UI-facing is not.**
 
+Since these tests were written, significant features have landed that are not yet covered: three-mode architecture (view/edit/stitch), file format v2 with progress tracking, StitchOps aggregation, B&W stitch rendering, page mode, unified share/export, and the full `EditorNotifier` refactor into five mixins.
+
 ## Coverage gaps by priority
 
 ### Priority 1 — central state and persistence
@@ -46,7 +48,7 @@ silently corrupt user data or wreck the editor experience.
 
 The Riverpod notifier with five mixins (drawing, layers, progress, snippets,
 selection) and ~660 lines of orchestration. Currently zero tests. Should
-cover:
+cover (including new three-mode and progress-tracking behaviour):
 
 - Drawing each stitch type onto a fresh pattern; verify the resulting
   `Layer.stitches` set
@@ -57,6 +59,7 @@ cover:
   with the active-layer pointer staying valid after deletions
 - Selection: rubber-band → copy → paste round-trip, including across pattern
   switches via clipboard preservation
+- Mode switching: view → edit → stitch → view; verify state resets correctly
 - Undo / redo across drawing, palette changes, and progress edits — all the
   way to the 200-step cap and back
 - Snippet CRUD: save selection as snippet, paste snippet, resize, transform,
@@ -73,11 +76,10 @@ Rough size: 600–900 lines of tests. Big up-front investment, biggest payoff.
 
 **P1.2 — File format round-trip (`format_service.dart` + `file_service.dart`)**
 
-Currently the only thing standing between users and silent data loss. Should
-cover:
+Currently the only thing standing between users and silent data loss. File format is now v2, adding progress tracking fields. Should cover:
 
 - Round-trip: build a pattern with every stitch type, every layer feature,
-  multiple snippets, multiple palettes per snippet, progress data → serialize
+  multiple snippets, multiple palettes per snippet, progress data, progress log → serialize
   → deserialize → assert structural equality
 - Compressed and uncompressed format paths
 - Backwards compatibility: load older `.stitches` fixtures committed under
@@ -125,6 +127,8 @@ from hot paths.
   colours, region matching produces deterministic output for a fixture image
 - **`stitch_renderer.dart`** — fractional cell-region helper (if added per
   the phase 3 follow-up note)
+- **`progress_log.dart`** — `logCountAsOf`, daily delta computation, streak calculation (see P1.4 below)
+- **`page_layout.dart`** — page tile generation now used in stitch-mode page view as well as PDF export
 
 Rough size: 400–600 lines across ~7 files.
 
@@ -177,8 +181,7 @@ Rough size: 4 tests, ~150–250 lines each.
 - **PDF export visual diffing** — `flutter_test` can't render the PDF
   package's output. PDF logic tests cover the data plumbing; visual checks
   remain manual.
-- **PDF scanner** — beta feature, redesign in flight (`memory/project_pdf_scanner_redesign.md`).
-  Add tests after the redesign lands.
+- **PDF scanner** — beta feature, redesign not yet started. Add tests after the redesign lands.
 - **Stitch demo** — beta feature; planner already has heavy unit tests, the
   rest is animation timing.
 - **Apple Pencil / touch gesture handling** — can't realistically be tested
