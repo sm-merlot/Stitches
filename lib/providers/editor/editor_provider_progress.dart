@@ -5,6 +5,66 @@ part of 'editor_provider.dart';
 // Stitch progress tracking: toggle done, region mark, flood fill, page toggle.
 
 mixin ProgressMixin on Notifier<EditorState> {
+  // ─── StitchOps log helpers ─────────────────────────────────────────────────
+
+  /// Updates the pattern-level [progressLog] with today's actual cumulative
+  /// count.
+  ///
+  /// Called from [_applyProgress] so every stitch-marking action (including
+  /// frogging) is reflected in the log.  Because the log lives on the pattern
+  /// (not inside [PatternProgress]), it is never rolled back by undo/redo.
+  ///
+  /// The entry always stores the real current count, not a high-watermark.
+  /// If the count returns to the same value it was at the end of yesterday,
+  /// today's entry is removed (no net change for the day).
+  List<ProgressLogEntry> _updatedLog(PatternProgress newProgress) {
+    final today = todayIsoDate();
+    final newCount = newProgress.completedStitches.length;
+    final newBackCount = newProgress.completedBackstitches.length;
+
+    // Find the cumulative baseline at the end of yesterday: the most recent
+    // log entry dated before today (log may be unsorted, so iterate all).
+    ProgressLogEntry? prevEntry;
+    for (final e in state.pattern.progressLog) {
+      if (e.isoDate.compareTo(today) < 0) {
+        if (prevEntry == null || e.isoDate.compareTo(prevEntry.isoDate) > 0) {
+          prevEntry = e;
+        }
+      }
+    }
+    final prevCount = prevEntry?.stitchCount ?? 0;
+    final prevBackCount = prevEntry?.backstitchCount ?? 0;
+
+    // If today's net change is zero (count returned to yesterday's baseline),
+    // remove today's entry — it carries no information.
+    if (newCount == prevCount && newBackCount == prevBackCount) {
+      if (state.pattern.progressLog.any((e) => e.isoDate == today)) {
+        return state.pattern.progressLog
+            .where((e) => e.isoDate != today)
+            .toList();
+      }
+      return state.pattern.progressLog;
+    }
+
+    // Write the actual current count (may be lower than a previous today
+    // entry if stitches were frogged since the last save).
+    final existing = state.pattern.progressLog
+        .where((e) => e.isoDate == today)
+        .firstOrNull;
+    if (existing != null &&
+        existing.stitchCount == newCount &&
+        existing.backstitchCount == newBackCount) {
+      return state.pattern.progressLog; // no change
+    }
+    return [
+      ...state.pattern.progressLog.where((e) => e.isoDate != today),
+      ProgressLogEntry(
+        isoDate: today,
+        stitchCount: newCount,
+        backstitchCount: newBackCount,
+      ),
+    ];
+  }
 
   // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -294,7 +354,11 @@ mixin ProgressMixin on Notifier<EditorState> {
   ///   so the two operations appear as one undo step.
   void _applyProgress(PatternProgress progress,
       {required bool pushUndo, bool squashPrev = false}) {
-    final newPattern = state.pattern.copyWith(progress: progress);
+    // Update today's high-watermark log entry BEFORE building the new pattern.
+    // The log is stored on the pattern (not inside PatternProgress) so it is
+    // never rolled back by undo/redo.
+    final updatedLog = _updatedLog(progress);
+    final newPattern = state.pattern.copyWith(progress: progress, progressLog: updatedLog);
     if (pushUndo) {
       final newUndoStack = [
         ...state._progressUndoStack,
