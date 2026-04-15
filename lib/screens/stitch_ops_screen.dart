@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
@@ -7,15 +8,20 @@ import '../models/thread.dart';
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
-void showStitchOps(BuildContext context, CrossStitchPattern pattern) {
+void showStitchOps(
+  BuildContext context,
+  CrossStitchPattern pattern, {
+  VoidCallback? onClearProgress,
+}) {
   final isWide = MediaQuery.of(context).size.shortestSide >= 600;
   if (isWide) {
     showDialog<void>(
       context: context,
       builder: (_) => Dialog(
         child: SizedBox(
-          width: 540,
-          child: StitchOpsScreen(pattern: pattern),
+          width: 560,
+          child: StitchOpsScreen(
+              pattern: pattern, onClearProgress: onClearProgress),
         ),
       ),
     );
@@ -23,7 +29,8 @@ void showStitchOps(BuildContext context, CrossStitchPattern pattern) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => StitchOpsScreen(pattern: pattern),
+        builder: (_) => StitchOpsScreen(
+            pattern: pattern, onClearProgress: onClearProgress),
       ),
     );
   }
@@ -33,8 +40,8 @@ void showStitchOps(BuildContext context, CrossStitchPattern pattern) {
 
 class _ThreadStats {
   final Thread thread;
-  final int total;    // unique cells belonging to this thread
-  final int done;     // completed cells
+  final int total;
+  final int done;
 
   const _ThreadStats({
     required this.thread,
@@ -52,35 +59,36 @@ class _StitchOpsStats {
   final int completedStitches;
   final int completedBackstitches;
 
+  // ── Colours & pages ────────────────────────────────────────────────────────
+  final int doneColours;
+  final int totalColours;
+  final int donePages;
+  final int totalPages;
+
   // ── Temporal ──────────────────────────────────────────────────────────────
   final int todayDelta;
   final int weekDelta;
   final int monthDelta;
   final int yearDelta;
-
-  /// Date of the very first log entry.
   final DateTime? startDate;
-
-  /// Most recent activity date.
   final DateTime? lastActiveDate;
-
-  /// Estimated completion date based on [recentDailyRate].
   final DateTime? estimatedCompletion;
-
-  /// Average stitches per active day (overall).
   final double avgPerActiveDay;
-
-  /// Average stitches per day over the last 14 days (used for ETA).
   final double recentDailyRate;
+  final int currentStreak;
+  final int longestStreak;
 
   // ── Per-thread ─────────────────────────────────────────────────────────────
   final List<_ThreadStats> threadStats;
 
   // ── Chart data ─────────────────────────────────────────────────────────────
+  /// date-string → stitches added that day (high-watermark deltas, always ≥ 0)
+  final Map<String, int> dailyMap;
+
   /// Last 60 days of daily stitch counts (0 if no activity).
   final List<(DateTime, int)> dailyData;
 
-  /// Cumulative progress over entire log history.
+  /// Cumulative progress over entire log history (adjusted for frogging).
   final List<(DateTime, int)> cumulativeData;
 
   const _StitchOpsStats({
@@ -88,6 +96,10 @@ class _StitchOpsStats {
     required this.totalBackstitches,
     required this.completedStitches,
     required this.completedBackstitches,
+    required this.doneColours,
+    required this.totalColours,
+    required this.donePages,
+    required this.totalPages,
     required this.todayDelta,
     required this.weekDelta,
     required this.monthDelta,
@@ -97,7 +109,10 @@ class _StitchOpsStats {
     required this.estimatedCompletion,
     required this.avgPerActiveDay,
     required this.recentDailyRate,
+    required this.currentStreak,
+    required this.longestStreak,
     required this.threadStats,
+    required this.dailyMap,
     required this.dailyData,
     required this.cumulativeData,
   });
@@ -123,6 +138,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     }
   }
   final totalStitches = cellSet.length;
+  final totalDone = progress.completedStitches.length;
 
   // ── Per-thread stats ─────────────────────────────────────────────────────
   final threadCells = <String, Set<(int, int)>>{};
@@ -142,10 +158,8 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
 
   // ── Log-derived delta stats ──────────────────────────────────────────────
   final today = DateTime.now();
-  final todayIso = todayIsoDate();
 
-  // Build a map of date → stitches for that day.
-  // Daily stitches = entry[i].stitchCount - entry[i-1].stitchCount (or entry[0].stitchCount).
+  // High-watermark daily deltas — used for bar chart, heatmap, streaks.
   int prevCount = 0;
   final dailyMap = <String, int>{};
   for (final entry in log) {
@@ -154,45 +168,91 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     prevCount = entry.stitchCount;
   }
 
-  int sumDays(int days) {
-    int sum = 0;
-    for (int i = 0; i < days; i++) {
-      final d = today.subtract(Duration(days: i));
-      final iso =
-          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      sum += dailyMap[iso] ?? 0;
-    }
-    return sum;
-  }
-
-  final todayDelta = dailyMap[todayIso] ?? 0;
-  final weekDelta = sumDays(7);
-  final monthDelta = sumDays(30);
-  final yearDelta = sumDays(365);
+  // Net period changes (can be negative if frogged).
+  final todayDelta =
+      totalDone - logCountAsOf(log, today.subtract(const Duration(days: 1)));
+  final weekDelta =
+      totalDone - logCountAsOf(log, today.subtract(const Duration(days: 7)));
+  final monthDelta =
+      totalDone - logCountAsOf(log, today.subtract(const Duration(days: 30)));
+  final yearDelta =
+      totalDone - logCountAsOf(log, today.subtract(const Duration(days: 365)));
 
   // ── Start / last active ──────────────────────────────────────────────────
   final startDate = log.isNotEmpty ? parseIsoDate(log.first.isoDate) : null;
   final lastActiveDate =
       log.isNotEmpty ? parseIsoDate(log.last.isoDate) : null;
 
-  // ── Average rates ────────────────────────────────────────────────────────
-  final activeDays =
-      dailyMap.values.where((v) => v > 0).length;
-  final totalDone = progress.completedStitches.length;
+  // ── Rates ────────────────────────────────────────────────────────────────
+  final activeDays = dailyMap.values.where((v) => v > 0).length;
   final avgPerActiveDay =
       activeDays == 0 ? 0.0 : totalDone / activeDays;
 
-  // Recent rate: sum of last 14 days divided by 14 (includes zero days).
-  final recentTotal = sumDays(14);
-  final recentDailyRate = recentTotal / 14.0;
+  final daysLogging =
+      startDate == null ? 0 : today.difference(startDate).inDays + 1;
+  final recentWindowDays = min(14, max(1, daysLogging));
+  final countAtWindowStart =
+      logCountAsOf(log, today.subtract(Duration(days: recentWindowDays)));
+  final recentNetTotal = totalDone - countAtWindowStart;
+  final recentDailyRate =
+      recentNetTotal <= 0 ? 0.0 : recentNetTotal / recentWindowDays;
 
   // ── Estimated completion ─────────────────────────────────────────────────
   DateTime? estimatedCompletion;
   final remaining = totalStitches - totalDone;
   if (recentDailyRate > 0 && remaining > 0) {
-    final daysLeft = (remaining / recentDailyRate).ceil();
-    estimatedCompletion = today.add(Duration(days: daysLeft));
+    estimatedCompletion =
+        today.add(Duration(days: (remaining / recentDailyRate).ceil()));
   }
+
+  // ── Streaks ──────────────────────────────────────────────────────────────
+  int currentStreak = 0;
+  {
+    var d = DateTime(today.year, today.month, today.day);
+    while (true) {
+      final iso =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      if ((dailyMap[iso] ?? 0) > 0) {
+        currentStreak++;
+        d = d.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+  }
+  int longestStreak = 0;
+  {
+    int streak = 0;
+    final activeDates = dailyMap.entries
+        .where((e) => e.value > 0)
+        .map((e) => e.key)
+        .toList()
+      ..sort();
+    for (int i = 0; i < activeDates.length; i++) {
+      if (i == 0) {
+        streak = 1;
+      } else {
+        final prev = parseIsoDate(activeDates[i - 1]);
+        final curr = parseIsoDate(activeDates[i]);
+        streak = curr.difference(prev).inDays == 1 ? streak + 1 : 1;
+      }
+      if (streak > longestStreak) longestStreak = streak;
+    }
+  }
+
+  // ── Colours & pages ──────────────────────────────────────────────────────
+  final allStitches = pattern.stitches;
+  final doneColours = pattern.threads
+      .where((t) => progress.isColourDone(t.dmcCode, allStitches))
+      .length;
+  final totalColours = pattern.threads.length;
+
+  PageLayout? pageLayout;
+  if (pattern.pageConfig.enabled) {
+    pageLayout = PageLayout.compute(pattern.pageConfig, pattern);
+  }
+  final donePages = progress.completedPages.length;
+  final totalPages = pageLayout?.totalPages ?? 0;
 
   // ── Chart: last 60 days ──────────────────────────────────────────────────
   final dailyData = <(DateTime, int)>[];
@@ -208,12 +268,24 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
   for (final entry in log) {
     cumulativeData.add((parseIsoDate(entry.isoDate), entry.stitchCount));
   }
+  if (cumulativeData.isNotEmpty && cumulativeData.last.$2 != totalDone) {
+    final todayDate = DateTime(today.year, today.month, today.day);
+    if (cumulativeData.last.$1 == todayDate) {
+      cumulativeData[cumulativeData.length - 1] = (todayDate, totalDone);
+    } else {
+      cumulativeData.add((todayDate, totalDone));
+    }
+  }
 
   return _StitchOpsStats(
     totalStitches: totalStitches,
     totalBackstitches: totalBackstitches,
     completedStitches: totalDone,
     completedBackstitches: progress.completedBackstitches.length,
+    doneColours: doneColours,
+    totalColours: totalColours,
+    donePages: donePages,
+    totalPages: totalPages,
     todayDelta: todayDelta,
     weekDelta: weekDelta,
     monthDelta: monthDelta,
@@ -223,7 +295,10 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     estimatedCompletion: estimatedCompletion,
     avgPerActiveDay: avgPerActiveDay,
     recentDailyRate: recentDailyRate,
+    currentStreak: currentStreak,
+    longestStreak: longestStreak,
     threadStats: threadStats,
+    dailyMap: dailyMap,
     dailyData: dailyData,
     cumulativeData: cumulativeData,
   );
@@ -242,7 +317,9 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
 
 class StitchOpsScreen extends StatelessWidget {
   final CrossStitchPattern pattern;
-  const StitchOpsScreen({super.key, required this.pattern});
+  final VoidCallback? onClearProgress;
+  const StitchOpsScreen(
+      {super.key, required this.pattern, this.onClearProgress});
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +332,8 @@ class StitchOpsScreen extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('StitchOps', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('StitchOps',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             Text(
               pattern.name,
               style: theme.textTheme.bodySmall
@@ -265,37 +343,112 @@ class StitchOpsScreen extends StatelessWidget {
             ),
           ],
         ),
-        leading: Navigator.canPop(context)
-            ? const CloseButton()
-            : null,
+        leading: Navigator.canPop(context) ? const CloseButton() : null,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _OverviewSection(stats: stats, colorScheme: colorScheme),
-          const SizedBox(height: 20),
-          _RateSection(stats: stats, colorScheme: colorScheme),
-          const SizedBox(height: 20),
-          if (stats.dailyData.any((d) => d.$2 > 0)) ...[
-            _DailyBarChart(dailyData: stats.dailyData, colorScheme: colorScheme),
-            const SizedBox(height: 20),
-          ],
-          if (stats.cumulativeData.length >= 2) ...[
-            _CumulativeLineChart(
-              cumulativeData: stats.cumulativeData,
-              total: stats.totalStitches,
-              colorScheme: colorScheme,
-            ),
-            const SizedBox(height: 20),
-          ],
-          if (stats.threadStats.isNotEmpty) ...[
-            _ThreadBreakdownSection(
-                stats: stats, colorScheme: colorScheme),
-            const SizedBox(height: 20),
-          ],
-          if (stats.startDate == null)
-            _NoDataCard(colorScheme: colorScheme),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 460;
+          const gap = SizedBox(height: 12);
+          const hgap = SizedBox(width: 12);
+
+          // Side-by-side helper for wide screens.
+          Widget pair(Widget a, Widget b) => Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: a),
+                  hgap,
+                  Expanded(child: b),
+                ],
+              );
+
+          final hasDaily = stats.dailyData.any((d) => d.$2 > 0);
+          final hasCumulative = stats.cumulativeData.length >= 2;
+          final hasHeatmap = stats.dailyMap.values.any((v) => v > 0);
+
+          final overviewCard =
+              _OverviewSection(stats: stats, colorScheme: colorScheme);
+          final velocityCard =
+              _RateSection(stats: stats, colorScheme: colorScheme);
+          final dailyCard = hasDaily
+              ? _DailyBarChart(
+                  dailyData: stats.dailyData, colorScheme: colorScheme)
+              : null;
+          final cumulativeCard = hasCumulative
+              ? _CumulativeLineChart(
+                  cumulativeData: stats.cumulativeData,
+                  total: stats.totalStitches,
+                  estimatedCompletion: stats.estimatedCompletion,
+                  colorScheme: colorScheme,
+                )
+              : null;
+          final heatmapCard = hasHeatmap
+              ? _ActivityHeatmap(
+                  dailyMap: stats.dailyMap,
+                  today: DateTime.now(),
+                  colorScheme: colorScheme,
+                )
+              : null;
+          final threadCard = stats.threadStats.isNotEmpty
+              ? _ThreadBreakdownSection(stats: stats, colorScheme: colorScheme)
+              : null;
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Controls — always at top, collapsed by default.
+              _ControlsSection(colorScheme: colorScheme),
+              gap,
+
+              // Overview + Velocity (side by side on wide).
+              if (isWide)
+                pair(overviewCard, velocityCard)
+              else ...[
+                overviewCard,
+                gap,
+                velocityCard,
+              ],
+              gap,
+
+              // Charts: daily + cumulative (side by side on wide).
+              if (isWide) ...[
+                if (dailyCard != null && cumulativeCard != null)
+                  pair(dailyCard, cumulativeCard)
+                else if (dailyCard != null)
+                  dailyCard
+                else
+                  ?cumulativeCard,
+              ] else ...[
+                if (dailyCard != null) ...[dailyCard, gap],
+                if (cumulativeCard != null) ...[cumulativeCard, gap],
+              ],
+              if (isWide && (dailyCard != null || cumulativeCard != null)) gap,
+
+              // Heatmap + Thread breakdown (side by side on wide).
+              if (isWide) ...[
+                if (heatmapCard != null && threadCard != null)
+                  pair(heatmapCard, threadCard)
+                else if (heatmapCard != null)
+                  heatmapCard
+                else
+                  ?threadCard,
+                if (heatmapCard != null || threadCard != null) gap,
+              ] else ...[
+                if (heatmapCard != null) ...[heatmapCard, gap],
+                if (threadCard != null) ...[threadCard, gap],
+              ],
+
+              if (stats.startDate == null) ...[
+                _NoDataCard(colorScheme: colorScheme),
+                gap,
+              ],
+              if (onClearProgress != null && stats.completedStitches > 0)
+                _ClearProgressButton(
+                  onClearProgress: onClearProgress!,
+                  colorScheme: colorScheme,
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -322,19 +475,19 @@ class _OverviewSection extends StatelessWidget {
           Row(
             children: [
               _StatTile(
-                label: 'Completed',
+                label: 'Done',
                 value: _fmt(stats.completedStitches),
                 color: colorScheme.primary,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               _StatTile(
                 label: 'Total',
                 value: _fmt(stats.totalStitches),
                 color: colorScheme.secondary,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               _StatTile(
-                label: 'Remaining',
+                label: 'Left',
                 value: _fmt(stats.totalStitches - stats.completedStitches),
                 color: colorScheme.outline,
               ),
@@ -348,39 +501,46 @@ class _OverviewSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: pct,
-                    minHeight: 12,
+                    minHeight: 10,
                     backgroundColor: colorScheme.surfaceContainerHighest,
                     valueColor:
                         AlwaysStoppedAnimation<Color>(colorScheme.primary),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 48,
-                child: Text(
-                  pctStr,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, color: colorScheme.primary),
-                  textAlign: TextAlign.end,
-                ),
+              const SizedBox(width: 10),
+              Text(
+                pctStr,
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: colorScheme.primary),
               ),
             ],
           ),
-          if (stats.totalBackstitches > 0) ...[
+          if (stats.totalBackstitches > 0 ||
+              stats.totalColours > 0 ||
+              stats.totalPages > 0) ...[
             const SizedBox(height: 8),
-            Text(
-              'Backstitches: ${_fmt(stats.completedBackstitches)} / ${_fmt(stats.totalBackstitches)}',
-              style: TextStyle(
-                  fontSize: 12, color: colorScheme.onSurfaceVariant),
-            ),
+            if (stats.totalBackstitches > 0)
+              _MiniRow(
+                  'Backstitches',
+                  '${_fmt(stats.completedBackstitches)} / ${_fmt(stats.totalBackstitches)}',
+                  colorScheme),
+            if (stats.totalColours > 0)
+              _MiniRow('Colours',
+                  '${stats.doneColours} / ${stats.totalColours}', colorScheme),
+            if (stats.totalPages > 0)
+              _MiniRow('Pages', '${stats.donePages} / ${stats.totalPages}',
+                  colorScheme),
           ],
           if (stats.startDate != null) ...[
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
               children: [
                 _dateChip(context, 'Started', stats.startDate!),
-                const SizedBox(width: 8),
                 if (stats.lastActiveDate != null)
                   _dateChip(context, 'Last active', stats.lastActiveDate!),
               ],
@@ -393,13 +553,35 @@ class _OverviewSection extends StatelessWidget {
 
   Widget _dateChip(BuildContext context, String label, DateTime date) {
     return Chip(
-      label: Text(
-        '$label: ${_shortDate(date)}',
-        style: const TextStyle(fontSize: 12),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      label: Text('$label: ${_shortDate(date)}',
+          style: const TextStyle(fontSize: 11)),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _MiniRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final ColorScheme colorScheme;
+  const _MiniRow(this.label, this.value, this.colorScheme);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: [
+          Text('$label: ',
+              style: TextStyle(
+                  fontSize: 11, color: colorScheme.onSurfaceVariant)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }
@@ -419,24 +601,38 @@ class _RateSection extends StatelessWidget {
         children: [
           _SectionHeader('Velocity'),
           const SizedBox(height: 12),
+          // Period deltas — 2×2 grid to stay readable at narrow widths.
           Row(
             children: [
               _StatTile(
-                  label: 'Today', value: _fmt(stats.todayDelta), color: colorScheme.primary),
-              const SizedBox(width: 12),
+                  label: 'Today',
+                  value: _fmt(stats.todayDelta),
+                  color: colorScheme.primary),
+              const SizedBox(width: 8),
               _StatTile(
-                  label: 'This week', value: _fmt(stats.weekDelta), color: colorScheme.secondary),
-              const SizedBox(width: 12),
-              _StatTile(
-                  label: 'This month', value: _fmt(stats.monthDelta), color: colorScheme.tertiary),
-              const SizedBox(width: 12),
-              _StatTile(
-                  label: 'This year', value: _fmt(stats.yearDelta), color: colorScheme.outline),
+                  label: 'Week',
+                  value: _fmt(stats.weekDelta),
+                  color: colorScheme.secondary),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _StatTile(
+                  label: 'Month',
+                  value: _fmt(stats.monthDelta),
+                  color: colorScheme.tertiary),
+              const SizedBox(width: 8),
+              _StatTile(
+                  label: 'Year',
+                  value: _fmt(stats.yearDelta),
+                  color: colorScheme.outline),
+            ],
+          ),
+          const SizedBox(height: 10),
           Divider(color: colorScheme.outlineVariant),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          // Rate + streaks
           Row(
             children: [
               Expanded(
@@ -447,29 +643,54 @@ class _RateSection extends StatelessWidget {
               ),
               Expanded(
                 child: _RateRow(
-                  label: 'Recent rate (14d)',
+                  label: 'Recent (14d)',
                   value: '${stats.recentDailyRate.toStringAsFixed(1)}/day',
                 ),
               ),
             ],
           ),
+          if (stats.currentStreak > 0 || stats.longestStreak > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (stats.currentStreak > 0)
+                  Expanded(
+                    child: _RateRow(
+                      label: 'Current streak',
+                      value:
+                          '${stats.currentStreak} ${stats.currentStreak == 1 ? 'day' : 'days'} 🔥',
+                    ),
+                  ),
+                if (stats.longestStreak > 0)
+                  Expanded(
+                    child: _RateRow(
+                      label: 'Longest streak',
+                      value:
+                          '${stats.longestStreak} ${stats.longestStreak == 1 ? 'day' : 'days'}',
+                    ),
+                  ),
+              ],
+            ),
+          ],
           if (stats.estimatedCompletion != null) ...[
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha:0.5),
+                color: colorScheme.primaryContainer.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
                   Icon(Icons.flag_outlined,
-                      size: 18, color: colorScheme.onPrimaryContainer),
-                  const SizedBox(width: 8),
+                      size: 16, color: colorScheme.onPrimaryContainer),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Estimated completion: ${_longDate(stats.estimatedCompletion!)}',
+                      'Est. completion: ${_longDate(stats.estimatedCompletion!)}',
                       style: TextStyle(
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: colorScheme.onPrimaryContainer,
                       ),
@@ -482,19 +703,21 @@ class _RateSection extends StatelessWidget {
               stats.totalStitches > 0) ...[
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha:0.5),
+                color: colorScheme.primaryContainer.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
                   Icon(Icons.check_circle_outline,
-                      size: 18, color: colorScheme.onPrimaryContainer),
-                  const SizedBox(width: 8),
+                      size: 16, color: colorScheme.onPrimaryContainer),
+                  const SizedBox(width: 6),
                   Text(
                     'Pattern complete!',
                     style: TextStyle(
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: colorScheme.onPrimaryContainer,
                     ),
@@ -520,10 +743,10 @@ class _RateRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(fontSize: 11),
+            style: const TextStyle(fontSize: 10),
             overflow: TextOverflow.ellipsis),
         Text(value,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
       ],
     );
   }
@@ -542,10 +765,10 @@ class _DailyBarChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader('Daily stitches (last 60 days)'),
+          _SectionHeader('Daily (60 days)'),
           const SizedBox(height: 12),
           SizedBox(
-            height: 120,
+            height: 110,
             child: CustomPaint(
               painter: _BarChartPainter(
                 data: dailyData,
@@ -581,9 +804,9 @@ class _BarChartPainter extends CustomPainter {
     final maxVal = data.map((d) => d.$2).fold(0, max);
     if (maxVal == 0) return;
 
-    const labelHeight = 16.0;
+    const labelHeight = 14.0;
     const topPad = 4.0;
-    final chartHeight = size.height - labelHeight - topPad;
+    final chartH = size.height - labelHeight - topPad;
     final barWidth = size.width / data.length;
     const barGap = 1.0;
 
@@ -591,8 +814,7 @@ class _BarChartPainter extends CustomPainter {
     final axisPaint = Paint()
       ..color = axisColor
       ..strokeWidth = 1;
-    final todayPaint = Paint()..color = barColor.withValues(alpha:0.35);
-
+    final todayPaint = Paint()..color = barColor.withValues(alpha: 0.35);
     final today = DateTime.now();
 
     for (int i = 0; i < data.length; i++) {
@@ -600,45 +822,43 @@ class _BarChartPainter extends CustomPainter {
       final isToday = date.year == today.year &&
           date.month == today.month &&
           date.day == today.day;
-      final x = i * barWidth;
       if (count > 0) {
-        final barH = (count / maxVal) * chartHeight;
+        final barH = (count / maxVal) * chartH;
         final rect = Rect.fromLTWH(
-          x + barGap / 2,
-          topPad + chartHeight - barH,
+          i * barWidth + barGap / 2,
+          topPad + chartH - barH,
           barWidth - barGap,
           barH,
         );
         canvas.drawRect(rect, isToday ? todayPaint : barPaint);
         if (isToday) {
-          canvas.drawRect(rect,
-              Paint()..color = barColor..style = PaintingStyle.stroke..strokeWidth = 1.5);
+          canvas.drawRect(
+              rect,
+              Paint()
+                ..color = barColor
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 1.5);
         }
       }
     }
 
-    // Baseline
-    canvas.drawLine(
-      Offset(0, topPad + chartHeight),
-      Offset(size.width, topPad + chartHeight),
-      axisPaint,
-    );
+    canvas.drawLine(Offset(0, topPad + chartH),
+        Offset(size.width, topPad + chartH), axisPaint);
 
-    // Month labels — one label per month at the first bar of that month
     final tp = TextPainter(textDirection: TextDirection.ltr);
     String? prevMonth;
     for (int i = 0; i < data.length; i++) {
       final (date, _) = data[i];
-      final monthKey =
+      final key =
           '${date.year}-${date.month.toString().padLeft(2, '0')}';
-      if (monthKey != prevMonth) {
-        prevMonth = monthKey;
+      if (key != prevMonth) {
+        prevMonth = key;
         tp.text = TextSpan(
-          text: _monthAbbr(date.month),
-          style: TextStyle(color: labelColor, fontSize: 10),
-        );
+            text: _monthAbbr(date.month),
+            style: TextStyle(color: labelColor, fontSize: 9));
         tp.layout();
-        tp.paint(canvas, Offset(i * barWidth, topPad + chartHeight + 3));
+        tp.paint(canvas,
+            Offset(i * barWidth, topPad + chartH + 2));
       }
     }
   }
@@ -653,10 +873,12 @@ class _BarChartPainter extends CustomPainter {
 class _CumulativeLineChart extends StatelessWidget {
   final List<(DateTime, int)> cumulativeData;
   final int total;
+  final DateTime? estimatedCompletion;
   final ColorScheme colorScheme;
   const _CumulativeLineChart({
     required this.cumulativeData,
     required this.total,
+    required this.estimatedCompletion,
     required this.colorScheme,
   });
 
@@ -666,17 +888,19 @@ class _CumulativeLineChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader('Cumulative progress'),
+          _SectionHeader('Cumulative'),
           const SizedBox(height: 12),
           SizedBox(
-            height: 120,
+            height: 110,
             child: CustomPaint(
               painter: _LineChartPainter(
                 data: cumulativeData,
                 total: total,
+                estimatedCompletion: estimatedCompletion,
                 lineColor: colorScheme.primary,
+                projectionColor: colorScheme.primary.withValues(alpha: 0.5),
                 targetColor: colorScheme.outlineVariant,
-                fillColor: colorScheme.primary.withValues(alpha:0.12),
+                fillColor: colorScheme.primary.withValues(alpha: 0.12),
                 labelColor: colorScheme.onSurfaceVariant,
               ),
               size: Size.infinite,
@@ -691,7 +915,9 @@ class _CumulativeLineChart extends StatelessWidget {
 class _LineChartPainter extends CustomPainter {
   final List<(DateTime, int)> data;
   final int total;
+  final DateTime? estimatedCompletion;
   final Color lineColor;
+  final Color projectionColor;
   final Color targetColor;
   final Color fillColor;
   final Color labelColor;
@@ -699,7 +925,9 @@ class _LineChartPainter extends CustomPainter {
   const _LineChartPainter({
     required this.data,
     required this.total,
+    required this.estimatedCompletion,
     required this.lineColor,
+    required this.projectionColor,
     required this.targetColor,
     required this.fillColor,
     required this.labelColor,
@@ -711,39 +939,43 @@ class _LineChartPainter extends CustomPainter {
     final maxVal = total > 0 ? total.toDouble() : data.last.$2.toDouble();
     if (maxVal == 0) return;
 
-    const labelHeight = 16.0;
+    const labelHeight = 14.0;
     const topPad = 4.0;
     final chartH = size.height - labelHeight - topPad;
 
     final startDate = data.first.$1;
-    final endDate = data.last.$1;
+    // Extend x-axis to estimatedCompletion if it lies in the future.
+    final lastDataDate = data.last.$1;
+    final chartEndDate =
+        (estimatedCompletion != null && estimatedCompletion!.isAfter(lastDataDate))
+            ? estimatedCompletion!
+            : lastDataDate;
     final totalDays =
-        endDate.difference(startDate).inDays.toDouble().clamp(1.0, double.infinity);
+        chartEndDate.difference(startDate).inDays.toDouble().clamp(1.0, double.infinity);
 
-    Offset toOffset((DateTime, int) point) {
-      final dayOffset = point.$1.difference(startDate).inDays;
-      final x = (dayOffset / totalDays) * size.width;
-      final y = topPad + chartH - (point.$2 / maxVal) * chartH;
+    Offset toOffset(DateTime date, int count) {
+      final x = date.difference(startDate).inDays / totalDays * size.width;
+      final y = topPad + chartH - (count / maxVal) * chartH;
       return Offset(x, y);
     }
 
-    // Filled area
+    // Fill area under actual data.
     final fillPath = Path();
     fillPath.moveTo(0, topPad + chartH);
-    for (final point in data) {
-      final o = toOffset(point);
+    for (final (date, count) in data) {
+      final o = toOffset(date, count);
       fillPath.lineTo(o.dx, o.dy);
     }
-    fillPath.lineTo(toOffset(data.last).dx, topPad + chartH);
+    fillPath.lineTo(toOffset(data.last.$1, data.last.$2).dx, topPad + chartH);
     fillPath.close();
     canvas.drawPath(fillPath, Paint()..color = fillColor);
 
-    // Line
+    // Actual line.
     final linePath = Path();
-    final first = toOffset(data.first);
-    linePath.moveTo(first.dx, first.dy);
+    linePath.moveTo(toOffset(data.first.$1, data.first.$2).dx,
+        toOffset(data.first.$1, data.first.$2).dy);
     for (int i = 1; i < data.length; i++) {
-      final o = toOffset(data[i]);
+      final o = toOffset(data[i].$1, data[i].$2);
       linePath.lineTo(o.dx, o.dy);
     }
     canvas.drawPath(
@@ -756,7 +988,24 @@ class _LineChartPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round,
     );
 
-    // Target line (total)
+    // Dashed projection line from last point → (estimatedCompletion, total).
+    if (estimatedCompletion != null &&
+        estimatedCompletion!.isAfter(lastDataDate) &&
+        data.last.$2 < total) {
+      final from = toOffset(lastDataDate, data.last.$2);
+      final to = toOffset(estimatedCompletion!, total);
+      _drawDashed(
+        canvas,
+        from,
+        to,
+        Paint()
+          ..color = projectionColor
+          ..strokeWidth = 1.5
+          ..style = PaintingStyle.stroke,
+      );
+    }
+
+    // Target line.
     if (data.last.$2 < total) {
       canvas.drawLine(
         Offset(0, topPad),
@@ -768,38 +1017,247 @@ class _LineChartPainter extends CustomPainter {
       );
     }
 
-    // Baseline
+    // Baseline.
     canvas.drawLine(
       Offset(0, topPad + chartH),
       Offset(size.width, topPad + chartH),
       Paint()..color = targetColor..strokeWidth = 1,
     );
 
-    // Year / month labels
+    // Date labels.
     final tp = TextPainter(textDirection: TextDirection.ltr);
     String? prevLabel;
     for (final (date, _) in data) {
-      final dayOffset = date.difference(startDate).inDays;
-      final x = (dayOffset / totalDays) * size.width;
-      String label;
-      if (totalDays > 180) {
-        label = '${date.year}';
-      } else {
-        label = _monthAbbr(date.month);
-      }
+      final x = date.difference(startDate).inDays / totalDays * size.width;
+      final label = totalDays > 180 ? '${date.year}' : _monthAbbr(date.month);
       if (label != prevLabel) {
         prevLabel = label;
         tp.text = TextSpan(
-            text: label, style: TextStyle(color: labelColor, fontSize: 10));
+            text: label, style: TextStyle(color: labelColor, fontSize: 9));
         tp.layout();
-        tp.paint(canvas, Offset(x, topPad + chartH + 3));
+        tp.paint(canvas, Offset(x, topPad + chartH + 2));
       }
+    }
+  }
+
+  void _drawDashed(Canvas canvas, Offset from, Offset to, Paint paint) {
+    const dashLen = 5.0;
+    const gapLen = 3.0;
+    final dx = to.dx - from.dx;
+    final dy = to.dy - from.dy;
+    final dist = sqrt(dx * dx + dy * dy);
+    if (dist < 1) return;
+    final ux = dx / dist;
+    final uy = dy / dist;
+    double d = 0;
+    while (d < dist) {
+      canvas.drawLine(
+        Offset(from.dx + ux * d, from.dy + uy * d),
+        Offset(from.dx + ux * min(d + dashLen, dist),
+            from.dy + uy * min(d + dashLen, dist)),
+        paint,
+      );
+      d += dashLen + gapLen;
     }
   }
 
   @override
   bool shouldRepaint(_LineChartPainter old) =>
-      old.data != data || old.total != total;
+      old.data != data ||
+      old.total != total ||
+      old.estimatedCompletion != estimatedCompletion;
+}
+
+// ─── Activity heatmap ─────────────────────────────────────────────────────────
+
+class _ActivityHeatmap extends StatelessWidget {
+  final Map<String, int> dailyMap;
+  final DateTime today;
+  final ColorScheme colorScheme;
+  const _ActivityHeatmap(
+      {required this.dailyMap,
+      required this.today,
+      required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    // Grid starts on Monday of the week 15 full weeks before the current week.
+    final daysFromMonday = today.weekday - 1;
+    final thisWeekMonday =
+        DateTime(today.year, today.month, today.day).subtract(
+      Duration(days: daysFromMonday),
+    );
+    final gridStart = thisWeekMonday.subtract(const Duration(days: 15 * 7));
+
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader('Activity (16 weeks)'),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 96,
+            child: CustomPaint(
+              painter: _HeatmapPainter(
+                dailyMap: dailyMap,
+                gridStart: gridStart,
+                today: DateTime(today.year, today.month, today.day),
+                activeColor: colorScheme.primary,
+                emptyColor: colorScheme.surfaceContainerHighest,
+                labelColor: colorScheme.onSurfaceVariant,
+              ),
+              size: Size.infinite,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text('Less',
+                  style: TextStyle(
+                      fontSize: 9, color: colorScheme.onSurfaceVariant)),
+              const SizedBox(width: 4),
+              ...List.generate(5, (i) {
+                final alpha = 0.1 + i * 0.22;
+                return Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: i == 0
+                          ? colorScheme.surfaceContainerHighest
+                          : colorScheme.primary.withValues(alpha: alpha),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(width: 4),
+              Text('More',
+                  style: TextStyle(
+                      fontSize: 9, color: colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeatmapPainter extends CustomPainter {
+  final Map<String, int> dailyMap;
+  final DateTime gridStart;
+  final DateTime today;
+  final Color activeColor;
+  final Color emptyColor;
+  final Color labelColor;
+
+  static const int _weeks = 16;
+  static const int _days = 7;
+
+  const _HeatmapPainter({
+    required this.dailyMap,
+    required this.gridStart,
+    required this.today,
+    required this.activeColor,
+    required this.emptyColor,
+    required this.labelColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dayLabelW = 16.0;
+    const monthLabelH = 14.0;
+    const gap = 2.0;
+
+    final availW = size.width - dayLabelW;
+    final availH = size.height - monthLabelH;
+    final cellW = (availW / _weeks) - gap;
+    final cellH = (availH / _days) - gap;
+    final cell = min(cellW, cellH).clamp(4.0, 20.0);
+
+    // Find max activity for alpha scaling.
+    int maxCount = 1;
+    for (int w = 0; w < _weeks; w++) {
+      for (int d = 0; d < _days; d++) {
+        final count = dailyMap[_iso(gridStart.add(Duration(days: w * 7 + d)))] ?? 0;
+        if (count > maxCount) maxCount = count;
+      }
+    }
+
+    final tp = TextPainter(textDirection: TextDirection.ltr);
+
+    // Day-of-week labels (Mon, Wed, Fri).
+    const dayLabels = ['M', '', 'W', '', 'F', '', ''];
+    for (int d = 0; d < _days; d++) {
+      if (dayLabels[d].isEmpty) continue;
+      tp.text = TextSpan(
+          text: dayLabels[d],
+          style: TextStyle(color: labelColor, fontSize: 8));
+      tp.layout();
+      tp.paint(
+          canvas,
+          Offset(
+              0,
+              monthLabelH +
+                  d * (cell + gap) +
+                  (cell - 8) / 2));
+    }
+
+    // Cells + month labels.
+    String? prevMonthKey;
+    for (int w = 0; w < _weeks; w++) {
+      for (int d = 0; d < _days; d++) {
+        final date = gridStart.add(Duration(days: w * 7 + d));
+        final isFuture = date.isAfter(today);
+        final count = isFuture ? 0 : (dailyMap[_iso(date)] ?? 0);
+
+        final x = dayLabelW + w * (cell + gap);
+        final y = monthLabelH + d * (cell + gap);
+
+        final Color cellColor;
+        if (isFuture) {
+          cellColor = emptyColor.withValues(alpha: 0.4);
+        } else if (count == 0) {
+          cellColor = emptyColor;
+        } else {
+          final alpha = (0.25 + 0.75 * count / maxCount).clamp(0.0, 1.0);
+          cellColor = activeColor.withValues(alpha: alpha);
+        }
+
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x, y, cell, cell),
+            const Radius.circular(2),
+          ),
+          Paint()..color = cellColor,
+        );
+
+        // Month label at the first visible day of each new month (only row 0).
+        if (d == 0) {
+          final monthKey =
+              '${date.year}-${date.month.toString().padLeft(2, '0')}';
+          if (monthKey != prevMonthKey && !isFuture) {
+            prevMonthKey = monthKey;
+            tp.text = TextSpan(
+                text: _monthAbbr(date.month),
+                style: TextStyle(color: labelColor, fontSize: 8));
+            tp.layout();
+            tp.paint(canvas, Offset(x, 0));
+          }
+        }
+      }
+    }
+  }
+
+  String _iso(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  bool shouldRepaint(_HeatmapPainter old) =>
+      old.dailyMap != dailyMap || old.today != today;
 }
 
 // ─── Thread breakdown section ─────────────────────────────────────────────────
@@ -816,7 +1274,7 @@ class _ThreadBreakdownSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader('Thread breakdown'),
+          _SectionHeader('Threads'),
           const SizedBox(height: 8),
           ...stats.threadStats.map((ts) => _ThreadRow(
                 ts: ts,
@@ -835,62 +1293,54 @@ class _ThreadRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = ts.pct;
     final isDone = ts.done >= ts.total;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Container(
-            width: 14,
-            height: 14,
+            width: 12,
+            height: 12,
             decoration: BoxDecoration(
               color: ts.thread.color,
               border: Border.all(
-                  color: colorScheme.outline.withValues(alpha:0.4), width: 1),
-              borderRadius: BorderRadius.circular(3),
+                  color: colorScheme.outline.withValues(alpha: 0.4), width: 1),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
             flex: 3,
             child: Text(
-              'DMC ${ts.thread.dmcCode} ${ts.thread.name}',
-              style: const TextStyle(fontSize: 12),
+              'DMC ${ts.thread.dmcCode}',
+              style: const TextStyle(fontSize: 11),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: LinearProgressIndicator(
-                    value: pct,
-                    minHeight: 6,
-                    backgroundColor: colorScheme.surfaceContainerHighest,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      isDone ? colorScheme.secondary : colorScheme.primary,
-                    ),
-                  ),
+            flex: 5,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: ts.pct,
+                minHeight: 6,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isDone ? colorScheme.secondary : colorScheme.primary,
                 ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           SizedBox(
-            width: 72,
+            width: 56,
             child: Text(
               '${_fmt(ts.done)}/${_fmt(ts.total)}',
               style: TextStyle(
-                fontSize: 11,
-                color: isDone
-                    ? colorScheme.secondary
-                    : colorScheme.onSurfaceVariant,
+                fontSize: 10,
+                color:
+                    isDone ? colorScheme.secondary : colorScheme.onSurfaceVariant,
                 fontWeight: isDone ? FontWeight.w600 : null,
               ),
               textAlign: TextAlign.end,
@@ -916,24 +1366,168 @@ class _NoDataCard extends StatelessWidget {
         child: Column(
           children: [
             Icon(Icons.bar_chart_outlined,
-                size: 48, color: colorScheme.outlineVariant),
-            const SizedBox(height: 12),
+                size: 40, color: colorScheme.outlineVariant),
+            const SizedBox(height: 10),
             Text(
               'No stitching history yet',
               style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: colorScheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               'Switch to Stitch mode and start marking\nstitches done to track your progress here.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 12, color: colorScheme.onSurfaceVariant),
+              style:
+                  TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Controls section (collapsible) ──────────────────────────────────────────
+
+class _ControlsSection extends StatelessWidget {
+  final ColorScheme colorScheme;
+  const _ControlsSection({required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.hardEdge,
+      child: ExpansionTile(
+        leading:
+            Icon(Icons.help_outline_rounded, size: 18, color: colorScheme.primary),
+        title: Text(
+          'CONTROLS',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.1,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        tilePadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+        childrenPadding:
+            const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        initiallyExpanded: false,
+        children: [
+          _ControlRow(
+            icon: Icons.touch_app_outlined,
+            label: 'Tap',
+            detail: 'Mark / frog one stitch',
+            colorScheme: colorScheme,
+          ),
+          const SizedBox(height: 8),
+          _ControlRow(
+            icon: Icons.mouse_outlined,
+            label: 'Double-tap',
+            detail:
+                'Flood fill — marks all connected stitches of the same colour (or frogs if already done)',
+            colorScheme: colorScheme,
+          ),
+          const SizedBox(height: 8),
+          _ControlRow(
+            icon: Icons.crop_outlined,
+            label: 'Drag to select',
+            detail:
+                'Draw a region, then tap Mark in the sidebar to mark all stitches inside it',
+            colorScheme: colorScheme,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ControlRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String detail;
+  final ColorScheme colorScheme;
+  const _ControlRow(
+      {required this.icon,
+      required this.label,
+      required this.detail,
+      required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: colorScheme.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(detail,
+                  style: TextStyle(
+                      fontSize: 11, color: colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Clear progress button ────────────────────────────────────────────────────
+
+class _ClearProgressButton extends StatelessWidget {
+  final VoidCallback onClearProgress;
+  final ColorScheme colorScheme;
+  const _ClearProgressButton(
+      {required this.onClearProgress, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+        label: const Text('Clear all progress'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colorScheme.error,
+          side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+        ),
+        onPressed: () async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Clear all progress?'),
+              content: const Text(
+                  'This will remove all stitches marked as done. This can be undone.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(
+                      foregroundColor: colorScheme.error),
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Clear'),
+                ),
+              ],
+            ),
+          );
+          if (confirmed == true && context.mounted) {
+            onClearProgress();
+            Navigator.of(context).pop();
+          }
+        },
       ),
     );
   }
@@ -950,7 +1544,7 @@ class _Card extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: child,
       ),
     );
@@ -966,7 +1560,7 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: TextStyle(
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.1,
         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -990,12 +1584,10 @@ class _StatTile extends StatelessWidget {
         children: [
           Text(value,
               style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+                  fontSize: 22, fontWeight: FontWeight.bold, color: color)),
           Text(label,
               style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: Theme.of(context).colorScheme.onSurfaceVariant),
               overflow: TextOverflow.ellipsis),
         ],
@@ -1007,16 +1599,15 @@ class _StatTile extends StatelessWidget {
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
 String _fmt(int n) {
-  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+  final sign = n < 0 ? '-' : '';
+  final abs = n.abs();
+  if (abs >= 1000000) return '$sign${(abs / 1000000).toStringAsFixed(1)}M';
+  if (abs >= 1000) return '$sign${(abs / 1000).toStringAsFixed(1)}k';
   return n.toString();
 }
 
-String _shortDate(DateTime d) =>
-    '${d.day} ${_monthAbbr(d.month)} ${d.year}';
-
-String _longDate(DateTime d) =>
-    '${d.day} ${_monthName(d.month)} ${d.year}';
+String _shortDate(DateTime d) => '${d.day} ${_monthAbbr(d.month)} ${d.year}';
+String _longDate(DateTime d) => '${d.day} ${_monthName(d.month)} ${d.year}';
 
 String _monthAbbr(int m) => const [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

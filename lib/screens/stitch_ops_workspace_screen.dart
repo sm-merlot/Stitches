@@ -124,17 +124,6 @@ _PatternSummary _summarisePattern(CrossStitchPattern p) {
   );
 }
 
-int _sumFromMap(Map<String, int> dailyMap, DateTime today, int days) {
-  int s = 0;
-  for (int i = 0; i < days; i++) {
-    final d = today.subtract(Duration(days: i));
-    final iso =
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    s += dailyMap[iso] ?? 0;
-  }
-  return s;
-}
-
 _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
   final today = DateTime.now();
 
@@ -156,18 +145,16 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
 
     final log = [...p.progressLog]
       ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
-    int prevCount = 0;
-    final dailyMap = <String, int>{};
-    for (final entry in log) {
-      final delta = max(0, entry.stitchCount - prevCount);
-      dailyMap[entry.isoDate] = delta;
-      prevCount = entry.stitchCount;
-    }
 
-    todayDelta += _sumFromMap(dailyMap, today, 1);
-    weekDelta += _sumFromMap(dailyMap, today, 7);
-    monthDelta += _sumFromMap(dailyMap, today, 30);
-    yearDelta += _sumFromMap(dailyMap, today, 365);
+    final completed = p.progress.completedStitches.length;
+    todayDelta +=
+        completed - logCountAsOf(log, today.subtract(const Duration(days: 1)));
+    weekDelta +=
+        completed - logCountAsOf(log, today.subtract(const Duration(days: 7)));
+    monthDelta +=
+        completed - logCountAsOf(log, today.subtract(const Duration(days: 30)));
+    yearDelta +=
+        completed - logCountAsOf(log, today.subtract(const Duration(days: 365)));
   }
 
   summaries.sort((a, b) {

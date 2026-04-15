@@ -77,3 +77,22 @@ DateTime parseIsoDate(String iso) {
   final parts = iso.split('-');
   return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
 }
+
+/// Returns the high-watermark cumulative stitch count as of [date].
+///
+/// Uses the most recent log entry whose date is on or before [date].
+/// [sortedLog] must be sorted ascending by [ProgressLogEntry.isoDate].
+/// Returns 0 if no entry predates [date].
+int logCountAsOf(List<ProgressLogEntry> sortedLog, DateTime date) {
+  final iso =
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  int count = 0;
+  for (final entry in sortedLog) {
+    if (entry.isoDate.compareTo(iso) <= 0) {
+      count = entry.stitchCount;
+    } else {
+      break; // ascending order — no earlier entries after this point
+    }
+  }
+  return count;
+}

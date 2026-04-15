@@ -561,7 +561,9 @@ class EditorScreen extends ConsumerWidget {
               IconButton(
                 tooltip: 'StitchOps — progress stats',
                 icon: const Icon(Icons.bar_chart_outlined),
-                onPressed: () => showStitchOps(context, state.pattern),
+                onPressed: () => showStitchOps(context, state.pattern,
+                    onClearProgress: () =>
+                        ref.read(editorProvider.notifier).clearProgress()),
               ),
               // Share button: iOS, Android, macOS only
               if (!kIsWeb && !Platform.isWindows)
@@ -623,15 +625,11 @@ class EditorScreen extends ConsumerWidget {
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
             if (state.mode == AppMode.stitch) ...[
               IconButton(
-                tooltip: 'Progress tracking',
-                icon: const Icon(Icons.checklist),
-                onPressed: () =>
-                    showProgressHelpDialog(context, ref, state: state),
-              ),
-              IconButton(
                 tooltip: 'StitchOps — progress stats',
                 icon: const Icon(Icons.bar_chart_outlined),
-                onPressed: () => showStitchOps(context, state.pattern),
+                onPressed: () => showStitchOps(context, state.pattern,
+                    onClearProgress: () =>
+                        ref.read(editorProvider.notifier).clearProgress()),
               ),
               IconButton(
                 tooltip: state.pattern.pageConfig.enabled

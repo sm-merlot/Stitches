@@ -1348,6 +1348,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (wsState.workspace != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'StitchOps — workspace stats',
+                  icon: const Icon(Icons.stacked_bar_chart),
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      showWorkspaceStitchOps(context, wsState.workspace!),
+                ),
+              ],
             ],
           ),
           backgroundColor: editorState.mode == AppMode.stitch
@@ -1403,7 +1414,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               IconButton(
                 tooltip: 'StitchOps — progress stats',
                 icon: const Icon(Icons.bar_chart_outlined),
-                onPressed: () => showStitchOps(context, editorState.pattern),
+                onPressed: () => showStitchOps(context, editorState.pattern,
+                    onClearProgress: () =>
+                        ref.read(editorProvider.notifier).clearProgress()),
               ),
               // Share: iOS, Android, macOS only
               if (!kIsWeb && !Platform.isWindows)
@@ -1463,15 +1476,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             // ── Stitch mode: page nav + demo + screen lock + Done ────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.stitch && openPdf == null) ...[
               IconButton(
-                tooltip: 'Progress tracking',
-                icon: const Icon(Icons.checklist),
-                onPressed: () =>
-                    showProgressHelpDialog(context, ref, state: editorState),
-              ),
-              IconButton(
                 tooltip: 'StitchOps — progress stats',
                 icon: const Icon(Icons.bar_chart_outlined),
-                onPressed: () => showStitchOps(context, editorState.pattern),
+                onPressed: () => showStitchOps(context, editorState.pattern,
+                    onClearProgress: () =>
+                        ref.read(editorProvider.notifier).clearProgress()),
               ),
               IconButton(
                 tooltip: editorState.pattern.pageConfig.enabled
@@ -1493,16 +1502,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               const EditorScreenLockButton(),
               const SizedBox(width: 8),
             ],
-            // ── No file open: workspace-level StitchOps ──────────────────────
-            if (!editorState.isFileOpen &&
-                openPdf == null &&
-                wsState.workspace != null)
-              IconButton(
-                tooltip: 'StitchOps — workspace stats',
-                icon: const Icon(Icons.bar_chart_outlined),
-                onPressed: () =>
-                    showWorkspaceStitchOps(context, wsState.workspace!),
-              ),
           ],
         ),
         body: Stack(

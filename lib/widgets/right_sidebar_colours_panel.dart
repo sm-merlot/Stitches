@@ -8,7 +8,7 @@ import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/stitch_demo_screen.dart';
 import 'color_select_dialog.dart';
-import 'editor_shared_widgets.dart';
+import '../screens/stitch_ops_screen.dart';
 
 enum ColoursPanelMode { design, stitch, snippet }
 
@@ -1359,7 +1359,9 @@ class MarkDoneButton extends ConsumerWidget {
       child: GestureDetector(
         onTap: enabled
             ? null
-            : () => showProgressHelpDialog(context, ref, state: state),
+            : () => showStitchOps(context, state.pattern,
+                    onClearProgress: () =>
+                        ref.read(editorProvider.notifier).clearProgress()),
         child: FilledButton.icon(
           icon: Icon(allDone ? Icons.remove_done : Icons.done_all, size: 16),
           label: Text(
