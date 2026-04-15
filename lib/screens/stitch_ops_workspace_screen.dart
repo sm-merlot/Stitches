@@ -10,6 +10,7 @@ import '../models/storage_location.dart';
 import '../providers/google_drive_provider.dart';
 import '../services/file_service.dart';
 import '../services/google_drive_service.dart';
+import 'stitch_ops_screen.dart';
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
@@ -19,9 +20,13 @@ void showWorkspaceStitchOps(
   if (isWide) {
     showDialog<void>(
       context: context,
-      builder: (_) => Dialog(
-        child: SizedBox(
-          width: 580,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 580,
+            maxHeight: MediaQuery.of(ctx).size.height - 48,
+          ),
           child: WorkspaceStitchOpsScreen(workspace: workspace),
         ),
       ),
@@ -58,15 +63,32 @@ class _PatternSummary {
   bool get isComplete => completedStitches >= totalStitches && totalStitches > 0;
 }
 
+// ─── Aggregated workspace stats ───────────────────────────────────────────────
+
 class _WorkspaceStats {
   final int patternCount;
   final int totalStitches;
   final int completedStitches;
   final int completedPatterns;
+
+  // Velocity
   final int todayDelta;
   final int weekDelta;
   final int monthDelta;
   final int yearDelta;
+
+  // Temporal
+  final DateTime? startDate;
+  final DateTime? lastActiveDate;
+  final int currentStreak;
+  final int longestStreak;
+
+  // Chart data
+  final Map<String, int> dailyMap; // iso → total stitches across all patterns
+  final List<(DateTime, int)> dailyData; // last 60 days
+  final List<(DateTime, int)> cumulativeData; // full history
+
+  // Per-pattern list
   final List<_PatternSummary> patterns;
 
   const _WorkspaceStats({
@@ -78,6 +100,13 @@ class _WorkspaceStats {
     required this.weekDelta,
     required this.monthDelta,
     required this.yearDelta,
+    required this.startDate,
+    required this.lastActiveDate,
+    required this.currentStreak,
+    required this.longestStreak,
+    required this.dailyMap,
+    required this.dailyData,
+    required this.cumulativeData,
     required this.patterns,
   });
 
@@ -98,27 +127,15 @@ _PatternSummary _summarisePattern(CrossStitchPattern p) {
   final lastActiveDate =
       log.isNotEmpty ? parseIsoDate(log.last.isoDate) : null;
 
-  int prevCount = 0;
-  final dailyMap = <String, int>{};
-  for (final entry in log) {
-    final delta = max(0, entry.stitchCount - prevCount);
-    dailyMap[entry.isoDate] = delta;
-    prevCount = entry.stitchCount;
-  }
-
   final today = DateTime.now();
-  int recentDelta = 0;
-  for (int i = 0; i < 14; i++) {
-    final d = today.subtract(Duration(days: i));
-    final iso =
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    recentDelta += dailyMap[iso] ?? 0;
-  }
+  final completed = p.progress.completedStitches.length;
+  final recentDelta =
+      completed - logCountAsOf(log, today.subtract(const Duration(days: 14)));
 
   return _PatternSummary(
     name: p.name,
     totalStitches: cellSet.length,
-    completedStitches: p.progress.completedStitches.length,
+    completedStitches: completed,
     lastActiveDate: lastActiveDate,
     recentDelta: recentDelta,
   );
@@ -126,14 +143,13 @@ _PatternSummary _summarisePattern(CrossStitchPattern p) {
 
 _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
   final today = DateTime.now();
+  final todayIso =
+      '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
+  // ── Per-pattern summaries ─────────────────────────────────────────────────
   int totalStitches = 0;
   int completedStitches = 0;
   int completedPatterns = 0;
-  int todayDelta = 0;
-  int weekDelta = 0;
-  int monthDelta = 0;
-  int yearDelta = 0;
   final summaries = <_PatternSummary>[];
 
   for (final p in patterns) {
@@ -142,19 +158,6 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     totalStitches += summary.totalStitches;
     completedStitches += summary.completedStitches;
     if (summary.isComplete) completedPatterns++;
-
-    final log = [...p.progressLog]
-      ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
-
-    final completed = p.progress.completedStitches.length;
-    todayDelta +=
-        completed - logCountAsOf(log, today.subtract(const Duration(days: 1)));
-    weekDelta +=
-        completed - logCountAsOf(log, today.subtract(const Duration(days: 7)));
-    monthDelta +=
-        completed - logCountAsOf(log, today.subtract(const Duration(days: 30)));
-    yearDelta +=
-        completed - logCountAsOf(log, today.subtract(const Duration(days: 365)));
   }
 
   summaries.sort((a, b) {
@@ -163,6 +166,125 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     }
     return a.name.compareTo(b.name);
   });
+
+  // ── Velocity (net-change, same logic as pattern StitchOps) ───────────────
+  int todayDelta = 0;
+  int weekDelta = 0;
+  int monthDelta = 0;
+  int yearDelta = 0;
+
+  for (final p in patterns) {
+    final log = [...p.progressLog]
+      ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
+    final completed = p.progress.completedStitches.length;
+    todayDelta +=
+        completed - logCountAsOf(log, today.subtract(const Duration(days: 1)));
+    weekDelta +=
+        completed - logCountAsOf(log, today.subtract(const Duration(days: 7)));
+    monthDelta +=
+        completed -
+        logCountAsOf(log, today.subtract(const Duration(days: 30)));
+    yearDelta +=
+        completed -
+        logCountAsOf(log, today.subtract(const Duration(days: 365)));
+  }
+
+  // ── Aggregated daily map (sum of all patterns' daily deltas) ─────────────
+  final dailyMap = <String, int>{};
+  DateTime? startDate;
+  DateTime? lastActiveDate;
+
+  for (final p in patterns) {
+    final log = [...p.progressLog]
+      ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
+    int prevCount = 0;
+    for (final entry in log) {
+      final delta = max(0, entry.stitchCount - prevCount);
+      if (delta > 0) {
+        dailyMap[entry.isoDate] = (dailyMap[entry.isoDate] ?? 0) + delta;
+      }
+      prevCount = entry.stitchCount;
+    }
+    if (log.isNotEmpty) {
+      final first = parseIsoDate(log.first.isoDate);
+      final last = parseIsoDate(log.last.isoDate);
+      if (startDate == null || first.isBefore(startDate)) startDate = first;
+      if (lastActiveDate == null || last.isAfter(lastActiveDate)) {
+        lastActiveDate = last;
+      }
+    }
+  }
+
+  // ── Daily data (last 60 days) ─────────────────────────────────────────────
+  final dailyData = <(DateTime, int)>[];
+  for (int i = 59; i >= 0; i--) {
+    final d = today.subtract(Duration(days: i));
+    final iso =
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    dailyData.add((DateTime(d.year, d.month, d.day), dailyMap[iso] ?? 0));
+  }
+
+  // ── Cumulative data (aggregate across all patterns) ───────────────────────
+  // Collect all log dates across all patterns, plus today.
+  final allIsos = <String>{todayIso};
+  for (final p in patterns) {
+    for (final e in p.progressLog) {
+      allIsos.add(e.isoDate);
+    }
+  }
+  final sortedIsos = allIsos.toList()..sort();
+
+  final cumulativeData = <(DateTime, int)>[];
+  for (final iso in sortedIsos) {
+    int total = 0;
+    for (final p in patterns) {
+      final log = [...p.progressLog]
+        ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
+      total += logCountAsOf(log, parseIsoDate(iso));
+    }
+    // For today, use actual completedStitches (handles frogging not yet in log).
+    if (iso == todayIso) total = completedStitches;
+    cumulativeData.add((parseIsoDate(iso), total));
+  }
+  // Remove leading zero entries.
+  while (cumulativeData.length > 1 && cumulativeData.first.$2 == 0) {
+    cumulativeData.removeAt(0);
+  }
+
+  // ── Streaks ───────────────────────────────────────────────────────────────
+  int currentStreak = 0;
+  {
+    var d = DateTime(today.year, today.month, today.day);
+    while (true) {
+      final iso =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      if ((dailyMap[iso] ?? 0) > 0) {
+        currentStreak++;
+        d = d.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+  }
+  int longestStreak = 0;
+  {
+    int streak = 0;
+    final activeDates = dailyMap.entries
+        .where((e) => e.value > 0)
+        .map((e) => e.key)
+        .toList()
+      ..sort();
+    for (int i = 0; i < activeDates.length; i++) {
+      if (i == 0) {
+        streak = 1;
+      } else {
+        final prev = parseIsoDate(activeDates[i - 1]);
+        final curr = parseIsoDate(activeDates[i]);
+        streak = curr.difference(prev).inDays == 1 ? streak + 1 : 1;
+      }
+      if (streak > longestStreak) longestStreak = streak;
+    }
+  }
 
   return _WorkspaceStats(
     patternCount: patterns.length,
@@ -173,6 +295,13 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     weekDelta: weekDelta,
     monthDelta: monthDelta,
     yearDelta: yearDelta,
+    startDate: startDate,
+    lastActiveDate: lastActiveDate,
+    currentStreak: currentStreak,
+    longestStreak: longestStreak,
+    dailyMap: dailyMap,
+    dailyData: dailyData,
+    cumulativeData: cumulativeData,
     patterns: summaries,
   );
 }
@@ -235,9 +364,7 @@ class _WorkspaceStitchOpsScreenState
       try {
         final (pattern, _, _) = await FileService.openFileFromPath(path);
         patterns.add(pattern);
-      } catch (_) {
-        // Skip unreadable files silently.
-      }
+      } catch (_) {}
       if (!mounted) return;
       setState(() => _loaded++);
     }
@@ -260,7 +387,6 @@ class _WorkspaceStitchOpsScreenState
       return;
     }
 
-    // Enumerate all .stitches files under this folder (recursive).
     List<DrivePatternFile> allFiles;
     try {
       allFiles = await _collectDriveFiles(service, folder);
@@ -286,9 +412,7 @@ class _WorkspaceStitchOpsScreenState
         await File(tempPath).writeAsBytes(bytes, flush: true);
         final (pattern, _, _) = await FileService.openFileFromPath(tempPath);
         patterns.add(pattern);
-      } catch (_) {
-        // Skip files that can't be downloaded or parsed.
-      }
+      } catch (_) {}
       if (!mounted) return;
       setState(() => _loaded++);
     }
@@ -297,8 +421,6 @@ class _WorkspaceStitchOpsScreenState
     setState(() => _stats = _aggregateStats(patterns));
   }
 
-  /// Recursively collects all [DrivePatternFile]s under [folder],
-  /// up to [maxDepth] levels deep.
   Future<List<DrivePatternFile>> _collectDriveFiles(
       GoogleDriveService service, DriveFolder folder,
       {int maxDepth = 4}) async {
@@ -342,7 +464,9 @@ class _WorkspaceStitchOpsScreenState
       body: _error != null
           ? _ErrorView(message: _error!, colorScheme: colorScheme)
           : _stats == null
-              ? _LoadingView(loaded: _loaded, total: _total,
+              ? _LoadingView(
+                  loaded: _loaded,
+                  total: _total,
                   isDrive: widget.workspace is DriveFolder)
               : _StatsView(stats: _stats!, colorScheme: colorScheme),
     );
@@ -355,8 +479,8 @@ class _LoadingView extends StatelessWidget {
   final int loaded;
   final int total;
   final bool isDrive;
-  const _LoadingView({required this.loaded, required this.total,
-      required this.isDrive});
+  const _LoadingView(
+      {required this.loaded, required this.total, required this.isDrive});
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +494,9 @@ class _LoadingView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            isDrive ? 'Downloading patterns from Drive…' : 'Scanning patterns…',
+            isDrive
+                ? 'Downloading patterns from Drive…'
+                : 'Scanning patterns…',
             style: TextStyle(color: colorScheme.onSurfaceVariant),
           ),
           if (total > 0)
@@ -400,8 +526,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_outlined,
-                size: 48, color: colorScheme.error),
+            Icon(Icons.cloud_off_outlined, size: 48, color: colorScheme.error),
             const SizedBox(height: 16),
             Text(message,
                 textAlign: TextAlign.center,
@@ -422,23 +547,100 @@ class _StatsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _AggregateCard(stats: stats, colorScheme: colorScheme),
-        const SizedBox(height: 16),
-        _PatternListCard(stats: stats, colorScheme: colorScheme),
-      ],
-    );
+    final hasDaily = stats.dailyData.any((d) => d.$2 > 0);
+    final hasCumulative = stats.cumulativeData.length >= 2;
+    final hasHeatmap = stats.dailyMap.values.any((v) => v > 0);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth >= 460;
+      const gap = SizedBox(height: 12);
+      const hgap = SizedBox(width: 12);
+
+      Widget pair(Widget a, Widget b) => Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: a),
+              hgap,
+              Expanded(child: b),
+            ],
+          );
+
+      final overviewCard = _WsOverviewCard(stats: stats, colorScheme: colorScheme);
+      final velocityCard = _WsVelocityCard(stats: stats, colorScheme: colorScheme);
+      final dailyCard = hasDaily
+          ? _WsChartCard(
+              title: 'Daily (60 days)',
+              child: StitchOpsDailyChart(
+                dailyData: stats.dailyData,
+                colorScheme: colorScheme,
+              ),
+            )
+          : null;
+      final cumulativeCard = hasCumulative
+          ? _WsChartCard(
+              title: 'Cumulative',
+              child: StitchOpsCumulativeChart(
+                cumulativeData: stats.cumulativeData,
+                total: stats.totalStitches,
+                estimatedCompletion: null,
+                colorScheme: colorScheme,
+              ),
+            )
+          : null;
+      final heatmapCard = hasHeatmap
+          ? _WsChartCard(
+              title: 'Activity (16 weeks)',
+              child: StitchOpsHeatmap(
+                dailyMap: stats.dailyMap,
+                today: DateTime.now(),
+                colorScheme: colorScheme,
+              ),
+            )
+          : null;
+
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Overview + Velocity.
+          if (isWide)
+            pair(overviewCard, velocityCard)
+          else ...[
+            overviewCard,
+            gap,
+            velocityCard,
+          ],
+          gap,
+
+          // Charts.
+          if (isWide) ...[
+            if (dailyCard != null && cumulativeCard != null)
+              pair(dailyCard, cumulativeCard)
+            else if (dailyCard != null)
+              dailyCard
+            else
+              ?cumulativeCard,
+            if (dailyCard != null || cumulativeCard != null) gap,
+          ] else ...[
+            if (dailyCard != null) ...[dailyCard, gap],
+            if (cumulativeCard != null) ...[cumulativeCard, gap],
+          ],
+
+          if (heatmapCard != null) ...[heatmapCard, gap],
+
+          // Per-pattern list.
+          _PatternListCard(stats: stats, colorScheme: colorScheme),
+        ],
+      );
+    });
   }
 }
 
-// ─── Aggregate overview card ──────────────────────────────────────────────────
+// ─── Workspace overview card ──────────────────────────────────────────────────
 
-class _AggregateCard extends StatelessWidget {
+class _WsOverviewCard extends StatelessWidget {
   final _WorkspaceStats stats;
   final ColorScheme colorScheme;
-  const _AggregateCard({required this.stats, required this.colorScheme});
+  const _WsOverviewCard({required this.stats, required this.colorScheme});
 
   @override
   Widget build(BuildContext context) {
@@ -446,32 +648,32 @@ class _AggregateCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader('Workspace overview'),
+            _SectionHeader('Overview'),
             const SizedBox(height: 12),
             Row(
               children: [
                 _WSTile(
-                    label: 'Patterns',
-                    value: stats.patternCount.toString(),
-                    color: colorScheme.primary),
-                const SizedBox(width: 12),
-                _WSTile(
-                    label: 'Complete',
-                    value: stats.completedPatterns.toString(),
-                    color: colorScheme.secondary),
-                const SizedBox(width: 12),
-                _WSTile(
-                    label: 'Stitches done',
+                    label: 'Done',
                     value: _fmt(stats.completedStitches),
-                    color: colorScheme.tertiary),
-                const SizedBox(width: 12),
+                    color: colorScheme.primary),
+                const SizedBox(width: 8),
                 _WSTile(
                     label: 'Total',
                     value: _fmt(stats.totalStitches),
+                    color: colorScheme.secondary),
+                const SizedBox(width: 8),
+                _WSTile(
+                    label: 'Patterns',
+                    value: stats.patternCount.toString(),
+                    color: colorScheme.tertiary),
+                const SizedBox(width: 8),
+                _WSTile(
+                    label: 'Complete',
+                    value: stats.completedPatterns.toString(),
                     color: colorScheme.outline),
               ],
             ),
@@ -485,46 +687,146 @@ class _AggregateCard extends StatelessWidget {
                       value: pct,
                       minHeight: 10,
                       backgroundColor: colorScheme.surfaceContainerHighest,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                          colorScheme.primary),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(colorScheme.primary),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Text(
                   '${(pct * 100).toStringAsFixed(1)}%',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
+                      fontSize: 13,
                       color: colorScheme.primary),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            _SectionHeader('Combined velocity'),
-            const SizedBox(height: 10),
+            if (stats.startDate != null) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  _dateChip('Started', stats.startDate!),
+                  if (stats.lastActiveDate != null)
+                    _dateChip('Last active', stats.lastActiveDate!),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dateChip(String label, DateTime date) {
+    return Chip(
+      label: Text('$label: ${_shortDate(date)}',
+          style: const TextStyle(fontSize: 11)),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+// ─── Velocity card ────────────────────────────────────────────────────────────
+
+class _WsVelocityCard extends StatelessWidget {
+  final _WorkspaceStats stats;
+  final ColorScheme colorScheme;
+  const _WsVelocityCard({required this.stats, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader('Velocity'),
+            const SizedBox(height: 12),
             Row(
               children: [
                 _WSTile(
                     label: 'Today',
                     value: _fmt(stats.todayDelta),
                     color: colorScheme.primary),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _WSTile(
-                    label: 'This week',
+                    label: 'Week',
                     value: _fmt(stats.weekDelta),
                     color: colorScheme.secondary),
-                const SizedBox(width: 12),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
                 _WSTile(
-                    label: 'This month',
+                    label: 'Month',
                     value: _fmt(stats.monthDelta),
                     color: colorScheme.tertiary),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _WSTile(
-                    label: 'This year',
+                    label: 'Year',
                     value: _fmt(stats.yearDelta),
                     color: colorScheme.outline),
               ],
             ),
+            if (stats.currentStreak > 0 || stats.longestStreak > 0) ...[
+              const SizedBox(height: 10),
+              Divider(color: colorScheme.outlineVariant),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  if (stats.currentStreak > 0)
+                    Expanded(
+                      child: _RateRow(
+                        label: 'Current streak',
+                        value:
+                            '${stats.currentStreak} ${stats.currentStreak == 1 ? 'day' : 'days'} 🔥',
+                      ),
+                    ),
+                  if (stats.longestStreak > 0)
+                    Expanded(
+                      child: _RateRow(
+                        label: 'Longest streak',
+                        value:
+                            '${stats.longestStreak} ${stats.longestStreak == 1 ? 'day' : 'days'}',
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Chart wrapper card ───────────────────────────────────────────────────────
+
+class _WsChartCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _WsChartCard({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader(title),
+            const SizedBox(height: 12),
+            child,
           ],
         ),
       ),
@@ -556,14 +858,14 @@ class _PatternListCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SectionHeader('Patterns'),
             const SizedBox(height: 8),
-            ...stats.patterns.map((p) =>
-                _PatternRow(summary: p, colorScheme: colorScheme)),
+            ...stats.patterns
+                .map((p) => _PatternRow(summary: p, colorScheme: colorScheme)),
           ],
         ),
       ),
@@ -613,8 +915,7 @@ class _PatternRow extends StatelessWidget {
                   Text(
                     'Last: ${_shortDate(summary.lastActiveDate!)}',
                     style: TextStyle(
-                        fontSize: 10,
-                        color: colorScheme.onSurfaceVariant),
+                        fontSize: 10, color: colorScheme.onSurfaceVariant),
                   ),
               ],
             ),
@@ -664,7 +965,7 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: TextStyle(
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.1,
         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -688,12 +989,10 @@ class _WSTile extends StatelessWidget {
         children: [
           Text(value,
               style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+                  fontSize: 22, fontWeight: FontWeight.bold, color: color)),
           Text(label,
               style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: Theme.of(context).colorScheme.onSurfaceVariant),
               overflow: TextOverflow.ellipsis),
         ],
@@ -702,16 +1001,38 @@ class _WSTile extends StatelessWidget {
   }
 }
 
+class _RateRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _RateRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(fontSize: 10),
+            overflow: TextOverflow.ellipsis),
+        Text(value,
+            style:
+                const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+      ],
+    );
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 String _fmt(int n) {
-  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+  final sign = n < 0 ? '-' : '';
+  final abs = n.abs();
+  if (abs >= 1000000) return '$sign${(abs / 1000000).toStringAsFixed(1)}M';
+  if (abs >= 1000) return '$sign${(abs / 1000).toStringAsFixed(1)}k';
   return n.toString();
 }
 
-String _shortDate(DateTime d) =>
-    '${d.day} ${_monthAbbr(d.month)} ${d.year}';
+String _shortDate(DateTime d) => '${d.day} ${_monthAbbr(d.month)} ${d.year}';
 
 String _monthAbbr(int m) => const [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

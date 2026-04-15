@@ -17,9 +17,13 @@ void showStitchOps(
   if (isWide) {
     showDialog<void>(
       context: context,
-      builder: (_) => Dialog(
-        child: SizedBox(
-          width: 560,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 560,
+            maxHeight: MediaQuery.of(ctx).size.height - 48,
+          ),
           child: StitchOpsScreen(
               pattern: pattern, onClearProgress: onClearProgress),
         ),
@@ -141,18 +145,39 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
   final totalDone = progress.completedStitches.length;
 
   // ── Per-thread stats ─────────────────────────────────────────────────────
-  final threadCells = <String, Set<(int, int)>>{};
+  // For FullStitches, deduplicate across layers so the counts match the
+  // thread panel (first layer claiming a cell wins, same as composite fallback).
+  final threadCounts = <String, int>{};
+  final threadDoneCounts = <String, int>{};
+  {
+    final seen = <(int, int)>{};
+    for (final layer in pattern.layers) {
+      for (final s in layer.stitches) {
+        if (s is! FullStitch) continue;
+        final cell = (s.x, s.y);
+        if (!seen.add(cell)) continue;
+        threadCounts[s.threadId] = (threadCounts[s.threadId] ?? 0) + 1;
+        if (progress.completedStitches.contains(cell)) {
+          threadDoneCounts[s.threadId] =
+              (threadDoneCounts[s.threadId] ?? 0) + 1;
+        }
+      }
+    }
+  }
+  // Non-FullStitch, non-BackStitch counted individually per stitch object.
   for (final s in pattern.stitches) {
-    if (s is BackStitch) continue;
+    if (s is FullStitch || s is BackStitch) continue;
     final xy = _stitchXY(s);
     if (xy == null) continue;
-    threadCells.putIfAbsent(s.threadId, () => {}).add(xy);
+    threadCounts[s.threadId] = (threadCounts[s.threadId] ?? 0) + 1;
+    if (progress.completedStitches.contains(xy)) {
+      threadDoneCounts[s.threadId] = (threadDoneCounts[s.threadId] ?? 0) + 1;
+    }
   }
   final threadStats = pattern.threads.map((t) {
-    final cells = threadCells[t.dmcCode] ?? {};
-    final done =
-        cells.where((c) => progress.completedStitches.contains(c)).length;
-    return _ThreadStats(thread: t, total: cells.length, done: done);
+    final total = threadCounts[t.dmcCode] ?? 0;
+    final done = threadDoneCounts[t.dmcCode] ?? 0;
+    return _ThreadStats(thread: t, total: total, done: done);
   }).where((ts) => ts.total > 0).toList()
     ..sort((a, b) => b.total.compareTo(a.total));
 
@@ -370,11 +395,11 @@ class StitchOpsScreen extends StatelessWidget {
           final velocityCard =
               _RateSection(stats: stats, colorScheme: colorScheme);
           final dailyCard = hasDaily
-              ? _DailyBarChart(
+              ? StitchOpsDailyChart(
                   dailyData: stats.dailyData, colorScheme: colorScheme)
               : null;
           final cumulativeCard = hasCumulative
-              ? _CumulativeLineChart(
+              ? StitchOpsCumulativeChart(
                   cumulativeData: stats.cumulativeData,
                   total: stats.totalStitches,
                   estimatedCompletion: stats.estimatedCompletion,
@@ -382,7 +407,7 @@ class StitchOpsScreen extends StatelessWidget {
                 )
               : null;
           final heatmapCard = hasHeatmap
-              ? _ActivityHeatmap(
+              ? StitchOpsHeatmap(
                   dailyMap: stats.dailyMap,
                   today: DateTime.now(),
                   colorScheme: colorScheme,
@@ -754,16 +779,16 @@ class _RateRow extends StatelessWidget {
 
 // ─── Daily bar chart ──────────────────────────────────────────────────────────
 
-class _DailyBarChart extends StatefulWidget {
+class StitchOpsDailyChart extends StatefulWidget {
   final List<(DateTime, int)> dailyData;
   final ColorScheme colorScheme;
-  const _DailyBarChart({required this.dailyData, required this.colorScheme});
+  const StitchOpsDailyChart({super.key, required this.dailyData, required this.colorScheme});
 
   @override
-  State<_DailyBarChart> createState() => _DailyBarChartState();
+  State<StitchOpsDailyChart> createState() => _StitchOpsDailyChartState();
 }
 
-class _DailyBarChartState extends State<_DailyBarChart> {
+class _StitchOpsDailyChartState extends State<StitchOpsDailyChart> {
   int? _hoverIndex;
   Offset? _hoverPos;
   static const double _chartH = 110.0;
@@ -930,12 +955,13 @@ class _BarChartPainter extends CustomPainter {
 
 // ─── Cumulative line chart ────────────────────────────────────────────────────
 
-class _CumulativeLineChart extends StatefulWidget {
+class StitchOpsCumulativeChart extends StatefulWidget {
   final List<(DateTime, int)> cumulativeData;
   final int total;
   final DateTime? estimatedCompletion;
   final ColorScheme colorScheme;
-  const _CumulativeLineChart({
+  const StitchOpsCumulativeChart({
+    super.key,
     required this.cumulativeData,
     required this.total,
     required this.estimatedCompletion,
@@ -943,10 +969,10 @@ class _CumulativeLineChart extends StatefulWidget {
   });
 
   @override
-  State<_CumulativeLineChart> createState() => _CumulativeLineChartState();
+  State<StitchOpsCumulativeChart> createState() => _StitchOpsCumulativeChartState();
 }
 
-class _CumulativeLineChartState extends State<_CumulativeLineChart> {
+class _StitchOpsCumulativeChartState extends State<StitchOpsCumulativeChart> {
   int? _hoverIndex;
   Offset? _hoverPos;
   static const double _chartH = 110.0;
@@ -1240,20 +1266,21 @@ class _LineChartPainter extends CustomPainter {
 
 // ─── Activity heatmap ─────────────────────────────────────────────────────────
 
-class _ActivityHeatmap extends StatefulWidget {
+class StitchOpsHeatmap extends StatefulWidget {
   final Map<String, int> dailyMap;
   final DateTime today;
   final ColorScheme colorScheme;
-  const _ActivityHeatmap(
-      {required this.dailyMap,
+  const StitchOpsHeatmap(
+      {super.key,
+      required this.dailyMap,
       required this.today,
       required this.colorScheme});
 
   @override
-  State<_ActivityHeatmap> createState() => _ActivityHeatmapState();
+  State<StitchOpsHeatmap> createState() => _StitchOpsHeatmapState();
 }
 
-class _ActivityHeatmapState extends State<_ActivityHeatmap> {
+class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
   (int, int)? _hoverCell; // (week, dayOfWeek)
   Offset? _hoverPos;
   static const double _chartH = 96.0;
