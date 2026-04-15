@@ -754,10 +754,19 @@ class _RateRow extends StatelessWidget {
 
 // ─── Daily bar chart ──────────────────────────────────────────────────────────
 
-class _DailyBarChart extends StatelessWidget {
+class _DailyBarChart extends StatefulWidget {
   final List<(DateTime, int)> dailyData;
   final ColorScheme colorScheme;
   const _DailyBarChart({required this.dailyData, required this.colorScheme});
+
+  @override
+  State<_DailyBarChart> createState() => _DailyBarChartState();
+}
+
+class _DailyBarChartState extends State<_DailyBarChart> {
+  int? _hoverIndex;
+  Offset? _hoverPos;
+  static const double _chartH = 110.0;
 
   @override
   Widget build(BuildContext context) {
@@ -768,16 +777,53 @@ class _DailyBarChart extends StatelessWidget {
           _SectionHeader('Daily (60 days)'),
           const SizedBox(height: 12),
           SizedBox(
-            height: 110,
-            child: CustomPaint(
-              painter: _BarChartPainter(
-                data: dailyData,
-                barColor: colorScheme.primary,
-                axisColor: colorScheme.outlineVariant,
-                labelColor: colorScheme.onSurfaceVariant,
-              ),
-              size: Size.infinite,
-            ),
+            height: _chartH,
+            child: LayoutBuilder(builder: (context, constraints) {
+              final chartW = constraints.maxWidth;
+              return MouseRegion(
+                onHover: (e) {
+                  if (widget.dailyData.isEmpty) return;
+                  final idx = (e.localPosition.dx /
+                          (chartW / widget.dailyData.length))
+                      .floor()
+                      .clamp(0, widget.dailyData.length - 1);
+                  setState(() {
+                    _hoverIndex = idx;
+                    _hoverPos = e.localPosition;
+                  });
+                },
+                onExit: (_) => setState(() {
+                  _hoverIndex = null;
+                  _hoverPos = null;
+                }),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CustomPaint(
+                      painter: _BarChartPainter(
+                        data: widget.dailyData,
+                        barColor: widget.colorScheme.primary,
+                        axisColor: widget.colorScheme.outlineVariant,
+                        labelColor: widget.colorScheme.onSurfaceVariant,
+                        hoverIndex: _hoverIndex,
+                      ),
+                      size: Size.infinite,
+                    ),
+                    if (_hoverIndex != null && _hoverPos != null)
+                      _ChartTooltip(
+                        hoverPos: _hoverPos!,
+                        chartWidth: chartW,
+                        chartHeight: _chartH,
+                        colorScheme: widget.colorScheme,
+                        rows: [
+                          (null, _shortDate(widget.dailyData[_hoverIndex!].$1)),
+                          ('Stitches', _fmt(widget.dailyData[_hoverIndex!].$2)),
+                        ],
+                      ),
+                  ],
+                ),
+              );
+            }),
           ),
         ],
       ),
@@ -790,12 +836,14 @@ class _BarChartPainter extends CustomPainter {
   final Color barColor;
   final Color axisColor;
   final Color labelColor;
+  final int? hoverIndex;
 
   const _BarChartPainter({
     required this.data,
     required this.barColor,
     required this.axisColor,
     required this.labelColor,
+    this.hoverIndex,
   });
 
   @override
@@ -845,6 +893,18 @@ class _BarChartPainter extends CustomPainter {
     canvas.drawLine(Offset(0, topPad + chartH),
         Offset(size.width, topPad + chartH), axisPaint);
 
+    // Hover crosshair.
+    if (hoverIndex != null && hoverIndex! < data.length) {
+      final cx = hoverIndex! * barWidth + barWidth / 2;
+      canvas.drawLine(
+        Offset(cx, topPad),
+        Offset(cx, topPad + chartH),
+        Paint()
+          ..color = barColor.withValues(alpha: 0.5)
+          ..strokeWidth = 1.0,
+      );
+    }
+
     final tp = TextPainter(textDirection: TextDirection.ltr);
     String? prevMonth;
     for (int i = 0; i < data.length; i++) {
@@ -865,12 +925,12 @@ class _BarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BarChartPainter old) =>
-      old.data != data || old.barColor != barColor;
+      old.data != data || old.barColor != barColor || old.hoverIndex != hoverIndex;
 }
 
 // ─── Cumulative line chart ────────────────────────────────────────────────────
 
-class _CumulativeLineChart extends StatelessWidget {
+class _CumulativeLineChart extends StatefulWidget {
   final List<(DateTime, int)> cumulativeData;
   final int total;
   final DateTime? estimatedCompletion;
@@ -883,6 +943,40 @@ class _CumulativeLineChart extends StatelessWidget {
   });
 
   @override
+  State<_CumulativeLineChart> createState() => _CumulativeLineChartState();
+}
+
+class _CumulativeLineChartState extends State<_CumulativeLineChart> {
+  int? _hoverIndex;
+  Offset? _hoverPos;
+  static const double _chartH = 110.0;
+
+  int? _hitTest(double localX, double chartWidth) {
+    final data = widget.cumulativeData;
+    if (data.length < 2) return null;
+    final startDate = data.first.$1;
+    final lastDataDate = data.last.$1;
+    final etaDate = widget.estimatedCompletion;
+    final chartEndDate = (etaDate != null && etaDate.isAfter(lastDataDate))
+        ? etaDate
+        : lastDataDate;
+    final totalDays =
+        chartEndDate.difference(startDate).inDays.toDouble().clamp(1.0, double.infinity);
+    final hoveredDays = (localX / chartWidth) * totalDays;
+    int best = 0;
+    double bestDist = double.infinity;
+    for (int i = 0; i < data.length; i++) {
+      final d = data[i].$1.difference(startDate).inDays.toDouble();
+      final dist = (d - hoveredDays).abs();
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _Card(
       child: Column(
@@ -891,20 +985,66 @@ class _CumulativeLineChart extends StatelessWidget {
           _SectionHeader('Cumulative'),
           const SizedBox(height: 12),
           SizedBox(
-            height: 110,
-            child: CustomPaint(
-              painter: _LineChartPainter(
-                data: cumulativeData,
-                total: total,
-                estimatedCompletion: estimatedCompletion,
-                lineColor: colorScheme.primary,
-                projectionColor: colorScheme.primary.withValues(alpha: 0.5),
-                targetColor: colorScheme.outlineVariant,
-                fillColor: colorScheme.primary.withValues(alpha: 0.12),
-                labelColor: colorScheme.onSurfaceVariant,
-              ),
-              size: Size.infinite,
-            ),
+            height: _chartH,
+            child: LayoutBuilder(builder: (context, constraints) {
+              final chartW = constraints.maxWidth;
+              return MouseRegion(
+                onHover: (e) {
+                  final idx = _hitTest(e.localPosition.dx, chartW);
+                  setState(() {
+                    _hoverIndex = idx;
+                    _hoverPos = e.localPosition;
+                  });
+                },
+                onExit: (_) => setState(() {
+                  _hoverIndex = null;
+                  _hoverPos = null;
+                }),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CustomPaint(
+                      painter: _LineChartPainter(
+                        data: widget.cumulativeData,
+                        total: widget.total,
+                        estimatedCompletion: widget.estimatedCompletion,
+                        lineColor: widget.colorScheme.primary,
+                        projectionColor:
+                            widget.colorScheme.primary.withValues(alpha: 0.5),
+                        targetColor: widget.colorScheme.outlineVariant,
+                        fillColor:
+                            widget.colorScheme.primary.withValues(alpha: 0.12),
+                        labelColor: widget.colorScheme.onSurfaceVariant,
+                        hoverIndex: _hoverIndex,
+                      ),
+                      size: Size.infinite,
+                    ),
+                    if (_hoverIndex != null && _hoverPos != null) ...[
+                      _ChartTooltip(
+                        hoverPos: _hoverPos!,
+                        chartWidth: chartW,
+                        chartHeight: _chartH,
+                        colorScheme: widget.colorScheme,
+                        rows: [
+                          (null,
+                              _shortDate(
+                                  widget.cumulativeData[_hoverIndex!].$1)),
+                          (
+                            'Stitches',
+                            _fmt(widget.cumulativeData[_hoverIndex!].$2)
+                          ),
+                          if (widget.total > 0)
+                            (
+                              '%',
+                              '${(widget.cumulativeData[_hoverIndex!].$2 / widget.total * 100).toStringAsFixed(1)}%'
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
           ),
         ],
       ),
@@ -921,6 +1061,7 @@ class _LineChartPainter extends CustomPainter {
   final Color targetColor;
   final Color fillColor;
   final Color labelColor;
+  final int? hoverIndex;
 
   const _LineChartPainter({
     required this.data,
@@ -931,6 +1072,7 @@ class _LineChartPainter extends CustomPainter {
     required this.targetColor,
     required this.fillColor,
     required this.labelColor,
+    this.hoverIndex,
   });
 
   @override
@@ -1024,6 +1166,33 @@ class _LineChartPainter extends CustomPainter {
       Paint()..color = targetColor..strokeWidth = 1,
     );
 
+    // Hover crosshair + dot.
+    if (hoverIndex != null && hoverIndex! < data.length) {
+      final (hDate, hCount) = data[hoverIndex!];
+      final ho = toOffset(hDate, hCount);
+      // Vertical line.
+      canvas.drawLine(
+        Offset(ho.dx, topPad),
+        Offset(ho.dx, topPad + chartH),
+        Paint()
+          ..color = lineColor.withValues(alpha: 0.4)
+          ..strokeWidth = 1.0,
+      );
+      // Filled dot.
+      canvas.drawCircle(
+          ho, 4.0, Paint()..color = lineColor);
+      canvas.drawCircle(
+          ho,
+          3.0,
+          Paint()..color = fillColor.withValues(alpha: 1.0));
+      canvas.drawCircle(
+          ho, 4.0,
+          Paint()
+            ..color = lineColor
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0);
+    }
+
     // Date labels.
     final tp = TextPainter(textDirection: TextDirection.ltr);
     String? prevLabel;
@@ -1065,12 +1234,13 @@ class _LineChartPainter extends CustomPainter {
   bool shouldRepaint(_LineChartPainter old) =>
       old.data != data ||
       old.total != total ||
-      old.estimatedCompletion != estimatedCompletion;
+      old.estimatedCompletion != estimatedCompletion ||
+      old.hoverIndex != hoverIndex;
 }
 
 // ─── Activity heatmap ─────────────────────────────────────────────────────────
 
-class _ActivityHeatmap extends StatelessWidget {
+class _ActivityHeatmap extends StatefulWidget {
   final Map<String, int> dailyMap;
   final DateTime today;
   final ColorScheme colorScheme;
@@ -1080,7 +1250,34 @@ class _ActivityHeatmap extends StatelessWidget {
       required this.colorScheme});
 
   @override
+  State<_ActivityHeatmap> createState() => _ActivityHeatmapState();
+}
+
+class _ActivityHeatmapState extends State<_ActivityHeatmap> {
+  (int, int)? _hoverCell; // (week, dayOfWeek)
+  Offset? _hoverPos;
+  static const double _chartH = 96.0;
+  static const int _weeks = 16;
+  static const int _days = 7;
+
+  (int, int)? _hitTest(Offset pos, double chartWidth) {
+    const dayLabelW = 16.0;
+    const monthLabelH = 14.0;
+    const gap = 2.0;
+    final availW = chartWidth - dayLabelW;
+    const availH = _chartH - monthLabelH;
+    final cellW = (availW / _weeks) - gap;
+    const cellH = (availH / _days) - gap;
+    final cell = min(cellW, cellH).clamp(4.0, 20.0);
+    final col = ((pos.dx - dayLabelW) / (cell + gap)).floor();
+    final row = ((pos.dy - monthLabelH) / (cell + gap)).floor();
+    if (col < 0 || col >= _weeks || row < 0 || row >= _days) return null;
+    return (col, row);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final today = widget.today;
     // Grid starts on Monday of the week 15 full weeks before the current week.
     final daysFromMonday = today.weekday - 1;
     final thisWeekMonday =
@@ -1088,6 +1285,23 @@ class _ActivityHeatmap extends StatelessWidget {
       Duration(days: daysFromMonday),
     );
     final gridStart = thisWeekMonday.subtract(const Duration(days: 15 * 7));
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+
+    // Tooltip content for hovered cell.
+    List<(String?, String)>? tooltipRows;
+    if (_hoverCell != null) {
+      final (col, row) = _hoverCell!;
+      final date = gridStart.add(Duration(days: col * 7 + row));
+      if (!date.isAfter(todayMidnight)) {
+        final iso =
+            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+        final count = widget.dailyMap[iso] ?? 0;
+        tooltipRows = [
+          (null, _shortDate(date)),
+          ('Stitches', count == 0 ? 'No activity' : _fmt(count)),
+        ];
+      }
+    }
 
     return _Card(
       child: Column(
@@ -1096,18 +1310,48 @@ class _ActivityHeatmap extends StatelessWidget {
           _SectionHeader('Activity (16 weeks)'),
           const SizedBox(height: 10),
           SizedBox(
-            height: 96,
-            child: CustomPaint(
-              painter: _HeatmapPainter(
-                dailyMap: dailyMap,
-                gridStart: gridStart,
-                today: DateTime(today.year, today.month, today.day),
-                activeColor: colorScheme.primary,
-                emptyColor: colorScheme.surfaceContainerHighest,
-                labelColor: colorScheme.onSurfaceVariant,
-              ),
-              size: Size.infinite,
-            ),
+            height: _chartH,
+            child: LayoutBuilder(builder: (context, constraints) {
+              final chartW = constraints.maxWidth;
+              return MouseRegion(
+                onHover: (e) {
+                  final cell = _hitTest(e.localPosition, chartW);
+                  setState(() {
+                    _hoverCell = cell;
+                    _hoverPos = e.localPosition;
+                  });
+                },
+                onExit: (_) => setState(() {
+                  _hoverCell = null;
+                  _hoverPos = null;
+                }),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CustomPaint(
+                      painter: _HeatmapPainter(
+                        dailyMap: widget.dailyMap,
+                        gridStart: gridStart,
+                        today: todayMidnight,
+                        activeColor: widget.colorScheme.primary,
+                        emptyColor: widget.colorScheme.surfaceContainerHighest,
+                        labelColor: widget.colorScheme.onSurfaceVariant,
+                        hoverCell: _hoverCell,
+                      ),
+                      size: Size.infinite,
+                    ),
+                    if (tooltipRows != null && _hoverPos != null)
+                      _ChartTooltip(
+                        hoverPos: _hoverPos!,
+                        chartWidth: chartW,
+                        chartHeight: _chartH,
+                        colorScheme: widget.colorScheme,
+                        rows: tooltipRows,
+                      ),
+                  ],
+                ),
+              );
+            }),
           ),
           const SizedBox(height: 6),
           // Legend
@@ -1116,7 +1360,7 @@ class _ActivityHeatmap extends StatelessWidget {
             children: [
               Text('Less',
                   style: TextStyle(
-                      fontSize: 9, color: colorScheme.onSurfaceVariant)),
+                      fontSize: 9, color: widget.colorScheme.onSurfaceVariant)),
               const SizedBox(width: 4),
               ...List.generate(5, (i) {
                 final alpha = 0.1 + i * 0.22;
@@ -1127,8 +1371,8 @@ class _ActivityHeatmap extends StatelessWidget {
                     height: 10,
                     decoration: BoxDecoration(
                       color: i == 0
-                          ? colorScheme.surfaceContainerHighest
-                          : colorScheme.primary.withValues(alpha: alpha),
+                          ? widget.colorScheme.surfaceContainerHighest
+                          : widget.colorScheme.primary.withValues(alpha: alpha),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1137,7 +1381,7 @@ class _ActivityHeatmap extends StatelessWidget {
               const SizedBox(width: 4),
               Text('More',
                   style: TextStyle(
-                      fontSize: 9, color: colorScheme.onSurfaceVariant)),
+                      fontSize: 9, color: widget.colorScheme.onSurfaceVariant)),
             ],
           ),
         ],
@@ -1153,6 +1397,7 @@ class _HeatmapPainter extends CustomPainter {
   final Color activeColor;
   final Color emptyColor;
   final Color labelColor;
+  final (int, int)? hoverCell;
 
   static const int _weeks = 16;
   static const int _days = 7;
@@ -1164,6 +1409,7 @@ class _HeatmapPainter extends CustomPainter {
     required this.activeColor,
     required this.emptyColor,
     required this.labelColor,
+    this.hoverCell,
   });
 
   @override
@@ -1250,6 +1496,26 @@ class _HeatmapPainter extends CustomPainter {
         }
       }
     }
+
+    // Hover highlight border.
+    if (hoverCell != null) {
+      final (hw, hd) = hoverCell!;
+      final x = dayLabelW + hw * (cell + gap);
+      final y = monthLabelH + hd * (cell + gap);
+      final date = gridStart.add(Duration(days: hw * 7 + hd));
+      if (!date.isAfter(today)) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x, y, cell, cell),
+            const Radius.circular(2),
+          ),
+          Paint()
+            ..color = activeColor
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      }
+    }
   }
 
   String _iso(DateTime d) =>
@@ -1257,7 +1523,102 @@ class _HeatmapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_HeatmapPainter old) =>
-      old.dailyMap != dailyMap || old.today != today;
+      old.dailyMap != dailyMap || old.today != today || old.hoverCell != hoverCell;
+}
+
+// ─── Chart tooltip overlay ────────────────────────────────────────────────────
+
+class _ChartTooltip extends StatelessWidget {
+  final Offset hoverPos;
+  final double chartWidth;
+  final double chartHeight;
+  final ColorScheme colorScheme;
+
+  /// Each row is (label, value). A null label renders as a bold header row.
+  final List<(String?, String)> rows;
+
+  const _ChartTooltip({
+    required this.hoverPos,
+    required this.chartWidth,
+    required this.chartHeight,
+    required this.colorScheme,
+    required this.rows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const tooltipW = 144.0;
+    const xOff = 12.0;
+    const yOff = -8.0;
+
+    double left = hoverPos.dx + xOff;
+    double top = hoverPos.dy + yOff;
+    // Flip horizontally if near right edge.
+    if (left + tooltipW > chartWidth) left = hoverPos.dx - tooltipW - xOff;
+    left = left.clamp(0.0, max(0.0, chartWidth - tooltipW));
+    top = top.clamp(0.0, chartHeight - 10.0);
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          decoration: BoxDecoration(
+            color: colorScheme.inverseSurface.withValues(alpha: 0.93),
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x28000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: rows.map((row) {
+              final (label, value) = row;
+              if (label == null) {
+                return Text(
+                  value,
+                  style: TextStyle(
+                    color: colorScheme.onInverseSurface,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$label: ',
+                      style: TextStyle(
+                        color: colorScheme.onInverseSurface
+                            .withValues(alpha: 0.65),
+                        fontSize: 10,
+                      ),
+                    ),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        color: colorScheme.onInverseSurface,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Thread breakdown section ─────────────────────────────────────────────────
