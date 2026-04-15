@@ -19,13 +19,17 @@ void showStitchOps(
       context: context,
       builder: (ctx) => Dialog(
         insetPadding: const EdgeInsets.all(20),
+        clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: 560,
             maxHeight: MediaQuery.of(ctx).size.height - 48,
           ),
           child: StitchOpsScreen(
-              pattern: pattern, onClearProgress: onClearProgress),
+            pattern: pattern,
+            onClearProgress: onClearProgress,
+            isDialog: true,
+          ),
         ),
       ),
     );
@@ -343,8 +347,16 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
 class StitchOpsScreen extends StatelessWidget {
   final CrossStitchPattern pattern;
   final VoidCallback? onClearProgress;
-  const StitchOpsScreen(
-      {super.key, required this.pattern, this.onClearProgress});
+  /// When true the screen renders without a Scaffold so the dialog can
+  /// shrink-wrap to its content.  Set automatically by [showStitchOps].
+  final bool isDialog;
+
+  const StitchOpsScreen({
+    super.key,
+    required this.pattern,
+    this.onClearProgress,
+    this.isDialog = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -352,129 +364,163 @@ class StitchOpsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final titleWidget = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('StitchOps',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text(
+          pattern.name,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: colorScheme.onSurfaceVariant),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+
+    // Builds the list items. shrinkWrap: true when inside a dialog so the
+    // ListView sizes to its content; the outer Flexible handles overflow.
+    Widget buildBody(bool shrinkWrap) => LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 460;
+            const gap = SizedBox(height: 12);
+            const hgap = SizedBox(width: 12);
+
+            Widget pair(Widget a, Widget b) => Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: a),
+                    hgap,
+                    Expanded(child: b),
+                  ],
+                );
+
+            final hasDaily = stats.dailyData.any((d) => d.$2 > 0);
+            final hasCumulative = stats.cumulativeData.length >= 2;
+            final hasHeatmap = stats.dailyMap.values.any((v) => v > 0);
+
+            final overviewCard =
+                _OverviewSection(stats: stats, colorScheme: colorScheme);
+            final velocityCard =
+                _RateSection(stats: stats, colorScheme: colorScheme);
+            final dailyCard = hasDaily
+                ? StitchOpsDailyChart(
+                    dailyData: stats.dailyData, colorScheme: colorScheme)
+                : null;
+            final cumulativeCard = hasCumulative
+                ? StitchOpsCumulativeChart(
+                    cumulativeData: stats.cumulativeData,
+                    total: stats.totalStitches,
+                    estimatedCompletion: stats.estimatedCompletion,
+                    colorScheme: colorScheme,
+                  )
+                : null;
+            final heatmapCard = hasHeatmap
+                ? StitchOpsHeatmap(
+                    dailyMap: stats.dailyMap,
+                    today: DateTime.now(),
+                    colorScheme: colorScheme,
+                  )
+                : null;
+            final threadCard = stats.threadStats.isNotEmpty
+                ? _ThreadBreakdownSection(
+                    stats: stats, colorScheme: colorScheme)
+                : null;
+
+            return ListView(
+              shrinkWrap: shrinkWrap,
+              physics: shrinkWrap
+                  ? const ClampingScrollPhysics()
+                  : null,
+              padding: const EdgeInsets.all(16),
+              children: [
+                _ControlsSection(colorScheme: colorScheme),
+                gap,
+
+                if (isWide)
+                  pair(overviewCard, velocityCard)
+                else ...[
+                  overviewCard,
+                  gap,
+                  velocityCard,
+                ],
+                gap,
+
+                if (isWide) ...[
+                  if (dailyCard != null && cumulativeCard != null)
+                    pair(dailyCard, cumulativeCard)
+                  else if (dailyCard != null)
+                    dailyCard
+                  else
+                    ?cumulativeCard,
+                ] else ...[
+                  if (dailyCard != null) ...[dailyCard, gap],
+                  if (cumulativeCard != null) ...[cumulativeCard, gap],
+                ],
+                if (isWide && (dailyCard != null || cumulativeCard != null))
+                  gap,
+
+                if (isWide) ...[
+                  if (heatmapCard != null && threadCard != null)
+                    pair(heatmapCard, threadCard)
+                  else if (heatmapCard != null)
+                    heatmapCard
+                  else
+                    ?threadCard,
+                  if (heatmapCard != null || threadCard != null) gap,
+                ] else ...[
+                  if (heatmapCard != null) ...[heatmapCard, gap],
+                  if (threadCard != null) ...[threadCard, gap],
+                ],
+
+                if (stats.startDate == null) ...[
+                  _NoDataCard(colorScheme: colorScheme),
+                  gap,
+                ],
+                if (onClearProgress != null && stats.completedStitches > 0)
+                  _ClearProgressButton(
+                    onClearProgress: onClearProgress!,
+                    colorScheme: colorScheme,
+                  ),
+              ],
+            );
+          },
+        );
+
+    if (isDialog) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // AppBar substitute — matches the theme's AppBar background.
+          Material(
+            color: colorScheme.surface,
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(
+                children: [
+                  CloseButton(
+                      onPressed: () => Navigator.of(context).pop()),
+                  const SizedBox(width: 8),
+                  Expanded(child: titleWidget),
+                ],
+              ),
+            ),
+          ),
+          Divider(height: 1, color: colorScheme.outlineVariant),
+          Flexible(child: buildBody(true)),
+        ],
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('StitchOps',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(
-              pattern.name,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: colorScheme.onSurfaceVariant),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+        title: titleWidget,
         leading: Navigator.canPop(context) ? const CloseButton() : null,
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 460;
-          const gap = SizedBox(height: 12);
-          const hgap = SizedBox(width: 12);
-
-          // Side-by-side helper for wide screens.
-          Widget pair(Widget a, Widget b) => Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: a),
-                  hgap,
-                  Expanded(child: b),
-                ],
-              );
-
-          final hasDaily = stats.dailyData.any((d) => d.$2 > 0);
-          final hasCumulative = stats.cumulativeData.length >= 2;
-          final hasHeatmap = stats.dailyMap.values.any((v) => v > 0);
-
-          final overviewCard =
-              _OverviewSection(stats: stats, colorScheme: colorScheme);
-          final velocityCard =
-              _RateSection(stats: stats, colorScheme: colorScheme);
-          final dailyCard = hasDaily
-              ? StitchOpsDailyChart(
-                  dailyData: stats.dailyData, colorScheme: colorScheme)
-              : null;
-          final cumulativeCard = hasCumulative
-              ? StitchOpsCumulativeChart(
-                  cumulativeData: stats.cumulativeData,
-                  total: stats.totalStitches,
-                  estimatedCompletion: stats.estimatedCompletion,
-                  colorScheme: colorScheme,
-                )
-              : null;
-          final heatmapCard = hasHeatmap
-              ? StitchOpsHeatmap(
-                  dailyMap: stats.dailyMap,
-                  today: DateTime.now(),
-                  colorScheme: colorScheme,
-                )
-              : null;
-          final threadCard = stats.threadStats.isNotEmpty
-              ? _ThreadBreakdownSection(stats: stats, colorScheme: colorScheme)
-              : null;
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // Controls — always at top, collapsed by default.
-              _ControlsSection(colorScheme: colorScheme),
-              gap,
-
-              // Overview + Velocity (side by side on wide).
-              if (isWide)
-                pair(overviewCard, velocityCard)
-              else ...[
-                overviewCard,
-                gap,
-                velocityCard,
-              ],
-              gap,
-
-              // Charts: daily + cumulative (side by side on wide).
-              if (isWide) ...[
-                if (dailyCard != null && cumulativeCard != null)
-                  pair(dailyCard, cumulativeCard)
-                else if (dailyCard != null)
-                  dailyCard
-                else
-                  ?cumulativeCard,
-              ] else ...[
-                if (dailyCard != null) ...[dailyCard, gap],
-                if (cumulativeCard != null) ...[cumulativeCard, gap],
-              ],
-              if (isWide && (dailyCard != null || cumulativeCard != null)) gap,
-
-              // Heatmap + Thread breakdown (side by side on wide).
-              if (isWide) ...[
-                if (heatmapCard != null && threadCard != null)
-                  pair(heatmapCard, threadCard)
-                else if (heatmapCard != null)
-                  heatmapCard
-                else
-                  ?threadCard,
-                if (heatmapCard != null || threadCard != null) gap,
-              ] else ...[
-                if (heatmapCard != null) ...[heatmapCard, gap],
-                if (threadCard != null) ...[threadCard, gap],
-              ],
-
-              if (stats.startDate == null) ...[
-                _NoDataCard(colorScheme: colorScheme),
-                gap,
-              ],
-              if (onClearProgress != null && stats.completedStitches > 0)
-                _ClearProgressButton(
-                  onClearProgress: onClearProgress!,
-                  colorScheme: colorScheme,
-                ),
-            ],
-          );
-        },
-      ),
+      body: buildBody(false),
     );
   }
 }
