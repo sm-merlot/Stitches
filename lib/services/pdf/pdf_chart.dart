@@ -40,14 +40,18 @@ void _drawChartPage(
   final gridOriginY = format.height - margin - headerH - rulerH - gridH;
 
   // ── Header ───────────────────────────────────────────────────────────
+  // In PatternKeeper mode embed an absolute-origin marker so the parser can
+  // reassemble multi-page exports without relying on fragile heuristics.
+  final subtitle = patternKeeperMode
+      ? 'PKCHART:$startX,$startY  |  Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages'
+      : 'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages';
   _drawPageHeader(
     canvas,
     format: format,
     pattern: pattern,
     margin: margin,
     headerH: headerH,
-    subtitle:
-        'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages',
+    subtitle: subtitle,
     fonts: fonts,
   );
 

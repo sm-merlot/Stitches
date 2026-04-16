@@ -81,6 +81,32 @@ const kPdfUnsupportedSymbols = <String>{
 bool symbolIsPdfUnsupported(String symbol) =>
     kPdfUnsupportedSymbols.contains(symbol);
 
+/// Symbols safe for PatternKeeper PDF round-trip export.
+///
+/// Excludes ASCII letters (A-Z, a-z) and digits (0-9) because those appear in
+/// page headers, footers, ruler labels, and column numbers — the parser cannot
+/// distinguish them from real grid symbols.  Only non-letter, non-digit
+/// codepoints that are also in the bundled PDF fonts are included.
+const kPkSafeSymbols = <String>[
+  // ASCII punctuation / operators (not appearing in header/footer text)
+  '+', '#', '@', r'$', '%', '&', '~', '!', '?', '^', '*',
+  // Filled / outline geometric shapes
+  '■', '●', '▲', '▼', '◆', '★', '○', '□', '△', '◇',
+  // More shapes
+  '▶', '◀', '⬡', '⬢', '⬤', '⬥', '◉', '◎',
+  // Stars / dingbats
+  '✦', '✩', '✓', '✗', '✚', '✜',
+  // Playing card suits
+  '♤', '♧', '♡', '♢',
+  // Circled operator
+  '⊙',
+  // Greek letters (visually distinct; not in Roman page text)
+  'α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'λ', 'μ',
+  'ξ', 'π', 'ρ', 'σ', 'τ', 'φ', 'χ', 'ψ', 'ω',
+  // Misc punctuation / currency / special
+  '§', '¶', '°', '±', '×', '÷', '€', '£', '¥', '¢',
+];
+
 /// Groups of symbols that are visually similar at small cell sizes.
 /// If a pattern uses two symbols from the same group, a warning is shown in
 /// the colours panel.

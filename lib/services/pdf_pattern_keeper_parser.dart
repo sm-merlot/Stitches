@@ -146,6 +146,9 @@ class PatternKeeperParser {
 
   // ─── Grid parsing ─────────────────────────────────────────────────────────
 
+  // Regex matching the PKCHART marker embedded in StitchX-exported PK PDFs.
+  static final _kPkChartRe = RegExp(r'PKCHART:(\d+),(\d+)');
+
   static List<_PageGrid> _parseAllGrids(
       List<PdfPageText?> pageTexts, Map<String, String> legend) {
     final symbolSet = legend.keys.toSet();
@@ -154,6 +157,17 @@ class PatternKeeperParser {
     for (int pi = 0; pi < pageTexts.length; pi++) {
       final pageText = pageTexts[pi];
       if (pageText == null) continue;
+
+      // Scan all fragments for a PKCHART:col,row marker (exported by StitchX).
+      int? pkStartCol, pkStartRow;
+      for (final frag in pageText.fragments) {
+        final m = _kPkChartRe.firstMatch(frag.text);
+        if (m != null) {
+          pkStartCol = int.tryParse(m.group(1)!);
+          pkStartRow = int.tryParse(m.group(2)!);
+          break;
+        }
+      }
 
       final symbolFrags = pageText.fragments
           .where((f) => symbolSet.contains(f.text.trim()))
@@ -200,8 +214,15 @@ class PatternKeeperParser {
       if (cells.isNotEmpty) {
         debugPrint('[PKParser] page $pi: ${cells.length} symbols, '
             '${maxCol + 1}×${maxRow + 1} grid, '
-            'step ${xStep.toStringAsFixed(1)}×${yStep.toStringAsFixed(1)} pt');
-        grids.add(_PageGrid(cells: cells, cols: maxCol + 1, rows: maxRow + 1));
+            'step ${xStep.toStringAsFixed(1)}×${yStep.toStringAsFixed(1)} pt'
+            '${pkStartCol != null ? ', PKCHART offset $pkStartCol,$pkStartRow' : ''}');
+        grids.add(_PageGrid(
+          cells: cells,
+          cols: maxCol + 1,
+          rows: maxRow + 1,
+          absStartCol: pkStartCol,
+          absStartRow: pkStartRow,
+        ));
       }
     }
 
@@ -217,14 +238,23 @@ class PatternKeeperParser {
     if (pageGrids.length == 1) {
       combined = pageGrids.first;
     } else {
-      // Decide stacking direction from column-count consistency.
-      final colCounts = pageGrids.map((g) => g.cols).toList();
-      final sortedCols = [...colCounts]..sort();
-      final medianCols = sortedCols[sortedCols.length ~/ 2];
-      final isVertical = colCounts.every((c) => (c - medianCols).abs() <= 2);
+      // If all pages carry PKCHART absolute offsets (StitchX export), use them
+      // directly — no heuristic needed.
+      final allHaveMarkers =
+          pageGrids.every((g) => g.absStartCol != null && g.absStartRow != null);
+      if (allHaveMarkers) {
+        combined = _combineAbsolute(pageGrids);
+      } else {
+        // Fallback heuristic for third-party PK PDFs.
+        // Decide stacking direction from column-count consistency.
+        final colCounts = pageGrids.map((g) => g.cols).toList();
+        final sortedCols = [...colCounts]..sort();
+        final medianCols = sortedCols[sortedCols.length ~/ 2];
+        final isVertical = colCounts.every((c) => (c - medianCols).abs() <= 2);
 
-      combined =
-          isVertical ? _stackVertically(pageGrids) : _stackHorizontally(pageGrids);
+        combined =
+            isVertical ? _stackVertically(pageGrids) : _stackHorizontally(pageGrids);
+      }
     }
 
     // Threads: only those whose DMC code appears in the assembled grid.
@@ -256,6 +286,29 @@ class PatternKeeperParser {
       threads: threads,
       stitches: stitches,
     );
+  }
+
+  /// Combine pages using absolute PKCHART offsets (StitchX exports only).
+  /// Each cell's final position = page absStartCol/Row + local col/row.
+  static _PageGrid _combineAbsolute(List<_PageGrid> grids) {
+    final cells = <_GridCell>[];
+    int maxCol = 0, maxRow = 0;
+
+    for (final grid in grids) {
+      final sc = grid.absStartCol!;
+      final sr = grid.absStartRow!;
+      for (final c in grid.cells) {
+        final ac = sc + c.col;
+        final ar = sr + c.row;
+        cells.add(_GridCell(c.symbol, ac, ar));
+        if (ac > maxCol) maxCol = ac;
+        if (ar > maxRow) maxRow = ar;
+      }
+    }
+
+    debugPrint('[PKParser] absolute assembly: ${grids.length} pages → '
+        '${maxCol + 1}×${maxRow + 1}');
+    return _PageGrid(cells: cells, cols: maxCol + 1, rows: maxRow + 1);
   }
 
   static _PageGrid _stackVertically(List<_PageGrid> grids) {
@@ -418,5 +471,14 @@ class _PageGrid {
   final List<_GridCell> cells;
   final int cols;
   final int rows;
-  const _PageGrid({required this.cells, required this.cols, required this.rows});
+  /// Absolute column/row origin from a PKCHART marker, if present.
+  final int? absStartCol;
+  final int? absStartRow;
+  const _PageGrid({
+    required this.cells,
+    required this.cols,
+    required this.rows,
+    this.absStartCol,
+    this.absStartRow,
+  });
 }
