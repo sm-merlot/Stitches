@@ -518,6 +518,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       if (!context.mounted) return;
       if (id != null) {
         showSuccess(context, 'Exported to Drive as $fileName');
+        refreshFolder(ref, folder);
         if (result.format == ShareFormat.pdf && result.patternKeeperPdf && context.mounted) {
           final pkBytes = await PdfService.buildPdfBytes(state.pattern,
               useDmc: ref.read(settingsProvider).useDmc,
@@ -527,6 +528,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               .uploadRawFile(name: pkFileName, bytes: pkBytes, parentFolderId: folder.folderId);
           if (context.mounted && pkId != null) {
             showSuccess(context, 'Also exported PatternKeeper PDF');
+            refreshFolder(ref, folder);
           }
         }
       } else {

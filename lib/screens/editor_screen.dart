@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../providers/editor/editor_provider.dart';
+import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/page_config.dart';
@@ -148,6 +149,7 @@ class EditorScreen extends ConsumerWidget {
       if (!context.mounted) return;
       if (id != null) {
         showSuccess(context, 'Exported to Drive as $fileName');
+        refreshFolder(ref, folder);
         if (result.format == ShareFormat.pdf && result.patternKeeperPdf && context.mounted) {
           final pkBytes = await PdfService.buildPdfBytes(state.pattern,
               useDmc: ref.read(settingsProvider).useDmc,
@@ -157,6 +159,7 @@ class EditorScreen extends ConsumerWidget {
               .uploadRawFile(name: pkFileName, bytes: pkBytes, parentFolderId: folder.folderId);
           if (context.mounted && pkId != null) {
             showSuccess(context, 'Also exported PatternKeeper PDF');
+            refreshFolder(ref, folder);
           }
         }
       } else {
