@@ -84,11 +84,22 @@ void _drawChartPage(
 
     // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt).
     // Blended cells use the composite symbol so the PDF grid matches the canvas.
+    // In PK mode every cell always shows a symbol at the full-cell centre —
+    // PatternKeeper treats all stitches as full cells, and sub-region sizes for
+    // QuarterStitch / HalfCrossStitch (cs/2 ≈ 3.5 pt) would fail the 4 pt guard.
     final sym = blendedCellSymbols[cellKey] ?? pdfSymbols[thread.dmcCode] ?? '';
     if (symbolIsVisible(sym)) {
-      final subSize = _stitchSubRegionSize(s, cellSize);
+      final double subSize;
+      final double sx, sy;
+      if (patternKeeperMode) {
+        subSize = cellSize;
+        sx = gx + cellSize / 2;
+        sy = gy + cellSize / 2;
+      } else {
+        subSize = _stitchSubRegionSize(s, cellSize);
+        (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
+      }
       if (subSize >= 4) {
-        final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
         // In PK mode always use black text (white background).
         // In standard mode contrast against the fill colour.
         final PdfColor textColor;
