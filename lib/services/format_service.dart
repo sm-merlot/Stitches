@@ -187,31 +187,37 @@ class FormatService {
           if (thread != null) {
             stitches.add(HalfStitch(x: x, y: y, isForward: false, threadId: thread.dmcCode));
           }
+          break;
         case 2: // / half stitch
           final thread = pi2 != null ? palette[pi2] : null;
           if (thread != null) {
             stitches.add(HalfStitch(x: x, y: y, isForward: true, threadId: thread.dmcCode));
           }
+          break;
         case 3: // TL quarter
           final thread = pi1 != null ? palette[pi1] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.topLeft, threadId: thread.dmcCode));
           }
+          break;
         case 4: // BR quarter
           final thread = pi1 != null ? palette[pi1] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.bottomRight, threadId: thread.dmcCode));
           }
+          break;
         case 5: // TR quarter
           final thread = pi2 != null ? palette[pi2] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.topRight, threadId: thread.dmcCode));
           }
+          break;
         case 6: // BL quarter
           final thread = pi2 != null ? palette[pi2] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.bottomLeft, threadId: thread.dmcCode));
           }
+          break;
       }
     }
 
