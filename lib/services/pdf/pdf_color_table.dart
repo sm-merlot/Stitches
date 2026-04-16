@@ -345,11 +345,14 @@ void _drawTableRow(
     }
 
     if (i == 0 && col0Font != null && cells[i].isNotEmpty) {
-      // PatternKeeper symbol column: selectable text centred in the cell
+      // PatternKeeper symbol column: selectable text centred in the cell.
+      // Use _fontFor so ASCII/Greek symbols use the regular font (NotoSansSymbols2
+      // lacks Basic Latin and Greek glyphs); U+2200+ symbols use col0Font.
       final sf = math.max(3.5, (rowH - 4.0) * 0.58);
-      final tw = _textWidth(col0Font, sf, cells[i]);
+      final effectiveFont = _fontFor(cells[i], fonts.regular, col0Font);
+      final tw = _textWidth(effectiveFont, sf, cells[i]);
       canvas.setFillColor(PdfColors.black);
-      canvas.drawString(col0Font, sf, cells[i],
+      canvas.drawString(effectiveFont, sf, cells[i],
           cx + (cw - tw) / 2,
           y - rowH + (rowH - sf) / 2 + 1.0);
     } else if (i == 0 && linePreviewColor != null) {

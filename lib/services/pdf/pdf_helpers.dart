@@ -149,6 +149,17 @@ Map<String, String> _buildPdfSymbolMap(
       usedSymbols.add(t.symbol);
     }
   }
+
+  // Auto-assign from kPatternSymbols for threads that still have no symbol.
+  final stdPool = kPatternSymbols
+      .where((s) => !kPdfUnsupportedSymbols.contains(s) && !usedSymbols.contains(s))
+      .toList();
+  int stdIdx = 0;
+  for (final t in threads) {
+    if (result.containsKey(t.dmcCode)) continue;
+    if (stdIdx >= stdPool.length) break;
+    result[t.dmcCode] = stdPool[stdIdx++];
+  }
   return result;
 }
 
