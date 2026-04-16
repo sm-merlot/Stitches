@@ -111,6 +111,18 @@ class PdfService {
       ...backThreads.where((t) => !crossThreads.any((c) => c.dmcCode == t.dmcCode)),
     ], autoAssignMissing: patternKeeperMode);
 
+    // Second pass for blended cells: crossStitchEquiv keys the composite thread's
+    // dmcCode, not the original layers'. So the original layer threads may not be in
+    // pdfSymbols. Fill any remaining blendedCellSymbols entries using the composite
+    // thread's PDF-assigned symbol so blended cells render correctly in the chart.
+    for (final key in compositeResult.blendedColors.keys) {
+      if (blendedCellSymbols.containsKey(key)) continue; // user composite symbol already set
+      final t = compositeResult.compositeThreads[key];
+      if (t == null) continue;
+      final sym = pdfSymbols[t.dmcCode] ?? '';
+      if (symbolIsVisible(sym)) blendedCellSymbols[key] = sym;
+    }
+
     // ── Page layout constants ───────────────────────────────────────────────
     const pageFormat = PdfPageFormat.a4; // portrait
     const margin = 40.0;
