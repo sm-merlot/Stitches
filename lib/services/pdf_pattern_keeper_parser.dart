@@ -212,6 +212,29 @@ class PatternKeeperParser {
       }
 
       if (cells.isNotEmpty) {
+        // ── Outlier filter ────────────────────────────────────────────────
+        // Footer text fragments ("Page", "1", "of", "5") land at very large
+        // row values — far beyond the actual grid extent — because the footer
+        // is below the grid and row = ((originY - cy) / yStep) is large there.
+        // Row ruler labels (left margin) already produce col < 0 and are
+        // filtered above.  Column ruler labels produce row < 0 and are filtered.
+        // Only footer produces valid (≥0) out-of-range rows.
+        //
+        // Use the 95th-percentile of actual row/col values as the "true" max;
+        // discard anything more than 2 steps beyond it.  With a uniform grid,
+        // p95 ≈ last row − a few, so real cells survive; footer phantoms at
+        // row >> maxActualRow are removed.
+        if (cells.length > 4) {
+          final sortedRows = (cells.map((c) => c.row).toList()..sort());
+          final sortedCols = (cells.map((c) => c.col).toList()..sort());
+          final p95row = sortedRows[(sortedRows.length * 0.95).floor()];
+          final p95col = sortedCols[(sortedCols.length * 0.95).floor()];
+          cells.retainWhere((c) => c.row <= p95row + 2 && c.col <= p95col + 2);
+          if (cells.isEmpty) continue;
+          maxCol = cells.map((c) => c.col).reduce(max);
+          maxRow = cells.map((c) => c.row).reduce(max);
+        }
+
         debugPrint('[PKParser] page $pi: ${cells.length} symbols, '
             '${maxCol + 1}×${maxRow + 1} grid, '
             'step ${xStep.toStringAsFixed(1)}×${yStep.toStringAsFixed(1)} pt'
