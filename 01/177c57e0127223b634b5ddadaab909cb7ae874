@@ -1,0 +1,29 @@
+lib/providers/editor/editor_state.dart
+  266c0109da4e1e8e 31-33,115,275,331
+.changeset/stitch-page-colour-filter.md
+  266c0109da4e1e8e 1-6
+lib/providers/editor/editor_provider_drawing.dart
+  266c0109da4e1e8e 663-666
+lib/widgets/right_sidebar_colours_panel.dart
+  266c0109da4e1e8e 411-479,491-506,511-529,540
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "01177c57e0127223b634b5ddadaab909cb7ae874",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 161,
+      "total_deletions": 47,
+      "accepted_lines": 121,
+      "overriden_lines": 0
+    }
+  }
+}
