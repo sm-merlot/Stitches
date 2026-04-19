@@ -37,6 +37,27 @@ What this means: **pure model and pure-Dart service logic is well covered**.
 
 Since these tests were written, significant features have landed that are not yet covered: three-mode architecture (view/edit/stitch), file format v2 with progress tracking, StitchOps aggregation, B&W stitch rendering, page mode, unified share/export, and the full `EditorNotifier` refactor into five mixins.
 
+## Progress in `feat/update-test-coverage`
+
+The branch adds ~1,770 lines of new tests across five new files, covering T1–T3 of the phasing plan. All 252 tests pass (`flutter test`).
+
+| New file                                              | Lines | Phase | What it covers                                                                                                                          |
+|-------------------------------------------------------|-------|-------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| `services/stitches_roundtrip_test.dart` (274)         | 274   | T1    | v2 full round-trip (all stitch types, snippets, multi-palette, progress, log); compressed vs uncompressed bytes; unknown-key safety; legacy v1 `flat_stitches` fixture |
+| `services/format_service_test.dart` (124)             | 124   | T1    | `FormatService` parse/emit for `.stitches`, `.oxs`; format detection; error paths                                                       |
+| `providers/editor_notifier_test.dart` (722)           | 722   | T2    | Drawing (full/half/quarter/petite/backstitch/French knot), erase modes (cell/box/fill-erase), layer CRUD, mode switching, undo/redo (200-step cap), thread management, progress marking, metadata |
+| `providers/editor_snippets_selection_test.dart` (420) | 420   | T3    | Snippet CRUD, resize (clip/expand), transform (flipH/flipV/rotateCW), palette management, `saveSelectionAsSnippet`, selection rect, copy/paste round-trip, `deleteSelection`, `moveSelection` |
+| `models/progress_log_test.dart` (162)                 | 162   | T3    | `logCountAsOf` (empty/mid/after-last), daily delta, frogging, streak calculation, `_aggregateStats` edge cases                          |
+| `services/editor_session_test.dart` (71)              | 71    | T3    | Session save/restore round-trip; graceful handling of corrupt/missing session data                                                      |
+
+Also added: `test/fixtures/legacy_v1_flat.stitches` — backward-compat fixture for the file-format tests.
+
+### What remains (T4–T5)
+
+- **T4 — P2 pure-Dart services**: `color_space.dart`, `dashed_line.dart`, `stitch_geometry.dart`, `snippet_palette_resolver.dart`, `page_layout.dart`, `sprite_importer.dart`, `stitch_renderer.dart`
+- **T4 — P3 widget smoke tests**: `editor_screen`, `home_screen`, `workspace_screen`, `snippet_editor_screen`, `color_picker_screen`, dialogs, `stitch_ops_screen`, `stitch_ops_workspace_screen`
+- **T5 — P4 integration smoke tests**: four end-to-end flows in `integration_test/` + CI wiring
+
 ## Coverage gaps by priority
 
 ### Priority 1 — central state and persistence
@@ -161,13 +182,13 @@ Rough size: 4 tests, ~150–250 lines each.
 
 The work breaks into roughly four PRs, each landable independently.
 
-| Phase  | Scope                                                         | Approx size         |
-|--------|---------------------------------------------------------------|---------------------|
-| **T1** | P1.2 file-format round-trip + fixtures                        | small (~300 lines)  |
-| **T2** | P1.1 EditorNotifier core (drawing, layers, undo/redo)         | large (~600 lines)  |
-| **T3** | P1.1 remainder (snippets, selection, progress) + P1.3 session | medium (~400 lines) |
-| **T4** | P2 pure-Dart services + P3 widget smoke tests                 | medium (~500 lines) |
-| **T5** | P4 integration smoke tests + CI wiring                        | small (~250 lines)  |
+| Phase  | Scope                                                         | Approx size         | Status      |
+|--------|---------------------------------------------------------------|---------------------|-------------|
+| **T1** | P1.2 file-format round-trip + fixtures                        | small (~300 lines)  | ✅ Done     |
+| **T2** | P1.1 EditorNotifier core (drawing, layers, undo/redo)         | large (~600 lines)  | ✅ Done     |
+| **T3** | P1.1 remainder (snippets, selection, progress) + P1.3 session | medium (~400 lines) | ✅ Done     |
+| **T4** | P2 pure-Dart services + P3 widget smoke tests                 | medium (~500 lines) | ⬜ Next     |
+| **T5** | P4 integration smoke tests + CI wiring                        | small (~250 lines)  | ⬜ Pending  |
 
 T1 first because format round-trip is the cheapest insurance against the worst kind of bug. T2 next because the editor provider is where every future change lands.
 
