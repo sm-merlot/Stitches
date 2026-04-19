@@ -1,0 +1,342 @@
+/// Tests for pure-Dart model helpers:
+///   stitch_geometry, snippet_palette_resolver, page_layout, stitch_renderer.
+///
+/// All pure-Dart or relying only on Flutter's Color type —
+/// no ProviderContainer, no fakes needed.
+
+import 'package:flutter/material.dart' show Color;
+import 'package:flutter_test/flutter_test.dart';
+
+import '../../lib/models/page_config.dart';
+import '../../lib/models/page_layout.dart';
+import '../../lib/models/pattern.dart';
+import '../../lib/models/snippet.dart';
+import '../../lib/models/snippet_palette.dart';
+import '../../lib/models/snippet_palette_resolver.dart';
+import '../../lib/models/stitch.dart';
+import '../../lib/models/stitch_geometry.dart';
+import '../../lib/models/stitch_plan.dart';
+import '../../lib/models/thread.dart';
+import '../../lib/services/stitch_renderer.dart';
+
+// ─── stitch_geometry ─────────────────────────────────────────────────────────
+
+void main() {
+  group('stitch_geometry — stitchXY', () {
+    test('FullStitch returns (x, y)', () {
+      expect(stitchXY(const FullStitch(x: 3, y: 7, threadId: 'a')), equals((3, 7)));
+    });
+
+    test('HalfStitch returns (x, y)', () {
+      expect(
+          stitchXY(const HalfStitch(
+              x: 1, y: 2, threadId: 'a', isForward: true)),
+          equals((1, 2)));
+    });
+
+    test('QuarterStitch returns (x, y)', () {
+      expect(
+          stitchXY(const QuarterStitch(
+              x: 5, y: 6, threadId: 'a', quadrant: QuadrantPosition.topRight)),
+          equals((5, 6)));
+    });
+
+    test('HalfCrossStitch returns (x, y)', () {
+      expect(
+          stitchXY(const HalfCrossStitch(
+              x: 2, y: 4, threadId: 'a', half: HalfOrientation.top)),
+          equals((2, 4)));
+    });
+
+    test('QuarterCrossStitch returns (x, y)', () {
+      expect(
+          stitchXY(const QuarterCrossStitch(
+              x: 0, y: 0, threadId: 'a', quadrant: QuadrantPosition.bottomLeft)),
+          equals((0, 0)));
+    });
+
+    test('BackStitch returns null', () {
+      expect(
+          stitchXY(const BackStitch(
+              x1: 0, y1: 0, x2: 1, y2: 1, threadId: 'a')),
+          isNull);
+    });
+  });
+
+  // ─── snippet_palette_resolver ─────────────────────────────────────────────
+
+  const _black = Thread(
+      dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: 'X');
+  const _red = Thread(
+      dmcCode: '666', color: Color(0xFFCC0000), name: 'Red', symbol: 'O');
+  const _blue = Thread(
+      dmcCode: '336', color: Color(0xFF003399), name: 'Blue', symbol: '#');
+
+  group('snippet_palette_resolver — resolveThread', () {
+    Snippet _snippetWith({
+      required List<Thread> primaryThreads,
+      List<Thread>? altThreads,
+      int activePaletteIndex = 0,
+    }) {
+      final palettes = [
+        SnippetPalette.create(name: 'Primary', threads: primaryThreads),
+        if (altThreads != null)
+          SnippetPalette.create(name: 'Alt', threads: altThreads),
+      ];
+      return Snippet.create(
+        name: 'S',
+        width: 2,
+        height: 2,
+        threads: primaryThreads,
+        stitches: const [],
+      ).copyWith(
+        palettes: palettes,
+        activePaletteIndex: activePaletteIndex,
+      );
+    }
+
+    test('active=0 (primary) → returns primary thread', () {
+      final snip = _snippetWith(primaryThreads: [_black, _red]);
+      expect(resolveThread(snip, '310').dmcCode, equals('310'));
+    });
+
+    test('active=1 returns alt palette thread at same slot', () {
+      final snip = _snippetWith(
+        primaryThreads: [_black],
+        altThreads: [_red],
+        activePaletteIndex: 1,
+      );
+      // slot 0 of primary = _black; slot 0 of alt = _red
+      expect(resolveThread(snip, '310').dmcCode, equals('666'));
+    });
+
+    test('active=1 but alt palette shorter → falls back to primary', () {
+      // Primary has 2 threads; alt only has 1.
+      final snip = _snippetWith(
+        primaryThreads: [_black, _red],
+        altThreads: [_blue],
+        activePaletteIndex: 1,
+      );
+      // Slot 1 doesn't exist in alt → falls back to primary slot 1
+      expect(resolveThread(snip, '666').dmcCode, equals('666'));
+    });
+
+    test('unknown threadId not in primary → falls back gracefully', () {
+      final snip = _snippetWith(primaryThreads: [_black]);
+      // '999' is not in the primary palette
+      final result = resolveThread(snip, '999');
+      expect(result, isNotNull);
+    });
+
+    test('empty palettes list → returns placeholder thread', () {
+      final snip = Snippet.create(
+        name: 'S',
+        width: 1,
+        height: 1,
+        threads: [],
+        stitches: [],
+      ).copyWith(palettes: []);
+      final result = resolveThread(snip, '310');
+      expect(result.dmcCode, equals('310'));
+    });
+  });
+
+  // ─── page_layout ──────────────────────────────────────────────────────────
+
+  CrossStitchPattern _emptyPattern({int width = 10, int height = 10}) =>
+      CrossStitchPattern.empty(name: 'T').copyWith(width: width, height: height);
+
+  const _cfg10 = PageConfig(
+    enabled: true,
+    pageWidth: 10,
+    pageHeight: 10,
+    fuzzyAmount: 0,
+  );
+
+  group('page_layout — PageLayout.compute', () {
+    test('pattern exactly one page → 1×1 layout', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 10, height: 10));
+      expect(layout.pagesAcross, equals(1));
+      expect(layout.pagesDown, equals(1));
+      expect(layout.totalPages, equals(1));
+    });
+
+    test('pattern 20×10 → 2 pages across, 1 down', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 10));
+      expect(layout.pagesAcross, equals(2));
+      expect(layout.pagesDown, equals(1));
+    });
+
+    test('pattern 10×20 → 1 page across, 2 down', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 10, height: 20));
+      expect(layout.pagesAcross, equals(1));
+      expect(layout.pagesDown, equals(2));
+    });
+
+    test('1×1 pattern → single page covers the cell', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 1, height: 1));
+      expect(layout.cellOnPage(0, 0, 0, 0), isTrue);
+    });
+
+    test('off-by-one: cell at right edge of page 0 is not on page 1', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 10));
+      expect(layout.cellOnPage(9, 0, 0, 0), isTrue);
+      expect(layout.cellOnPage(9, 0, 1, 0), isFalse);
+    });
+
+    test('cell at start of second page is on page 1 not page 0', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 10));
+      expect(layout.cellOnPage(10, 0, 1, 0), isTrue);
+      expect(layout.cellOnPage(10, 0, 0, 0), isFalse);
+    });
+
+    test('nominalPageRect returns correct rect for each page', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 20));
+      final r00 = layout.nominalPageRect(0, 0);
+      expect(r00.left, equals(0));
+      expect(r00.top, equals(0));
+      expect(r00.right, equals(10));
+      expect(r00.bottom, equals(10));
+
+      final r10 = layout.nominalPageRect(1, 0);
+      expect(r10.left, equals(10));
+      expect(r10.right, equals(20));
+    });
+
+    test('out-of-bounds cell returns false from cellOnPage', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 10, height: 10));
+      expect(layout.cellOnPage(-1, 0, 0, 0), isFalse);
+      expect(layout.cellOnPage(0, 10, 0, 0), isFalse);
+    });
+
+    test('every cell in pattern belongs to exactly one page', () {
+      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 15, height: 12));
+      for (var y = 0; y < 12; y++) {
+        for (var x = 0; x < 15; x++) {
+          int count = 0;
+          for (var py = 0; py < layout.pagesDown; py++) {
+            for (var px = 0; px < layout.pagesAcross; px++) {
+              if (layout.cellOnPage(x, y, px, py)) count++;
+            }
+          }
+          expect(count, equals(1),
+              reason: 'cell ($x,$y) belonged to $count pages');
+        }
+      }
+    });
+  });
+
+  // ─── stitch_renderer ─────────────────────────────────────────────────────
+
+  PlannedAida _oneSquare({int x = 0, int y = 0}) {
+    const sq = PlannedSquare(id: 0, x: 0, y: 0);
+    return const PlannedAida(
+      title: 'T',
+      cols: 1,
+      rows: 1,
+      squares: [sq],
+      activeSquareIds: {0},
+      stitches: [],
+    );
+  }
+
+  PlannedAida _aidaWith2x2Squares() {
+    const squares = [
+      PlannedSquare(id: 0, x: 0, y: 0),
+      PlannedSquare(id: 1, x: 1, y: 0),
+      PlannedSquare(id: 2, x: 0, y: 1),
+      PlannedSquare(id: 3, x: 1, y: 1),
+    ];
+    return const PlannedAida(
+      title: 'T',
+      cols: 2,
+      rows: 2,
+      squares: squares,
+      activeSquareIds: {0, 1, 2, 3},
+      stitches: [],
+    );
+  }
+
+  group('stitch_renderer — computeGridBounds', () {
+    test('empty activeSquareIds → 1×1 fallback rect', () {
+      final aida = const PlannedAida(
+        title: 'T',
+        cols: 1,
+        rows: 1,
+        squares: [PlannedSquare(id: 0, x: 0, y: 0)],
+        activeSquareIds: {},
+        stitches: [],
+      );
+      final b = computeGridBounds(aida, 10.0);
+      expect(b.width, closeTo(10.0, 1e-9));
+      expect(b.height, closeTo(10.0, 1e-9));
+    });
+
+    test('single square at (0,0) with cellSize=10 → -5..5 bounds', () {
+      final b = computeGridBounds(_oneSquare(), 10.0);
+      expect(b.left, closeTo(-5.0, 1e-9));
+      expect(b.top, closeTo(-5.0, 1e-9));
+      expect(b.right, closeTo(5.0, 1e-9));
+      expect(b.bottom, closeTo(5.0, 1e-9));
+    });
+
+    test('2×2 grid with cellSize=10 → width and height are 20', () {
+      final b = computeGridBounds(_aidaWith2x2Squares(), 10.0);
+      expect(b.width, closeTo(20.0, 1e-9));
+      expect(b.height, closeTo(20.0, 1e-9));
+    });
+  });
+
+  group('stitch_renderer — resolveSegments', () {
+    test('empty stitch list → empty segments', () {
+      final segs = resolveSegments(_oneSquare(), cellSize: 10.0);
+      expect(segs, isEmpty);
+    });
+
+    test('one PlanSimpleStitch → one segment', () {
+      const sq = PlannedSquare(id: 0, x: 2, y: 3);
+      const stitch = PlanSimpleStitch(
+        squareId: 0,
+        fro: Corner.topLeft,
+        to: Corner.bottomRight,
+      );
+      final aida = const PlannedAida(
+        title: 'T',
+        cols: 1,
+        rows: 1,
+        squares: [sq],
+        activeSquareIds: {0},
+        stitches: [stitch],
+      );
+      final segs = resolveSegments(aida, cellSize: 10.0);
+      expect(segs.length, equals(1));
+      // topLeft of (2,3): pixel (2-0.5)*10 = 15, (3-0.5)*10 = 25
+      expect(segs.single.x1, closeTo(15.0, 1e-9));
+      expect(segs.single.y1, closeTo(25.0, 1e-9));
+      // bottomRight: (2+0.5)*10=25, (3+0.5)*10=35
+      expect(segs.single.x2, closeTo(25.0, 1e-9));
+      expect(segs.single.y2, closeTo(35.0, 1e-9));
+    });
+
+    test('originX/Y offset is applied to all segment coordinates', () {
+      const sq = PlannedSquare(id: 0, x: 0, y: 0);
+      const stitch = PlanSimpleStitch(
+        squareId: 0,
+        fro: Corner.topLeft,
+        to: Corner.topRight,
+      );
+      final aida = const PlannedAida(
+        title: 'T',
+        cols: 1,
+        rows: 1,
+        squares: [sq],
+        activeSquareIds: {0},
+        stitches: [stitch],
+      );
+      final segs = resolveSegments(aida, cellSize: 10.0, originX: 5, originY: 8);
+      expect(segs.single.x1, closeTo(5 + (-0.5) * 10, 1e-9));
+      expect(segs.single.y1, closeTo(8 + (-0.5) * 10, 1e-9));
+    });
+  });
+}
+
