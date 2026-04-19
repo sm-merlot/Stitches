@@ -502,6 +502,7 @@ class StitchOpsScreen extends ConsumerWidget {
                     cumulativeData: stats.cumulativeData,
                     total: stats.totalStitches,
                     estimatedCompletion: stats.estimatedCompletion,
+                    timeMap: stats.timeMap,
                     colorScheme: colorScheme,
                   )
                 : null;
@@ -1394,12 +1395,14 @@ class StitchOpsCumulativeChart extends StatefulWidget {
   final List<(DateTime, int)> cumulativeData;
   final int total;
   final DateTime? estimatedCompletion;
+  final Map<String, int> timeMap;
   final ColorScheme colorScheme;
   const StitchOpsCumulativeChart({
     super.key,
     required this.cumulativeData,
     required this.total,
     required this.estimatedCompletion,
+    required this.timeMap,
     required this.colorScheme,
   });
 
@@ -1499,6 +1502,17 @@ class _StitchOpsCumulativeChartState extends State<StitchOpsCumulativeChart> {
                               '%',
                               '${(widget.cumulativeData[_hoverIndex!].$2 / widget.total * 100).toStringAsFixed(1)}%'
                             ),
+                          ...() {
+                            // Cumulative minutes up to and including hovered date.
+                            final hDate = widget.cumulativeData[_hoverIndex!].$1;
+                            final hIso = _isoFromDate(hDate);
+                            final cumMins = widget.timeMap.entries
+                                .where((e) => e.key.compareTo(hIso) <= 0)
+                                .fold(0, (s, e) => s + e.value);
+                            return cumMins > 0
+                                ? [('Time', _fmtMins(cumMins))]
+                                : <(String?, String)>[];
+                          }(),
                         ],
                       ),
                     ],
