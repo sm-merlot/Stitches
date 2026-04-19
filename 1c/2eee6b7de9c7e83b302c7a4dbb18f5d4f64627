@@ -1,0 +1,25 @@
+lib/services/format_service.dart
+  14aa4afdbffe9737 190,196,202,208,214,220
+test/fixtures/minimal.oxs
+  14aa4afdbffe9737 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "1c2eee6b7de9c7e83b302c7a4dbb18f5d4f64627",
+  "prompts": {
+    "14aa4afdbffe9737": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ef6bbdc-3306-4c26-80ef-478c6c0bb4bc",
+        "model": "google/gemma-4-26b-a4b"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 163,
+      "total_deletions": 11,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    }
+  }
+}
