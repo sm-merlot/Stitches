@@ -1496,12 +1496,23 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
             // Drag selection tooltip — shows size and from/to coords while dragging.
             if ((_dragSelectionRect != null && _selectionAnchor != null) ||
                 (_progressDragRect != null && _progressAnchor != null && _hasDraggedProgress))
-              _SelectionTooltipOverlay(
-                rect: _dragSelectionRect ?? _progressDragRect!,
-                anchor: _selectionAnchor ?? _progressAnchor!,
-                mousePos: _mouseScreenPos,
-                canvasSize: _canvasSize,
-              ),
+              () {
+                final rect = _dragSelectionRect ?? _progressDragRect!;
+                final anchor = _selectionAnchor ?? _progressAnchor!;
+                // Determine drag direction from anchor vs current end cell.
+                final endX = rect.right - 1; // inclusive end col
+                final endY = rect.bottom - 1;
+                final dragRight = endX >= anchor.dx;
+                final dragDown = endY >= anchor.dy;
+                return _SelectionTooltipOverlay(
+                  rect: rect,
+                  anchor: anchor,
+                  mousePos: _mouseScreenPos,
+                  canvasSize: _canvasSize,
+                  dragRight: dragRight,
+                  dragDown: dragDown,
+                );
+              }(),
             // Overlay layer: cursor, ghost stitches, selection, hover.
             // Repaints freely without touching the cached static layer.
             CustomPaint(
@@ -1584,12 +1595,16 @@ class _SelectionTooltipOverlay extends StatelessWidget {
   final Offset anchor;
   final Offset? mousePos;
   final Size canvasSize;
+  final bool dragRight;
+  final bool dragDown;
 
   const _SelectionTooltipOverlay({
     required this.rect,
     required this.anchor,
     required this.mousePos,
     required this.canvasSize,
+    required this.dragRight,
+    required this.dragDown,
   });
 
   @override
@@ -1601,25 +1616,26 @@ class _SelectionTooltipOverlay extends StatelessWidget {
     final toX = (rect.right - 1).toInt() + 1;
     final toY = (rect.bottom - 1).toInt() + 1;
 
-    // Clamp to ensure from ≤ to in display
     final x1 = math.min(fromX, toX);
     final y1 = math.min(fromY, toY);
     const tooltipWidth = 160.0;
     const tooltipHeight = 64.0;
-    const offset = 14.0;
+    const gap = 14.0;
 
-    // Position near the cursor; default to top-right; flip if near edges.
     double left, top;
     final mp = mousePos;
     if (mp != null) {
-      left = mp.dx + offset;
-      top = mp.dy - tooltipHeight - offset;
-      // Flip right → left if near right edge
-      if (left + tooltipWidth > canvasSize.width - 8) {
-        left = mp.dx - tooltipWidth - offset;
+      // Place tooltip in the quadrant the user is dragging towards.
+      if (dragRight) {
+        left = mp.dx + gap;
+      } else {
+        left = mp.dx - tooltipWidth - gap;
       }
-      // Flip above → below if near top edge
-      if (top < 8) top = mp.dy + offset;
+      if (dragDown) {
+        top = mp.dy + gap;
+      } else {
+        top = mp.dy - tooltipHeight - gap;
+      }
       left = left.clamp(8.0, canvasSize.width - tooltipWidth - 8);
       top = top.clamp(8.0, canvasSize.height - tooltipHeight - 8);
     } else {
