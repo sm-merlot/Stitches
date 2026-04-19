@@ -1733,11 +1733,43 @@ class StitchOpsHeatmap extends StatefulWidget {
 }
 
 class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
-  (int, int)? _hoverCell; // (week, dayOfWeek)
+  (int, int)? _hoverCell; // (week col, dayOfWeek row)
   Offset? _hoverPos;
+  int _weekOffset = 0; // weeks scrolled back from "now"; steps of 4
   static const double _chartH = 96.0;
   static const int _weeks = 16;
   static const int _days = 7;
+  static const int _step = 4; // weeks per arrow press
+
+  // Earliest iso date that has any data, used to cap the left arrow.
+  String? get _earliestIso {
+    final keys = [
+      ...widget.dailyMap.keys,
+      ...widget.timeMap.keys,
+    ];
+    if (keys.isEmpty) return null;
+    return (keys..sort()).first;
+  }
+
+  DateTime _gridStart(DateTime thisWeekMonday) =>
+      thisWeekMonday.subtract(Duration(days: (15 + _weekOffset) * 7));
+
+  bool get _canGoBack {
+    final earliest = _earliestIso;
+    if (earliest == null) return false;
+    // Allow going back as long as the window end is after the earliest data.
+    final today = widget.today;
+    final daysFromMonday = today.weekday - 1;
+    final thisWeekMonday = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: daysFromMonday));
+    final nextStart = _gridStart(thisWeekMonday)
+        .subtract(const Duration(days: _step * 7));
+    // Window end = nextStart + 16 weeks - 1 day.
+    final nextEnd =
+        nextStart.add(const Duration(days: _weeks * 7 - 1));
+    final earliestDate = parseIsoDate(earliest);
+    return !nextEnd.isBefore(earliestDate);
+  }
 
   (int, int)? _hitTest(Offset pos, double chartWidth) {
     const dayLabelW = 16.0;
@@ -1754,16 +1786,28 @@ class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
     return (col, row);
   }
 
+  String _windowLabel(DateTime gridStart) {
+    final end = gridStart.add(const Duration(days: _weeks * 7 - 1));
+    final startLabel =
+        '${_monthAbbr(gridStart.month)} ${gridStart.year != end.year ? gridStart.year.toString() : ''}';
+    final endLabel = '${_monthAbbr(end.month)} ${end.year}';
+    final start = startLabel.trim();
+    return start == endLabel.split(' ').first ? endLabel : '$start – $endLabel';
+  }
+
+  static const _kMonths = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  static String _monthAbbr(int m) => _kMonths[m];
+
   @override
   Widget build(BuildContext context) {
     final today = widget.today;
-    // Grid starts on Monday of the week 15 full weeks before the current week.
     final daysFromMonday = today.weekday - 1;
-    final thisWeekMonday =
-        DateTime(today.year, today.month, today.day).subtract(
-      Duration(days: daysFromMonday),
-    );
-    final gridStart = thisWeekMonday.subtract(const Duration(days: 15 * 7));
+    final thisWeekMonday = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: daysFromMonday));
+    final gridStart = _gridStart(thisWeekMonday);
     final todayMidnight = DateTime(today.year, today.month, today.day);
 
     // Tooltip content for hovered cell.
@@ -1788,7 +1832,47 @@ class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader('Activity (16 weeks)'),
+          // Header row with navigation arrows.
+          Row(
+            children: [
+              Expanded(child: _SectionHeader(_windowLabel(gridStart))),
+              SizedBox(
+                width: 28,
+                height: 20,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Earlier',
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: _canGoBack
+                      ? () => setState(() {
+                            _weekOffset += _step;
+                            _hoverCell = null;
+                          })
+                      : null,
+                ),
+              ),
+              SizedBox(
+                width: 28,
+                height: 20,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Later',
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: _weekOffset > 0
+                      ? () => setState(() {
+                            _weekOffset =
+                                (_weekOffset - _step).clamp(0, _weekOffset);
+                            _hoverCell = null;
+                          })
+                      : null,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           SizedBox(
             height: _chartH,
