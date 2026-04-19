@@ -85,8 +85,15 @@ class _WorkspaceStats {
 
   // Chart data
   final Map<String, int> dailyMap; // iso → total stitches across all patterns
+  final Map<String, int> timeMap;  // iso → total minutes across all patterns
   final List<(DateTime, int)> dailyData; // last 60 days
   final List<(DateTime, int)> cumulativeData; // full history
+
+  // Time totals
+  final int totalMinutes;
+  final int todayMinutes;
+  final int weekMinutes;
+  final double stitchesPerHour;
 
   // Per-pattern list
   final List<_PatternSummary> patterns;
@@ -105,9 +112,14 @@ class _WorkspaceStats {
     required this.currentStreak,
     required this.longestStreak,
     required this.dailyMap,
+    required this.timeMap,
     required this.dailyData,
     required this.cumulativeData,
     required this.patterns,
+    required this.totalMinutes,
+    required this.todayMinutes,
+    required this.weekMinutes,
+    required this.stitchesPerHour,
   });
 
   double get overallPct =>
@@ -191,6 +203,7 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
 
   // ── Aggregated daily map (sum of all patterns' daily deltas) ─────────────
   final dailyMap = <String, int>{};
+  final timeMap = <String, int>{};  // iso → sum of minutesSpent across patterns
   DateTime? startDate;
   DateTime? lastActiveDate;
 
@@ -202,6 +215,10 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
       final delta = max(0, entry.stitchCount - prevCount);
       if (delta > 0) {
         dailyMap[entry.isoDate] = (dailyMap[entry.isoDate] ?? 0) + delta;
+      }
+      if (entry.minutesSpent > 0) {
+        timeMap[entry.isoDate] =
+            (timeMap[entry.isoDate] ?? 0) + entry.minutesSpent;
       }
       prevCount = entry.stitchCount;
     }
@@ -286,6 +303,21 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     }
   }
 
+  // ── Time totals ───────────────────────────────────────────────────────────
+  final totalMinutes = timeMap.values.fold(0, (s, v) => s + v);
+  int minsInRange(int days) {
+    final cutoff = today.subtract(Duration(days: days));
+    final cutoffIso = '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
+    return timeMap.entries
+        .where((e) => e.key.compareTo(cutoffIso) > 0)
+        .fold(0, (s, e) => s + e.value);
+  }
+  final todayMinutes = minsInRange(1);
+  final weekMinutes = minsInRange(7);
+  final stitchesPerHour = totalMinutes == 0
+      ? 0.0
+      : completedStitches / (totalMinutes / 60.0);
+
   return _WorkspaceStats(
     patternCount: patterns.length,
     totalStitches: totalStitches,
@@ -300,9 +332,14 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     currentStreak: currentStreak,
     longestStreak: longestStreak,
     dailyMap: dailyMap,
+    timeMap: timeMap,
     dailyData: dailyData,
     cumulativeData: cumulativeData,
     patterns: summaries,
+    totalMinutes: totalMinutes,
+    todayMinutes: todayMinutes,
+    weekMinutes: weekMinutes,
+    stitchesPerHour: stitchesPerHour,
   );
 }
 
@@ -615,11 +652,15 @@ class _StatsView extends StatelessWidget {
 
       final overviewCard = _WsOverviewCard(stats: stats, colorScheme: colorScheme);
       final velocityCard = _WsVelocityCard(stats: stats, colorScheme: colorScheme);
+      final timeCard = stats.totalMinutes > 0
+          ? _WsTimeCard(stats: stats, colorScheme: colorScheme)
+          : null;
       final dailyCard = hasDaily
           ? _WsChartCard(
               title: 'Daily (60 days)',
               child: StitchOpsDailyChart(
                 dailyData: stats.dailyData,
+                timeMap: stats.timeMap,
                 colorScheme: colorScheme,
               ),
             )
@@ -631,18 +672,17 @@ class _StatsView extends StatelessWidget {
                 cumulativeData: stats.cumulativeData,
                 total: stats.totalStitches,
                 estimatedCompletion: null,
+                timeMap: stats.timeMap,
                 colorScheme: colorScheme,
               ),
             )
           : null;
       final heatmapCard = hasHeatmap
-          ? _WsChartCard(
-              title: 'Activity (16 weeks)',
-              child: StitchOpsHeatmap(
-                dailyMap: stats.dailyMap,
-                today: DateTime.now(),
-                colorScheme: colorScheme,
-              ),
+          ? StitchOpsHeatmap(
+              dailyMap: stats.dailyMap,
+              timeMap: stats.timeMap,
+              today: DateTime.now(),
+              colorScheme: colorScheme,
             )
           : null;
 
@@ -658,6 +698,8 @@ class _StatsView extends StatelessWidget {
             velocityCard,
           ],
           gap,
+
+          if (timeCard != null) ...[timeCard, gap],
 
           // Charts.
           if (isWide) ...[
@@ -1212,7 +1254,71 @@ class _RateRow extends StatelessWidget {
   }
 }
 
+// ─── Workspace time card ──────────────────────────────────────────────────────
+
+class _WsTimeCard extends StatelessWidget {
+  final _WorkspaceStats stats;
+  final ColorScheme colorScheme;
+  const _WsTimeCard({required this.stats, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionHeader('Time'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _WSTile(
+                  label: 'Total',
+                  value: _fmtMins(stats.totalMinutes),
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                _WSTile(
+                  label: 'Today',
+                  value: _fmtMins(stats.todayMinutes),
+                  color: colorScheme.secondary,
+                ),
+                const SizedBox(width: 8),
+                _WSTile(
+                  label: 'Week',
+                  value: _fmtMins(stats.weekMinutes),
+                  color: colorScheme.tertiary,
+                ),
+              ],
+            ),
+            if (stats.stitchesPerHour > 0) ...[
+              const SizedBox(height: 10),
+              Divider(color: colorScheme.outlineVariant),
+              const SizedBox(height: 6),
+              _RateRow(
+                label: 'Stitches / hour',
+                value: stats.stitchesPerHour.toStringAsFixed(1),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+String _fmtMins(int mins) {
+  if (mins <= 0) return '0m';
+  final h = mins ~/ 60;
+  final m = mins.remainder(60);
+  if (h == 0) return '${m}m';
+  if (m == 0) return '${h}h';
+  return '${h}h ${m}m';
+}
 
 String _fmt(int n) {
   final sign = n < 0 ? '-' : '';

@@ -365,12 +365,29 @@ Map<String, int> _countStitches(List<Stitch> stitches) {
 /// cells shared across layers) and raw threadId for non-FullStitch types.
 Map<String, int> _countStitchesComposite(EditorState state) {
   final cache = state.compositeResult?.compositeThreads;
-  if (cache == null || cache.isEmpty) {
-    return _countStitches(state.pattern.stitches);
+  if (cache != null && cache.isNotEmpty) {
+    final counts = <String, int>{};
+    for (final thread in cache.values) {
+      counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
+    }
+    for (final s in state.pattern.stitches) {
+      if (s is FullStitch) continue;
+      counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
+    }
+    return counts;
   }
+  // Fallback: deduplicate FullStitches by cell (first layer claiming a cell
+  // wins, matching the composite renderer behaviour).
   final counts = <String, int>{};
-  for (final thread in cache.values) {
-    counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
+  final seen = <(int, int)>{};
+  for (final layer in state.pattern.layers) {
+    for (final s in layer.stitches) {
+      if (s is FullStitch) {
+        final cell = (s.x, s.y);
+        if (!seen.add(cell)) continue;
+        counts[s.threadId] = (counts[s.threadId] ?? 0) + 1;
+      }
+    }
   }
   for (final s in state.pattern.stitches) {
     if (s is FullStitch) continue;
@@ -753,7 +770,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
 
 // ─── Shared thread list ───────────────────────────────────────────────────────
 
-class _ThreadList extends ConsumerWidget {
+class _ThreadList extends ConsumerStatefulWidget {
   final List<Thread> threads;
   final String? selectedThreadId;
   final bool useDmc;
@@ -776,8 +793,55 @@ class _ThreadList extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (threads.isEmpty) {
+  ConsumerState<_ThreadList> createState() => _ThreadListState();
+}
+
+class _ThreadListState extends ConsumerState<_ThreadList> {
+  final _scrollController = ScrollController();
+  bool _canScrollUp = false;
+  bool _canScrollDown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateScrollState);
+    // Check after first frame when layout is known.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateScrollState());
+  }
+
+  void _updateScrollState() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    final newUp = pos.pixels > 0;
+    final newDown = pos.pixels < pos.maxScrollExtent;
+    if (newUp != _canScrollUp || newDown != _canScrollDown) {
+      setState(() {
+        _canScrollUp = newUp;
+        _canScrollDown = newDown;
+      });
+    }
+  }
+
+  void _scrollBy(double delta) {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      (_scrollController.offset + delta)
+          .clamp(0.0, _scrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_updateScrollState);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.threads.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),
         child: Text('No threads yet.',
@@ -788,6 +852,11 @@ class _ThreadList extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final sortMode = settings.colourSortMode;
     final completedLast = settings.completedColoursLast;
+
+    final threads = widget.threads;
+    final stitchCounts = widget.stitchCounts;
+    final doneCounts = widget.doneCounts;
+    final useDmc = widget.useDmc;
 
     // Pre-compute duplicate symbols across the displayed list.
     final symbolCounts = <String, int>{};
@@ -819,7 +888,7 @@ class _ThreadList extends ConsumerWidget {
     bool isThreadComplete(Thread t) {
       if (doneCounts == null) return false;
       final total = stitchCounts[t.dmcCode] ?? 0;
-      final done = doneCounts![t.dmcCode] ?? 0;
+      final done = doneCounts[t.dmcCode] ?? 0;
       return total > 0 && done >= total;
     }
 
@@ -866,13 +935,20 @@ class _ThreadList extends ConsumerWidget {
 
     return Column(
       children: [
+        // ── Scroll up arrow ──────────────────────────────────────────────
+        if (_canScrollUp)
+          _ScrollArrowButton(
+            icon: Icons.keyboard_arrow_up,
+            onTap: () => _scrollBy(-200),
+          ),
         // ── Thread list ────────────────────────────────────────────────
         Expanded(child: ListView.builder(
+      controller: _scrollController,
       padding: EdgeInsets.zero,
       itemCount: sorted.length,
       itemBuilder: (_, i) {
         final t = sorted[i];
-        final isSelected = t.dmcCode == selectedThreadId;
+        final isSelected = t.dmcCode == widget.selectedThreadId;
         final code = useDmc
             ? t.dmcCode
             : (dmcColorByCode(t.dmcCode)?.anchorCode ?? t.dmcCode);
@@ -954,7 +1030,7 @@ class _ThreadList extends ConsumerWidget {
             ],
           );
         }
-        if (onSwatchTap != null) {
+        if (widget.onSwatchTap != null) {
           swatch = Tooltip(
             message: isPdfBad
                 ? "Symbol '${t.symbol}' won't render in PDF — tap to assign a compatible one"
@@ -969,7 +1045,7 @@ class _ThreadList extends ConsumerWidget {
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => onSwatchTap!(t),
+                onTap: () => widget.onSwatchTap!(t),
                 child: swatch,
               ),
             ),
@@ -977,7 +1053,7 @@ class _ThreadList extends ConsumerWidget {
         }
 
         return InkWell(
-          onTap: () => onTap(t),
+          onTap: () => widget.onTap(t),
           child: Container(
             decoration: isSelected
                 ? BoxDecoration(
@@ -1031,7 +1107,7 @@ class _ThreadList extends ConsumerWidget {
                       const SizedBox(width: 2),
                       Text(
                         doneCounts != null
-                            ? '${doneCounts![t.dmcCode] ?? 0}/$count'
+                            ? '${doneCounts[t.dmcCode] ?? 0}/$count'
                             : '$count',
                         style: TextStyle(
                           fontSize: 10,
@@ -1049,7 +1125,33 @@ class _ThreadList extends ConsumerWidget {
         );
       },
     )),
+        // ── Scroll down arrow ────────────────────────────────────────────
+        if (_canScrollDown)
+          _ScrollArrowButton(
+            icon: Icons.keyboard_arrow_down,
+            onTap: () => _scrollBy(200),
+          ),
       ],
+    );
+  }
+}
+
+class _ScrollArrowButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _ScrollArrowButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 20,
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.85),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 16, color: cs.onSurfaceVariant),
+      ),
     );
   }
 }
@@ -1361,7 +1463,9 @@ class MarkDoneButton extends ConsumerWidget {
             ? null
             : () => showStitchOps(context, state.pattern,
                     onClearProgress: () =>
-                        ref.read(editorProvider.notifier).clearProgress()),
+                        ref.read(editorProvider.notifier).clearProgress(),
+                    onAdjustTime: (date, mins) =>
+                        ref.read(editorProvider.notifier).setTimeForDate(date, mins)),
         child: FilledButton.icon(
           icon: Icon(allDone ? Icons.remove_done : Icons.done_all, size: 16),
           label: Text(

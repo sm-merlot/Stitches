@@ -563,7 +563,9 @@ class EditorScreen extends ConsumerWidget {
                 icon: const Icon(Icons.bar_chart_outlined),
                 onPressed: () => showStitchOps(context, state.pattern,
                     onClearProgress: () =>
-                        ref.read(editorProvider.notifier).clearProgress()),
+                        ref.read(editorProvider.notifier).clearProgress(),
+                    onAdjustTime: (date, mins) =>
+                        ref.read(editorProvider.notifier).setTimeForDate(date, mins)),
               ),
               // Share button: iOS, Android, macOS only
               if (!kIsWeb && !Platform.isWindows)
@@ -629,7 +631,9 @@ class EditorScreen extends ConsumerWidget {
                 icon: const Icon(Icons.bar_chart_outlined),
                 onPressed: () => showStitchOps(context, state.pattern,
                     onClearProgress: () =>
-                        ref.read(editorProvider.notifier).clearProgress()),
+                        ref.read(editorProvider.notifier).clearProgress(),
+                    onAdjustTime: (date, mins) =>
+                        ref.read(editorProvider.notifier).setTimeForDate(date, mins)),
               ),
               IconButton(
                 tooltip: state.pattern.pageConfig.enabled

@@ -1,10 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
+import '../providers/editor/editor_provider.dart';
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
@@ -12,6 +14,7 @@ void showStitchOps(
   BuildContext context,
   CrossStitchPattern pattern, {
   VoidCallback? onClearProgress,
+  void Function(String isoDate, int newMinutes)? onAdjustTime,
 }) {
   final isWide = MediaQuery.of(context).size.shortestSide >= 600;
   if (isWide) {
@@ -28,6 +31,7 @@ void showStitchOps(
           child: StitchOpsScreen(
             pattern: pattern,
             onClearProgress: onClearProgress,
+            onAdjustTime: onAdjustTime,
             isDialog: true,
           ),
         ),
@@ -38,7 +42,9 @@ void showStitchOps(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
         builder: (_) => StitchOpsScreen(
-            pattern: pattern, onClearProgress: onClearProgress),
+            pattern: pattern,
+            onClearProgress: onClearProgress,
+            onAdjustTime: onAdjustTime),
       ),
     );
   }
@@ -86,12 +92,24 @@ class _StitchOpsStats {
   final int currentStreak;
   final int longestStreak;
 
+  // ── Time tracking ─────────────────────────────────────────────────────────
+  final int totalMinutes;
+  final int todayMinutes;
+  final int weekMinutes;
+  final double stitchesPerHour;
+  /// All log entries that have [minutesSpent] > 0, sorted descending by date,
+  /// used to populate the time-history editor.
+  final List<ProgressLogEntry> timeLog;
+
   // ── Per-thread ─────────────────────────────────────────────────────────────
   final List<_ThreadStats> threadStats;
 
   // ── Chart data ─────────────────────────────────────────────────────────────
   /// date-string → stitches added that day (high-watermark deltas, always ≥ 0)
   final Map<String, int> dailyMap;
+
+  /// date-string → minutes spent stitching that day (from progress log).
+  final Map<String, int> timeMap;
 
   /// Last 60 days of daily stitch counts (0 if no activity).
   final List<(DateTime, int)> dailyData;
@@ -121,15 +139,22 @@ class _StitchOpsStats {
     required this.longestStreak,
     required this.threadStats,
     required this.dailyMap,
+    required this.timeMap,
     required this.dailyData,
     required this.cumulativeData,
+    required this.totalMinutes,
+    required this.todayMinutes,
+    required this.weekMinutes,
+    required this.stitchesPerHour,
+    required this.timeLog,
   });
 
   double get overallPct =>
       totalStitches == 0 ? 0 : completedStitches / totalStitches;
 }
 
-_StitchOpsStats _computeStats(CrossStitchPattern pattern) {
+_StitchOpsStats _computeStats(CrossStitchPattern pattern,
+    {Map<String, Thread>? compositeCache}) {
   final progress = pattern.progress;
   final log = [...pattern.progressLog]
     ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
@@ -149,22 +174,41 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
   final totalDone = progress.completedStitches.length;
 
   // ── Per-thread stats ─────────────────────────────────────────────────────
-  // For FullStitches, deduplicate across layers so the counts match the
-  // thread panel (first layer claiming a cell wins, same as composite fallback).
+  // Use the composite cache when available so cell→thread attribution exactly
+  // matches what the sidebar colours panel shows (topmost visible layer wins).
+  // Falls back to a last-layer-wins scan when no cache is present.
   final threadCounts = <String, int>{};
   final threadDoneCounts = <String, int>{};
-  {
-    final seen = <(int, int)>{};
+  if (compositeCache != null && compositeCache.isNotEmpty) {
+    // Each cache entry is "x,y" → Thread (topmost visible layer for that cell).
+    for (final entry in compositeCache.entries) {
+      final parts = entry.key.split(',');
+      if (parts.length != 2) continue;
+      final x = int.tryParse(parts[0]);
+      final y = int.tryParse(parts[1]);
+      if (x == null || y == null) continue;
+      final id = entry.value.dmcCode;
+      threadCounts[id] = (threadCounts[id] ?? 0) + 1;
+      if (progress.completedStitches.contains((x, y))) {
+        threadDoneCounts[id] = (threadDoneCounts[id] ?? 0) + 1;
+      }
+    }
+  } else {
+    // No composite cache: build a cell→threadId map where the last (topmost)
+    // visible layer claiming a cell wins — consistent with the composite renderer.
+    final cellThread = <(int, int), String>{};
     for (final layer in pattern.layers) {
+      if (!layer.visible) continue;
       for (final s in layer.stitches) {
         if (s is! FullStitch) continue;
-        final cell = (s.x, s.y);
-        if (!seen.add(cell)) continue;
-        threadCounts[s.threadId] = (threadCounts[s.threadId] ?? 0) + 1;
-        if (progress.completedStitches.contains(cell)) {
-          threadDoneCounts[s.threadId] =
-              (threadDoneCounts[s.threadId] ?? 0) + 1;
-        }
+        cellThread[(s.x, s.y)] = s.threadId; // later layer overwrites → top wins
+      }
+    }
+    for (final entry in cellThread.entries) {
+      final id = entry.value;
+      threadCounts[id] = (threadCounts[id] ?? 0) + 1;
+      if (progress.completedStitches.contains(entry.key)) {
+        threadDoneCounts[id] = (threadDoneCounts[id] ?? 0) + 1;
       }
     }
   }
@@ -328,13 +372,58 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     longestStreak: longestStreak,
     threadStats: threadStats,
     dailyMap: dailyMap,
+    timeMap: {for (final e in log) e.isoDate: e.minutesSpent},
     dailyData: dailyData,
     cumulativeData: cumulativeData,
+    totalMinutes: _computeTotalMinutes(log),
+    todayMinutes: _computeMinutesInRange(log, today, const Duration(days: 1)),
+    weekMinutes: _computeMinutesInRange(log, today, const Duration(days: 7)),
+    stitchesPerHour: _computeStitchesPerHour(log, totalDone),
+    // All days with any stitching activity, sorted newest-first.
+    // Includes days where minutesSpent == 0 so the user can fill them in.
+    timeLog: [...log]
+      ..sort((a, b) => b.isoDate.compareTo(a.isoDate)),
   );
 }
 
-(int, int)? _stitchXY(Stitch s) => switch (s) {
-      FullStitch(:final x, :final y) => (x, y),
+// ─── Time helpers ──────────────────────────────────────────────────────────────
+
+int _computeTotalMinutes(List<ProgressLogEntry> log) =>
+    log.fold(0, (sum, e) => sum + e.minutesSpent);
+
+/// Sum of [minutesSpent] for entries within the last [window] before [now].
+int _computeMinutesInRange(
+    List<ProgressLogEntry> log, DateTime now, Duration window) {
+  final cutoff = now.subtract(window);
+  final cutoffIso =
+      '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
+  return log
+      .where((e) => e.isoDate.compareTo(cutoffIso) > 0)
+      .fold(0, (sum, e) => sum + e.minutesSpent);
+}
+
+/// Overall stitches-per-hour based on total recorded time.
+double _computeStitchesPerHour(List<ProgressLogEntry> log, int totalDone) {
+  final total = _computeTotalMinutes(log);
+  if (total == 0) return 0;
+  return totalDone / (total / 60.0);
+}
+
+/// Format minutes as "Xh Ym", "Xh", or "Ym".
+String _fmtMins(int mins) {
+  if (mins <= 0) return '0m';
+  final h = mins ~/ 60;
+  final m = mins.remainder(60);
+  if (h == 0) return '${m}m';
+  if (m == 0) return '${h}h';
+  return '${h}h ${m}m';
+}
+
+/// Convert a [DateTime] to an ISO-8601 date string, e.g. `'2024-01-15'`.
+String _isoFromDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+(int, int)? _stitchXY(Stitch s) => switch (s) {      FullStitch(:final x, :final y) => (x, y),
       HalfStitch(:final x, :final y) => (x, y),
       HalfCrossStitch(:final x, :final y) => (x, y),
       QuarterStitch(:final x, :final y) => (x, y),
@@ -344,9 +433,14 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-class StitchOpsScreen extends StatelessWidget {
+class StitchOpsScreen extends ConsumerWidget {
+  /// Seed pattern — used as fallback if [editorProvider] has no file open
+  /// (e.g. when the screen is shown standalone without an active editor).
   final CrossStitchPattern pattern;
   final VoidCallback? onClearProgress;
+  /// Called when the user saves a manual time adjustment.
+  /// Arguments are the ISO date string and the new total minutes for that day.
+  final void Function(String isoDate, int newMinutes)? onAdjustTime;
   /// When true the screen renders without a Scaffold so the dialog can
   /// shrink-wrap to its content.  Set automatically by [showStitchOps].
   final bool isDialog;
@@ -355,12 +449,19 @@ class StitchOpsScreen extends StatelessWidget {
     super.key,
     required this.pattern,
     this.onClearProgress,
+    this.onAdjustTime,
     this.isDialog = false,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final stats = _computeStats(pattern);
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the editor so any mutation (time adjust, clear progress, etc.)
+    // immediately re-renders the stats without needing to close and reopen.
+    final editorState = ref.watch(editorProvider);
+    final livePattern =
+        editorState.isFileOpen ? editorState.pattern : pattern;
+    final compositeCache = editorState.compositeResult?.compositeThreads;
+    final stats = _computeStats(livePattern, compositeCache: compositeCache);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -404,21 +505,32 @@ class StitchOpsScreen extends StatelessWidget {
                 _OverviewSection(stats: stats, colorScheme: colorScheme);
             final velocityCard =
                 _RateSection(stats: stats, colorScheme: colorScheme);
+            final timeCard = stats.timeLog.isNotEmpty
+                ? _TimeSection(
+                    stats: stats,
+                    colorScheme: colorScheme,
+                    onAdjustTime: onAdjustTime,
+                    timeLog: stats.timeLog)
+                : null;
             final dailyCard = hasDaily
                 ? StitchOpsDailyChart(
-                    dailyData: stats.dailyData, colorScheme: colorScheme)
+                    dailyData: stats.dailyData,
+                    timeMap: stats.timeMap,
+                    colorScheme: colorScheme)
                 : null;
             final cumulativeCard = hasCumulative
                 ? StitchOpsCumulativeChart(
                     cumulativeData: stats.cumulativeData,
                     total: stats.totalStitches,
                     estimatedCompletion: stats.estimatedCompletion,
+                    timeMap: stats.timeMap,
                     colorScheme: colorScheme,
                   )
                 : null;
             final heatmapCard = hasHeatmap
                 ? StitchOpsHeatmap(
                     dailyMap: stats.dailyMap,
+                    timeMap: stats.timeMap,
                     today: DateTime.now(),
                     colorScheme: colorScheme,
                   )
@@ -446,6 +558,8 @@ class StitchOpsScreen extends StatelessWidget {
                   velocityCard,
                 ],
                 gap,
+
+                if (timeCard != null) ...[timeCard, gap],
 
                 if (isWide) ...[
                   if (dailyCard != null && cumulativeCard != null)
@@ -823,12 +937,302 @@ class _RateRow extends StatelessWidget {
   }
 }
 
+// ─── Time tracking section ────────────────────────────────────────────────────
+
+class _TimeSection extends StatelessWidget {
+  final _StitchOpsStats stats;
+  final ColorScheme colorScheme;
+  final List<ProgressLogEntry> timeLog;
+  final void Function(String isoDate, int newMinutes)? onAdjustTime;
+  const _TimeSection({
+    required this.stats,
+    required this.colorScheme,
+    required this.timeLog,
+    this.onAdjustTime,
+  });
+
+  Future<void> _showHistoryDialog(BuildContext context) async {
+    final results = await showDialog<Map<String, int>>(
+      context: context,
+      builder: (ctx) => _TimeHistoryDialog(
+        timeLog: timeLog,
+        colorScheme: colorScheme,
+      ),
+    );
+    if (results == null || !context.mounted) return;
+    for (final entry in results.entries) {
+      onAdjustTime!(entry.key, entry.value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canEdit = onAdjustTime != null;
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: _SectionHeader('Time')),
+              if (canEdit)
+                Tooltip(
+                  message: 'Edit time history',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(4),
+                    onTap: () => _showHistoryDialog(context),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        size: 14,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _StatTile(
+                label: 'Total',
+                value: _fmtMins(stats.totalMinutes),
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              _StatTile(
+                label: 'Today',
+                value: _fmtMins(stats.todayMinutes),
+                color: colorScheme.secondary,
+              ),
+              const SizedBox(width: 8),
+              _StatTile(
+                label: 'Week',
+                value: _fmtMins(stats.weekMinutes),
+                color: colorScheme.tertiary,
+              ),
+            ],
+          ),
+          if (stats.stitchesPerHour > 0) ...[
+            const SizedBox(height: 10),
+            Divider(color: colorScheme.outlineVariant),
+            const SizedBox(height: 6),
+            _RateRow(
+              label: 'Stitches / hour',
+              value: stats.stitchesPerHour.toStringAsFixed(1),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Time history editor dialog ───────────────────────────────────────────────
+//
+// Shows every day that has logged time (sorted newest first) plus today even if
+// it has 0 minutes, so the user can always add or correct any entry.
+// Returns a Map<isoDate, newMinutes> of only the entries that changed.
+
+class _TimeHistoryDialog extends StatefulWidget {
+  final List<ProgressLogEntry> timeLog; // sorted desc by date
+  final ColorScheme colorScheme;
+  const _TimeHistoryDialog({
+    required this.timeLog,
+    required this.colorScheme,
+  });
+
+  @override
+  State<_TimeHistoryDialog> createState() => _TimeHistoryDialogState();
+}
+
+class _TimeHistoryDialogState extends State<_TimeHistoryDialog> {
+  // isoDate → (hoursController, minutesController, originalMinutes)
+  late final Map<String, (TextEditingController, TextEditingController, int)>
+      _rows;
+  late final List<String> _dates; // display order (desc)
+
+  @override
+  void initState() {
+    super.initState();
+    final today = todayIsoDate();
+    // Build ordered date list: today first, then all other log entries
+    // (already sorted desc). Today is pinned at top even if not in the log.
+    final dateSet = <String>{today};
+    _dates = [today];
+    for (final e in widget.timeLog) {
+      if (dateSet.add(e.isoDate)) _dates.add(e.isoDate);
+    }
+
+    // Build a lookup of minutesSpent by date.
+    final byDate = {for (final e in widget.timeLog) e.isoDate: e.minutesSpent};
+
+    _rows = {};
+    for (final d in _dates) {
+      final mins = byDate[d] ?? 0;
+      _rows[d] = (
+        TextEditingController(text: (mins ~/ 60).toString()),
+        TextEditingController(text: mins.remainder(60).toString()),
+        mins,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final (h, m, _) in _rows.values) {
+      h.dispose();
+      m.dispose();
+    }
+    super.dispose();
+  }
+
+  int _minutesFor(String date) {
+    final (hCtrl, mCtrl, _) = _rows[date]!;
+    final h = int.tryParse(hCtrl.text) ?? 0;
+    final m = int.tryParse(mCtrl.text) ?? 0;
+    return (h.clamp(0, 99) * 60) + m.clamp(0, 59);
+  }
+
+  void _save() {
+    final changes = <String, int>{};
+    for (final date in _dates) {
+      final newMins = _minutesFor(date);
+      final (_, _, original) = _rows[date]!;
+      if (newMins != original) changes[date] = newMins;
+    }
+    Navigator.of(context).pop(changes);
+  }
+
+  String _friendlyDate(String iso) {
+    final today = todayIsoDate();
+    if (iso == today) return 'Today';
+    final dt = parseIsoDate(iso);
+    final now = DateTime.now();
+    final diff = DateTime(now.year, now.month, now.day)
+        .difference(DateTime(dt.year, dt.month, dt.day))
+        .inDays;
+    if (diff == 1) return 'Yesterday';
+    return '${dt.day} ${_monthFull(dt.month)} ${dt.year != now.year ? '${dt.year}' : ''}'.trim();
+  }
+
+  static const _months = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  static String _monthFull(int m) => _months[m];
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit time history'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Correct the total stitching time for any day.\nChanges overwrite the recorded values.',
+              style: TextStyle(
+                fontSize: 12,
+                color: widget.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 380),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: _dates.map((date) {
+                    final (hCtrl, mCtrl, _) = _rows[date]!;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _friendlyDate(date),
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 52,
+                            child: TextField(
+                              controller: hCtrl,
+                              keyboardType: TextInputType.number,
+                              maxLength: 2,
+                              textAlign: TextAlign.center,
+                              decoration: const InputDecoration(
+                                labelText: 'h',
+                                counterText: '',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    vertical: 8, horizontal: 6),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          SizedBox(
+                            width: 52,
+                            child: TextField(
+                              controller: mCtrl,
+                              keyboardType: TextInputType.number,
+                              maxLength: 2,
+                              textAlign: TextAlign.center,
+                              decoration: const InputDecoration(
+                                labelText: 'm',
+                                counterText: '',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    vertical: 8, horizontal: 6),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
 // ─── Daily bar chart ──────────────────────────────────────────────────────────
 
 class StitchOpsDailyChart extends StatefulWidget {
   final List<(DateTime, int)> dailyData;
+  final Map<String, int> timeMap;
   final ColorScheme colorScheme;
-  const StitchOpsDailyChart({super.key, required this.dailyData, required this.colorScheme});
+  const StitchOpsDailyChart({
+    super.key,
+    required this.dailyData,
+    required this.timeMap,
+    required this.colorScheme,
+  });
 
   @override
   State<StitchOpsDailyChart> createState() => _StitchOpsDailyChartState();
@@ -889,6 +1293,13 @@ class _StitchOpsDailyChartState extends State<StitchOpsDailyChart> {
                         rows: [
                           (null, _shortDate(widget.dailyData[_hoverIndex!].$1)),
                           ('Stitches', _fmt(widget.dailyData[_hoverIndex!].$2)),
+                          ...() {
+                            final iso = _isoFromDate(widget.dailyData[_hoverIndex!].$1);
+                            final mins = widget.timeMap[iso] ?? 0;
+                            return mins > 0
+                                ? [('Time', _fmtMins(mins))]
+                                : <(String?, String)>[];
+                          }(),
                         ],
                       ),
                   ],
@@ -978,18 +1389,22 @@ class _BarChartPainter extends CustomPainter {
 
     final tp = TextPainter(textDirection: TextDirection.ltr);
     String? prevMonth;
+    double lastLabelX = -100.0;
     for (int i = 0; i < data.length; i++) {
       final (date, _) = data[i];
       final key =
           '${date.year}-${date.month.toString().padLeft(2, '0')}';
       if (key != prevMonth) {
-        prevMonth = key;
         tp.text = TextSpan(
             text: _monthAbbr(date.month),
             style: TextStyle(color: labelColor, fontSize: 9));
         tp.layout();
-        tp.paint(canvas,
-            Offset(i * barWidth, topPad + chartH + 2));
+        final x = i * barWidth;
+        if (x - lastLabelX >= tp.width + 4) {
+          prevMonth = key;
+          tp.paint(canvas, Offset(x, topPad + chartH + 2));
+          lastLabelX = x;
+        }
       }
     }
   }
@@ -1005,12 +1420,14 @@ class StitchOpsCumulativeChart extends StatefulWidget {
   final List<(DateTime, int)> cumulativeData;
   final int total;
   final DateTime? estimatedCompletion;
+  final Map<String, int> timeMap;
   final ColorScheme colorScheme;
   const StitchOpsCumulativeChart({
     super.key,
     required this.cumulativeData,
     required this.total,
     required this.estimatedCompletion,
+    required this.timeMap,
     required this.colorScheme,
   });
 
@@ -1110,6 +1527,17 @@ class _StitchOpsCumulativeChartState extends State<StitchOpsCumulativeChart> {
                               '%',
                               '${(widget.cumulativeData[_hoverIndex!].$2 / widget.total * 100).toStringAsFixed(1)}%'
                             ),
+                          ...() {
+                            // Cumulative minutes up to and including hovered date.
+                            final hDate = widget.cumulativeData[_hoverIndex!].$1;
+                            final hIso = _isoFromDate(hDate);
+                            final cumMins = widget.timeMap.entries
+                                .where((e) => e.key.compareTo(hIso) <= 0)
+                                .fold(0, (s, e) => s + e.value);
+                            return cumMins > 0
+                                ? [('Time', _fmtMins(cumMins))]
+                                : <(String?, String)>[];
+                          }(),
                         ],
                       ),
                     ],
@@ -1314,81 +1742,181 @@ class _LineChartPainter extends CustomPainter {
 
 class StitchOpsHeatmap extends StatefulWidget {
   final Map<String, int> dailyMap;
+  final Map<String, int> timeMap;
   final DateTime today;
   final ColorScheme colorScheme;
-  const StitchOpsHeatmap(
-      {super.key,
-      required this.dailyMap,
-      required this.today,
-      required this.colorScheme});
+  const StitchOpsHeatmap({
+    super.key,
+    required this.dailyMap,
+    required this.timeMap,
+    required this.today,
+    required this.colorScheme,
+  });
 
   @override
   State<StitchOpsHeatmap> createState() => _StitchOpsHeatmapState();
 }
 
 class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
-  (int, int)? _hoverCell; // (week, dayOfWeek)
+  (int, int)? _hoverCell; // (week col, dayOfWeek row)
   Offset? _hoverPos;
-  static const double _chartH = 96.0;
-  static const int _weeks = 16;
-  static const int _days = 7;
+  int _weekOffset = 0; // weeks scrolled back from "now"; steps of 4
 
-  (int, int)? _hitTest(Offset pos, double chartWidth) {
-    const dayLabelW = 16.0;
-    const monthLabelH = 14.0;
-    const gap = 2.0;
-    final availW = chartWidth - dayLabelW;
-    const availH = _chartH - monthLabelH;
-    final cellW = (availW / _weeks) - gap;
-    const cellH = (availH / _days) - gap;
-    final cell = min(cellW, cellH).clamp(4.0, 20.0);
-    final col = ((pos.dx - dayLabelW) / (cell + gap)).floor();
-    final row = ((pos.dy - monthLabelH) / (cell + gap)).floor();
-    if (col < 0 || col >= _weeks || row < 0 || row >= _days) return null;
+  static const double _chartH = 96.0;
+  static const double _monthLabelH = 14.0;
+  static const double _dayLabelW = 16.0;
+  static const double _gap = 2.0;
+  static const int _days = 7;
+  static const int _step = 4; // weeks per arrow press
+
+  /// Square cell size derived from the fixed chart height.
+  static double get _cellSize {
+    final availH = _chartH - _monthLabelH;
+    return availH / _days - _gap; // ≈ 9.7 px
+  }
+
+  /// Column pitch (cell + gap), same in both axes → square cells.
+  static double get _colW => _cellSize + _gap;
+
+  /// How many full week columns fit in [availableWidth].
+  static int _weeksForWidth(double availableWidth) =>
+      ((availableWidth - _dayLabelW) / _colW).floor().clamp(4, 104);
+
+  // Earliest iso date that has any data, used to cap the left arrow.
+  String? get _earliestIso {
+    final keys = [
+      ...widget.dailyMap.keys,
+      ...widget.timeMap.keys,
+    ];
+    if (keys.isEmpty) return null;
+    return (keys..sort()).first;
+  }
+
+  DateTime _gridStart(DateTime thisWeekMonday, int weeksVisible) =>
+      thisWeekMonday.subtract(
+          Duration(days: (weeksVisible - 1 + _weekOffset) * 7));
+
+  bool _canGoBack(int weeksVisible) {
+    final earliest = _earliestIso;
+    if (earliest == null) return false;
+    final earliestDate = parseIsoDate(earliest);
+    final today = widget.today;
+    final daysFromMonday = today.weekday - 1;
+    final thisWeekMonday = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: daysFromMonday));
+    // Allow going back only if the earliest data date falls before the current
+    // window's start — i.e. there is genuine history not yet in view.
+    return earliestDate.isBefore(_gridStart(thisWeekMonday, weeksVisible));
+  }
+
+  (int, int)? _hitTest(Offset pos, double chartWidth, int weeksVisible) {
+    final availW = chartWidth - _dayLabelW;
+    final colW = availW / weeksVisible;
+    final rowH = (_chartH - _monthLabelH) / _days;
+    final col = ((pos.dx - _dayLabelW) / colW).floor();
+    final row = ((pos.dy - _monthLabelH) / rowH).floor();
+    if (col < 0 || col >= weeksVisible || row < 0 || row >= _days) return null;
     return (col, row);
   }
+
+  String _windowLabel(DateTime gridStart, int weeksVisible) {
+    final end = gridStart.add(Duration(days: weeksVisible * 7 - 1));
+    final startLabel =
+        '${_monthAbbr(gridStart.month)} ${gridStart.year != end.year ? gridStart.year.toString() : ''}';
+    final endLabel = '${_monthAbbr(end.month)} ${end.year}';
+    final start = startLabel.trim();
+    return start == endLabel.split(' ').first ? endLabel : '$start – $endLabel';
+  }
+
+  static const _kMonths = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  static String _monthAbbr(int m) => _kMonths[m];
 
   @override
   Widget build(BuildContext context) {
     final today = widget.today;
-    // Grid starts on Monday of the week 15 full weeks before the current week.
     final daysFromMonday = today.weekday - 1;
-    final thisWeekMonday =
-        DateTime(today.year, today.month, today.day).subtract(
-      Duration(days: daysFromMonday),
-    );
-    final gridStart = thisWeekMonday.subtract(const Duration(days: 15 * 7));
+    final thisWeekMonday = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: daysFromMonday));
     final todayMidnight = DateTime(today.year, today.month, today.day);
 
-    // Tooltip content for hovered cell.
-    List<(String?, String)>? tooltipRows;
-    if (_hoverCell != null) {
-      final (col, row) = _hoverCell!;
-      final date = gridStart.add(Duration(days: col * 7 + row));
-      if (!date.isAfter(todayMidnight)) {
-        final iso =
-            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-        final count = widget.dailyMap[iso] ?? 0;
-        tooltipRows = [
-          (null, _shortDate(date)),
-          ('Stitches', count == 0 ? 'No activity' : _fmt(count)),
-        ];
-      }
-    }
-
     return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionHeader('Activity (16 weeks)'),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: _chartH,
-            child: LayoutBuilder(builder: (context, constraints) {
-              final chartW = constraints.maxWidth;
-              return MouseRegion(
+      child: LayoutBuilder(builder: (context, constraints) {
+        final weeksVisible = _weeksForWidth(constraints.maxWidth);
+        final gridStart = _gridStart(thisWeekMonday, weeksVisible);
+
+        // Tooltip content for hovered cell.
+        List<(String?, String)>? tooltipRows;
+        if (_hoverCell != null) {
+          final (col, row) = _hoverCell!;
+          final date = gridStart.add(Duration(days: col * 7 + row));
+          if (!date.isAfter(todayMidnight)) {
+            final iso =
+                '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+            final count = widget.dailyMap[iso] ?? 0;
+            final mins = widget.timeMap[iso] ?? 0;
+            tooltipRows = [
+              (null, _shortDate(date)),
+              ('Stitches', count == 0 ? 'No activity' : _fmt(count)),
+              if (mins > 0) ('Time', _fmtMins(mins)),
+            ];
+          }
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row with navigation arrows.
+            Row(
+              children: [
+                Expanded(
+                    child: _SectionHeader(_windowLabel(gridStart, weeksVisible))),
+                SizedBox(
+                  width: 28,
+                  height: 20,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 16,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Earlier',
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: _canGoBack(weeksVisible)
+                        ? () => setState(() {
+                              _weekOffset += _step;
+                              _hoverCell = null;
+                            })
+                        : null,
+                  ),
+                ),
+                SizedBox(
+                  width: 28,
+                  height: 20,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 16,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Later',
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: _weekOffset > 0
+                        ? () => setState(() {
+                              _weekOffset =
+                                  (_weekOffset - _step).clamp(0, _weekOffset);
+                              _hoverCell = null;
+                            })
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: _chartH,
+              child: MouseRegion(
                 onHover: (e) {
-                  final cell = _hitTest(e.localPosition, chartW);
+                  final cell =
+                      _hitTest(e.localPosition, constraints.maxWidth, weeksVisible);
                   setState(() {
                     _hoverCell = cell;
                     _hoverPos = e.localPosition;
@@ -1406,6 +1934,7 @@ class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
                         dailyMap: widget.dailyMap,
                         gridStart: gridStart,
                         today: todayMidnight,
+                        weeksVisible: weeksVisible,
                         activeColor: widget.colorScheme.primary,
                         emptyColor: widget.colorScheme.surfaceContainerHighest,
                         labelColor: widget.colorScheme.onSurfaceVariant,
@@ -1416,49 +1945,52 @@ class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
                     if (tooltipRows != null && _hoverPos != null)
                       _ChartTooltip(
                         hoverPos: _hoverPos!,
-                        chartWidth: chartW,
+                        chartWidth: constraints.maxWidth,
                         chartHeight: _chartH,
                         colorScheme: widget.colorScheme,
                         rows: tooltipRows,
                       ),
                   ],
                 ),
-              );
-            }),
-          ),
-          const SizedBox(height: 6),
-          // Legend
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Text('Less',
-                  style: TextStyle(
-                      fontSize: 9, color: widget.colorScheme.onSurfaceVariant)),
-              const SizedBox(width: 4),
-              ...List.generate(5, (i) {
-                final alpha = 0.1 + i * 0.22;
-                return Padding(
-                  padding: const EdgeInsets.only(left: 2),
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: i == 0
-                          ? widget.colorScheme.surfaceContainerHighest
-                          : widget.colorScheme.primary.withValues(alpha: alpha),
-                      borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Legend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text('Less',
+                    style: TextStyle(
+                        fontSize: 9,
+                        color: widget.colorScheme.onSurfaceVariant)),
+                const SizedBox(width: 4),
+                ...List.generate(5, (i) {
+                  final alpha = 0.1 + i * 0.22;
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: i == 0
+                            ? widget.colorScheme.surfaceContainerHighest
+                            : widget.colorScheme.primary
+                                .withValues(alpha: alpha),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                );
-              }),
-              const SizedBox(width: 4),
-              Text('More',
-                  style: TextStyle(
-                      fontSize: 9, color: widget.colorScheme.onSurfaceVariant)),
-            ],
-          ),
-        ],
-      ),
+                  );
+                }),
+                const SizedBox(width: 4),
+                Text('More',
+                    style: TextStyle(
+                        fontSize: 9,
+                        color: widget.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ],
+        );
+      }),
     );
   }
 }
@@ -1467,18 +1999,19 @@ class _HeatmapPainter extends CustomPainter {
   final Map<String, int> dailyMap;
   final DateTime gridStart;
   final DateTime today;
+  final int weeksVisible;
   final Color activeColor;
   final Color emptyColor;
   final Color labelColor;
   final (int, int)? hoverCell;
 
-  static const int _weeks = 16;
   static const int _days = 7;
 
   const _HeatmapPainter({
     required this.dailyMap,
     required this.gridStart,
     required this.today,
+    required this.weeksVisible,
     required this.activeColor,
     required this.emptyColor,
     required this.labelColor,
@@ -1491,19 +2024,18 @@ class _HeatmapPainter extends CustomPainter {
     const monthLabelH = 14.0;
     const gap = 2.0;
 
-    final availW = size.width - dayLabelW;
     final availH = size.height - monthLabelH;
-    final cellW = (availW / _weeks) - gap;
-    final cellH = (availH / _days) - gap;
-    final cell = min(cellW, cellH).clamp(4.0, 20.0);
+    // Square cells: derive size from the fixed height so cells are always square
+    // regardless of the chart width. Extra width shows more weeks of history.
+    final cellSize = (availH / _days - gap).clamp(4.0, double.infinity);
+    final colW = cellSize + gap; // column pitch = row pitch → square
 
-    // Find max activity for alpha scaling.
+    // Find max activity across ALL recorded history so the colour scale stays
+    // consistent when scrolling — a busy day always looks the same shade
+    // regardless of which window is visible.
     int maxCount = 1;
-    for (int w = 0; w < _weeks; w++) {
-      for (int d = 0; d < _days; d++) {
-        final count = dailyMap[_iso(gridStart.add(Duration(days: w * 7 + d)))] ?? 0;
-        if (count > maxCount) maxCount = count;
-      }
+    for (final count in dailyMap.values) {
+      if (count > maxCount) maxCount = count;
     }
 
     final tp = TextPainter(textDirection: TextDirection.ltr);
@@ -1521,20 +2053,21 @@ class _HeatmapPainter extends CustomPainter {
           Offset(
               0,
               monthLabelH +
-                  d * (cell + gap) +
-                  (cell - 8) / 2));
+                  d * colW + // colW == rowPitch → square
+                  (cellSize - 8) / 2));
     }
 
     // Cells + month labels.
     String? prevMonthKey;
-    for (int w = 0; w < _weeks; w++) {
+    double lastLabelX = -999;
+    for (int w = 0; w < weeksVisible; w++) {
       for (int d = 0; d < _days; d++) {
         final date = gridStart.add(Duration(days: w * 7 + d));
         final isFuture = date.isAfter(today);
         final count = isFuture ? 0 : (dailyMap[_iso(date)] ?? 0);
 
-        final x = dayLabelW + w * (cell + gap);
-        final y = monthLabelH + d * (cell + gap);
+        final x = dayLabelW + w * colW;
+        final y = monthLabelH + d * colW;
 
         final Color cellColor;
         if (isFuture) {
@@ -1548,23 +2081,27 @@ class _HeatmapPainter extends CustomPainter {
 
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(x, y, cell, cell),
+            Rect.fromLTWH(x, y, cellSize, cellSize),
             const Radius.circular(2),
           ),
           Paint()..color = cellColor,
         );
 
-        // Month label at the first visible day of each new month (only row 0).
+        // Month label: only at row 0, new month, and far enough from previous.
         if (d == 0) {
           final monthKey =
               '${date.year}-${date.month.toString().padLeft(2, '0')}';
           if (monthKey != prevMonthKey && !isFuture) {
-            prevMonthKey = monthKey;
             tp.text = TextSpan(
                 text: _monthAbbr(date.month),
                 style: TextStyle(color: labelColor, fontSize: 8));
             tp.layout();
-            tp.paint(canvas, Offset(x, 0));
+            // Only draw if there's enough space since the last label.
+            if (x - lastLabelX >= tp.width + 4) {
+              prevMonthKey = monthKey;
+              tp.paint(canvas, Offset(x, 0));
+              lastLabelX = x;
+            }
           }
         }
       }
@@ -1573,13 +2110,13 @@ class _HeatmapPainter extends CustomPainter {
     // Hover highlight border.
     if (hoverCell != null) {
       final (hw, hd) = hoverCell!;
-      final x = dayLabelW + hw * (cell + gap);
-      final y = monthLabelH + hd * (cell + gap);
+      final x = dayLabelW + hw * colW;
+      final y = monthLabelH + hd * colW;
       final date = gridStart.add(Duration(days: hw * 7 + hd));
       if (!date.isAfter(today)) {
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(x, y, cell, cell),
+            Rect.fromLTWH(x, y, cellSize, cellSize),
             const Radius.circular(2),
           ),
           Paint()
@@ -1594,9 +2131,18 @@ class _HeatmapPainter extends CustomPainter {
   String _iso(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  String _monthAbbr(int m) => const [
+        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ][m];
+
   @override
   bool shouldRepaint(_HeatmapPainter old) =>
-      old.dailyMap != dailyMap || old.today != today || old.hoverCell != hoverCell;
+      old.dailyMap != dailyMap ||
+      old.today != today ||
+      old.weeksVisible != weeksVisible ||
+      old.gridStart != gridStart ||
+      old.hoverCell != hoverCell;
 }
 
 // ─── Chart tooltip overlay ────────────────────────────────────────────────────
@@ -1629,7 +2175,10 @@ class _ChartTooltip extends StatelessWidget {
     // Flip horizontally if near right edge.
     if (left + tooltipW > chartWidth) left = hoverPos.dx - tooltipW - xOff;
     left = left.clamp(0.0, max(0.0, chartWidth - tooltipW));
-    top = top.clamp(0.0, chartHeight - 10.0);
+    // Estimate tooltip height so it never overflows below the chart and covers
+    // sibling widgets (e.g. the heatmap legend row).
+    final estimatedH = rows.length * 18.0 + 16.0;
+    top = top.clamp(0.0, max(0.0, chartHeight - estimatedH));
 
     return Positioned(
       left: left,
@@ -1696,25 +2245,121 @@ class _ChartTooltip extends StatelessWidget {
 
 // ─── Thread breakdown section ─────────────────────────────────────────────────
 
-class _ThreadBreakdownSection extends StatelessWidget {
+class _ThreadBreakdownSection extends StatefulWidget {
   final _StitchOpsStats stats;
   final ColorScheme colorScheme;
   const _ThreadBreakdownSection(
       {required this.stats, required this.colorScheme});
 
   @override
+  State<_ThreadBreakdownSection> createState() =>
+      _ThreadBreakdownSectionState();
+}
+
+class _ThreadBreakdownSectionState extends State<_ThreadBreakdownSection> {
+  final _scrollController = ScrollController();
+  bool _canScrollUp = false;
+  bool _canScrollDown = false;
+
+  // Show ~6 rows before scrolling (each row ≈ 32 px).
+  static const double _maxListH = 192.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateScroll());
+  }
+
+  void _updateScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    final up = pos.pixels > 0;
+    final down = pos.pixels < pos.maxScrollExtent;
+    if (up != _canScrollUp || down != _canScrollDown) {
+      setState(() {
+        _canScrollUp = up;
+        _canScrollDown = down;
+      });
+    }
+  }
+
+  void _scrollBy(double delta) {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      (_scrollController.offset + delta)
+          .clamp(0.0, _scrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_updateScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final rows = widget.stats.threadStats;
+    final cs = widget.colorScheme;
+
+    // Only constrain height when there are enough rows to overflow.
+    const rowH = 32.0;
+    final contentH = rows.length * rowH;
+    final listH = contentH > _maxListH ? _maxListH : contentH;
+
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionHeader('Threads'),
           const SizedBox(height: 8),
-          ...stats.threadStats.map((ts) => _ThreadRow(
-                ts: ts,
-                colorScheme: colorScheme,
-              )),
+          if (_canScrollUp)
+            _StitchOpsScrollArrow(
+                up: true, onTap: () => _scrollBy(-rowH * 3)),
+          SizedBox(
+            height: listH,
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: EdgeInsets.zero,
+              itemCount: rows.length,
+              itemBuilder: (_, i) =>
+                  _ThreadRow(ts: rows[i], colorScheme: cs),
+            ),
+          ),
+          if (_canScrollDown)
+            _StitchOpsScrollArrow(
+                up: false, onTap: () => _scrollBy(rowH * 3)),
         ],
+      ),
+    );
+  }
+}
+
+/// Compact up/down scroll arrow used inside StitchOps cards.
+class _StitchOpsScrollArrow extends StatelessWidget {
+  final bool up;
+  final VoidCallback onTap;
+  const _StitchOpsScrollArrow({required this.up, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 18,
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
+        alignment: Alignment.center,
+        child: Icon(
+          up ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+          size: 16,
+          color: cs.onSurfaceVariant,
+        ),
       ),
     );
   }

@@ -1416,9 +1416,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 icon: const Icon(Icons.bar_chart_outlined),
                 onPressed: () => showStitchOps(context, editorState.pattern,
                     onClearProgress: () =>
-                        ref.read(editorProvider.notifier).clearProgress()),
-              ),
-              // Share: iOS, Android, macOS only
+                        ref.read(editorProvider.notifier).clearProgress(),
+                    onAdjustTime: (date, mins) =>
+                        ref.read(editorProvider.notifier).setTimeForDate(date, mins)),
+               ),
+               // Share: iOS, Android, macOS only
               if (!kIsWeb && !Platform.isWindows)
                 IconButton(
                   tooltip: 'Share',
@@ -1480,7 +1482,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 icon: const Icon(Icons.bar_chart_outlined),
                 onPressed: () => showStitchOps(context, editorState.pattern,
                     onClearProgress: () =>
-                        ref.read(editorProvider.notifier).clearProgress()),
+                        ref.read(editorProvider.notifier).clearProgress(),
+                    onAdjustTime: (date, mins) =>
+                        ref.read(editorProvider.notifier).setTimeForDate(date, mins)),
               ),
               IconButton(
                 tooltip: editorState.pattern.pageConfig.enabled
