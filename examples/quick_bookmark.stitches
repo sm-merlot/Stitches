@@ -171,9 +171,9 @@ pattern:
         - {type: full, x: 17, y: 7, thread: '321'}
 stitching:
   progressLog:
-    - {date: '2026-04-13', stitches: 7}
-    - {date: '2026-04-14', stitches: 14}
-    - {date: '2026-04-15', stitches: 18}
+    - {date: '2026-04-13', stitches: 7, minutes: 15}
+    - {date: '2026-04-14', stitches: 14, minutes: 15}
+    - {date: '2026-04-15', stitches: 18, minutes: 5}
   progress:
     completedStitches:
       - 0,0

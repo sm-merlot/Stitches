@@ -1023,52 +1023,52 @@ pattern:
         - {type: full, x: 34, y: 27, thread: 'White'}
 stitching:
   progressLog:
-    - {date: '2026-02-01', stitches: 20}
-    - {date: '2026-02-02', stitches: 38}
-    - {date: '2026-02-03', stitches: 51}
-    - {date: '2026-02-06', stitches: 64}
-    - {date: '2026-02-07', stitches: 74}
-    - {date: '2026-02-09', stitches: 87}
-    - {date: '2026-02-13', stitches: 101}
-    - {date: '2026-02-14', stitches: 114}
-    - {date: '2026-02-15', stitches: 133}
-    - {date: '2026-02-16', stitches: 146}
-    - {date: '2026-02-17', stitches: 162}
-    - {date: '2026-02-20', stitches: 178}
-    - {date: '2026-02-21', stitches: 188}
-    - {date: '2026-02-22', stitches: 208}
-    - {date: '2026-02-24', stitches: 223}
-    - {date: '2026-02-25', stitches: 234}
-    - {date: '2026-02-28', stitches: 250}
-    - {date: '2026-03-02', stitches: 261}
-    - {date: '2026-03-03', stitches: 279}
-    - {date: '2026-03-05', stitches: 297}
-    - {date: '2026-03-06', stitches: 308}
-    - {date: '2026-03-07', stitches: 321}
-    - {date: '2026-03-09', stitches: 334}
-    - {date: '2026-03-10', stitches: 344}
-    - {date: '2026-03-13', stitches: 361}
-    - {date: '2026-03-15', stitches: 379}
-    - {date: '2026-03-16', stitches: 396}
-    - {date: '2026-03-19', stitches: 415}
-    - {date: '2026-03-20', stitches: 425}
-    - {date: '2026-03-21', stitches: 435}
-    - {date: '2026-03-23', stitches: 471}
-    - {date: '2026-03-24', stitches: 507}
-    - {date: '2026-03-25', stitches: 532}
-    - {date: '2026-03-26', stitches: 554}
-    - {date: '2026-03-27', stitches: 581}
-    - {date: '2026-03-28', stitches: 619}
-    - {date: '2026-03-29', stitches: 658}
-    - {date: '2026-03-31', stitches: 696}
-    - {date: '2026-04-01', stitches: 726}
-    - {date: '2026-04-02', stitches: 752}
-    - {date: '2026-04-03', stitches: 782}
-    - {date: '2026-04-04', stitches: 814}
-    - {date: '2026-04-05', stitches: 854}
-    - {date: '2026-04-06', stitches: 884}
-    - {date: '2026-04-07', stitches: 906}
-    - {date: '2026-04-09', stitches: 940}
+    - {date: '2026-02-01', stitches: 20, minutes: 35}
+    - {date: '2026-02-02', stitches: 38, minutes: 35}
+    - {date: '2026-02-03', stitches: 51, minutes: 30}
+    - - {date: '2026-02-06', stitches: 64}
+    - {date: '2026-02-07', stitches: 74, minutes: 20}
+    - {date: '2026-02-09', stitches: 87, minutes: 25}
+    - {date: '2026-02-13', stitches: 101, minutes: 25}
+    - {date: '2026-02-14', stitches: 114, minutes: 30}
+    - {date: '2026-02-15', stitches: 133, minutes: 35}
+    - {date: '2026-02-16', stitches: 146, minutes: 30}
+    - {date: '2026-02-17', stitches: 162, minutes: 40}
+    - {date: '2026-02-20', stitches: 178, minutes: 30}
+    - {date: '2026-02-21', stitches: 188, minutes: 25}
+    - {date: '2026-02-22', stitches: 208, minutes: 35}
+    - {date: '2026-02-24', stitches: 223, minutes: 35}
+    - {date: '2026-02-25', stitches: 234, minutes: 25}
+    - {date: '2026-02-28', stitches: 250, minutes: 35}
+    - - {date: '2026-03-02', stitches: 261}
+    - {date: '2026-03-03', stitches: 279, minutes: 40}
+    - - {date: '2026-03-05', stitches: 297}
+    - {date: '2026-03-06', stitches: 308, minutes: 25}
+    - {date: '2026-03-07', stitches: 321, minutes: 30}
+    - {date: '2026-03-09', stitches: 334, minutes: 25}
+    - {date: '2026-03-10', stitches: 344, minutes: 15}
+    - {date: '2026-03-13', stitches: 361, minutes: 30}
+    - {date: '2026-03-15', stitches: 379, minutes: 40}
+    - {date: '2026-03-16', stitches: 396, minutes: 35}
+    - {date: '2026-03-19', stitches: 415, minutes: 35}
+    - - {date: '2026-03-20', stitches: 425}
+    - {date: '2026-03-21', stitches: 435, minutes: 20}
+    - {date: '2026-03-23', stitches: 471, minutes: 85}
+    - {date: '2026-03-24', stitches: 507, minutes: 75}
+    - - {date: '2026-03-25', stitches: 532}
+    - {date: '2026-03-26', stitches: 554, minutes: 50}
+    - {date: '2026-03-27', stitches: 581, minutes: 65}
+    - {date: '2026-03-28', stitches: 619, minutes: 70}
+    - {date: '2026-03-29', stitches: 658, minutes: 75}
+    - {date: '2026-03-31', stitches: 696, minutes: 70}
+    - - {date: '2026-04-01', stitches: 726}
+    - - {date: '2026-04-02', stitches: 752}
+    - {date: '2026-04-03', stitches: 782, minutes: 70}
+    - {date: '2026-04-04', stitches: 814, minutes: 80}
+    - {date: '2026-04-05', stitches: 854, minutes: 75}
+    - {date: '2026-04-06', stitches: 884, minutes: 65}
+    - {date: '2026-04-07', stitches: 906, minutes: 50}
+    - - {date: '2026-04-09', stitches: 940}
   progress:
     completedStitches:
       - 0,0
