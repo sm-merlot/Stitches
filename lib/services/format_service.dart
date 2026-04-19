@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:xml/xml.dart';
+import 'package:yaml/yaml.dart';
 
 import 'package:uuid/uuid.dart';
 
@@ -17,7 +18,8 @@ import 'sprite_importer.dart';
 
 enum CrossStitchFormat {
   oxs('oxs', 'Open Cross Stitch (.oxs)'),
-  ;
+  stitches('stitches', '.stitches'),
+;
 
   const CrossStitchFormat(this.extension, this.label);
   final String extension;
@@ -33,7 +35,7 @@ enum CrossStitchFormat {
 }
 
 /// Set of file extensions (lowercase, with dot) that can be imported.
-const kImportableExtensions = {'.oxs'};
+const kImportableExtensions = {'.oxs', '.stitches'};
 
 // ─── Service ─────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,13 @@ class FormatService {
     final content = await File(path).readAsString();
     return switch (format) {
       CrossStitchFormat.oxs => _parseOxs(content, path),
+      CrossStitchFormat.stitches => () {
+          final doc = loadYaml(content);
+          if (doc is! Map) {
+            throw const FormatException('Invalid .stitches file');
+          }
+          return CrossStitchPattern.fromYaml(Map<String, dynamic>.from(doc));
+        }(),
     };
   }
 
@@ -54,6 +63,8 @@ class FormatService {
   static String encodeFile(CrossStitchPattern pattern, CrossStitchFormat format) {
     return switch (format) {
       CrossStitchFormat.oxs => _writeOxs(pattern),
+      CrossStitchFormat.stitches => throw UnsupportedError(
+          'Use FileService.toYamlString/saveFile for .stitches output.'),
     };
   }
 
