@@ -352,6 +352,8 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     todayMinutes: _computeMinutesInRange(log, today, const Duration(days: 1)),
     weekMinutes: _computeMinutesInRange(log, today, const Duration(days: 7)),
     stitchesPerHour: _computeStitchesPerHour(log, totalDone),
+    // All days with any stitching activity, sorted newest-first.
+    // Includes days where minutesSpent == 0 so the user can fill them in.
     timeLog: [...log]
       ..sort((a, b) => b.isoDate.compareTo(a.isoDate)),
   );
@@ -454,7 +456,7 @@ class StitchOpsScreen extends StatelessWidget {
                 _OverviewSection(stats: stats, colorScheme: colorScheme);
             final velocityCard =
                 _RateSection(stats: stats, colorScheme: colorScheme);
-            final timeCard = stats.totalMinutes > 0
+            final timeCard = stats.timeLog.isNotEmpty
                 ? _TimeSection(
                     stats: stats,
                     colorScheme: colorScheme,
@@ -1012,15 +1014,15 @@ class _TimeHistoryDialogState extends State<_TimeHistoryDialog> {
   void initState() {
     super.initState();
     final today = todayIsoDate();
-    // Build ordered date list: today first, then all other entries that have
-    // minutesSpent > 0, skipping today if it appears there.
+    // Build ordered date list: today first, then all other log entries
+    // (already sorted desc). Today is pinned at top even if not in the log.
     final dateSet = <String>{today};
     _dates = [today];
     for (final e in widget.timeLog) {
       if (dateSet.add(e.isoDate)) _dates.add(e.isoDate);
     }
 
-    // Build a lookup from the log.
+    // Build a lookup of minutesSpent by date.
     final byDate = {for (final e in widget.timeLog) e.isoDate: e.minutesSpent};
 
     _rows = {};
