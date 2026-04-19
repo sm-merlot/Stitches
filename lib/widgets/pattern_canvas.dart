@@ -1620,8 +1620,8 @@ class _SelectionTooltipOverlay extends StatelessWidget {
 
     final x1 = math.min(fromX, toX);
     final y1 = math.min(fromY, toY);
-    const tooltipWidth = 160.0;
-    const tooltipHeight = 64.0;
+    const tooltipMaxWidth = 130.0;
+    const tooltipHeight = 58.0;
     const gap = 14.0;
 
     double left, top;
@@ -1631,14 +1631,14 @@ class _SelectionTooltipOverlay extends StatelessWidget {
       if (dragRight) {
         left = mp.dx + gap;
       } else {
-        left = mp.dx - tooltipWidth - gap;
+        left = mp.dx - tooltipMaxWidth - gap;
       }
       if (dragDown) {
         top = mp.dy + gap;
       } else {
         top = mp.dy - tooltipHeight - gap;
       }
-      left = left.clamp(8.0, canvasSize.width - tooltipWidth - 8);
+      left = left.clamp(8.0, canvasSize.width - tooltipMaxWidth - 8);
       top = top.clamp(8.0, canvasSize.height - tooltipHeight - 8);
     } else {
       left = 16;
@@ -1649,9 +1649,10 @@ class _SelectionTooltipOverlay extends StatelessWidget {
       left: left,
       top: top,
       child: IgnorePointer(
+        child: IntrinsicWidth(
         child: Container(
-          width: tooltipWidth,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          constraints: const BoxConstraints(maxWidth: tooltipMaxWidth),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.78),
             borderRadius: BorderRadius.circular(8),
@@ -1679,12 +1680,13 @@ class _SelectionTooltipOverlay extends StatelessWidget {
                     )),
                   ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text('From  ($x1, $y1)', style: const TextStyle(color: Colors.white70)),
                 Text('To      ($toX, $toY)', style: const TextStyle(color: Colors.white70)),
               ],
             ),
           ),
+        ),
         ),
       ),
     );
