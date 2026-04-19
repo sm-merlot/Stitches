@@ -2928,8 +2928,8 @@ stitching:
     - {date: '2026-02-23', stitches: 45, minutes: 60}
     - {date: '2026-02-24', stitches: 57, minutes: 25}
     - {date: '2026-02-25', stitches: 82, minutes: 50}
-    - - {date: '2026-02-27', stitches: 103}
-    - - {date: '2026-02-28', stitches: 128}
+    - {date: '2026-02-27', stitches: 103}
+    - {date: '2026-02-28', stitches: 128}
     - {date: '2026-03-01', stitches: 142, minutes: 30}
     - {date: '2026-03-02', stitches: 148, minutes: 10}
   progress:
