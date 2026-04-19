@@ -39,7 +39,7 @@ Since these tests were written, significant features have landed that are not ye
 
 ## Progress in `feat/update-test-coverage`
 
-The branch adds ~2,680 lines of new tests across ten new files, covering T1–T4 of the phasing plan. All 350 tests pass (`flutter test`) in ~6 s.
+The branch adds ~2,900 lines of new tests across eleven new files, covering all five phases of the plan. All 350 unit/widget tests pass (`flutter test`) in ~6 s. Four integration tests live in `integration_test/` for the v1 release checklist.
 
 | New file                                              | Lines | Phase | What it covers                                                                                                                                                                                    |
 |-------------------------------------------------------|-------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -53,12 +53,11 @@ The branch adds ~2,680 lines of new tests across ten new files, covering T1–T4
 | `models/geometry_and_layout_test.dart` (342)          | 342   | T4    | `stitch_geometry`: `stitchXY` for every stitch type; `snippet_palette_resolver`: slot mapping, alt palette, fallback; `page_layout`: tile count, boundary, every-cell-on-exactly-one-page; `stitch_renderer`: `computeGridBounds`, `resolveSegments` |
 | `services/sprite_importer_test.dart` (113)            | 113   | T4    | `SpriteImporter.matchPixel` (transparent, dark, light, cache stability); `importRegion` (solid, transparent, clamp, offset normalisation, merge threshold)                                        |
 | `widgets/screen_smoke_test.dart` (263)                | 263   | T4    | `StitchOpsScreen`, `NewPatternDialog`, `ResizeCanvasDialog`, `ColorPickerScreen`, `SnippetEditorScreen`, `HomeScreen` — each builds without crashing and key structural widgets are present        |
+| `integration_test/editor_flows_test.dart` (230)       | 230   | T5    | Flow 1: draw→save→reload; Flow 2: copy→paste→undo; Flow 3: progress mark→save→reload; Flow 4: snippet→save→reload. Uses real `FileService` disk I/O via tmp dir. Run with `flutter test integration_test/ -d macos` |
 
-Also added: `test/fixtures/legacy_v1_flat.stitches` — backward-compat fixture for the file-format tests.
-
-### What remains (T5)
-
-- **T5 — P4 integration smoke tests**: four end-to-end flows in `integration_test/` + CI wiring
+Also added:
+- `test/fixtures/legacy_v1_flat.stitches` — backward-compat fixture for file-format tests
+- `.github/workflows/test.yml` — CI workflow running `flutter test` on push/PR to `main`
 
 ## Coverage gaps by priority
 
@@ -190,7 +189,7 @@ The work breaks into roughly four PRs, each landable independently.
 | **T2** | P1.1 EditorNotifier core (drawing, layers, undo/redo)         | large (~600 lines)  | ✅ Done    |
 | **T3** | P1.1 remainder (snippets, selection, progress) + P1.3 session | medium (~400 lines) | ✅ Done    |
 | **T4** | P2 pure-Dart services + P3 widget smoke tests                 | medium (~500 lines) | ✅ Done    |
-| **T5** | P4 integration smoke tests + CI wiring                        | small (~250 lines)  | ⬜ Next    |
+| **T5** | P4 integration smoke tests + CI wiring                        | small (~250 lines)  | ✅ Done    |
 
 T1 first because format round-trip is the cheapest insurance against the worst kind of bug. T2 next because the editor provider is where every future change lands.
 
