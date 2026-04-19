@@ -347,8 +347,16 @@ class PageLayout {
   /// `primary = col, crossIndex = row`; for horizontal, `primary = row,
   /// crossIndex = col`.
   ///
-  /// Priority: snap to nearest colour change within the fuzzy zone; fall back
-  /// to seeded pseudo-random if no change exists.
+  /// Strategy:
+  ///   1. Scan outward from the nominal boundary for the nearest colour change
+  ///      where BOTH sides have a solid run of at least [_minRun] stitches of
+  ///      their own colour.  This avoids snapping to stray singleton stitches
+  ///      and leaving tiny colour islands at the page edge.
+  ///   2. If no qualifying cut is found (the boundary bisects a solid block of
+  ///      one colour), fall back to a seeded pseudo-random offset so the edge
+  ///      appears organic rather than straight.
+  static const int _minRun = 2;
+
   static int _computeOffset({
     required int nominalBoundary,
     required int crossIndex,
@@ -359,35 +367,56 @@ class PageLayout {
   }) {
     if (fuzzyAmount == 0) return 0;
 
-    // Scan outward from the nominal boundary for the nearest colour change.
-    // Offset k places the boundary between positions (nominalBoundary+k-1)
-    // and (nominalBoundary+k).
+    // Returns the length of the run of [color] starting at [start] going in
+    // direction [dir] (+1 or -1), capped at [cap].
+    int runLength(String color, int start, int dir, int cap) {
+      int count = 0;
+      int pos = start;
+      while (count < cap && pos >= 0 && pos < maxBoundary) {
+        if (colorAt(pos, crossIndex) != color) break;
+        count++;
+        pos += dir;
+      }
+      return count;
+    }
+
+    // Check whether a cut between posA and posB (posB = posA+1) is a
+    // "solid-block" transition: both sides have at least _minRun stitches of
+    // their own colour.
+    bool isQualifyingCut(int posA, int posB) {
+      final cA = colorAt(posA, crossIndex);
+      final cB = colorAt(posB, crossIndex);
+      if (cA == null || cB == null || cA == cB) return false;
+      // Verify both sides have a solid run.
+      final runA = runLength(cA, posA, -1, _minRun);
+      final runB = runLength(cB, posB, 1, _minRun);
+      return runA >= _minRun && runB >= _minRun;
+    }
+
+    // Scan outward from the nominal boundary, preferring the closest qualifying
+    // cut.  Offset d places the boundary between (nominalBoundary+d-1) and
+    // (nominalBoundary+d).
     for (int d = 0; d <= fuzzyAmount; d++) {
       // Positive offset (right/below nominal).
       {
         final posA = nominalBoundary + d - 1;
         final posB = nominalBoundary + d;
-        if (posA >= 0 && posB < maxBoundary) {
-          final cA = colorAt(posA, crossIndex);
-          final cB = colorAt(posB, crossIndex);
-          // Only snap to changes between two STITCHED cells of different colours
-          // — ignore transitions to/from empty aida.
-          if (cA != null && cB != null && cA != cB) return d;
+        if (posA >= 0 && posB < maxBoundary && isQualifyingCut(posA, posB)) {
+          return d;
         }
       }
       // Negative offset (left/above nominal); skip d=0 (already covered).
       if (d > 0) {
         final posA = nominalBoundary - d - 1;
         final posB = nominalBoundary - d;
-        if (posA >= 0 && posB < maxBoundary) {
-          final cA = colorAt(posA, crossIndex);
-          final cB = colorAt(posB, crossIndex);
-          if (cA != null && cB != null && cA != cB) return -d;
+        if (posA >= 0 && posB < maxBoundary && isQualifyingCut(posA, posB)) {
+          return -d;
         }
       }
     }
 
-    // No colour change in the fuzzy zone — use seeded pseudo-random offset.
+    // No qualifying colour-change cut found — the boundary bisects a solid
+    // block.  Apply a seeded random offset so the edge looks organic.
     return math.Random(seed).nextInt(2 * fuzzyAmount + 1) - fuzzyAmount;
   }
 }
