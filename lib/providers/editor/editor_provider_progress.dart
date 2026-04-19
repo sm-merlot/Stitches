@@ -368,6 +368,44 @@ mixin ProgressMixin on Notifier<EditorState> {
     );
   }
 
+  /// Overrides [minutesSpent] for the log entry on [isoDate] to [minutes].
+  ///
+  /// Used by the manual time-adjustment UI in StitchOps.  If [minutes] is 0
+  /// the entry's time is zeroed (other fields like stitchCount are preserved).
+  /// If no entry exists for [isoDate] and [minutes] > 0 a skeleton entry is
+  /// created with the current stitch counts.
+  void setTimeForDate(String isoDate, int minutes) {
+    final existing = state.pattern.progressLog
+        .where((e) => e.isoDate == isoDate)
+        .firstOrNull;
+    if (existing == null && minutes <= 0) return; // nothing to do
+    late final List<ProgressLogEntry> newLog;
+    if (existing != null) {
+      newLog = [
+        ...state.pattern.progressLog.where((e) => e.isoDate != isoDate),
+        existing.copyWith(minutesSpent: minutes),
+      ];
+    } else {
+      // No log entry for this date yet — create one with current counts.
+      final currentCount = state.pattern.progress.completedStitches.length;
+      final currentBackCount =
+          state.pattern.progress.completedBackstitches.length;
+      newLog = [
+        ...state.pattern.progressLog,
+        ProgressLogEntry(
+          isoDate: isoDate,
+          stitchCount: currentCount,
+          backstitchCount: currentBackCount,
+          minutesSpent: minutes,
+        ),
+      ];
+    }
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(progressLog: newLog),
+      isDirty: true,
+    );
+  }
+
   /// Clear all progress (completed stitches and pages). Undoable.
   void clearProgress() {
     if (state.pattern.progress == PatternProgress.empty) return;

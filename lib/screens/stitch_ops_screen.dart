@@ -12,6 +12,7 @@ void showStitchOps(
   BuildContext context,
   CrossStitchPattern pattern, {
   VoidCallback? onClearProgress,
+  void Function(String isoDate, int newMinutes)? onAdjustTime,
 }) {
   final isWide = MediaQuery.of(context).size.shortestSide >= 600;
   if (isWide) {
@@ -28,6 +29,7 @@ void showStitchOps(
           child: StitchOpsScreen(
             pattern: pattern,
             onClearProgress: onClearProgress,
+            onAdjustTime: onAdjustTime,
             isDialog: true,
           ),
         ),
@@ -38,7 +40,9 @@ void showStitchOps(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
         builder: (_) => StitchOpsScreen(
-            pattern: pattern, onClearProgress: onClearProgress),
+            pattern: pattern,
+            onClearProgress: onClearProgress,
+            onAdjustTime: onAdjustTime),
       ),
     );
   }
@@ -383,6 +387,9 @@ double _computeStitchesPerHour(List<ProgressLogEntry> log, int totalDone) {
 class StitchOpsScreen extends StatelessWidget {
   final CrossStitchPattern pattern;
   final VoidCallback? onClearProgress;
+  /// Called when the user saves a manual time adjustment.
+  /// Arguments are the ISO date string and the new total minutes for that day.
+  final void Function(String isoDate, int newMinutes)? onAdjustTime;
   /// When true the screen renders without a Scaffold so the dialog can
   /// shrink-wrap to its content.  Set automatically by [showStitchOps].
   final bool isDialog;
@@ -391,6 +398,7 @@ class StitchOpsScreen extends StatelessWidget {
     super.key,
     required this.pattern,
     this.onClearProgress,
+    this.onAdjustTime,
     this.isDialog = false,
   });
 
@@ -441,7 +449,10 @@ class StitchOpsScreen extends StatelessWidget {
             final velocityCard =
                 _RateSection(stats: stats, colorScheme: colorScheme);
             final timeCard = stats.totalMinutes > 0
-                ? _TimeSection(stats: stats, colorScheme: colorScheme)
+                ? _TimeSection(
+                    stats: stats,
+                    colorScheme: colorScheme,
+                    onAdjustTime: onAdjustTime)
                 : null;
             final dailyCard = hasDaily
                 ? StitchOpsDailyChart(
@@ -869,7 +880,12 @@ class _RateRow extends StatelessWidget {
 class _TimeSection extends StatelessWidget {
   final _StitchOpsStats stats;
   final ColorScheme colorScheme;
-  const _TimeSection({required this.stats, required this.colorScheme});
+  final void Function(String isoDate, int newMinutes)? onAdjustTime;
+  const _TimeSection({
+    required this.stats,
+    required this.colorScheme,
+    this.onAdjustTime,
+  });
 
   /// Format minutes as "Xh Ym" or just "Ym" when < 1 hour.
   static String _fmtMins(int mins) {
@@ -881,13 +897,49 @@ class _TimeSection extends StatelessWidget {
     return '${h}h ${m}m';
   }
 
+  Future<void> _showEditDialog(BuildContext context) async {
+    final today = todayIsoDate();
+    final current = stats.todayMinutes;
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _AdjustTimeDialog(
+        initialMinutes: current,
+        colorScheme: colorScheme,
+      ),
+    );
+    if (result != null && context.mounted) {
+      onAdjustTime!(today, result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final canEdit = onAdjustTime != null;
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader('Time'),
+          Row(
+            children: [
+              Expanded(child: _SectionHeader('Time')),
+              if (canEdit)
+                Tooltip(
+                  message: "Adjust today's logged time",
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(4),
+                    onTap: () => _showEditDialog(context),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        size: 14,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -921,6 +973,122 @@ class _TimeSection extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ─── Adjust time dialog ───────────────────────────────────────────────────────
+
+class _AdjustTimeDialog extends StatefulWidget {
+  final int initialMinutes;
+  final ColorScheme colorScheme;
+  const _AdjustTimeDialog({
+    required this.initialMinutes,
+    required this.colorScheme,
+  });
+
+  @override
+  State<_AdjustTimeDialog> createState() => _AdjustTimeDialogState();
+}
+
+class _AdjustTimeDialogState extends State<_AdjustTimeDialog> {
+  late final TextEditingController _hoursCtrl;
+  late final TextEditingController _minsCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final h = widget.initialMinutes ~/ 60;
+    final m = widget.initialMinutes.remainder(60);
+    _hoursCtrl = TextEditingController(text: h.toString());
+    _minsCtrl = TextEditingController(text: m.toString());
+  }
+
+  @override
+  void dispose() {
+    _hoursCtrl.dispose();
+    _minsCtrl.dispose();
+    super.dispose();
+  }
+
+  int get _totalMinutes {
+    final h = int.tryParse(_hoursCtrl.text) ?? 0;
+    final m = int.tryParse(_minsCtrl.text) ?? 0;
+    return (h.clamp(0, 99) * 60) + m.clamp(0, 59);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Adjust today's time"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Correct the total time logged for today.\nThis overwrites the current value.',
+            style: TextStyle(
+              fontSize: 13,
+              color: widget.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              // Hours field
+              SizedBox(
+                width: 72,
+                child: TextField(
+                  controller: _hoursCtrl,
+                  keyboardType: TextInputType.number,
+                  maxLength: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Hours',
+                    counterText: '',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Text('h', style: TextStyle(fontSize: 16)),
+              ),
+              // Minutes field
+              SizedBox(
+                width: 72,
+                child: TextField(
+                  controller: _minsCtrl,
+                  keyboardType: TextInputType.number,
+                  maxLength: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Minutes',
+                    counterText: '',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Text('m', style: TextStyle(fontSize: 16)),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_totalMinutes),
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

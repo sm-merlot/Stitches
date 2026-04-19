@@ -1361,7 +1361,9 @@ class MarkDoneButton extends ConsumerWidget {
             ? null
             : () => showStitchOps(context, state.pattern,
                     onClearProgress: () =>
-                        ref.read(editorProvider.notifier).clearProgress()),
+                        ref.read(editorProvider.notifier).clearProgress(),
+                    onAdjustTime: (date, mins) =>
+                        ref.read(editorProvider.notifier).setTimeForDate(date, mins)),
         child: FilledButton.icon(
           icon: Icon(allDone ? Icons.remove_done : Icons.done_all, size: 16),
           label: Text(
