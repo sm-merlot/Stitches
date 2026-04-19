@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'page_config.dart';
 import 'pattern.dart';
 import 'stitch.dart';
+import '../services/stitch_compositor.dart';
 
 /// Precomputed page layout derived from a [PageConfig] and the pattern's stitch
 /// data. Not persisted — recomputed whenever page config changes.
@@ -124,6 +125,18 @@ class PageLayout {
 
   static int _encodeCell(int col, int row) => (col << 16) | row;
 
+  /// Parse a `'x,y'` composite key into an encoded cell int.
+  static int _parseXY(String key) {
+    final comma = key.indexOf(',');
+    return (_parseInt(key, 0, comma) << 16) | _parseInt(key, comma + 1, key.length);
+  }
+
+  static int _parseInt(String s, int start, int end) {
+    var v = 0;
+    for (var i = start; i < end; i++) v = v * 10 + s.codeUnitAt(i) - 48;
+    return v;
+  }
+
   /// Build a [PageLayout] from [config] and the pattern's current stitch data.
   ///
   /// Fuzzy boundary offsets are computed once and cached in the returned
@@ -134,36 +147,20 @@ class PageLayout {
     final pagesDown =
         (pattern.height / config.pageHeight).ceil().clamp(1, pattern.height);
 
-    // For boundary snapping we use the thread's index in pattern.threads as an
-    // opaque colour ID.  This means every distinct DMC code is treated as a
-    // distinct colour (e.g. 310 Black ≠ 3371 Black Brown), which is correct:
-    // they are different stitching threads and produce a visible seam.
-    //
-    // Earlier versions quantised colours to 3 bits per channel to merge
-    // near-identical darks, but this collapsed unrelated threads (outline 'q'
-    // and background 'A') into the same bucket, causing the snap/island
-    // heuristics to misfire.  Using raw thread indices is simpler and more
-    // correct.
-    //
-    // We use the TOPMOST visible layer colour for each cell, matching exactly
-    // what the user sees on the canvas.  `layers` is ordered bottom→top;
-    // iterating reversed (top→bottom) with putIfAbsent means the first write
-    // per cell wins, which is the topmost layer.
+    // Build snap-colour map from the canonical composite view — same thread
+    // per cell that the stitcher sees on the canvas (visible layers, blending
+    // resolved, topmost layer wins for overlapping FullStitches).
+    final composite = StitchCompositor.compute(pattern);
     final threadIndex = <String, int>{
       for (int i = 0; i < pattern.threads.length; i++)
         pattern.threads[i].dmcCode: i,
     };
 
-    final Map<int, int?> snapColor = {};
-    for (final layer in pattern.layers.reversed) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is FullStitch) {
-          final key = (stitch.x << 16) | stitch.y;
-          snapColor.putIfAbsent(key, () => threadIndex[stitch.threadId]);
-        }
-      }
-    }
+    // compositeThreads is keyed 'x,y' → Thread.
+    final Map<int, int?> snapColor = {
+      for (final entry in composite.compositeThreads.entries)
+        _parseXY(entry.key): threadIndex[entry.value.dmcCode],
+    };
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];
 
@@ -178,6 +175,7 @@ class PageLayout {
           crossIndex: row,
           fuzzyAmount: config.fuzzyAmount,
           maxBoundary: pattern.width,
+          maxCross: pattern.height,
           colorAt: (primary, secondary) => colorAt(primary, secondary),
           seed: _makeSeed(
               pattern.width, pattern.height, config, boundaryCol * 100003 + row),
@@ -197,6 +195,7 @@ class PageLayout {
           crossIndex: col,
           fuzzyAmount: config.fuzzyAmount,
           maxBoundary: pattern.height,
+          maxCross: pattern.width,
           colorAt: (primary, secondary) => colorAt(secondary, primary),
           seed: _makeSeed(
               pattern.width, pattern.height, config, boundaryRow * 100003 + col + 500000000),
@@ -394,12 +393,17 @@ class PageLayout {
   static const int snapRange = 4;
   static const int _snapRange = snapRange;
 
+  /// Minimum vertical run length to accept a colour transition as a
+  /// "structural column" candidate, bypassing the 1D qualifying checks.
+  static const int _minVerticalRun = 7;
+
   @visibleForTesting
   static int computeOffset({
     required int nominalBoundary,
     required int crossIndex,
     required int fuzzyAmount,
     required int maxBoundary,
+    required int maxCross,
     required int? Function(int primary, int crossIndex) colorAt,
     required int seed,
   }) =>
@@ -408,6 +412,7 @@ class PageLayout {
         crossIndex: crossIndex,
         fuzzyAmount: fuzzyAmount,
         maxBoundary: maxBoundary,
+        maxCross: maxCross,
         colorAt: colorAt,
         seed: seed,
       );
@@ -417,6 +422,7 @@ class PageLayout {
     required int crossIndex,
     required int fuzzyAmount,
     required int maxBoundary,
+    required int maxCross,
     required int? Function(int primary, int crossIndex) colorAt,
     required int seed,
   }) {
@@ -533,29 +539,169 @@ class PageLayout {
       return true;
     }
 
-    // Scan outward, preferring the closest qualifying cut.
+    // Scan outward, collecting qualifying cuts and vertical-column candidates,
+    // scoring with 2D flood penalty, vertical coherence, and distance.
+    //
+    // Composite score (lower = better):
+    //   penalty * 1000          — stranding dominates
+    //   − min(vExt, 10) * 2    — vertical column bonus (each row of vExt offsets 2 distance units)
+    //   + distance              — prefer closer to nominal
     final effectiveRange = math.max(fuzzyAmount, _snapRange);
+    int? bestOffset;
+    int bestScore = 0x7FFFFFFF;
+
+    void considerCandidate(int offset, int posA, int posB, int dist) {
+      final cA = colorAt(posA, crossIndex)!;
+      final penalty = _floodPenalty(
+          posA, posB, crossIndex, maxBoundary, maxCross, colorAt);
+      final vExt = _verticalRun(posA, crossIndex, cA, maxCross, colorAt);
+      final score = penalty * 1000 - math.min(vExt, 10) * 2 + dist;
+      if (score < bestScore) {
+        bestOffset = offset;
+        bestScore = score;
+      }
+    }
+
     for (int d = 0; d <= effectiveRange; d++) {
       // Positive offset (right/below nominal).
       {
         final posA = nominalBoundary + d - 1;
         final posB = nominalBoundary + d;
-        if (posA >= 0 && posB < maxBoundary && isQualifyingCut(posA, posB)) {
-          return d;
+        if (posA >= 0 && posB < maxBoundary) {
+          final cA = colorAt(posA, crossIndex);
+          final cB = colorAt(posB, crossIndex);
+          if (cA != null && cB != null && cA != cB) {
+            // Accept if 1D-qualifying OR cA has vertical column support.
+            if (isQualifyingCut(posA, posB) ||
+                _verticalRun(posA, crossIndex, cA, maxCross, colorAt) >=
+                    _minVerticalRun) {
+              considerCandidate(d, posA, posB, d);
+            }
+          }
         }
       }
       // Negative offset (left/above nominal); skip d=0 (already covered above).
       if (d > 0) {
         final posA = nominalBoundary - d - 1;
         final posB = nominalBoundary - d;
-        if (posA >= 0 && posB < maxBoundary && isQualifyingCut(posA, posB)) {
-          return -d;
+        if (posA >= 0 && posB < maxBoundary) {
+          final cA = colorAt(posA, crossIndex);
+          final cB = colorAt(posB, crossIndex);
+          if (cA != null && cB != null && cA != cB) {
+            if (isQualifyingCut(posA, posB) ||
+                _verticalRun(posA, crossIndex, cA, maxCross, colorAt) >=
+                    _minVerticalRun) {
+              considerCandidate(-d, posA, posB, d);
+            }
+          }
         }
       }
     }
 
+    final result = bestOffset;
+    if (result != null) return result;
+
     // No qualifying cut found — boundary bisects a solid block.
     // Apply a seeded random offset within ±fuzzyAmount for an organic edge.
     return math.Random(seed).nextInt(2 * fuzzyAmount + 1) - fuzzyAmount;
+  }
+
+  /// Total stranding penalty for cutting between [posA] and [posB].
+  /// Floods each colour in 2D and counts cells that would end up on the
+  /// wrong side of the cut. Lower = better.
+  static int _floodPenalty(
+    int posA,
+    int posB,
+    int crossIndex,
+    int maxBoundary,
+    int maxCross,
+    int? Function(int primary, int cross) colorAt,
+  ) {
+    final cA = colorAt(posA, crossIndex);
+    final cB = colorAt(posB, crossIndex);
+    if (cA == null || cB == null) return 0;
+
+    // cA lives on the left page (primary < posB). Count cA cells at >= posB.
+    final strandedA = _floodStrandedCount(
+      posA, crossIndex, cA, posB, true, maxBoundary, maxCross, colorAt);
+    // cB lives on the right page (primary >= posB). Count cB cells at < posB.
+    final strandedB = _floodStrandedCount(
+      posB, crossIndex, cB, posB, false, maxBoundary, maxCross, colorAt);
+
+    return strandedA + strandedB;
+  }
+
+  /// BFS flood from ([startP], [startC]) following [targetColor].
+  /// Returns the count of visited cells on the "wrong" side of [cutBoundary]:
+  ///   [wrongSideIsRight] true  → count cells at primary >= cutBoundary
+  ///   [wrongSideIsRight] false → count cells at primary <  cutBoundary
+  ///
+  /// Bounded to ±[_snapRange] in both axes from the start cell, max 40 cells.
+  static int _floodStrandedCount(
+    int startP,
+    int startC,
+    int targetColor,
+    int cutBoundary,
+    bool wrongSideIsRight,
+    int maxBoundary,
+    int maxCross,
+    int? Function(int primary, int cross) colorAt,
+  ) {
+    const maxCells = 40;
+
+    final visited = <int>{};
+    final queue = <int>[];
+    final startKey = (startP << 16) | startC;
+    visited.add(startKey);
+    queue.add(startKey);
+
+    int count = 0;
+    int qi = 0;
+
+    while (qi < queue.length && visited.length <= maxCells) {
+      final key = queue[qi++];
+      final p = key >> 16;
+      final c = key & 0xFFFF;
+
+      if (wrongSideIsRight ? (p >= cutBoundary) : (p < cutBoundary)) {
+        count++;
+      }
+
+      for (final (dp, dc) in const [(-1, 0), (1, 0), (0, -1), (0, 1)]) {
+        final np = p + dp;
+        final nc = c + dc;
+        if (np < 0 || np >= maxBoundary || nc < 0 || nc >= maxCross) continue;
+        if ((np - startP).abs() > _snapRange) continue;
+        if ((nc - startC).abs() > _snapRange) continue;
+        final nkey = (np << 16) | nc;
+        if (visited.contains(nkey)) continue;
+        if (colorAt(np, nc) != targetColor) continue;
+        visited.add(nkey);
+        queue.add(nkey);
+      }
+    }
+
+    return count;
+  }
+
+  /// Vertical run length of [color] at primary position [pos], centred on
+  /// [crossIndex]. Returns 1 if only the cell itself matches. Capped at 10.
+  static int _verticalRun(
+    int pos,
+    int crossIndex,
+    int color,
+    int maxCross,
+    int? Function(int primary, int cross) colorAt,
+  ) {
+    int run = 1;
+    for (int r = crossIndex - 1; r >= 0 && colorAt(pos, r) == color; r--) {
+      if (++run >= 10) return run;
+    }
+    for (int r = crossIndex + 1;
+        r < maxCross && colorAt(pos, r) == color;
+        r++) {
+      if (++run >= 10) return run;
+    }
+    return run;
   }
 }

@@ -12,8 +12,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/page_layout.dart';
-import 'package:stitches/models/stitch.dart';
 import 'package:stitches/services/file_service.dart';
+import 'package:stitches/services/stitch_compositor.dart';
 
 void main() {
   const filePath =
@@ -32,28 +32,22 @@ void main() {
     printOnFailure('Page config: ${config.pageWidth}×${config.pageHeight} '
         'fuzzyAmount=${config.fuzzyAmount} enabled=${config.enabled}');
 
-    // ── Build snap-colour map (mirrors PageLayout.compute exactly)
-    // Use raw thread index as colour ID — no quantisation.
+    // ── Build snap-colour map via StitchCompositor (mirrors PageLayout.compute)
+    final composite = StitchCompositor.compute(pattern);
     final threadIndex = <String, int>{
       for (int i = 0; i < pattern.threads.length; i++)
         pattern.threads[i].dmcCode: i,
     };
-    // thread index → symbol
     final indexToSym = <int, String>{
       for (int i = 0; i < pattern.threads.length; i++)
         i: pattern.threads[i].symbol ?? '?',
     };
-
-    // layers is bottom→top; reversed = topmost first; putIfAbsent = top wins
     final snapColor = <int, int?>{};
-    for (final layer in pattern.layers.reversed) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is FullStitch) {
-          final key = (stitch.x << 16) | stitch.y;
-          snapColor.putIfAbsent(key, () => threadIndex[stitch.threadId]);
-        }
-      }
+    for (final entry in composite.compositeThreads.entries) {
+      final parts = entry.key.split(',');
+      final col = int.parse(parts[0]);
+      final row = int.parse(parts[1]);
+      snapColor[(col << 16) | row] = threadIndex[entry.value.dmcCode];
     }
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];
@@ -125,6 +119,7 @@ void main() {
         crossIndex: row,
         fuzzyAmount: config.fuzzyAmount,
         maxBoundary: pattern.width,
+        maxCross: pattern.height,
         colorAt: colorAt,
         seed: seed,
       );

@@ -19,8 +19,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/page_layout.dart';
-import 'package:stitches/models/stitch.dart';
 import 'package:stitches/services/file_service.dart';
+import 'package:stitches/services/stitch_compositor.dart';
 
 void main() {
   const fixturePath = 'test/fixtures/super_metroid_samus_ridley.stitches';
@@ -37,7 +37,9 @@ void main() {
 
     layout = PageLayout.compute(pattern.pageConfig, pattern);
 
-    // Build the same snap-colour map as PageLayout.compute uses.
+    // Mirror PageLayout.compute: use StitchCompositor for the canonical
+    // visible-stitch view (same source of truth as the algo).
+    final composite = StitchCompositor.compute(pattern);
     final threadIndex = <String, int>{
       for (int i = 0; i < pattern.threads.length; i++)
         pattern.threads[i].dmcCode: i,
@@ -47,14 +49,12 @@ void main() {
         i: pattern.threads[i].symbol ?? '?',
     };
     snapColor = {};
-    for (final layer in pattern.layers.reversed) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is FullStitch) {
-          final key = (stitch.x << 16) | stitch.y;
-          snapColor.putIfAbsent(key, () => threadIndex[stitch.threadId]);
-        }
-      }
+    for (final entry in composite.compositeThreads.entries) {
+      final parts = entry.key.split(',');
+      final col = int.parse(parts[0]);
+      final row = int.parse(parts[1]);
+      final idx = threadIndex[entry.value.dmcCode];
+      if (idx != null) snapColor[(col << 16) | row] = idx;
     }
   });
 
@@ -146,11 +146,12 @@ void main() {
   });
 
   // ── Long-C-run rows 36–37 ─────────────────────────────────────────────────
-  // Rows 36–37 have a long C block that extends right of the boundary before
-  // changing to q.  The nearest clean cut is at offset +4 (the full snap range).
+  // Rows 36–37 have a long C block around the boundary.  With vertical-column
+  // scoring, the algorithm now prefers the C column at col 45–46 (consistent
+  // with adjacent rows 31–35) over the far-right C|q at col 54.
   group('first vertical boundary (col $nominal) — long C run rows 36–37', () {
     for (final row in [36, 37]) {
-      test('row $row snaps to C|q at the far right edge', () {
+      test('row $row snaps to a colour transition (vertical-column consistent)', () {
         final offset = offsetAt(row);
         final cutCol = nominal + offset;
         expect(
@@ -159,8 +160,6 @@ void main() {
           reason: 'row $row should snap to a colour transition, '
               'got (${symAt(cutCol - 1, row)} | ${symAt(cutCol, row)})',
         );
-        expect(offset, greaterThan(0),
-            reason: 'row $row: nearest cut is to the right of nominal');
       });
     }
   });

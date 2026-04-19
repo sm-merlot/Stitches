@@ -30,6 +30,7 @@ int snap(
   int nominalBoundary, {
   int fuzzyAmount = 3,
   int? maxBoundary,
+  int maxCross = 1,
   int seed = 0,
 }) =>
     PageLayout.computeOffset(
@@ -37,6 +38,7 @@ int snap(
       crossIndex: 0,
       fuzzyAmount: fuzzyAmount,
       maxBoundary: maxBoundary ?? cells.length,
+      maxCross: maxCross,
       colorAt: colorMap(cells),
       seed: seed,
     );
@@ -280,6 +282,134 @@ void main() {
       // We can't guarantee they differ but we can verify both are in range.
       expect(r1, inInclusiveRange(-3, 3));
       expect(r2, inInclusiveRange(-3, 3));
+    });
+  });
+
+  // ── 2D flood-fill scoring ─────────────────────────────────────────────────
+  // These tests use a multi-row colour map so the 2D flood can differentiate
+  // candidates that look identical in 1D.
+
+  /// Build a 2D colorAt from a list of rows (index 0 = crossIndex 0).
+  int? Function(int, int) colorMap2D(List<List<int?>> rows) =>
+      (int primary, int crossIndex) =>
+          (crossIndex >= 0 &&
+                  crossIndex < rows.length &&
+                  primary >= 0 &&
+                  primary < rows[crossIndex].length)
+              ? rows[crossIndex][primary]
+              : null;
+
+  /// Convenience: call computeOffset with a 2D colour map.
+  int snap2D(
+    List<List<int?>> rows,
+    int nominalBoundary, {
+    int crossIndex = 0,
+    int fuzzyAmount = 3,
+    int seed = 0,
+  }) {
+    final maxBoundary = rows.isEmpty ? 0 : rows[0].length;
+    return PageLayout.computeOffset(
+      nominalBoundary: nominalBoundary,
+      crossIndex: crossIndex,
+      fuzzyAmount: fuzzyAmount,
+      maxBoundary: maxBoundary,
+      maxCross: rows.length,
+      colorAt: colorMap2D(rows),
+      seed: seed,
+    );
+  }
+
+  group('2D flood scoring prefers cuts with less stranding', () {
+    test('prefers farther cut when closer one strands A via adjacent rows', () {
+      // Row 0:  C C C A A | B B B B B B B
+      // Row 1:  C C C C A   A A A B B B B
+      // Row 2:  C C C C A   A A A B B B B
+      //
+      // Nominal=5. Qualifying candidates at row 0:
+      //   d=0: posA=4(A), posB=5(B). Clean 1D. But flood A from (4,0)
+      //     reaches (4,1)→(5,1)→(6,1)→(7,1) and same on row 2.
+      //     Stranded A at primary>=5 = 6 cells. Penalty=6.
+      //   d=-2: posA=2(C), posB=3(A). Clean 1D. Flood C from (2,0):
+      //     (2,1)→(3,1), but (3,1)=C at primary>=3 → stranded 2.
+      //     Penalty=2.
+      //
+      // Flood picks d=-2 (penalty 2 < 6). Old first-found picks d=0.
+      final rows = [
+        [C, C, C, A, A, B, B, B, B, B, B, B], // row 0
+        [C, C, C, C, A, A, A, A, B, B, B, B], // row 1
+        [C, C, C, C, A, A, A, A, B, B, B, B], // row 2
+      ];
+      expect(snap2D(rows, 5, crossIndex: 0), -2,
+          reason: 'd=-2 strands fewer cells in 2D than d=0');
+    });
+
+    test('single qualifying candidate returned regardless of penalty', () {
+      // Row 0:  A A B B B B B B
+      // Row 1:  A A A A A B B B
+      //
+      // Nominal=4. Only d=-2 qualifies (A|B at col 2).
+      // Penalty is non-zero (A extends right on row 1) but it's the only
+      // option so it must be returned.
+      final rows = [
+        [A, A, B, B, B, B, B, B], // row 0
+        [A, A, A, A, A, B, B, B], // row 1
+      ];
+      expect(snap2D(rows, 4, crossIndex: 0), -2);
+    });
+
+    test('both candidates clean in 2D: closest to nominal wins', () {
+      // Row 0:  A A B B C C C C
+      // Row 1:  A A B B C C C C
+      // Row 2:  A A B B C C C C
+      //
+      // Nominal=4. d=0: B|C, penalty=0. d=-2: A|B, penalty=0.
+      // Both clean → closest (d=0) wins.
+      final rows = [
+        [A, A, B, B, C, C, C, C],
+        [A, A, B, B, C, C, C, C],
+        [A, A, B, B, C, C, C, C],
+      ];
+      expect(snap2D(rows, 4, crossIndex: 0), 0);
+    });
+
+    test('flood detects stranding through L-shaped region', () {
+      // Row 0:  A A A B B B B B B B
+      // Row 1:  A A A A A A B B B B
+      // Row 2:  A A A A A A B B B B
+      //
+      // Nominal=3. Only d=0 (A|B) qualifies. Flood A from (2,0) reaches
+      // rows 1-2 cols 3-5 = 6 stranded cells. But with no alternative,
+      // d=0 is still returned.
+      final rows = [
+        [A, A, A, B, B, B, B, B, B, B], // row 0
+        [A, A, A, A, A, A, B, B, B, B], // row 1
+        [A, A, A, A, A, A, B, B, B, B], // row 2
+      ];
+      expect(snap2D(rows, 3, crossIndex: 0), 0);
+    });
+
+    test('1D-identical cuts differentiated by 2D context', () {
+      // Row 0:  A A A A B B B B C C C C
+      // Row 1:  A A A A A A A B C C C C
+      // Row 2:  A A A A A A A B C C C C
+      //
+      // Nominal=6. Two qualifying candidates:
+      //   d=-2: posA=3(A), posB=4(B). Flood A from (3,0): all left-side,
+      //     rows 1-2 cols 4-6 are A → stranded = 6. Penalty=6.
+      //   d=+2: posA=7(B), posB=8(C). Flood B from (7,0): B at 4-7 row 0,
+      //     col 7 rows 1-2. No B at >=8. Flood C from (8,0): C at 8-11.
+      //     No C at <8. Penalty=0.
+      //
+      // Flood picks d=+2 (penalty 0). Without flood, both are at same
+      // distance but d=+2 is checked first (positive priority) → same result.
+      // This test verifies flood scoring is active even when it agrees with
+      // the old order.
+      final rows = [
+        [A, A, A, A, B, B, B, B, C, C, C, C], // row 0
+        [A, A, A, A, A, A, A, B, C, C, C, C], // row 1
+        [A, A, A, A, A, A, A, B, C, C, C, C], // row 2
+      ];
+      expect(snap2D(rows, 6, crossIndex: 0), 2);
     });
   });
 }
