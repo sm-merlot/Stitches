@@ -1,0 +1,28 @@
+docs/specs/test-coverage.md
+  h_c73f350bf316ee 45,186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "70f707ba01f12de7ea4882020e310785b93b1efd",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 903,
+      "total_deletions": 0,
+      "accepted_lines": 713,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
