@@ -1,0 +1,45 @@
+lib/models/page_layout.dart
+  266c0109da4e1e8e 7,128-139,150-153,159-163
+  28c23d0ae7c3e27a 178,198,396-399,406,415,425,542-548,550-564,570-580,587-596,601-603,608-706
+test/page_layout_integration_test.dart
+  266c0109da4e1e8e 23,40-42,52-57
+  28c23d0ae7c3e27a 149-151,154
+test/debug_snap_test.dart
+  28c23d0ae7c3e27a 122
+  266c0109da4e1e8e 16,35-36,46-50
+test/page_layout_snap_test.dart
+  28c23d0ae7c3e27a 33,41,287-414
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "5967f5960c6a20cc8b8c3cf0d413e9ddfa9729d7",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 49,
+      "accepted_lines": 40,
+      "overriden_lines": 0
+    },
+    "28c23d0ae7c3e27a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "255c2d53-ee56-41c0-bc15-c2b97ab988ef",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 386,
+      "total_deletions": 107,
+      "accepted_lines": 289,
+      "overriden_lines": 0
+    }
+  }
+}
