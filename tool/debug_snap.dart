@@ -1,3 +1,4 @@
+// UNUSED — see test/debug_snap_test.dart instead.
 // tool/debug_snap.dart
 //
 // Loads the Ridley .stitches file using the real app code and dumps the

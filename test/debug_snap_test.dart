@@ -7,7 +7,7 @@
 // Run with:
 //   flutter test test/debug_snap_test.dart --reporter=expanded
 //
-// This is a @Skip test by default; change to false to run.
+// The test always calls fail() so Flutter prints the output.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,14 +17,12 @@ import 'package:stitches/services/file_service.dart';
 
 void main() {
   const filePath =
-      '/Users/scottmerchant/dev/Stitches/worktrees/fuzzy-page-edges/'
-      'Super Metroid - Samus battles Ridley.stitches';
+      'test/fixtures/super_metroid_samus_ridley.stitches';
 
-  test('debug: snap simulation rows 22–32 at first vertical boundary',
-      skip: !File(filePath).existsSync()
-          ? 'file not found'
-          : false, () async {
-    // ── Load pattern ────────────────────────────────────────────────────────
+  test('debug: snap simulation rows 17–32 at first vertical boundary',
+      skip: !File(filePath).existsSync() ? 'file not found' : false,
+      () async {
+    // ── Load pattern
     final bytes = await File(filePath).readAsBytes();
     final (pattern, _) = await FileService.parseBytesToPattern(bytes);
 
@@ -34,30 +32,17 @@ void main() {
     printOnFailure('Page config: ${config.pageWidth}×${config.pageHeight} '
         'fuzzyAmount=${config.fuzzyAmount} enabled=${config.enabled}');
 
-    // ── Build snap-colour map (mirrors PageLayout.compute) ──────────────────
-    int quantise(Color c) {
-      // ignore: deprecated_member_use
-      return ((c.red >> 5) << 6) | ((c.green >> 5) << 3) | (c.blue >> 5);
-    }
-
-    final threadQ = <String, int>{
-      for (final t in pattern.threads) t.dmcCode: quantise(t.color),
+    // ── Build snap-colour map (mirrors PageLayout.compute exactly)
+    // Use raw thread index as colour ID — no quantisation.
+    final threadIndex = <String, int>{
+      for (int i = 0; i < pattern.threads.length; i++)
+        pattern.threads[i].dmcCode: i,
     };
-    final threadSym = <String, String>{
-      for (final t in pattern.threads) t.dmcCode: t.symbol ?? '?',
+    // thread index → symbol
+    final indexToSym = <int, String>{
+      for (int i = 0; i < pattern.threads.length; i++)
+        i: pattern.threads[i].symbol ?? '?',
     };
-    // quant → symbol of first thread with that quant
-    final quantToSym = <int, String>{};
-    for (final t in pattern.threads) {
-      quantToSym.putIfAbsent(quantise(t.color), () => t.symbol ?? '?');
-    }
-    // Find which thread has symbol '8'
-    for (final t in pattern.threads) {
-      if (t.symbol == '8') {
-        printOnFailure("Symbol '8' = DMC ${t.dmcCode}  "
-            "color=${t.color}  quant=${quantise(t.color)}");
-      }
-    }
 
     // layers is bottom→top; reversed = topmost first; putIfAbsent = top wins
     final snapColor = <int, int?>{};
@@ -66,26 +51,26 @@ void main() {
       for (final stitch in layer.stitches) {
         if (stitch is FullStitch) {
           final key = (stitch.x << 16) | stitch.y;
-          snapColor.putIfAbsent(key, () => threadQ[stitch.threadId]);
+          snapColor.putIfAbsent(key, () => threadIndex[stitch.threadId]);
         }
       }
     }
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];
     String symAt(int col, int row) {
-      final q = colorAt(col, row);
-      return q == null ? '.' : (quantToSym[q] ?? '?');
+      final idx = colorAt(col, row);
+      return idx == null ? '.' : (indexToSym[idx] ?? '?');
     }
 
-    // ── Canvas view ──────────────────────────────────────────────────────────
-    final nominal = config.pageWidth; // first vertical boundary (col 50)
-    const startRow = 22;
-    const endRow = 33;
+    // ── Canvas view
+    final nominal = config.pageWidth; // first vertical boundary
+    const startRow = 17;
+    const endRow = 46;
     final startCol = nominal - 10;
     final endCol = nominal + 9;
 
     final sb = StringBuffer();
-    sb.writeln('\nCanvas view cols $startCol–$endCol, rows $startRow–${endRow-1}');
+    sb.writeln('\nCanvas view (thread symbols, cols ${startCol}–${endCol - 1}):');
     sb.writeln('Nominal boundary at col $nominal');
     sb.write('row  ');
     for (int c = startCol; c < endCol; c++) {
@@ -98,8 +83,23 @@ void main() {
       sb.writeln();
     }
 
-    // ── Quant values ─────────────────────────────────────────────────────────
-    sb.writeln('\nQuant values cols ${nominal-5}–${nominal+5}:');
+    // Wider view
+    final wideStart = nominal - 15;
+    final wideEnd = nominal + 15;
+    sb.writeln('\nWide view cols $wideStart–${wideEnd - 1}:');
+    sb.write('row  ');
+    for (int c = wideStart; c < wideEnd; c++) {
+      sb.write(c == nominal ? '|' : (c % 10).toString());
+    }
+    sb.writeln();
+    for (int row = startRow; row < endRow; row++) {
+      sb.write(' ${row.toString().padLeft(2)}: ');
+      for (int col = wideStart; col < wideEnd; col++) sb.write(symAt(col, row));
+      sb.writeln();
+    }
+
+    // ── Thread index values
+    sb.writeln('\nThread index values cols ${nominal - 5}–${nominal + 5}:');
     sb.write('row  ');
     for (int c = nominal - 5; c <= nominal + 5; c++) {
       sb.write(' ${c.toString().padLeft(4)}');
@@ -108,35 +108,35 @@ void main() {
     for (int row = startRow; row < endRow; row++) {
       sb.write(' ${row.toString().padLeft(2)}: ');
       for (int c = nominal - 5; c <= nominal + 5; c++) {
-        final q = colorAt(c, row);
-        sb.write(' ${(q?.toString() ?? 'N').padLeft(4)}');
+        final idx = colorAt(c, row);
+        sb.write(' ${(idx?.toString() ?? 'N').padLeft(4)}');
       }
       sb.writeln();
     }
 
-    // ── computeOffset simulation ─────────────────────────────────────────────
+    // ── computeOffset simulation (using real seed, same as PageLayout.compute)
     sb.writeln('\ncomputeOffset results — boundary=$nominal '
         'fuzzyAmount=${config.fuzzyAmount} snapRange=${PageLayout.snapRange}:');
     for (int row = startRow; row < endRow; row++) {
+      final seed = PageLayout.makeSeed(
+          pattern.width, pattern.height, config, nominal * 100003 + row);
       final offset = PageLayout.computeOffset(
         nominalBoundary: nominal,
         crossIndex: row,
         fuzzyAmount: config.fuzzyAmount,
         maxBoundary: pattern.width,
         colorAt: colorAt,
-        seed: 0,
+        seed: seed,
       );
       final cutCol = nominal + offset;
       final leftSym = symAt(cutCol - 1, row);
       final rightSym = symAt(cutCol, row);
       sb.writeln('  row $row: offset=${offset.toString().padLeft(3)} → '
-          'cut at col $cutCol  ($leftSym | $rightSym)');
+          'cut at col $cutCol  ($leftSym | $rightSym)  seed=$seed');
     }
 
     printOnFailure(sb.toString());
-    // Always "fail" so the output is visible without --verbose.
-    // Change expect(true, isFalse) to expect(true, isTrue) to suppress.
-    expect(true, isFalse, reason: sb.toString());
+    // Always fail so Flutter test prints the output.
+    fail(sb.toString());
   });
 }
-

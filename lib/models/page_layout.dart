@@ -355,6 +355,10 @@ class PageLayout {
     );
   }
 
+  @visibleForTesting
+  static int makeSeed(int pw, int ph, PageConfig config, int extra) =>
+      _makeSeed(pw, ph, config, extra);
+
   static int _makeSeed(int pw, int ph, PageConfig config, int extra) =>
       (pw * 73856093) ^
       (ph * 19349663) ^
@@ -425,6 +429,12 @@ class PageLayout {
       final cB = colorAt(posB, crossIndex);
       if (cA == null || cB == null || cA == cB) return false;
 
+      // ── Left-run check ─────────────────────────────────────────────────────
+      // Require cA to have a run of at least 2 stitches ending at posA.
+      // A single isolated stitch at the cut edge belongs with the colour block
+      // on the right page — cutting right after it strands it on the left.
+      if (posA > 0 && colorAt(posA - 1, crossIndex) != cA) return false;
+
       // ── Fast-path ping-pong check ───────────────────────────────────────
       // Reject [cB, cA | cB, ...] or [..., cA | cB, cA]: a single stitch of
       // one colour sandwiched between two runs of the other.
@@ -492,8 +502,9 @@ class PageLayout {
         if (rightCounts.containsKey(c)) continue; // handled above
         if ((leftCounts[c] ?? 0) > 2) continue;   // large block, not an island
         // If this colour already appeared further left, it's a repeating element.
+        // Scan 3× window to handle patterns whose period is up to 2× window wide.
         bool repeatsLeft = false;
-        for (int p = posA - window; p >= math.max(0, posA - 2 * window); p--) {
+        for (int p = posA - window; p >= math.max(0, posA - 3 * window); p--) {
           if (colorAt(p, crossIndex) == c) { repeatsLeft = true; break; }
         }
         if (repeatsLeft) continue;
@@ -506,9 +517,9 @@ class PageLayout {
       for (final c in rightCounts.keys) {
         if (leftCounts.containsKey(c)) continue; // handled above
         if ((rightCounts[c] ?? 0) > 2) continue;
-        // Symmetric: if colour already appeared further right, it's repeating.
+        // Symmetric: scan 3× window to handle wide repeating patterns.
         bool repeatsRight = false;
-        for (int p = posB + window; p < math.min(maxBoundary, posB + 2 * window); p++) {
+        for (int p = posB + window; p < math.min(maxBoundary, posB + 3 * window); p++) {
           if (colorAt(p, crossIndex) == c) { repeatsRight = true; break; }
         }
         if (repeatsRight) continue;
