@@ -85,6 +85,7 @@ class _WorkspaceStats {
 
   // Chart data
   final Map<String, int> dailyMap; // iso → total stitches across all patterns
+  final Map<String, int> timeMap;  // iso → total minutes across all patterns
   final List<(DateTime, int)> dailyData; // last 60 days
   final List<(DateTime, int)> cumulativeData; // full history
 
@@ -105,6 +106,7 @@ class _WorkspaceStats {
     required this.currentStreak,
     required this.longestStreak,
     required this.dailyMap,
+    required this.timeMap,
     required this.dailyData,
     required this.cumulativeData,
     required this.patterns,
@@ -191,6 +193,7 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
 
   // ── Aggregated daily map (sum of all patterns' daily deltas) ─────────────
   final dailyMap = <String, int>{};
+  final timeMap = <String, int>{};  // iso → sum of minutesSpent across patterns
   DateTime? startDate;
   DateTime? lastActiveDate;
 
@@ -202,6 +205,10 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
       final delta = max(0, entry.stitchCount - prevCount);
       if (delta > 0) {
         dailyMap[entry.isoDate] = (dailyMap[entry.isoDate] ?? 0) + delta;
+      }
+      if (entry.minutesSpent > 0) {
+        timeMap[entry.isoDate] =
+            (timeMap[entry.isoDate] ?? 0) + entry.minutesSpent;
       }
       prevCount = entry.stitchCount;
     }
@@ -300,6 +307,7 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
     currentStreak: currentStreak,
     longestStreak: longestStreak,
     dailyMap: dailyMap,
+    timeMap: timeMap,
     dailyData: dailyData,
     cumulativeData: cumulativeData,
     patterns: summaries,
@@ -640,6 +648,7 @@ class _StatsView extends StatelessWidget {
               title: 'Activity (16 weeks)',
               child: StitchOpsHeatmap(
                 dailyMap: stats.dailyMap,
+                timeMap: stats.timeMap,
                 today: DateTime.now(),
                 colorScheme: colorScheme,
               ),

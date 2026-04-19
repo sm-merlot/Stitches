@@ -108,6 +108,9 @@ class _StitchOpsStats {
   /// date-string → stitches added that day (high-watermark deltas, always ≥ 0)
   final Map<String, int> dailyMap;
 
+  /// date-string → minutes spent stitching that day (from progress log).
+  final Map<String, int> timeMap;
+
   /// Last 60 days of daily stitch counts (0 if no activity).
   final List<(DateTime, int)> dailyData;
 
@@ -136,6 +139,7 @@ class _StitchOpsStats {
     required this.longestStreak,
     required this.threadStats,
     required this.dailyMap,
+    required this.timeMap,
     required this.dailyData,
     required this.cumulativeData,
     required this.totalMinutes,
@@ -348,6 +352,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     longestStreak: longestStreak,
     threadStats: threadStats,
     dailyMap: dailyMap,
+    timeMap: {for (final e in log) e.isoDate: e.minutesSpent},
     dailyData: dailyData,
     cumulativeData: cumulativeData,
     totalMinutes: _computeTotalMinutes(log),
@@ -383,6 +388,20 @@ double _computeStitchesPerHour(List<ProgressLogEntry> log, int totalDone) {
   if (total == 0) return 0;
   return totalDone / (total / 60.0);
 }
+
+/// Format minutes as "Xh Ym", "Xh", or "Ym".
+String _fmtMins(int mins) {
+  if (mins <= 0) return '0m';
+  final h = mins ~/ 60;
+  final m = mins.remainder(60);
+  if (h == 0) return '${m}m';
+  if (m == 0) return '${h}h';
+  return '${h}h ${m}m';
+}
+
+/// Convert a [DateTime] to an ISO-8601 date string, e.g. `'2024-01-15'`.
+String _isoFromDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 (int, int)? _stitchXY(Stitch s) => switch (s) {      FullStitch(:final x, :final y) => (x, y),
       HalfStitch(:final x, :final y) => (x, y),
@@ -474,7 +493,9 @@ class StitchOpsScreen extends ConsumerWidget {
                 : null;
             final dailyCard = hasDaily
                 ? StitchOpsDailyChart(
-                    dailyData: stats.dailyData, colorScheme: colorScheme)
+                    dailyData: stats.dailyData,
+                    timeMap: stats.timeMap,
+                    colorScheme: colorScheme)
                 : null;
             final cumulativeCard = hasCumulative
                 ? StitchOpsCumulativeChart(
@@ -487,6 +508,7 @@ class StitchOpsScreen extends ConsumerWidget {
             final heatmapCard = hasHeatmap
                 ? StitchOpsHeatmap(
                     dailyMap: stats.dailyMap,
+                    timeMap: stats.timeMap,
                     today: DateTime.now(),
                     colorScheme: colorScheme,
                   )
@@ -907,15 +929,6 @@ class _TimeSection extends StatelessWidget {
     this.onAdjustTime,
   });
 
-  static String _fmtMins(int mins) {
-    if (mins <= 0) return '0m';
-    final h = mins ~/ 60;
-    final m = mins.remainder(60);
-    if (h == 0) return '${m}m';
-    if (m == 0) return '${h}h';
-    return '${h}h ${m}m';
-  }
-
   Future<void> _showHistoryDialog(BuildContext context) async {
     final results = await showDialog<Map<String, int>>(
       context: context,
@@ -1190,8 +1203,14 @@ class _TimeHistoryDialogState extends State<_TimeHistoryDialog> {
 
 class StitchOpsDailyChart extends StatefulWidget {
   final List<(DateTime, int)> dailyData;
+  final Map<String, int> timeMap;
   final ColorScheme colorScheme;
-  const StitchOpsDailyChart({super.key, required this.dailyData, required this.colorScheme});
+  const StitchOpsDailyChart({
+    super.key,
+    required this.dailyData,
+    required this.timeMap,
+    required this.colorScheme,
+  });
 
   @override
   State<StitchOpsDailyChart> createState() => _StitchOpsDailyChartState();
@@ -1252,6 +1271,13 @@ class _StitchOpsDailyChartState extends State<StitchOpsDailyChart> {
                         rows: [
                           (null, _shortDate(widget.dailyData[_hoverIndex!].$1)),
                           ('Stitches', _fmt(widget.dailyData[_hoverIndex!].$2)),
+                          ...() {
+                            final iso = _isoFromDate(widget.dailyData[_hoverIndex!].$1);
+                            final mins = widget.timeMap[iso] ?? 0;
+                            return mins > 0
+                                ? [('Time', _fmtMins(mins))]
+                                : <(String?, String)>[];
+                          }(),
                         ],
                       ),
                   ],
@@ -1677,13 +1703,16 @@ class _LineChartPainter extends CustomPainter {
 
 class StitchOpsHeatmap extends StatefulWidget {
   final Map<String, int> dailyMap;
+  final Map<String, int> timeMap;
   final DateTime today;
   final ColorScheme colorScheme;
-  const StitchOpsHeatmap(
-      {super.key,
-      required this.dailyMap,
-      required this.today,
-      required this.colorScheme});
+  const StitchOpsHeatmap({
+    super.key,
+    required this.dailyMap,
+    required this.timeMap,
+    required this.today,
+    required this.colorScheme,
+  });
 
   @override
   State<StitchOpsHeatmap> createState() => _StitchOpsHeatmapState();
@@ -1732,9 +1761,11 @@ class _StitchOpsHeatmapState extends State<StitchOpsHeatmap> {
         final iso =
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
         final count = widget.dailyMap[iso] ?? 0;
+        final mins = widget.timeMap[iso] ?? 0;
         tooltipRows = [
           (null, _shortDate(date)),
           ('Stitches', count == 0 ? 'No activity' : _fmt(count)),
+          if (mins > 0) ('Time', _fmtMins(mins)),
         ];
       }
     }
