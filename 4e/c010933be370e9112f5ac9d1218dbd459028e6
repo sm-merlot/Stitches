@@ -1,0 +1,23 @@
+lib/widgets/pattern_canvas.dart
+  266c0109da4e1e8e 1496-1504,1580-1675
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "4ec010933be370e9112f5ac9d1218dbd459028e6",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 105,
+      "total_deletions": 0,
+      "accepted_lines": 105,
+      "overriden_lines": 0
+    }
+  }
+}
