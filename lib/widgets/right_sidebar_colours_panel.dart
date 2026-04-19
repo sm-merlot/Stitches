@@ -408,8 +408,75 @@ class _StitchColoursPanel extends ConsumerWidget {
     final useDmc = ref.watch(settingsProvider).useDmc;
     final theme = Theme.of(context);
 
-    final threads = _compositeThreads(state);
-    final stitchCounts = _countStitchesComposite(state);
+    final allThreads = _compositeThreads(state);
+    final allStitchCounts = _countStitchesComposite(state);
+
+    // Page colour filtering: when page mode is active and the toggle is on,
+    // only show threads that have stitches on the current page.
+    final pageLayout = state.pageLayout;
+    final showPageColours = state.stitchShowPageColours && pageLayout != null && state.stitchMode;
+    List<Thread> threads;
+    Map<String, int> stitchCounts;
+    if (showPageColours) {
+      final (pageCol, pageRow) = pageLayout.pageCoords(state.currentPage);
+      final pageCounts = <String, int>{};
+
+      // FullStitches: use the composite cache so only the topmost visible
+      // stitch per cell is counted — matching the flattened view.
+      final cache = state.compositeResult?.compositeThreads;
+      if (cache != null && cache.isNotEmpty) {
+        for (final entry in cache.entries) {
+          final parts = entry.key.split(',');
+          if (parts.length != 2) continue;
+          final sx = int.tryParse(parts[0]);
+          final sy = int.tryParse(parts[1]);
+          if (sx == null || sy == null) continue;
+          if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) {
+            final id = entry.value.dmcCode;
+            pageCounts[id] = (pageCounts[id] ?? 0) + 1;
+          }
+        }
+      } else {
+        // Fallback: deduplicate FullStitches by cell (first visible layer wins).
+        final seen = <(int, int)>{};
+        for (final layer in state.pattern.layers) {
+          if (!layer.visible) continue;
+          for (final s in layer.stitches) {
+            if (s is! FullStitch) continue;
+            final cell = (s.x, s.y);
+            if (!seen.add(cell)) continue;
+            if (pageLayout.cellOnPage(s.x, s.y, pageCol, pageRow)) {
+              pageCounts[s.threadId] = (pageCounts[s.threadId] ?? 0) + 1;
+            }
+          }
+        }
+      }
+
+      // Non-FullStitch types (backstitches etc.): use the flat pattern list.
+      for (final s in state.pattern.stitches) {
+        if (s is FullStitch) continue;
+        int sx, sy;
+        if (s is BackStitch) {
+          sx = s.x1.floor();
+          sy = s.y1.floor();
+        } else {
+          final coords = EditorState.cellCoords(s);
+          if (coords == null) continue;
+          (sx, sy) = coords;
+        }
+        if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) {
+          pageCounts[s.threadId] = (pageCounts[s.threadId] ?? 0) + 1;
+        }
+      }
+
+      final pageThreadIds = pageCounts.keys.toSet();
+      threads = allThreads.where((t) => pageThreadIds.contains(t.dmcCode)).toList();
+      stitchCounts = pageCounts;
+    } else {
+      threads = allThreads;
+      stitchCounts = allStitchCounts;
+    }
+
     final progress = state.pattern.progress;
     final doneCounts = !progress.isEmpty
         ? _countDoneStitches(state)
@@ -421,14 +488,45 @@ class _StitchColoursPanel extends ConsumerWidget {
     final hasBack = allStitches.any((s) => s is BackStitch);
     final showFocus = hasNonBack && hasBack;
 
-    final totalCross = stitchCounts.values
-        .fold<int>(0, (sum, c) => sum + c) -
-        allStitches.whereType<BackStitch>().length;
-    final totalBack = allStitches.whereType<BackStitch>().length;
+    // When page-filtered, use stitchCounts totals (already page-scoped).
+    // Otherwise use allStitches for backstitch count.
+    // Simpler: count backstitches present in the stitchCounts keys.
+    final backStitchCount = showPageColours
+        ? (() {
+            int count = 0;
+            final (pageCol, pageRow) = pageLayout.pageCoords(state.currentPage);
+            for (final s in state.pattern.stitches.whereType<BackStitch>()) {
+              final sx = s.x1.floor();
+              final sy = s.y1.floor();
+              if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) count++;
+            }
+            return count;
+          })()
+        : allStitches.whereType<BackStitch>().length;
+    final totalCross = stitchCounts.values.fold<int>(0, (sum, c) => sum + c) - backStitchCount;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── Page / All colour toggle (only when page mode is active) ────────
+        if (pageLayout != null && state.stitchMode) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('All')),
+                ButtonSegment(value: true, label: Text('Page')),
+              ],
+              selected: {state.stitchShowPageColours},
+              onSelectionChanged: (s) => notifier.setStitchShowPageColours(s.first),
+              style: const ButtonStyle(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+        ],
         // ── Total stitch count summary + sort ───────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
@@ -439,7 +537,7 @@ class _StitchColoursPanel extends ConsumerWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  '$totalCross stitches${totalBack > 0 ? '  •  $totalBack backstitches' : ''}',
+                  '$totalCross stitches${backStitchCount > 0 ? '  •  $backStitchCount backstitches' : ''}',
                   style: TextStyle(
                       fontSize: 11,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
