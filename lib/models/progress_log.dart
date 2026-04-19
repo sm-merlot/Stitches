@@ -19,21 +19,27 @@ class ProgressLogEntry {
   /// High-watermark cumulative completed backstitch count on [isoDate].
   final int backstitchCount;
 
+  /// Total minutes spent stitching on [isoDate].
+  final int minutesSpent;
+
   const ProgressLogEntry({
     required this.isoDate,
     required this.stitchCount,
     required this.backstitchCount,
+    this.minutesSpent = 0,
   });
 
   ProgressLogEntry copyWith({
     String? isoDate,
     int? stitchCount,
     int? backstitchCount,
+    int? minutesSpent,
   }) =>
       ProgressLogEntry(
         isoDate: isoDate ?? this.isoDate,
         stitchCount: stitchCount ?? this.stitchCount,
         backstitchCount: backstitchCount ?? this.backstitchCount,
+        minutesSpent: minutesSpent ?? this.minutesSpent,
       );
 
   factory ProgressLogEntry.fromYaml(Map yaml) {
@@ -41,6 +47,7 @@ class ProgressLogEntry {
       isoDate: yaml['date'] as String,
       stitchCount: (yaml['stitches'] as num?)?.toInt() ?? 0,
       backstitchCount: (yaml['backstitches'] as num?)?.toInt() ?? 0,
+      minutesSpent: (yaml['minutes'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -48,6 +55,7 @@ class ProgressLogEntry {
         'date': isoDate,
         'stitches': stitchCount,
         if (backstitchCount > 0) 'backstitches': backstitchCount,
+        if (minutesSpent > 0) 'minutes': minutesSpent,
       };
 
   @override
@@ -56,10 +64,11 @@ class ProgressLogEntry {
       other is ProgressLogEntry &&
           isoDate == other.isoDate &&
           stitchCount == other.stitchCount &&
-          backstitchCount == other.backstitchCount;
+          backstitchCount == other.backstitchCount &&
+          minutesSpent == other.minutesSpent;
 
   @override
-  int get hashCode => Object.hash(isoDate, stitchCount, backstitchCount);
+  int get hashCode => Object.hash(isoDate, stitchCount, backstitchCount, minutesSpent);
 
   @override
   String toString() =>

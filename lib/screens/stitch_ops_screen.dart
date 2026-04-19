@@ -86,6 +86,12 @@ class _StitchOpsStats {
   final int currentStreak;
   final int longestStreak;
 
+  // ── Time tracking ─────────────────────────────────────────────────────────
+  final int totalMinutes;
+  final int todayMinutes;
+  final int weekMinutes;
+  final double stitchesPerHour;
+
   // ── Per-thread ─────────────────────────────────────────────────────────────
   final List<_ThreadStats> threadStats;
 
@@ -123,6 +129,10 @@ class _StitchOpsStats {
     required this.dailyMap,
     required this.dailyData,
     required this.cumulativeData,
+    required this.totalMinutes,
+    required this.todayMinutes,
+    required this.weekMinutes,
+    required this.stitchesPerHour,
   });
 
   double get overallPct =>
@@ -330,11 +340,37 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     dailyMap: dailyMap,
     dailyData: dailyData,
     cumulativeData: cumulativeData,
+    totalMinutes: _computeTotalMinutes(log),
+    todayMinutes: _computeMinutesInRange(log, today, const Duration(days: 1)),
+    weekMinutes: _computeMinutesInRange(log, today, const Duration(days: 7)),
+    stitchesPerHour: _computeStitchesPerHour(log, totalDone),
   );
 }
 
-(int, int)? _stitchXY(Stitch s) => switch (s) {
-      FullStitch(:final x, :final y) => (x, y),
+// ─── Time helpers ──────────────────────────────────────────────────────────────
+
+int _computeTotalMinutes(List<ProgressLogEntry> log) =>
+    log.fold(0, (sum, e) => sum + e.minutesSpent);
+
+/// Sum of [minutesSpent] for entries within the last [window] before [now].
+int _computeMinutesInRange(
+    List<ProgressLogEntry> log, DateTime now, Duration window) {
+  final cutoff = now.subtract(window);
+  final cutoffIso =
+      '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
+  return log
+      .where((e) => e.isoDate.compareTo(cutoffIso) > 0)
+      .fold(0, (sum, e) => sum + e.minutesSpent);
+}
+
+/// Overall stitches-per-hour based on total recorded time.
+double _computeStitchesPerHour(List<ProgressLogEntry> log, int totalDone) {
+  final total = _computeTotalMinutes(log);
+  if (total == 0) return 0;
+  return totalDone / (total / 60.0);
+}
+
+(int, int)? _stitchXY(Stitch s) => switch (s) {      FullStitch(:final x, :final y) => (x, y),
       HalfStitch(:final x, :final y) => (x, y),
       HalfCrossStitch(:final x, :final y) => (x, y),
       QuarterStitch(:final x, :final y) => (x, y),
@@ -404,6 +440,9 @@ class StitchOpsScreen extends StatelessWidget {
                 _OverviewSection(stats: stats, colorScheme: colorScheme);
             final velocityCard =
                 _RateSection(stats: stats, colorScheme: colorScheme);
+            final timeCard = stats.totalMinutes > 0
+                ? _TimeSection(stats: stats, colorScheme: colorScheme)
+                : null;
             final dailyCard = hasDaily
                 ? StitchOpsDailyChart(
                     dailyData: stats.dailyData, colorScheme: colorScheme)
@@ -446,6 +485,8 @@ class StitchOpsScreen extends StatelessWidget {
                   velocityCard,
                 ],
                 gap,
+
+                if (timeCard != null) ...[timeCard, gap],
 
                 if (isWide) ...[
                   if (dailyCard != null && cumulativeCard != null)
@@ -819,6 +860,67 @@ class _RateRow extends StatelessWidget {
         Text(value,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
       ],
+    );
+  }
+}
+
+// ─── Time tracking section ────────────────────────────────────────────────────
+
+class _TimeSection extends StatelessWidget {
+  final _StitchOpsStats stats;
+  final ColorScheme colorScheme;
+  const _TimeSection({required this.stats, required this.colorScheme});
+
+  /// Format minutes as "Xh Ym" or just "Ym" when < 1 hour.
+  static String _fmtMins(int mins) {
+    if (mins <= 0) return '0m';
+    final h = mins ~/ 60;
+    final m = mins.remainder(60);
+    if (h == 0) return '${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader('Time'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _StatTile(
+                label: 'Total',
+                value: _fmtMins(stats.totalMinutes),
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              _StatTile(
+                label: 'Today',
+                value: _fmtMins(stats.todayMinutes),
+                color: colorScheme.secondary,
+              ),
+              const SizedBox(width: 8),
+              _StatTile(
+                label: 'Week',
+                value: _fmtMins(stats.weekMinutes),
+                color: colorScheme.tertiary,
+              ),
+            ],
+          ),
+          if (stats.stitchesPerHour > 0) ...[
+            const SizedBox(height: 10),
+            Divider(color: colorScheme.outlineVariant),
+            const SizedBox(height: 6),
+            _RateRow(
+              label: 'Stitches / hour',
+              value: stats.stitchesPerHour.toStringAsFixed(1),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

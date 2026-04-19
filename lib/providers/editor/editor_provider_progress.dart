@@ -338,6 +338,36 @@ mixin ProgressMixin on Notifier<EditorState> {
     _applyProgress(prog.copyWith(completedPages: pages), pushUndo: false);
   }
 
+  /// Adds [minutes] to today's progress log entry's [minutesSpent].
+  ///
+  /// Called when the user stops the stitching timer.  Creates today's entry
+  /// if one doesn't exist yet, otherwise accumulates into the existing one.
+  void addTimeToLog(int minutes) {
+    if (minutes <= 0) return;
+    final today = todayIsoDate();
+    final existing = state.pattern.progressLog
+        .where((e) => e.isoDate == today)
+        .firstOrNull;
+    final currentCount = state.pattern.progress.completedStitches.length;
+    final currentBackCount = state.pattern.progress.completedBackstitches.length;
+    final updated = existing != null
+        ? existing.copyWith(minutesSpent: existing.minutesSpent + minutes)
+        : ProgressLogEntry(
+            isoDate: today,
+            stitchCount: currentCount,
+            backstitchCount: currentBackCount,
+            minutesSpent: minutes,
+          );
+    final newLog = [
+      ...state.pattern.progressLog.where((e) => e.isoDate != today),
+      updated,
+    ];
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(progressLog: newLog),
+      isDirty: true,
+    );
+  }
+
   /// Clear all progress (completed stitches and pages). Undoable.
   void clearProgress() {
     if (state.pattern.progress == PatternProgress.empty) return;

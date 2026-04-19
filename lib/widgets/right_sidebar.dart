@@ -6,6 +6,7 @@ import '../providers/editor/editor_provider.dart';
 import 'layers_panel.dart';
 import 'right_sidebar_colours_panel.dart';
 import 'right_sidebar_palettes_panel.dart';
+import 'stitching_timer_button.dart';
 
 enum RightSidebarContext { mainEditor, snippetEditor }
 
@@ -176,6 +177,11 @@ class _RightSidebarState extends ConsumerState<RightSidebar> {
             children: [
               Expanded(child: MarkDoneButton(state: editorState)),
               Expanded(child: StitchDemoButton(state: editorState)),
+            ],
+          ),
+          Row(
+            children: [
+              const Expanded(child: StitchingTimerButton()),
             ],
           ),
         ],
