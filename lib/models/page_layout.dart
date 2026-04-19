@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'page_config.dart';
 import 'pattern.dart';
@@ -133,26 +134,24 @@ class PageLayout {
     final pagesDown =
         (pattern.height / config.pageHeight).ceil().clamp(1, pattern.height);
 
-    // For boundary snapping we use a *quantised* colour at each cell rather
-    // than the raw thread ID.  Thread IDs are too fine-grained: DMC 310 (Black
-    // #000000) and 3371 (Black Brown #180808) are perceptually identical but
-    // have different IDs, which causes the ping-pong island check to miss
-    // cases where a coloured stitch is sandwiched between two very-dark threads
-    // of slightly different codes.
+    // For boundary snapping we use the thread's index in pattern.threads as an
+    // opaque colour ID.  This means every distinct DMC code is treated as a
+    // distinct colour (e.g. 310 Black ≠ 3371 Black Brown), which is correct:
+    // they are different stitching threads and produce a visible seam.
     //
-    // Quantising to 3 bits per channel (top 3 bits → >>5) groups colours that
-    // differ by less than ~32 units per channel into the same "block colour".
-    // 310 (#000000) and 3371 (#180808) both reduce to 0; a mid-tone colour
-    // like 3685 (#520120) reduces to a clearly different value.
+    // Earlier versions quantised colours to 3 bits per channel to merge
+    // near-identical darks, but this collapsed unrelated threads (outline 'q'
+    // and background 'A') into the same bucket, causing the snap/island
+    // heuristics to misfire.  Using raw thread indices is simpler and more
+    // correct.
     //
-    // We build the map from the BOTTOMMOST visible layer (putIfAbsent while
-    // iterating layers.reversed = top→bottom) so that colour-fill layers
-    // beneath black outline layers are used for the snap decision.
-    int _quantise(Color c) =>
-        ((c.red >> 5) << 6) | ((c.green >> 5) << 3) | (c.blue >> 5);
-
-    final Map<String, int> threadQuantColor = {
-      for (final t in pattern.threads) t.dmcCode: _quantise(t.color),
+    // We use the TOPMOST visible layer colour for each cell, matching exactly
+    // what the user sees on the canvas.  `layers` is ordered bottom→top;
+    // iterating reversed (top→bottom) with putIfAbsent means the first write
+    // per cell wins, which is the topmost layer.
+    final threadIndex = <String, int>{
+      for (int i = 0; i < pattern.threads.length; i++)
+        pattern.threads[i].dmcCode: i,
     };
 
     final Map<int, int?> snapColor = {};
@@ -161,7 +160,7 @@ class PageLayout {
       for (final stitch in layer.stitches) {
         if (stitch is FullStitch) {
           final key = (stitch.x << 16) | stitch.y;
-          snapColor.putIfAbsent(key, () => threadQuantColor[stitch.threadId]);
+          snapColor.putIfAbsent(key, () => threadIndex[stitch.threadId]);
         }
       }
     }
@@ -372,17 +371,42 @@ class PageLayout {
   ///
   /// Strategy:
   ///   1. Scan outward up to [_snapRange] stitches for a colour transition
-  ///      that does NOT create a lone-stitch colour island.  A cut between
-  ///      posA (colour cA) and posB (colour cB) is rejected if
-  ///      color(posA-1)==cB or color(posB+1)==cA — the ping-pong pattern
-  ///      that would leave a single stitch of one colour isolated at the
-  ///      page edge.  Intentionally thin border stitches (different colour
-  ///      on their far side) are accepted.
-  ///      [_snapRange] is always at least 3 so natural borders a couple of
-  ///      stitches from the nominal line are still reachable.
+  ///      that does NOT create a colour island.  A cut between posA (colour
+  ///      cA) and posB (colour cB) is rejected if:
+  ///      • Fast-path ping-pong: color(posA-1)==cB or color(posB+1)==cA
+  ///        (single stitch of one colour sandwiched between two runs of the
+  ///        other colour).
+  ///      • Window island check: within a window of [_snapRange] stitches on
+  ///        each side of the proposed cut, any colour whose minority-side
+  ///        count is ≤ 2 AND whose majority-side count is ≥ 2× the minority
+  ///        is flagged as an island — UNLESS the colour demonstrably
+  ///        continues beyond the window on the minority side (i.e. it is a
+  ///        large region that merely clips the window, not a thin strip).
+  ///      [_snapRange] is always at least [_snapRange] so natural borders a
+  ///      few stitches from the nominal line are still reachable.
   ///   2. If no qualifying cut is found (solid block crosses the boundary)
   ///      fall back to a seeded pseudo-random offset within ±[fuzzyAmount].
-  static const int _snapRange = 3;
+  @visibleForTesting
+  static const int snapRange = 4;
+  static const int _snapRange = snapRange;
+
+  @visibleForTesting
+  static int computeOffset({
+    required int nominalBoundary,
+    required int crossIndex,
+    required int fuzzyAmount,
+    required int maxBoundary,
+    required int? Function(int primary, int crossIndex) colorAt,
+    required int seed,
+  }) =>
+      _computeOffset(
+        nominalBoundary: nominalBoundary,
+        crossIndex: crossIndex,
+        fuzzyAmount: fuzzyAmount,
+        maxBoundary: maxBoundary,
+        colorAt: colorAt,
+        seed: seed,
+      );
 
   static int _computeOffset({
     required int nominalBoundary,
@@ -395,14 +419,106 @@ class PageLayout {
     if (fuzzyAmount == 0) return 0;
 
     // Returns true if cutting between posA (colour cA) and posB (colour cB)
-    // is valid — i.e. it does not create a lone-stitch colour island.
+    // is valid — i.e. it does not create a colour island on either page.
     bool isQualifyingCut(int posA, int posB) {
       final cA = colorAt(posA, crossIndex);
       final cB = colorAt(posB, crossIndex);
       if (cA == null || cB == null || cA == cB) return false;
-      // Reject ping-pong: [cB, cA | cB, ...] or [..., cA | cB, cA]
+
+      // ── Fast-path ping-pong check ───────────────────────────────────────
+      // Reject [cB, cA | cB, ...] or [..., cA | cB, cA]: a single stitch of
+      // one colour sandwiched between two runs of the other.
       if (posA > 0 && colorAt(posA - 1, crossIndex) == cB) return false;
-      if (posB + 1 < maxBoundary && colorAt(posB + 1, crossIndex) == cA) return false;
+      if (posB + 1 < maxBoundary && colorAt(posB + 1, crossIndex) == cA) {
+        return false;
+      }
+
+      // ── Window-based colour-island check ───────────────────────────────
+      // Build stitch-count maps for the [_snapRange]-wide window on each side
+      // of the proposed cut.  A colour is flagged as an island on one side if:
+      //   • its minority-side count is ≤ 2, AND
+      //   • the majority-side count is ≥ 2× the minority count, AND
+      //   • the colour does NOT continue beyond the window edge on the
+      //     minority side (which would indicate a large region merely
+      //     clipping the window, not a thin isolated strip).
+      const window = _snapRange;
+      final leftCounts = <int, int>{};
+      final rightCounts = <int, int>{};
+      for (int p = math.max(0, posA - window + 1); p <= posA; p++) {
+        final c = colorAt(p, crossIndex);
+        if (c != null) leftCounts[c] = (leftCounts[c] ?? 0) + 1;
+      }
+      for (int p = posB; p < math.min(maxBoundary, posB + window); p++) {
+        final c = colorAt(p, crossIndex);
+        if (c != null) rightCounts[c] = (rightCounts[c] ?? 0) + 1;
+      }
+
+      for (final c in {...leftCounts.keys, ...rightCounts.keys}) {
+        final l = leftCounts[c] ?? 0;
+        final r = rightCounts[c] ?? 0;
+        if (l == 0 || r == 0) continue; // colour is only on one side, fine
+        final minority = l <= r ? l : r;
+        final majority = l <= r ? r : l;
+        if (minority > 2 || majority < minority * 2) continue;
+        // Potential island — check whether the minority region extends
+        // beyond the window (large region clipping the window → not an island).
+        if (l <= r) {
+          // Minority is on the left: check just beyond the left window edge.
+          final beyond = posA - window;
+          if (beyond >= 0 && colorAt(beyond, crossIndex) == c) continue;
+        } else {
+          // Minority is on the right: check just beyond the right window edge.
+          final beyond = posB + window;
+          if (beyond < maxBoundary && colorAt(beyond, crossIndex) == c) {
+            continue;
+          }
+        }
+        return false; // colour island detected — reject this cut position
+      }
+
+      // ── Extended-scan colour-split check ─────────────────────────────────
+      // If a colour has a small presence on one side of the cut but does NOT
+      // appear in the immediate window on the other side, scan one extra
+      // window-width further to see if it reappears.  If it does, the cut is
+      // splitting a colour block whose "other half" lies just beyond the search
+      // window, leaving a few stitches of that colour stranded on the wrong
+      // page (e.g. 2 blue stitches on the left, then 4 white, then 3 more
+      // blue to the right — cutting at the blue/white boundary is wrong).
+      //
+      // Guard: if the colour ALSO appears beyond the left window (further left),
+      // it is a regularly-repeating structural element (outline, separator) and
+      // should NOT be treated as a block split.
+      for (final c in leftCounts.keys) {
+        if (rightCounts.containsKey(c)) continue; // handled above
+        if ((leftCounts[c] ?? 0) > 2) continue;   // large block, not an island
+        // If this colour already appeared further left, it's a repeating element.
+        bool repeatsLeft = false;
+        for (int p = posA - window; p >= math.max(0, posA - 2 * window); p--) {
+          if (colorAt(p, crossIndex) == c) { repeatsLeft = true; break; }
+        }
+        if (repeatsLeft) continue;
+        // Otherwise check if it reappears to the right beyond the window.
+        final extEnd = math.min(maxBoundary, posB + 2 * window);
+        for (int p = posB + window; p < extEnd; p++) {
+          if (colorAt(p, crossIndex) == c) return false;
+        }
+      }
+      for (final c in rightCounts.keys) {
+        if (leftCounts.containsKey(c)) continue; // handled above
+        if ((rightCounts[c] ?? 0) > 2) continue;
+        // Symmetric: if colour already appeared further right, it's repeating.
+        bool repeatsRight = false;
+        for (int p = posB + window; p < math.min(maxBoundary, posB + 2 * window); p++) {
+          if (colorAt(p, crossIndex) == c) { repeatsRight = true; break; }
+        }
+        if (repeatsRight) continue;
+        // Check if it reappears to the left beyond the window.
+        final extStart = math.max(0, posA - 2 * window + 1);
+        for (int p = posA - window; p >= extStart; p--) {
+          if (colorAt(p, crossIndex) == c) return false;
+        }
+      }
+
       return true;
     }
 
