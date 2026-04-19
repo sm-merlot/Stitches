@@ -154,7 +154,7 @@ Future<void> main(List<String> arguments) async {
     );
 
     print('Encoding GIF…');
-    File(outputPath!).writeAsBytesSync(gifBytes);
+    File(outputPath).writeAsBytesSync(gifBytes);
     print('Saved to $outputPath');
     return;
   }
