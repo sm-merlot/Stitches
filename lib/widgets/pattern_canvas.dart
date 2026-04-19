@@ -1493,6 +1493,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   ),
                 ),
               ),
+            // Drag selection tooltip — shows size and from/to coords while dragging.
+            if ((_dragSelectionRect != null && _selectionAnchor != null) ||
+                (_progressDragRect != null && _progressAnchor != null && _hasDraggedProgress))
+              _SelectionTooltipOverlay(
+                rect: _dragSelectionRect ?? _progressDragRect!,
+                anchor: _selectionAnchor ?? _progressAnchor!,
+                mousePos: _mouseScreenPos,
+                canvasSize: _canvasSize,
+              ),
             // Overlay layer: cursor, ghost stitches, selection, hover.
             // Repaints freely without touching the cached static layer.
             CustomPaint(
@@ -1565,6 +1574,102 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               ? SystemMouseCursors.move
               : SystemMouseCursors.cell,
     };
+  }
+}
+
+// ─── Selection drag tooltip ───────────────────────────────────────────────────
+
+class _SelectionTooltipOverlay extends StatelessWidget {
+  final Rect rect;
+  final Offset anchor;
+  final Offset? mousePos;
+  final Size canvasSize;
+
+  const _SelectionTooltipOverlay({
+    required this.rect,
+    required this.anchor,
+    required this.mousePos,
+    required this.canvasSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final w = rect.width.toInt();
+    final h = rect.height.toInt();
+    final fromX = anchor.dx.toInt() + 1; // 1-based
+    final fromY = anchor.dy.toInt() + 1;
+    final toX = (rect.right - 1).toInt() + 1;
+    final toY = (rect.bottom - 1).toInt() + 1;
+
+    // Clamp to ensure from ≤ to in display
+    final x1 = math.min(fromX, toX);
+    final y1 = math.min(fromY, toY);
+    const tooltipWidth = 160.0;
+    const tooltipHeight = 64.0;
+    const offset = 14.0;
+
+    // Position near the cursor; default to top-right; flip if near edges.
+    double left, top;
+    final mp = mousePos;
+    if (mp != null) {
+      left = mp.dx + offset;
+      top = mp.dy - tooltipHeight - offset;
+      // Flip right → left if near right edge
+      if (left + tooltipWidth > canvasSize.width - 8) {
+        left = mp.dx - tooltipWidth - offset;
+      }
+      // Flip above → below if near top edge
+      if (top < 8) top = mp.dy + offset;
+      left = left.clamp(8.0, canvasSize.width - tooltipWidth - 8);
+      top = top.clamp(8.0, canvasSize.height - tooltipHeight - 8);
+    } else {
+      left = 16;
+      top = 16;
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        child: Container(
+          width: tooltipWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DefaultTextStyle(
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+              decoration: TextDecoration.none,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.crop_free, color: Colors.white70, size: 13),
+                    const SizedBox(width: 5),
+                    Text('$w × $h', style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    )),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text('From  ($x1, $y1)', style: const TextStyle(color: Colors.white70)),
+                Text('To      ($toX, $toY)', style: const TextStyle(color: Colors.white70)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
