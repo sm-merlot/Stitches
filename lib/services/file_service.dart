@@ -277,6 +277,9 @@ class FileService {
           if (entry.backstitchCount > 0) {
             buf.write(', backstitches: ${entry.backstitchCount}');
           }
+          if (entry.minutesSpent > 0) {
+            buf.write(', minutes: ${entry.minutesSpent}');
+          }
           buf.writeln('}');
         }
       }
