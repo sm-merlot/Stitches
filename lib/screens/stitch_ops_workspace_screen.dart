@@ -678,14 +678,11 @@ class _StatsView extends StatelessWidget {
             )
           : null;
       final heatmapCard = hasHeatmap
-          ? _WsChartCard(
-              title: 'Activity (16 weeks)',
-              child: StitchOpsHeatmap(
-                dailyMap: stats.dailyMap,
-                timeMap: stats.timeMap,
-                today: DateTime.now(),
-                colorScheme: colorScheme,
-              ),
+          ? StitchOpsHeatmap(
+              dailyMap: stats.dailyMap,
+              timeMap: stats.timeMap,
+              today: DateTime.now(),
+              colorScheme: colorScheme,
             )
           : null;
 
