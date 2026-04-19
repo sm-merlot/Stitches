@@ -95,6 +95,9 @@ class _StitchOpsStats {
   final int todayMinutes;
   final int weekMinutes;
   final double stitchesPerHour;
+  /// All log entries that have [minutesSpent] > 0, sorted descending by date,
+  /// used to populate the time-history editor.
+  final List<ProgressLogEntry> timeLog;
 
   // ── Per-thread ─────────────────────────────────────────────────────────────
   final List<_ThreadStats> threadStats;
@@ -137,6 +140,7 @@ class _StitchOpsStats {
     required this.todayMinutes,
     required this.weekMinutes,
     required this.stitchesPerHour,
+    required this.timeLog,
   });
 
   double get overallPct =>
@@ -348,6 +352,8 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern) {
     todayMinutes: _computeMinutesInRange(log, today, const Duration(days: 1)),
     weekMinutes: _computeMinutesInRange(log, today, const Duration(days: 7)),
     stitchesPerHour: _computeStitchesPerHour(log, totalDone),
+    timeLog: [...log]
+      ..sort((a, b) => b.isoDate.compareTo(a.isoDate)),
   );
 }
 
@@ -452,7 +458,8 @@ class StitchOpsScreen extends StatelessWidget {
                 ? _TimeSection(
                     stats: stats,
                     colorScheme: colorScheme,
-                    onAdjustTime: onAdjustTime)
+                    onAdjustTime: onAdjustTime,
+                    timeLog: stats.timeLog)
                 : null;
             final dailyCard = hasDaily
                 ? StitchOpsDailyChart(
@@ -880,14 +887,15 @@ class _RateRow extends StatelessWidget {
 class _TimeSection extends StatelessWidget {
   final _StitchOpsStats stats;
   final ColorScheme colorScheme;
+  final List<ProgressLogEntry> timeLog;
   final void Function(String isoDate, int newMinutes)? onAdjustTime;
   const _TimeSection({
     required this.stats,
     required this.colorScheme,
+    required this.timeLog,
     this.onAdjustTime,
   });
 
-  /// Format minutes as "Xh Ym" or just "Ym" when < 1 hour.
   static String _fmtMins(int mins) {
     if (mins <= 0) return '0m';
     final h = mins ~/ 60;
@@ -897,18 +905,17 @@ class _TimeSection extends StatelessWidget {
     return '${h}h ${m}m';
   }
 
-  Future<void> _showEditDialog(BuildContext context) async {
-    final today = todayIsoDate();
-    final current = stats.todayMinutes;
-    final result = await showDialog<int>(
+  Future<void> _showHistoryDialog(BuildContext context) async {
+    final results = await showDialog<Map<String, int>>(
       context: context,
-      builder: (ctx) => _AdjustTimeDialog(
-        initialMinutes: current,
+      builder: (ctx) => _TimeHistoryDialog(
+        timeLog: timeLog,
         colorScheme: colorScheme,
       ),
     );
-    if (result != null && context.mounted) {
-      onAdjustTime!(today, result);
+    if (results == null || !context.mounted) return;
+    for (final entry in results.entries) {
+      onAdjustTime!(entry.key, entry.value);
     }
   }
 
@@ -924,10 +931,10 @@ class _TimeSection extends StatelessWidget {
               Expanded(child: _SectionHeader('Time')),
               if (canEdit)
                 Tooltip(
-                  message: "Adjust today's logged time",
+                  message: 'Edit time history',
                   child: InkWell(
                     borderRadius: BorderRadius.circular(4),
-                    onTap: () => _showEditDialog(context),
+                    onTap: () => _showHistoryDialog(context),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
                       child: Icon(
@@ -977,107 +984,182 @@ class _TimeSection extends StatelessWidget {
   }
 }
 
-// ─── Adjust time dialog ───────────────────────────────────────────────────────
+// ─── Time history editor dialog ───────────────────────────────────────────────
+//
+// Shows every day that has logged time (sorted newest first) plus today even if
+// it has 0 minutes, so the user can always add or correct any entry.
+// Returns a Map<isoDate, newMinutes> of only the entries that changed.
 
-class _AdjustTimeDialog extends StatefulWidget {
-  final int initialMinutes;
+class _TimeHistoryDialog extends StatefulWidget {
+  final List<ProgressLogEntry> timeLog; // sorted desc by date
   final ColorScheme colorScheme;
-  const _AdjustTimeDialog({
-    required this.initialMinutes,
+  const _TimeHistoryDialog({
+    required this.timeLog,
     required this.colorScheme,
   });
 
   @override
-  State<_AdjustTimeDialog> createState() => _AdjustTimeDialogState();
+  State<_TimeHistoryDialog> createState() => _TimeHistoryDialogState();
 }
 
-class _AdjustTimeDialogState extends State<_AdjustTimeDialog> {
-  late final TextEditingController _hoursCtrl;
-  late final TextEditingController _minsCtrl;
+class _TimeHistoryDialogState extends State<_TimeHistoryDialog> {
+  // isoDate → (hoursController, minutesController, originalMinutes)
+  late final Map<String, (TextEditingController, TextEditingController, int)>
+      _rows;
+  late final List<String> _dates; // display order (desc)
 
   @override
   void initState() {
     super.initState();
-    final h = widget.initialMinutes ~/ 60;
-    final m = widget.initialMinutes.remainder(60);
-    _hoursCtrl = TextEditingController(text: h.toString());
-    _minsCtrl = TextEditingController(text: m.toString());
+    final today = todayIsoDate();
+    // Build ordered date list: today first, then all other entries that have
+    // minutesSpent > 0, skipping today if it appears there.
+    final dateSet = <String>{today};
+    _dates = [today];
+    for (final e in widget.timeLog) {
+      if (dateSet.add(e.isoDate)) _dates.add(e.isoDate);
+    }
+
+    // Build a lookup from the log.
+    final byDate = {for (final e in widget.timeLog) e.isoDate: e.minutesSpent};
+
+    _rows = {};
+    for (final d in _dates) {
+      final mins = byDate[d] ?? 0;
+      _rows[d] = (
+        TextEditingController(text: (mins ~/ 60).toString()),
+        TextEditingController(text: mins.remainder(60).toString()),
+        mins,
+      );
+    }
   }
 
   @override
   void dispose() {
-    _hoursCtrl.dispose();
-    _minsCtrl.dispose();
+    for (final (h, m, _) in _rows.values) {
+      h.dispose();
+      m.dispose();
+    }
     super.dispose();
   }
 
-  int get _totalMinutes {
-    final h = int.tryParse(_hoursCtrl.text) ?? 0;
-    final m = int.tryParse(_minsCtrl.text) ?? 0;
+  int _minutesFor(String date) {
+    final (hCtrl, mCtrl, _) = _rows[date]!;
+    final h = int.tryParse(hCtrl.text) ?? 0;
+    final m = int.tryParse(mCtrl.text) ?? 0;
     return (h.clamp(0, 99) * 60) + m.clamp(0, 59);
   }
+
+  void _save() {
+    final changes = <String, int>{};
+    for (final date in _dates) {
+      final newMins = _minutesFor(date);
+      final (_, _, original) = _rows[date]!;
+      if (newMins != original) changes[date] = newMins;
+    }
+    Navigator.of(context).pop(changes);
+  }
+
+  String _friendlyDate(String iso) {
+    final today = todayIsoDate();
+    if (iso == today) return 'Today';
+    final dt = parseIsoDate(iso);
+    final now = DateTime.now();
+    final diff = DateTime(now.year, now.month, now.day)
+        .difference(DateTime(dt.year, dt.month, dt.day))
+        .inDays;
+    if (diff == 1) return 'Yesterday';
+    return '${dt.day} ${_monthFull(dt.month)} ${dt.year != now.year ? '${dt.year}' : ''}'.trim();
+  }
+
+  static const _months = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  static String _monthFull(int m) => _months[m];
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("Adjust today's time"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Correct the total time logged for today.\nThis overwrites the current value.',
-            style: TextStyle(
-              fontSize: 13,
-              color: widget.colorScheme.onSurfaceVariant,
+      title: const Text('Edit time history'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Correct the total stitching time for any day.\nChanges overwrite the recorded values.',
+              style: TextStyle(
+                fontSize: 12,
+                color: widget.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              // Hours field
-              SizedBox(
-                width: 72,
-                child: TextField(
-                  controller: _hoursCtrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Hours',
-                    counterText: '',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onChanged: (_) => setState(() {}),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 380),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: _dates.map((date) {
+                    final (hCtrl, mCtrl, _) = _rows[date]!;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _friendlyDate(date),
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 52,
+                            child: TextField(
+                              controller: hCtrl,
+                              keyboardType: TextInputType.number,
+                              maxLength: 2,
+                              textAlign: TextAlign.center,
+                              decoration: const InputDecoration(
+                                labelText: 'h',
+                                counterText: '',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    vertical: 8, horizontal: 6),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          SizedBox(
+                            width: 52,
+                            child: TextField(
+                              controller: mCtrl,
+                              keyboardType: TextInputType.number,
+                              maxLength: 2,
+                              textAlign: TextAlign.center,
+                              decoration: const InputDecoration(
+                                labelText: 'm',
+                                counterText: '',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    vertical: 8, horizontal: 6),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text('h', style: TextStyle(fontSize: 16)),
-              ),
-              // Minutes field
-              SizedBox(
-                width: 72,
-                child: TextField(
-                  controller: _minsCtrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Minutes',
-                    counterText: '',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text('m', style: TextStyle(fontSize: 16)),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -1085,7 +1167,7 @@ class _AdjustTimeDialogState extends State<_AdjustTimeDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(_totalMinutes),
+          onPressed: _save,
           child: const Text('Save'),
         ),
       ],
