@@ -628,6 +628,7 @@ class _StatsView extends StatelessWidget {
               title: 'Daily (60 days)',
               child: StitchOpsDailyChart(
                 dailyData: stats.dailyData,
+                timeMap: stats.timeMap,
                 colorScheme: colorScheme,
               ),
             )
