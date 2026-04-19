@@ -172,6 +172,16 @@ class EditorState {
     final rect = selectionRect;
     if (rect == null) return [];
     if (canvasSelectionMode) {
+      // Mirror the compositor-based logic in copySelection: use the deduplicated
+      // visible stitch list so the selection count and copy both reflect what
+      // is actually rendered on the canvas.
+      final composite = compositeResult;
+      if (composite != null) {
+        return [
+          ...composite.dedupedNonBack.where((s) => isStitchInRect(s, rect)),
+          ...composite.backstitches.where((s) => isStitchInRect(s, rect)),
+        ];
+      }
       return pattern.layers
           .where((l) => l.visible)
           .expand((l) => l.stitches.where((s) => isStitchInRect(s, rect)))

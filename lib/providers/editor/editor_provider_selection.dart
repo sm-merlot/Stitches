@@ -62,10 +62,24 @@ mixin SelectionMixin on Notifier<EditorState> {
     }
     final List<Stitch> inSel;
     if (state.canvasSelectionMode) {
-      inSel = state.pattern.layers
-          .where((l) => l.visible)
-          .expand((l) => l.stitches.where((s) => EditorState.isStitchInRect(s, rect)))
-          .toList();
+      // Use the compositor's already-deduplicated visible stitch list so the
+      // copy matches exactly what is rendered on the canvas: one winner per cell
+      // (topmost visible normal-blend opaque layer) plus all visible backstitches.
+      // Falls back to raw layer iteration if the composite cache is stale/absent.
+      final composite = state.compositeResult;
+      if (composite != null) {
+        inSel = [
+          ...composite.dedupedNonBack
+              .where((s) => EditorState.isStitchInRect(s, rect)),
+          ...composite.backstitches
+              .where((s) => EditorState.isStitchInRect(s, rect)),
+        ];
+      } else {
+        inSel = state.pattern.layers
+            .where((l) => l.visible)
+            .expand((l) => l.stitches.where((s) => EditorState.isStitchInRect(s, rect)))
+            .toList();
+      }
     } else {
       inSel = state.activeLayer.stitches
           .where((s) => EditorState.isStitchInRect(s, rect))

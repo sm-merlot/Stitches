@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+### Patch Changes
+
+- 0c19d73: Fix "select all visible layers" copy picking up stitch from occluded/transparent layers and missing stitches from the topmost visible layer.
+
+  **Before:** canvas-mode copy iterated every visible layer independently, so cells covered by multiple layers produced duplicate stitches in the clipboard (lower-layer stitches that are visually hidden behind upper layers were included), and layers with `opacity: 0` but `visible: true` were incorrectly included too.
+
+  **After:** `copySelection` and the `selectedStitches` getter now use the compositor's `dedupedNonBack` + `backstitches` result — the same deduplicated, opacity-aware stitch list that drives canvas rendering. One stitch per occupied cell (topmost visible normal-blend opaque layer wins), all visible backstitches included, opacity-zero layers naturally excluded. Falls back to the previous raw-layer iteration when the composite cache is absent.
+
 ## 0.6.0
 
 ### Minor Changes
