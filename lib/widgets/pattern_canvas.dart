@@ -857,6 +857,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           if (bs == null) _checkProgressDoubleClick(event.localPosition);
           setState(() {
             _progressAnchor = cell;
+            _progressAnchorScreen = event.localPosition; // needed for drag threshold
             _progressBackstitch = bs;
             _hasDraggedProgress = false;
             _progressDragRect = null;
@@ -1121,6 +1122,33 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       } else if (ref.read(editorProvider).currentTool != DrawingTool.backstitch) {
         // Backstitch is click-to-click, not drag-to-draw.
         _handleDrawAt(event.localPosition);
+      }
+    }
+
+    // ── Kind-agnostic fallback ───────────────────────────────────────────────
+    // Apple Pencil can emit PointerMoveEvents with kind == unknown on some
+    // iPadOS versions, bypassing both the stylus and touch branches above.
+    // If an anchor is set but hasn't been serviced yet, update drag state here.
+    if (_selectionAnchor != null) {
+      final cell = _screenToSelCell(event.localPosition);
+      _hasDraggedSelection = true;
+      _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
+      _scheduleRebuild();
+    } else if (_progressAnchor != null && ref.read(editorProvider).stitchMode) {
+      final cell = _screenToSelCell(event.localPosition);
+      final newRect = _buildSelRect(_progressAnchor!, cell);
+      if (!_hasDraggedProgress) {
+        if (_progressAnchorScreen != null) {
+          if ((event.localPosition - _progressAnchorScreen!).distance > _kProgressDragThreshold) {
+            _hasDraggedProgress = true;
+          }
+        } else if (newRect.width > 1 || newRect.height > 1) {
+          _hasDraggedProgress = true;
+        }
+      }
+      if (newRect != _progressDragRect) {
+        _progressDragRect = newRect;
+        _scheduleRebuild();
       }
     }
   }
@@ -1493,6 +1521,28 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   ),
                 ),
               ),
+            // Drag selection tooltip — shows size and from/to coords while dragging.
+            if ((_dragSelectionRect != null && _selectionAnchor != null) ||
+                (_progressDragRect != null && _progressAnchor != null && _hasDraggedProgress))
+              () {
+                final rect = _dragSelectionRect ?? _progressDragRect!;
+                final anchor = _selectionAnchor ?? _progressAnchor!;
+                // Determine drag direction by comparing mouse screen pos to anchor screen pos.
+                final anchorScreen = _viewport.canvasToScreen(
+                  Offset(anchor.dx * _cellSize, anchor.dy * _cellSize),
+                );
+                final mp = _mouseScreenPos;
+                final dragRight = mp == null || mp.dx >= anchorScreen.dx;
+                final dragDown  = mp == null || mp.dy >= anchorScreen.dy;
+                return _SelectionTooltipOverlay(
+                  rect: rect,
+                  anchor: anchor,
+                  mousePos: mp,
+                  canvasSize: _canvasSize,
+                  dragRight: dragRight,
+                  dragDown: dragDown,
+                );
+              }(),
             // Overlay layer: cursor, ghost stitches, selection, hover.
             // Repaints freely without touching the cached static layer.
             CustomPaint(
@@ -1565,6 +1615,109 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               ? SystemMouseCursors.move
               : SystemMouseCursors.cell,
     };
+  }
+}
+
+// ─── Selection drag tooltip ───────────────────────────────────────────────────
+
+class _SelectionTooltipOverlay extends StatelessWidget {
+  final Rect rect;
+  final Offset anchor;
+  final Offset? mousePos;
+  final Size canvasSize;
+  final bool dragRight;
+  final bool dragDown;
+
+  const _SelectionTooltipOverlay({
+    required this.rect,
+    required this.anchor,
+    required this.mousePos,
+    required this.canvasSize,
+    required this.dragRight,
+    required this.dragDown,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final w = rect.width.toInt();
+    final h = rect.height.toInt();
+    final fromX = anchor.dx.toInt() + 1; // 1-based
+    final fromY = anchor.dy.toInt() + 1;
+    final toX = (rect.right - 1).toInt() + 1;
+    final toY = (rect.bottom - 1).toInt() + 1;
+
+    final x1 = math.min(fromX, toX);
+    final y1 = math.min(fromY, toY);
+    const tooltipMaxWidth = 130.0;
+    const tooltipHeight = 58.0;
+    const gap = 14.0;
+
+    double left, top;
+    final mp = mousePos;
+    if (mp != null) {
+      // Place tooltip in the quadrant the user is dragging towards.
+      if (dragRight) {
+        left = mp.dx + gap;
+      } else {
+        left = mp.dx - tooltipMaxWidth - gap;
+      }
+      if (dragDown) {
+        top = mp.dy + gap;
+      } else {
+        top = mp.dy - tooltipHeight - gap;
+      }
+      left = left.clamp(8.0, canvasSize.width - tooltipMaxWidth - 8);
+      top = top.clamp(8.0, canvasSize.height - tooltipHeight - 8);
+    } else {
+      left = 16;
+      top = 16;
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        child: IntrinsicWidth(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: tooltipMaxWidth),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DefaultTextStyle(
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+              decoration: TextDecoration.none,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.crop_free, color: Colors.white70, size: 13),
+                    const SizedBox(width: 5),
+                    Text('$w × $h', style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    )),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text('From  ($x1, $y1)', style: const TextStyle(color: Colors.white70)),
+                Text('To      ($toX, $toY)', style: const TextStyle(color: Colors.white70)),
+              ],
+            ),
+          ),
+        ),
+        ),
+      ),
+    );
   }
 }
 
