@@ -77,13 +77,9 @@ void main() {
     testWidgets('renders with empty pattern', (tester) async {
       final pattern = CrossStitchPattern.empty(name: 'Smoke Test');
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: StitchOpsScreen(pattern: pattern),
-          ),
-        ),
+        _wrap(Scaffold(body: StitchOpsScreen(pattern: pattern))),
       );
-      await tester.pump(); // settle
+      await tester.pump();
       expect(find.text('StitchOps'), findsOneWidget);
     });
 
@@ -99,9 +95,7 @@ void main() {
       final filled = pattern.mapLayers((_) => layer);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: StitchOpsScreen(pattern: filled)),
-        ),
+        _wrap(Scaffold(body: StitchOpsScreen(pattern: filled))),
       );
       await tester.pump();
       expect(find.text('StitchOps'), findsOneWidget);
