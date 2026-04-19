@@ -20,9 +20,11 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:image/image.dart' as img;
+import 'package:stitches/models/stitch_plan.dart' show PlannedAida;
 import 'package:stitches/services/gif_renderer.dart'
     show kDemoSubFrames, renderDemoGif;
 import 'package:stitches/services/grid_parser.dart';
+import 'package:stitches/services/stitch_instructions_parser.dart';
 import 'package:stitches/services/stitch_planner.dart';
 import 'package:stitches/services/stitch_renderer.dart';
 
@@ -36,7 +38,12 @@ Future<void> main(List<String> arguments) async {
     ..addOption('pattern',
         abbr: 'p',
         help: 'Inline grid pattern. Rows are separated by \\n '
-            '(or actual newlines in a quoted string).')
+            '(or actual newlines in a quoted string.')
+    ..addOption('stitches',
+        abbr: 's',
+        help: 'Path to a hand-crafted stitch instructions JSON file. '
+            'Bypasses the auto-planner; lets you specify every stitch and '
+            'back-stitch in exact order. See --help for the JSON schema.')
     ..addOption('output',
         abbr: 'o',
         help: 'Path to output GIF file. (required)')
@@ -99,11 +106,58 @@ Future<void> main(List<String> arguments) async {
     exit(1);
   }
 
+  // --stitches is mutually exclusive with --input / --pattern.
+  if (args['stitches'] != null &&
+      (args['input'] != null || args['pattern'] != null)) {
+    stderr.writeln(
+        'Error: --stitches cannot be combined with --input or --pattern.\n');
+    _printUsage(parser);
+    exit(1);
+  }
+
   final fps = int.parse(args['fps'] as String);
   final cellSize = double.parse(args['cell-size'] as String);
   final padding = double.parse(args['padding'] as String);
   final samplingFactor = int.parse(args['sampling-factor'] as String);
   final dither = _parseDither(args['dither'] as String);
+
+  // ── Stitch-instructions shortcut (bypasses grid parser + planner) ─────────
+
+  if (args['stitches'] != null) {
+    final stitchesPath = args['stitches'] as String;
+    final stitchesFile = File(stitchesPath);
+    if (!stitchesFile.existsSync()) {
+      stderr.writeln('Error: file not found: $stitchesPath');
+      exit(1);
+    }
+
+    final instructionsJson = stitchesFile.readAsStringSync();
+    final PlannedAida aida;
+    try {
+      aida = parseStitchInstructions(instructionsJson);
+    } on FormatException catch (e) {
+      stderr.writeln('Error parsing stitch instructions: ${e.message}');
+      exit(1);
+    }
+
+    final title = (args['title'] as String?) ?? aida.title;
+    print('Loaded "$title" — ${aida.stitches.length} stitches '
+        '(${aida.cols}x${aida.rows} grid).');
+
+    final gifBytes = renderDemoGif(
+      aida: aida,
+      fps: fps,
+      cellSize: cellSize,
+      padding: padding,
+      samplingFactor: samplingFactor,
+      dither: dither,
+    );
+
+    print('Encoding GIF…');
+    File(outputPath).writeAsBytesSync(gifBytes);
+    print('Saved to $outputPath');
+    return;
+  }
 
   // ── Read grid text ────────────────────────────────────────────────────────
 
@@ -211,6 +265,7 @@ Usage:
   stitches-cli -i <grid.pattern> -o <out.gif>          file input
   cat grid.pattern | stitches-cli -o <out.gif>          stdin input
   stitches-cli -p "╳ ▞\\n▚ ╳" -o <out.gif>         inline input
+  stitches-cli -s <plan.json>   -o <out.gif>            hand-crafted plan
 
 Grid format:
   Rows are separated by newlines.
@@ -229,6 +284,34 @@ Grid format:
      ▛    Three-quarter (−BR)     ▜    Three-quarter (−BL)
      ▙    Three-quarter (−TR)     ▟    Three-quarter (−TL)
   (space) Empty cell
+
+Hand-crafted stitch instructions JSON  (-s / --stitches):
+  Bypasses the auto-planner so you control every stitch in exact order.
+
+  {
+    "title": "My Pattern",     // optional
+    "cols":  3,                // grid width  (required)
+    "rows":  2,                // grid height (required)
+    "cells": [[0,0],[1,0]],   // optional — which cells show a grid box
+                               //   defaults to every cell touched by a stitch
+    "stitches": [
+      {
+        "type": "front1",      // front1 | front2 | back1 | back2 | back3 | auto
+        "from": {"x":0,"y":0,"corner":"topLeft"},
+        "to":   {"x":0,"y":0,"corner":"bottomRight"}
+      },
+      ...
+    ]
+  }
+
+  Corner names:  topLeft (TL)  topRight (TR)  bottomLeft (BL)  bottomRight (BR)
+  Types:
+    front1 — purple  (\\-diagonal front stitch)
+    front2 — green   (/-diagonal front stitch)
+    back1  — grey    (first pass back stitch)
+    back2  — grey    (second pass — same segment)
+    back3  — grey    (third pass)
+    auto   — uses the automatic colour for the stitch type
 
 Options:
 ${parser.usage}''');
