@@ -660,6 +660,10 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(stitchFocusThreadId: threadId);
   }
 
+  void setStitchShowPageColours(bool value) {
+    state = state.copyWith(stitchShowPageColours: value);
+  }
+
   // ─── Reference image ─────────────────────────────────────────────────────
 
   Future<void> pickReferenceImage() async {

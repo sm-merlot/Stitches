@@ -28,6 +28,9 @@ class EditorState {
   final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
   final bool stitchBackMode;  // Back: greys normal stitches, backstitches shown in colour
   final String? stitchFocusThreadId;
+  /// When true and page mode is active, the stitch-mode colour list shows only
+  /// threads present on the current page. Defaults to false (show all colours).
+  final bool stitchShowPageColours;
   final ui.Image? referenceImage;
   final double referenceOpacity;
   final bool referenceVisible;
@@ -109,6 +112,7 @@ class EditorState {
     this.stitchCrossMode = false,
     this.stitchBackMode = false,
     this.stitchFocusThreadId,
+    this.stitchShowPageColours = false,
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
@@ -268,6 +272,7 @@ class EditorState {
     bool? stitchCrossMode,
     bool? stitchBackMode,
     Object? stitchFocusThreadId = _sentinel,
+    bool? stitchShowPageColours,
     Object? referenceImage = _sentinel,
     double? referenceOpacity,
     bool? referenceVisible,
@@ -323,6 +328,7 @@ class EditorState {
       stitchFocusThreadId: stitchFocusThreadId == _sentinel
           ? this.stitchFocusThreadId
           : stitchFocusThreadId as String?,
+      stitchShowPageColours: stitchShowPageColours ?? this.stitchShowPageColours,
       referenceImage: referenceImage == _sentinel
           ? this.referenceImage
           : referenceImage as ui.Image?,
