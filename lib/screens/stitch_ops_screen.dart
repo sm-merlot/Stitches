@@ -1,10 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
+import '../providers/editor/editor_provider.dart';
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
@@ -392,7 +394,9 @@ double _computeStitchesPerHour(List<ProgressLogEntry> log, int totalDone) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-class StitchOpsScreen extends StatelessWidget {
+class StitchOpsScreen extends ConsumerWidget {
+  /// Seed pattern — used as fallback if [editorProvider] has no file open
+  /// (e.g. when the screen is shown standalone without an active editor).
   final CrossStitchPattern pattern;
   final VoidCallback? onClearProgress;
   /// Called when the user saves a manual time adjustment.
@@ -411,8 +415,13 @@ class StitchOpsScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final stats = _computeStats(pattern);
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the editor so any mutation (time adjust, clear progress, etc.)
+    // immediately re-renders the stats without needing to close and reopen.
+    final editorState = ref.watch(editorProvider);
+    final livePattern =
+        editorState.isFileOpen ? editorState.pattern : pattern;
+    final stats = _computeStats(livePattern);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
