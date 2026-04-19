@@ -133,26 +133,47 @@ class PageLayout {
     final pagesDown =
         (pattern.height / config.pageHeight).ceil().clamp(1, pattern.height);
 
-    // Build top-most FullStitch colour map: encoded cell key → threadId.
-    // Iterate layers top-to-bottom so earlier entries (higher layers) win.
-    final Map<int, String?> cellColor = {};
+    // For boundary snapping we use a *quantised* colour at each cell rather
+    // than the raw thread ID.  Thread IDs are too fine-grained: DMC 310 (Black
+    // #000000) and 3371 (Black Brown #180808) are perceptually identical but
+    // have different IDs, which causes the ping-pong island check to miss
+    // cases where a coloured stitch is sandwiched between two very-dark threads
+    // of slightly different codes.
+    //
+    // Quantising to 3 bits per channel (top 3 bits → >>5) groups colours that
+    // differ by less than ~32 units per channel into the same "block colour".
+    // 310 (#000000) and 3371 (#180808) both reduce to 0; a mid-tone colour
+    // like 3685 (#520120) reduces to a clearly different value.
+    //
+    // We build the map from the BOTTOMMOST visible layer (putIfAbsent while
+    // iterating layers.reversed = top→bottom) so that colour-fill layers
+    // beneath black outline layers are used for the snap decision.
+    int _quantise(Color c) =>
+        ((c.red >> 5) << 6) | ((c.green >> 5) << 3) | (c.blue >> 5);
+
+    final Map<String, int> threadQuantColor = {
+      for (final t in pattern.threads) t.dmcCode: _quantise(t.color),
+    };
+
+    final Map<int, int?> snapColor = {};
     for (final layer in pattern.layers.reversed) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is FullStitch) {
-          cellColor[(stitch.x << 16) | stitch.y] = stitch.threadId;
+          final key = (stitch.x << 16) | stitch.y;
+          snapColor.putIfAbsent(key, () => threadQuantColor[stitch.threadId]);
         }
       }
     }
 
-    String? colorAt(int col, int row) => cellColor[(col << 16) | row];
+    int? colorAt(int col, int row) => snapColor[(col << 16) | row];
 
     // Vertical boundary offsets (column boundaries).
     final Map<int, Map<int, int>> verticalOffsets = {};
     for (int p = 1; p < pagesAcross; p++) {
       final boundaryCol = p * config.pageWidth;
       final Map<int, int> rowOffsets = {};
-      for (int row = 0; row < pattern.height; row++) {
+      for (int row = 0, patternHeight = pattern.height; row < patternHeight; row++) {
         rowOffsets[row] = _computeOffset(
           nominalBoundary: boundaryCol,
           crossIndex: row,
@@ -171,7 +192,7 @@ class PageLayout {
     for (int p = 1; p < pagesDown; p++) {
       final boundaryRow = p * config.pageHeight;
       final Map<int, int> colOffsets = {};
-      for (int col = 0; col < pattern.width; col++) {
+      for (int col = 0, patternWidth = pattern.width; col < patternWidth; col++) {
         colOffsets[col] = _computeOffset(
           nominalBoundary: boundaryRow,
           crossIndex: col,
@@ -228,7 +249,9 @@ class PageLayout {
     final Map<int, Set<int>> excludedCells = {};
 
     if (config.fuzzyAmount > 0) {
-      final fa = config.fuzzyAmount;
+      // Use the same effective range as _computeOffset so the corner region
+      // covers all cells that could be shifted by a snap (up to _snapRange).
+      final fa = math.max(config.fuzzyAmount, _snapRange);
 
       for (int py = 0; py < pagesDown; py++) {
         for (int px = 0; px < pagesAcross; px++) {
@@ -348,55 +371,44 @@ class PageLayout {
   /// crossIndex = col`.
   ///
   /// Strategy:
-  ///   1. Scan outward from the nominal boundary for the nearest colour change
-  ///      where BOTH sides have a solid run of at least [_minRun] stitches of
-  ///      their own colour.  This avoids snapping to stray singleton stitches
-  ///      and leaving tiny colour islands at the page edge.
-  ///   2. If no qualifying cut is found (the boundary bisects a solid block of
-  ///      one colour), fall back to a seeded pseudo-random offset so the edge
-  ///      appears organic rather than straight.
-  static const int _minRun = 2;
+  ///   1. Scan outward up to [_snapRange] stitches for a colour transition
+  ///      that does NOT create a lone-stitch colour island.  A cut between
+  ///      posA (colour cA) and posB (colour cB) is rejected if
+  ///      color(posA-1)==cB or color(posB+1)==cA — the ping-pong pattern
+  ///      that would leave a single stitch of one colour isolated at the
+  ///      page edge.  Intentionally thin border stitches (different colour
+  ///      on their far side) are accepted.
+  ///      [_snapRange] is always at least 3 so natural borders a couple of
+  ///      stitches from the nominal line are still reachable.
+  ///   2. If no qualifying cut is found (solid block crosses the boundary)
+  ///      fall back to a seeded pseudo-random offset within ±[fuzzyAmount].
+  static const int _snapRange = 3;
 
   static int _computeOffset({
     required int nominalBoundary,
     required int crossIndex,
     required int fuzzyAmount,
     required int maxBoundary,
-    required String? Function(int primary, int crossIndex) colorAt,
+    required int? Function(int primary, int crossIndex) colorAt,
     required int seed,
   }) {
     if (fuzzyAmount == 0) return 0;
 
-    // Returns the length of the run of [color] starting at [start] going in
-    // direction [dir] (+1 or -1), capped at [cap].
-    int runLength(String color, int start, int dir, int cap) {
-      int count = 0;
-      int pos = start;
-      while (count < cap && pos >= 0 && pos < maxBoundary) {
-        if (colorAt(pos, crossIndex) != color) break;
-        count++;
-        pos += dir;
-      }
-      return count;
-    }
-
-    // Check whether a cut between posA and posB (posB = posA+1) is a
-    // "solid-block" transition: both sides have at least _minRun stitches of
-    // their own colour.
+    // Returns true if cutting between posA (colour cA) and posB (colour cB)
+    // is valid — i.e. it does not create a lone-stitch colour island.
     bool isQualifyingCut(int posA, int posB) {
       final cA = colorAt(posA, crossIndex);
       final cB = colorAt(posB, crossIndex);
       if (cA == null || cB == null || cA == cB) return false;
-      // Verify both sides have a solid run.
-      final runA = runLength(cA, posA, -1, _minRun);
-      final runB = runLength(cB, posB, 1, _minRun);
-      return runA >= _minRun && runB >= _minRun;
+      // Reject ping-pong: [cB, cA | cB, ...] or [..., cA | cB, cA]
+      if (posA > 0 && colorAt(posA - 1, crossIndex) == cB) return false;
+      if (posB + 1 < maxBoundary && colorAt(posB + 1, crossIndex) == cA) return false;
+      return true;
     }
 
-    // Scan outward from the nominal boundary, preferring the closest qualifying
-    // cut.  Offset d places the boundary between (nominalBoundary+d-1) and
-    // (nominalBoundary+d).
-    for (int d = 0; d <= fuzzyAmount; d++) {
+    // Scan outward, preferring the closest qualifying cut.
+    final effectiveRange = math.max(fuzzyAmount, _snapRange);
+    for (int d = 0; d <= effectiveRange; d++) {
       // Positive offset (right/below nominal).
       {
         final posA = nominalBoundary + d - 1;
@@ -405,7 +417,7 @@ class PageLayout {
           return d;
         }
       }
-      // Negative offset (left/above nominal); skip d=0 (already covered).
+      // Negative offset (left/above nominal); skip d=0 (already covered above).
       if (d > 0) {
         final posA = nominalBoundary - d - 1;
         final posB = nominalBoundary - d;
@@ -415,8 +427,8 @@ class PageLayout {
       }
     }
 
-    // No qualifying colour-change cut found — the boundary bisects a solid
-    // block.  Apply a seeded random offset so the edge looks organic.
+    // No qualifying cut found — boundary bisects a solid block.
+    // Apply a seeded random offset within ±fuzzyAmount for an organic edge.
     return math.Random(seed).nextInt(2 * fuzzyAmount + 1) - fuzzyAmount;
   }
 }
