@@ -1,0 +1,18 @@
+lib/widgets/stitching_timer_button.dart
+  h_c73f350bf316ee 1-54
+lib/models/progress_log.dart
+  h_c73f350bf316ee 22
+lib/widgets/right_sidebar.dart
+  h_c73f350bf316ee 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "c86ca15aa1bbc5c5a0e169d3f853a693f86960bf",
+  "prompts": {},
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
