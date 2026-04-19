@@ -1,0 +1,45 @@
+test/page_layout_snap_test.dart
+  28c23d0ae7c3e27a 285-414
+test/page_layout_integration_test.dart
+  266c0109da4e1e8e 23,40-42,52-57
+  28c23d0ae7c3e27a 149-151,154
+test/debug_snap_test.dart
+  266c0109da4e1e8e 16,35-36,46-50
+  28c23d0ae7c3e27a 122
+lib/models/page_layout.dart
+  28c23d0ae7c3e27a 540-541,600,607,158,395,437,450-451,466,470-471,490,493-494,522,537-538,132-133,138-139,178,198,396-399,406,415,425,542-548,550-564,570-580,587-596,601-603,608-706
+  266c0109da4e1e8e 157,7,128-131,134-137,150-153,159-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "96141a5346e9f2270b1a9ce0cd6c346a24360047",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 49,
+      "accepted_lines": 36,
+      "overriden_lines": 0
+    },
+    "28c23d0ae7c3e27a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "255c2d53-ee56-41c0-bc15-c2b97ab988ef",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 386,
+      "total_deletions": 107,
+      "accepted_lines": 293,
+      "overriden_lines": 0
+    }
+  }
+}

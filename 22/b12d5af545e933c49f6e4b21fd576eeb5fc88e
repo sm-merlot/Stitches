@@ -1,0 +1,23 @@
+lib/models/page_layout.dart
+  28c23d0ae7c3e27a 394-395,417,421
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "22b12d5af545e933c49f6e4b21fd576eeb5fc88e",
+  "prompts": {
+    "28c23d0ae7c3e27a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "255c2d53-ee56-41c0-bc15-c2b97ab988ef",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 386,
+      "total_deletions": 107,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}

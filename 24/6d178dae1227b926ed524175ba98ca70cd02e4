@@ -1,0 +1,37 @@
+lib/models/page_layout.dart
+  28c23d0ae7c3e27a 407-408,429,433,157
+  266c0109da4e1e8e 156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "246d178dae1227b926ed524175ba98ca70cd02e4",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 49,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "28c23d0ae7c3e27a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "255c2d53-ee56-41c0-bc15-c2b97ab988ef",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 386,
+      "total_deletions": 107,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
