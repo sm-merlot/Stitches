@@ -1,6 +1,11 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'editor/editor_provider.dart';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const _kSessionStartKey = 'stitching_timer_session_start_ms';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -48,15 +53,45 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   @override
   StitchingTimerState build() {
     ref.onDispose(() => _ticker?.cancel());
+    // Restore any session that was running when the app was last killed.
+    _restorePersistedSession();
     return const StitchingTimerState();
   }
 
+  /// Reads SharedPreferences synchronously-ish: fires an async check and
+  /// updates state if a persisted session is found.
+  Future<void> _restorePersistedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ms = prefs.getInt(_kSessionStartKey);
+    if (ms == null) return;
+    final savedStart = DateTime.fromMillisecondsSinceEpoch(ms);
+    // Sanity check: ignore sessions older than 24 hours (likely a stale entry).
+    if (DateTime.now().difference(savedStart).inHours > 24) {
+      await prefs.remove(_kSessionStartKey);
+      return;
+    }
+    // Resume the session.
+    state = StitchingTimerState(
+      isRunning: true,
+      sessionStart: savedStart,
+      tickCount: 0,
+    );
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      state = state.copyWith(tickCount: state.tickCount + 1);
+    });
+  }
+
   /// Start the timer. No-op if already running.
-  void start() {
+  void start() async {
     if (state.isRunning) return;
+    final now = DateTime.now();
+    // Persist the session start time before updating state so a kill between
+    // the two operations still recovers the session on next launch.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kSessionStartKey, now.millisecondsSinceEpoch);
     state = state.copyWith(
       isRunning: true,
-      sessionStart: DateTime.now(),
+      sessionStart: now,
     );
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       state = state.copyWith(tickCount: state.tickCount + 1);
@@ -80,6 +115,10 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
       clearSessionStart: true,
       tickCount: 0,
     );
+
+    // Clear the persisted session start (fire-and-forget is fine here).
+    SharedPreferences.getInstance()
+        .then((p) => p.remove(_kSessionStartKey));
 
     if (minutes > 0) {
       ref.read(editorProvider.notifier).addTimeToLog(minutes);
