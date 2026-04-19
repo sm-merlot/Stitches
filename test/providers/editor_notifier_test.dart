@@ -402,5 +402,321 @@ void main() {
       expect(result.first.symbol, isNot(equals('X')));
     });
   });
-}
 
+  // ─── Flood fill ──────────────────────────────────────────────────────────────
+
+  group('EditorNotifier — floodFill draw', () {
+    late ProviderContainer c;
+    setUp(() { c = makeContainer(); loadEmpty(c); });
+    tearDown(() => c.dispose());
+
+    test('fills connected same-colour cells with selected thread', () {
+      // 2×2 red block at (0,0)..(1,1)
+      for (int x = 0; x < 2; x++) {
+        for (int y = 0; y < 2; y++) {
+          notifier(c).addStitch(FullStitch(x: x, y: y, threadId: '310'));
+        }
+      }
+      // Add an isolated cell in a different location to prove it is NOT filled.
+      notifier(c).addStitch(const FullStitch(x: 5, y: 5, threadId: '310'));
+
+      notifier(c).setSelectedThread('666');
+      notifier(c).floodFill(0, 0, erase: false);
+
+      final stitches = editorState(c).pattern.stitches.whereType<FullStitch>();
+      // The connected block should now all be '666'.
+      expect(
+        stitches.where((s) => s.x < 2 && s.y < 2).every((s) => s.threadId == '666'),
+        isTrue,
+      );
+      // The isolated cell is not connected and should remain '310'.
+      expect(
+        stitches.where((s) => s.x == 5 && s.y == 5).single.threadId,
+        equals('310'),
+      );
+    });
+
+    test('flood fill erase removes connected cells', () {
+      for (int x = 0; x < 3; x++) {
+        notifier(c).addStitch(FullStitch(x: x, y: 0, threadId: '310'));
+      }
+      notifier(c).floodFill(1, 0, erase: true);
+      expect(editorState(c).pattern.stitches, isEmpty);
+    });
+
+    test('flood fill erase on empty cell is a no-op', () {
+      // Erase on an empty cell (no seed thread) returns early.
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      notifier(c).floodFill(5, 5, erase: true); // no stitch at (5,5)
+      expect(editorState(c).pattern.stitches, hasLength(1)); // original unchanged
+    });
+  });
+
+  // ─── Fill-erase and eraser controls ──────────────────────────────────────────
+
+  group('EditorNotifier — fill-erase & eraser', () {
+    late ProviderContainer c;
+    setUp(() { c = makeContainer(); loadEmpty(c); });
+    tearDown(() => c.dispose());
+
+    test('setEraserSize clamps to [1,10]', () {
+      notifier(c).setEraserSize(20);
+      expect(editorState(c).eraserSize, equals(10));
+      notifier(c).setEraserSize(0);
+      expect(editorState(c).eraserSize, equals(1));
+    });
+
+    test('setEraserSize turns off fillEraseActive', () {
+      notifier(c).toggleFillErase();
+      expect(editorState(c).fillEraseActive, isTrue);
+      notifier(c).setEraserSize(3);
+      expect(editorState(c).fillEraseActive, isFalse);
+    });
+
+    test('toggleFillErase flips fillEraseActive', () {
+      expect(editorState(c).fillEraseActive, isFalse);
+      notifier(c).toggleFillErase();
+      expect(editorState(c).fillEraseActive, isTrue);
+      notifier(c).toggleFillErase();
+      expect(editorState(c).fillEraseActive, isFalse);
+    });
+  });
+
+  // ─── Thread management ────────────────────────────────────────────────────────
+
+  group('EditorNotifier — thread management', () {
+    late ProviderContainer c;
+    setUp(() { c = makeContainer(); loadEmpty(c); });
+    tearDown(() => c.dispose());
+
+    test('removeThread deletes thread and its stitches', () {
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '666'));
+      notifier(c).removeThread('310');
+
+      final codes = editorState(c).pattern.threads.map((t) => t.dmcCode);
+      expect(codes, isNot(contains('310')));
+      final stitches = editorState(c).pattern.stitches;
+      expect(stitches.any((s) => s.threadId == '310'), isFalse);
+      expect(stitches.any((s) => s.threadId == '666'), isTrue);
+    });
+
+    test('removeThread updates selectedThread when removed thread was selected', () {
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '666'));
+      notifier(c).setSelectedThread('310');
+      notifier(c).removeThread('310');
+      // After removal, selectedThread should point to a remaining thread.
+      final codes = editorState(c).pattern.threads.map((t) => t.dmcCode).toList();
+      expect(codes, isNot(contains('310')));
+      expect(codes, contains(editorState(c).selectedThreadId ?? codes.first));
+    });
+
+    test('replaceThread remaps all stitches to new code', () {
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+
+      notifier(c).replaceThread('310', '666', const Color(0xFFCC0000), 'Red');
+
+      final codes = editorState(c).pattern.threads.map((t) => t.dmcCode);
+      expect(codes, contains('666'));
+      expect(codes, isNot(contains('310')));
+      expect(
+        editorState(c).pattern.stitches.every((s) => s.threadId == '666'),
+        isTrue,
+      );
+    });
+
+    test('setTool updates currentTool and clears backstitchStartPoint', () {
+      notifier(c).setBackstitchStart(const Offset(1, 1));
+      notifier(c).setTool(DrawingTool.halfForward);
+      expect(editorState(c).currentTool, equals(DrawingTool.halfForward));
+      expect(editorState(c).backstitchStartPoint, isNull);
+    });
+
+    test('setSelectedThread updates selection and recent list', () {
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '666'));
+      notifier(c).setSelectedThread('666');
+      expect(editorState(c).selectedThreadId, equals('666'));
+      expect(editorState(c).recentThreadIds, contains('666'));
+    });
+  });
+
+  // ─── Undo cap ─────────────────────────────────────────────────────────────────
+
+  group('EditorNotifier — undo cap', () {
+    late ProviderContainer c;
+    setUp(() { c = makeContainer(); loadEmpty(c); });
+    tearDown(() => c.dispose());
+
+    test('undo stack never exceeds 200 entries', () {
+      // Add 210 distinct stitches — each push to undo stack.
+      for (int i = 0; i < 210; i++) {
+        notifier(c).addStitch(FullStitch(x: i % 30, y: i ~/ 30, threadId: '310'));
+      }
+      // Stack must be capped at 200.
+      final state = editorState(c);
+      expect(state.canUndo, isTrue);
+      // We can't read _undoStack directly, but we can verify undo 200 times
+      // doesn't crash (and canUndo eventually becomes false).
+      int undoCount = 0;
+      while (editorState(c).canUndo && undoCount < 210) {
+        notifier(c).undo();
+        undoCount++;
+      }
+      expect(undoCount, lessThanOrEqualTo(200));
+    });
+  });
+
+  // ─── Progress marking ─────────────────────────────────────────────────────────
+
+  group('EditorNotifier — progress marking', () {
+    late ProviderContainer c;
+    setUp(() {
+      c = makeContainer();
+      loadEmpty(c);
+      // Switch to stitch mode so marking is active.
+      notifier(c).setMode(AppMode.stitch);
+    });
+    tearDown(() => c.dispose());
+
+    test('toggleStitchDone marks a cell done', () {
+      // Must have a stitch in the pattern to mark.
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 2, y: 3, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).toggleStitchDone(2, 3);
+      expect(
+        editorState(c).pattern.progress.isStitchDone(2, 3),
+        isTrue,
+      );
+    });
+
+    test('toggleStitchDone un-marks an already-done cell', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).toggleStitchDone(1, 1);
+      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isTrue);
+      notifier(c).toggleStitchDone(1, 1);
+      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isFalse);
+    });
+
+    test('toggleStitchDone on empty cell is a no-op', () {
+      notifier(c).toggleStitchDone(0, 0); // no stitch there
+      expect(editorState(c).pattern.progress.completedStitches, isEmpty);
+    });
+
+    test('markRegionDone marks all stitches in rect', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      notifier(c).addStitch(const FullStitch(x: 2, y: 2, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).markRegionDone(const Rect.fromLTRB(0, 0, 5, 5));
+      final prog = editorState(c).pattern.progress;
+      expect(prog.isStitchDone(1, 1), isTrue);
+      expect(prog.isStitchDone(2, 2), isTrue);
+    });
+
+    test('markRegionNotDone clears stitches in rect', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).markRegionDone(const Rect.fromLTRB(0, 0, 5, 5));
+      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isTrue);
+
+      notifier(c).markRegionNotDone(const Rect.fromLTRB(0, 0, 5, 5));
+      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isFalse);
+    });
+
+    test('clearProgress empties all completed stitches', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+      notifier(c).toggleStitchDone(1, 1);
+      expect(editorState(c).pattern.progress.completedStitches, isNotEmpty);
+
+      notifier(c).clearProgress();
+      expect(editorState(c).pattern.progress.completedStitches, isEmpty);
+    });
+
+    test('undoProgress reverts last marking; redoProgress reapplies it', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).toggleStitchDone(1, 1);
+      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isTrue);
+
+      notifier(c).undoProgress();
+      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isFalse);
+
+      notifier(c).redoProgress();
+      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isTrue);
+    });
+
+    test('setMode(stitch) prunes completed cells no longer in pattern', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+      notifier(c).toggleStitchDone(1, 1);
+
+      // Remove the stitch from the pattern, then switch back to stitch mode.
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).removeStitchesAt(1, 1);
+      notifier(c).setMode(AppMode.stitch);
+
+      expect(editorState(c).pattern.progress.completedStitches, isEmpty);
+    });
+
+    test('progressLog updated after marking; frogging reduces count', () {
+      notifier(c).setMode(AppMode.edit);
+      for (int i = 0; i < 5; i++) {
+        notifier(c).addStitch(FullStitch(x: i, y: 0, threadId: '310'));
+      }
+      notifier(c).setMode(AppMode.stitch);
+
+      // Mark 3 stitches done.
+      for (int i = 0; i < 3; i++) {
+        notifier(c).toggleStitchDone(i, 0);
+      }
+      expect(editorState(c).pattern.progressLog, isNotEmpty);
+      final logCount = editorState(c).pattern.progressLog.last.stitchCount;
+      expect(logCount, equals(3));
+
+      // Frog one stitch — log count drops.
+      notifier(c).toggleStitchDone(0, 0);
+      expect(editorState(c).pattern.progressLog.last.stitchCount, equals(2));
+    });
+  });
+
+  // ─── Pattern metadata ──────────────────────────────────────────────────────
+
+  group('EditorNotifier — metadata', () {
+    late ProviderContainer c;
+    setUp(() { c = makeContainer(); loadEmpty(c); });
+    tearDown(() => c.dispose());
+
+    test('updatePatternMetadata persists all fields', () {
+      notifier(c).updatePatternMetadata(
+        name: 'Updated',
+        designer: 'Tester',
+        description: 'A test pattern',
+        difficulty: 'Easy',
+        estimatedHours: '5',
+        copyright: '2026',
+      );
+      final p = editorState(c).pattern;
+      expect(p.name, equals('Updated'));
+      expect(p.designer, equals('Tester'));
+      expect(p.description, equals('A test pattern'));
+      expect(p.difficulty, equals('Easy'));
+      expect(p.estimatedHours, equals('5'));
+      expect(p.copyright, equals('2026'));
+      expect(editorState(c).isDirty, isTrue);
+    });
+  });
+}
