@@ -39,7 +39,7 @@ Since these tests were written, significant features have landed that are not ye
 
 ## Progress in `feat/update-test-coverage`
 
-The branch adds ~1,770 lines of new tests across five new files, covering T1–T3 of the phasing plan. All 252 tests pass (`flutter test`).
+The branch adds ~2,680 lines of new tests across ten new files, covering T1–T4 of the phasing plan. All 350 tests pass (`flutter test`) in ~6 s.
 
 | New file                                              | Lines | Phase | What it covers                                                                                                                                                                                    |
 |-------------------------------------------------------|-------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -49,13 +49,15 @@ The branch adds ~1,770 lines of new tests across five new files, covering T1–T
 | `providers/editor_snippets_selection_test.dart` (420) | 420   | T3    | Snippet CRUD, resize (clip/expand), transform (flipH/flipV/rotateCW), palette management, `saveSelectionAsSnippet`, selection rect, copy/paste round-trip, `deleteSelection`, `moveSelection`     |
 | `models/progress_log_test.dart` (162)                 | 162   | T3    | `logCountAsOf` (empty/mid/after-last), daily delta, frogging, streak calculation, `_aggregateStats` edge cases                                                                                    |
 | `services/editor_session_test.dart` (71)              | 71    | T3    | Session save/restore round-trip; graceful handling of corrupt/missing session data                                                                                                                |
+| `services/pure_dart_services_test.dart` (190)         | 190   | T4    | `color_space`: sRGB↔Lab, ΔE ordering, `nearestLabIndex`; `dashed_line`: segment count/positions, edge cases (zero-length, shorter-than-dash, diagonal)                                           |
+| `models/geometry_and_layout_test.dart` (342)          | 342   | T4    | `stitch_geometry`: `stitchXY` for every stitch type; `snippet_palette_resolver`: slot mapping, alt palette, fallback; `page_layout`: tile count, boundary, every-cell-on-exactly-one-page; `stitch_renderer`: `computeGridBounds`, `resolveSegments` |
+| `services/sprite_importer_test.dart` (113)            | 113   | T4    | `SpriteImporter.matchPixel` (transparent, dark, light, cache stability); `importRegion` (solid, transparent, clamp, offset normalisation, merge threshold)                                        |
+| `widgets/screen_smoke_test.dart` (263)                | 263   | T4    | `StitchOpsScreen`, `NewPatternDialog`, `ResizeCanvasDialog`, `ColorPickerScreen`, `SnippetEditorScreen`, `HomeScreen` — each builds without crashing and key structural widgets are present        |
 
 Also added: `test/fixtures/legacy_v1_flat.stitches` — backward-compat fixture for the file-format tests.
 
-### What remains (T4–T5)
+### What remains (T5)
 
-- **T4 — P2 pure-Dart services**: `color_space.dart`, `dashed_line.dart`, `stitch_geometry.dart`, `snippet_palette_resolver.dart`, `page_layout.dart`, `sprite_importer.dart`, `stitch_renderer.dart`
-- **T4 — P3 widget smoke tests**: `editor_screen`, `home_screen`, `workspace_screen`, `snippet_editor_screen`, `color_picker_screen`, dialogs, `stitch_ops_screen`, `stitch_ops_workspace_screen`
 - **T5 — P4 integration smoke tests**: four end-to-end flows in `integration_test/` + CI wiring
 
 ## Coverage gaps by priority
@@ -187,8 +189,8 @@ The work breaks into roughly four PRs, each landable independently.
 | **T1** | P1.2 file-format round-trip + fixtures                        | small (~300 lines)  | ✅ Done    |
 | **T2** | P1.1 EditorNotifier core (drawing, layers, undo/redo)         | large (~600 lines)  | ✅ Done    |
 | **T3** | P1.1 remainder (snippets, selection, progress) + P1.3 session | medium (~400 lines) | ✅ Done    |
-| **T4** | P2 pure-Dart services + P3 widget smoke tests                 | medium (~500 lines) | ⬜ Next    |
-| **T5** | P4 integration smoke tests + CI wiring                        | small (~250 lines)  | ⬜ Pending |
+| **T4** | P2 pure-Dart services + P3 widget smoke tests                 | medium (~500 lines) | ✅ Done    |
+| **T5** | P4 integration smoke tests + CI wiring                        | small (~250 lines)  | ⬜ Next    |
 
 T1 first because format round-trip is the cheapest insurance against the worst kind of bug. T2 next because the editor provider is where every future change lands.
 
