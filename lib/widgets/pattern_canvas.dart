@@ -857,6 +857,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
           if (bs == null) _checkProgressDoubleClick(event.localPosition);
           setState(() {
             _progressAnchor = cell;
+            _progressAnchorScreen = event.localPosition; // needed for drag threshold
             _progressBackstitch = bs;
             _hasDraggedProgress = false;
             _progressDragRect = null;
@@ -1121,6 +1122,33 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       } else if (ref.read(editorProvider).currentTool != DrawingTool.backstitch) {
         // Backstitch is click-to-click, not drag-to-draw.
         _handleDrawAt(event.localPosition);
+      }
+    }
+
+    // ── Kind-agnostic fallback ───────────────────────────────────────────────
+    // Apple Pencil can emit PointerMoveEvents with kind == unknown on some
+    // iPadOS versions, bypassing both the stylus and touch branches above.
+    // If an anchor is set but hasn't been serviced yet, update drag state here.
+    if (_selectionAnchor != null) {
+      final cell = _screenToSelCell(event.localPosition);
+      _hasDraggedSelection = true;
+      _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
+      _scheduleRebuild();
+    } else if (_progressAnchor != null && ref.read(editorProvider).stitchMode) {
+      final cell = _screenToSelCell(event.localPosition);
+      final newRect = _buildSelRect(_progressAnchor!, cell);
+      if (!_hasDraggedProgress) {
+        if (_progressAnchorScreen != null) {
+          if ((event.localPosition - _progressAnchorScreen!).distance > _kProgressDragThreshold) {
+            _hasDraggedProgress = true;
+          }
+        } else if (newRect.width > 1 || newRect.height > 1) {
+          _hasDraggedProgress = true;
+        }
+      }
+      if (newRect != _progressDragRect) {
+        _progressDragRect = newRect;
+        _scheduleRebuild();
       }
     }
   }
