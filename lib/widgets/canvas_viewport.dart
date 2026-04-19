@@ -30,6 +30,9 @@ class CanvasViewport {
   /// Converts a screen-space point to canvas/pattern space.
   Offset screenToCanvas(Offset screen) => (screen - panOffset) / scale;
 
+  /// Converts a canvas-space point back to screen-space. Inverse of [screenToCanvas].
+  Offset canvasToScreen(Offset canvas) => canvas * scale + panOffset;
+
   /// Snaps a canvas-space point to the nearest half-cell grid intersection.
   /// Used for backstitch endpoint placement.
   Offset canvasToGridPoint(Offset canvas) {

@@ -1499,15 +1499,17 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
               () {
                 final rect = _dragSelectionRect ?? _progressDragRect!;
                 final anchor = _selectionAnchor ?? _progressAnchor!;
-                // Determine drag direction from anchor vs current end cell.
-                final endX = rect.right - 1; // inclusive end col
-                final endY = rect.bottom - 1;
-                final dragRight = endX >= anchor.dx;
-                final dragDown = endY >= anchor.dy;
+                // Determine drag direction by comparing mouse screen pos to anchor screen pos.
+                final anchorScreen = _viewport.canvasToScreen(
+                  Offset(anchor.dx * _cellSize, anchor.dy * _cellSize),
+                );
+                final mp = _mouseScreenPos;
+                final dragRight = mp == null || mp.dx >= anchorScreen.dx;
+                final dragDown  = mp == null || mp.dy >= anchorScreen.dy;
                 return _SelectionTooltipOverlay(
                   rect: rect,
                   anchor: anchor,
-                  mousePos: _mouseScreenPos,
+                  mousePos: mp,
                   canvasSize: _canvasSize,
                   dragRight: dragRight,
                   dragDown: dragDown,
