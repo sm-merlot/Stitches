@@ -1,0 +1,59 @@
+lib/services/pdf/pdf_chart.dart
+  ea80d59547b4bcc2 46
+lib/services/scan_result.dart
+  e3e3dae4c55d02ec 1-95
+tool/pk_convert.dart
+  e3e3dae4c55d02ec 1-151
+lib/services/grid_cell_scanner.dart
+  e3e3dae4c55d02ec 6
+lib/screens/pattern_scan_preview.dart
+  e3e3dae4c55d02ec 13
+lib/services/grid_symbol_matcher.dart
+  e3e3dae4c55d02ec 7
+lib/services/pdf_pattern_keeper_parser.dart
+  ea80d59547b4bcc2 119-123,136-145,147-149,151-153,155-174,177-187,204-207,218-220,222-228,234-236,238-240,281-282,284-294,301-303,308,328-342,344-345,347,349,353,359
+  e3e3dae4c55d02ec 7,37,40-52,54,58-65,67-79,81-87,89-93,95-99,101-106,109-112,124,127-129,146,150,154,210,214-216,221,231,237,244,248,268-269,502-503,506,512,514,519
+lib/screens/pattern_scan_review_screen.dart
+  e3e3dae4c55d02ec 6
+integration_test/pk_roundtrip_test.dart
+  e3e3dae4c55d02ec 1-139
+test/pk_pdf_parser_test.dart
+  e3e3dae4c55d02ec 1-496
+test/pk_pdf_inspect.dart
+  ea80d59547b4bcc2 1-88
+pubspec.yaml
+  e3e3dae4c55d02ec 34-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "d61ce61abb5c79618548c04cf71703f81da3a88c",
+  "prompts": {
+    "e3e3dae4c55d02ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f020e4cd-faf0-4593-9af6-3b4962b08a03",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 1525,
+      "total_deletions": 623,
+      "accepted_lines": 975,
+      "overriden_lines": 0
+    },
+    "ea80d59547b4bcc2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f809e6df-6ede-45d8-8b9f-7a872cfe4b04",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 215,
+      "total_deletions": 68,
+      "accepted_lines": 199,
+      "overriden_lines": 0
+    }
+  }
+}
