@@ -39,6 +39,11 @@ _Built with the assistance of [Claude Code](https://claude.ai/claude-code)_
 <td>📖 <strong>Three modes</strong> — View, Edit, and Stitch for a clean stitching workflow</td>
 <td>📑 <strong>Page mode</strong> — split large patterns into printable pages, stitch one at a time</td>
 </tr>
+<tr>
+<td>📈 <strong>StitchOps analytics</strong> — time tracking, stitch counts, per-thread breakdowns</td>
+<td>🖤 <strong>B&amp;W stitch mode</strong> — symbols while stitching, done stitches fill with colour</td>
+<td>🎨 <strong>Page colour filter</strong> — focus on one page colour at a time while stitching</td>
+</tr>
 </table>
 
 ## 📺 See it in action
@@ -146,6 +151,23 @@ Shot list:
 5. Show colours-done and pages-done counts in the progress bar
 6. Undo a progress step, redo it
 7. Show the keep-screen-on toggle
+-->
+
+<video src="VIDEO_URL_HERE" controls width="100%"></video>
+
+</details>
+
+<details>
+<summary>▶ StitchOps analytics (~25s)</summary>
+
+<!--
+Shot list:
+1. Open a pattern with substantial progress already recorded
+2. Open StitchOps panel — show stitch count, time spent, percentage done
+3. Scroll through per-thread breakdown — counts and time per colour
+4. Switch to workspace aggregate view — multiple patterns compared
+5. Show a chart (time breakdown or progress over sessions)
+6. Close and show keep-stitching flow
 -->
 
 <video src="VIDEO_URL_HERE" controls width="100%"></video>
@@ -293,19 +315,30 @@ Convert a printed cross-stitch chart PDF into an editable pattern without any AI
 
 The resulting pattern is saved automatically as a `.stitches` file next to the source PDF.
 
+Detection uses 2D floodfill and vertical column analysis to handle fuzzy or uneven page edges that confuse simple bounding-box approaches.
+
 > The scanner works best on clean, high-contrast charts. Backstitches and half-stitches are not extracted (full stitches only in this release).
 
 ### Stitch demonstration *(beta)*
 - **Animated stitch order** — per-thread step-by-step animation showing exactly how to stitch the pattern, with configurable playback speed
 - **Stitch planner** — automatic path planning that determines an efficient stitch order, respecting front/back alternation rules
 - **Start cell selection** — tap any cell on the demo canvas to set the stitching start point
-- **GIF export** — download the stitch order animation as a GIF file
+- **GIF export** — download the stitch order animation as a GIF file; optionally supply a JSON file with an explicit stitch list to generate a GIF for a custom sequence
 - **Color-coded passes** — front passes (purple / green), back passes (gold / red / blue) with perpendicular offset rendering so overlapping stitches on the same line are all visible
 
 > The stitch demonstration is in beta. Some pattern shapes may produce incorrect or suboptimal stitch paths.
 
+### StitchOps analytics
+- **Per-pattern stats** — total stitches, stitches done, percentage complete, and time spent on the current pattern
+- **Time tracking** — session timer starts automatically when you enter Stitch mode; accumulates across sessions and is saved inside the `.stitches` file
+- **Per-thread breakdown** — stitch count and time spent per DMC colour, so you can estimate how long remaining colours will take
+- **Workspace aggregate** — StitchOps panel accessible from the workspace home screen shows combined stats and charts across all patterns in the workspace
+- **Colour sort options** — sort the thread palette by DMC number, stitch count, or completed-last order to prioritise what to stitch next
+
 ### View options
 - **Block mode** — renders all stitches as solid coloured rectangles instead of X-shapes; half stitches occupy half the cell, quarter stitches a quarter cell. Makes it easy to read the overall colour distribution of a design. Toggle button in the AppBar (highlighted when active) on all canvases; defaults to off per session. In stitch mode, symbols remain visible when zoomed in; in design mode the view stays clean. Block mode state is session-only (not saved to file).
+- **B&W stitch mode** — unmarked stitches render as greyscale symbols; stitches marked done fill with their full DMC colour. Keeps focus on what's left while confirming progress at a glance. Focused stitches and completed backstitches always render in colour regardless of B&W mode.
+- **Page colour filter** — in Stitch mode, filter the canvas to show only stitches that belong to the current page colour; all other stitches dim. Useful for working through one thread colour at a time on a large pattern.
 - **Zoom-adaptive rendering** — below a zoom threshold, stitches automatically switch to block rendering; backstitches and grid lines fade out at very low zoom
 
 ### Platform & input
@@ -350,5 +383,4 @@ See [CHANGELOG.md](CHANGELOG.md) — generated automatically from [changesets](h
 - Extend supported import/export file types (Pattern Maker `.xsd`, PC Stitch `.pat`, others)
 
 ### Engineering
-- Better test coverage (unit tests exist for models, stitch logic, and layer behaviour; integration and widget tests not yet written)
 - Grid detector tests — `test/grid_detector_test.dart` was removed because the fixture PNGs (`grid_test_lighthouse.png`, `grid_test_anchor.png`) were never committed. To restore: add the fixture images to `test/fixtures/`, restore the test file from git history (`git show HEAD~1:test/grid_detector_test.dart`), and set `_lighthouseExpectedKnown` / `_anchorExpectedKnown` to `true` once expected values are confirmed.
