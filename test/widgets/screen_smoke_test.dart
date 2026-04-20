@@ -3,27 +3,28 @@
 /// One test per screen: assert it builds without crashing and that key
 /// structural widgets are present. Providers are overridden with stubs
 /// that return empty/default state without doing any I/O.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../lib/models/pattern.dart';
-import '../../lib/models/snippet.dart';
-import '../../lib/models/stitch.dart';
-import '../../lib/models/thread.dart';
-import '../../lib/providers/editor/editor_provider.dart';
-import '../../lib/providers/google_drive_provider.dart';
-import '../../lib/providers/recent_items_provider.dart';
-import '../../lib/providers/settings_provider.dart';
-import '../../lib/providers/workspace_provider.dart';
-import '../../lib/screens/color_picker_screen.dart';
-import '../../lib/screens/home_screen.dart';
-import '../../lib/screens/new_pattern_dialog.dart';
-import '../../lib/screens/resize_canvas_dialog.dart';
-import '../../lib/screens/snippet_editor_screen.dart';
-import '../../lib/screens/stitch_ops_screen.dart';
+import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/snippet.dart';
+import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/thread.dart';
+import 'package:stitches/providers/editor/editor_provider.dart';
+import 'package:stitches/providers/google_drive_provider.dart';
+import 'package:stitches/providers/recent_items_provider.dart';
+import 'package:stitches/providers/settings_provider.dart';
+import 'package:stitches/providers/workspace_provider.dart';
+import 'package:stitches/screens/color_picker_screen.dart';
+import 'package:stitches/screens/home_screen.dart';
+import 'package:stitches/screens/new_pattern_dialog.dart';
+import 'package:stitches/screens/resize_canvas_dialog.dart';
+import 'package:stitches/screens/snippet_editor_screen.dart';
+import 'package:stitches/screens/stitch_ops_screen.dart';
 
 // ─── Stubs ───────────────────────────────────────────────────────────────────
 
@@ -133,7 +134,7 @@ void main() {
   // ─── ResizeCanvasDialog ───────────────────────────────────────────────────
 
   group('ResizeCanvasDialog', () {
-    Future<void> _pumpDialog(WidgetTester tester) async {
+    Future<void> pumpDialog(WidgetTester tester) async {
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -152,13 +153,13 @@ void main() {
     }
 
     testWidgets('builds and shows width and height fields', (tester) async {
-      await _pumpDialog(tester);
+      await pumpDialog(tester);
       tester.takeException(); // dismiss any RenderFlex overflow in test viewport
       expect(find.byType(TextFormField), findsWidgets);
     });
 
     testWidgets('anchor section is present', (tester) async {
-      await _pumpDialog(tester);
+      await pumpDialog(tester);
       // Consume any RenderFlex overflow that occurs in the small test viewport.
       tester.takeException();
       expect(find.text('Anchor'), findsOneWidget);

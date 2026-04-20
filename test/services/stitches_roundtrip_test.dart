@@ -6,18 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-import '../../lib/models/layer.dart';
-import '../../lib/models/layer_blend_mode.dart';
-import '../../lib/models/layer_item.dart';
-import '../../lib/models/page_config.dart';
-import '../../lib/models/pattern.dart';
-import '../../lib/models/pattern_progress.dart';
-import '../../lib/models/progress_log.dart';
-import '../../lib/models/snippet.dart';
-import '../../lib/models/snippet_palette.dart';
-import '../../lib/models/stitch.dart';
-import '../../lib/models/thread.dart';
-import '../../lib/services/file_service.dart';
+import 'package:stitches/models/layer.dart';
+import 'package:stitches/models/layer_blend_mode.dart';
+import 'package:stitches/models/layer_item.dart';
+import 'package:stitches/models/page_config.dart';
+import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/pattern_progress.dart';
+import 'package:stitches/models/progress_log.dart';
+import 'package:stitches/models/snippet.dart';
+import 'package:stitches/models/snippet_palette.dart';
+import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/thread.dart';
+import 'package:stitches/services/file_service.dart';
 
 void main() {
   group('.stitches round-trip', () {
@@ -30,7 +30,7 @@ void main() {
       expect(parsed.name, equals(original.name));
       expect(parsed.width, equals(original.width));
       expect(parsed.height, equals(original.height));
-      expect(parsed.aidaColor.value, equals(original.aidaColor.value));
+      expect(parsed.aidaColor, equals(original.aidaColor));
       expect(parsed.designer, equals(original.designer));
       expect(parsed.description, equals(original.description));
       expect(parsed.difficulty, equals(original.difficulty));

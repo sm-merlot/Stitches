@@ -3,21 +3,22 @@
 ///
 /// All pure-Dart or relying only on Flutter's Color type —
 /// no ProviderContainer, no fakes needed.
+library;
 
 import 'package:flutter/material.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/models/page_config.dart';
-import '../../lib/models/page_layout.dart';
-import '../../lib/models/pattern.dart';
-import '../../lib/models/snippet.dart';
-import '../../lib/models/snippet_palette.dart';
-import '../../lib/models/snippet_palette_resolver.dart';
-import '../../lib/models/stitch.dart';
-import '../../lib/models/stitch_geometry.dart';
-import '../../lib/models/stitch_plan.dart';
-import '../../lib/models/thread.dart';
-import '../../lib/services/stitch_renderer.dart';
+import 'package:stitches/models/page_config.dart';
+import 'package:stitches/models/page_layout.dart';
+import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/snippet.dart';
+import 'package:stitches/models/snippet_palette.dart';
+import 'package:stitches/models/snippet_palette_resolver.dart';
+import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/stitch_geometry.dart';
+import 'package:stitches/models/stitch_plan.dart';
+import 'package:stitches/models/thread.dart';
+import 'package:stitches/services/stitch_renderer.dart';
 
 // ─── stitch_geometry ─────────────────────────────────────────────────────────
 
@@ -65,15 +66,15 @@ void main() {
 
   // ─── snippet_palette_resolver ─────────────────────────────────────────────
 
-  const _black = Thread(
+  const black = Thread(
       dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: 'X');
-  const _red = Thread(
+  const red = Thread(
       dmcCode: '666', color: Color(0xFFCC0000), name: 'Red', symbol: 'O');
-  const _blue = Thread(
+  const blue = Thread(
       dmcCode: '336', color: Color(0xFF003399), name: 'Blue', symbol: '#');
 
   group('snippet_palette_resolver — resolveThread', () {
-    Snippet _snippetWith({
+    Snippet snippetWith({
       required List<Thread> primaryThreads,
       List<Thread>? altThreads,
       int activePaletteIndex = 0,
@@ -96,14 +97,14 @@ void main() {
     }
 
     test('active=0 (primary) → returns primary thread', () {
-      final snip = _snippetWith(primaryThreads: [_black, _red]);
+      final snip = snippetWith(primaryThreads: [black, red]);
       expect(resolveThread(snip, '310').dmcCode, equals('310'));
     });
 
     test('active=1 returns alt palette thread at same slot', () {
-      final snip = _snippetWith(
-        primaryThreads: [_black],
-        altThreads: [_red],
+      final snip = snippetWith(
+        primaryThreads: [black],
+        altThreads: [red],
         activePaletteIndex: 1,
       );
       // slot 0 of primary = _black; slot 0 of alt = _red
@@ -112,9 +113,9 @@ void main() {
 
     test('active=1 but alt palette shorter → falls back to primary', () {
       // Primary has 2 threads; alt only has 1.
-      final snip = _snippetWith(
-        primaryThreads: [_black, _red],
-        altThreads: [_blue],
+      final snip = snippetWith(
+        primaryThreads: [black, red],
+        altThreads: [blue],
         activePaletteIndex: 1,
       );
       // Slot 1 doesn't exist in alt → falls back to primary slot 1
@@ -122,7 +123,7 @@ void main() {
     });
 
     test('unknown threadId not in primary → falls back gracefully', () {
-      final snip = _snippetWith(primaryThreads: [_black]);
+      final snip = snippetWith(primaryThreads: [black]);
       // '999' is not in the primary palette
       final result = resolveThread(snip, '999');
       expect(result, isNotNull);
@@ -143,10 +144,10 @@ void main() {
 
   // ─── page_layout ──────────────────────────────────────────────────────────
 
-  CrossStitchPattern _emptyPattern({int width = 10, int height = 10}) =>
+  CrossStitchPattern emptyPattern({int width = 10, int height = 10}) =>
       CrossStitchPattern.empty(name: 'T').copyWith(width: width, height: height);
 
-  const _cfg10 = PageConfig(
+  const cfg10 = PageConfig(
     enabled: true,
     pageWidth: 10,
     pageHeight: 10,
@@ -155,43 +156,43 @@ void main() {
 
   group('page_layout — PageLayout.compute', () {
     test('pattern exactly one page → 1×1 layout', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 10, height: 10));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 10, height: 10));
       expect(layout.pagesAcross, equals(1));
       expect(layout.pagesDown, equals(1));
       expect(layout.totalPages, equals(1));
     });
 
     test('pattern 20×10 → 2 pages across, 1 down', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 10));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 20, height: 10));
       expect(layout.pagesAcross, equals(2));
       expect(layout.pagesDown, equals(1));
     });
 
     test('pattern 10×20 → 1 page across, 2 down', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 10, height: 20));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 10, height: 20));
       expect(layout.pagesAcross, equals(1));
       expect(layout.pagesDown, equals(2));
     });
 
     test('1×1 pattern → single page covers the cell', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 1, height: 1));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 1, height: 1));
       expect(layout.cellOnPage(0, 0, 0, 0), isTrue);
     });
 
     test('off-by-one: cell at right edge of page 0 is not on page 1', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 10));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 20, height: 10));
       expect(layout.cellOnPage(9, 0, 0, 0), isTrue);
       expect(layout.cellOnPage(9, 0, 1, 0), isFalse);
     });
 
     test('cell at start of second page is on page 1 not page 0', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 10));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 20, height: 10));
       expect(layout.cellOnPage(10, 0, 1, 0), isTrue);
       expect(layout.cellOnPage(10, 0, 0, 0), isFalse);
     });
 
     test('nominalPageRect returns correct rect for each page', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 20, height: 20));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 20, height: 20));
       final r00 = layout.nominalPageRect(0, 0);
       expect(r00.left, equals(0));
       expect(r00.top, equals(0));
@@ -204,13 +205,13 @@ void main() {
     });
 
     test('out-of-bounds cell returns false from cellOnPage', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 10, height: 10));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 10, height: 10));
       expect(layout.cellOnPage(-1, 0, 0, 0), isFalse);
       expect(layout.cellOnPage(0, 10, 0, 0), isFalse);
     });
 
     test('every cell in pattern belongs to exactly one page', () {
-      final layout = PageLayout.compute(_cfg10, _emptyPattern(width: 15, height: 12));
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 15, height: 12));
       for (var y = 0; y < 12; y++) {
         for (var x = 0; x < 15; x++) {
           int count = 0;
@@ -228,7 +229,7 @@ void main() {
 
   // ─── stitch_renderer ─────────────────────────────────────────────────────
 
-  PlannedAida _oneSquare({int x = 0, int y = 0}) {
+  PlannedAida oneSquare({int x = 0, int y = 0}) {
     const sq = PlannedSquare(id: 0, x: 0, y: 0);
     return const PlannedAida(
       title: 'T',
@@ -240,7 +241,7 @@ void main() {
     );
   }
 
-  PlannedAida _aidaWith2x2Squares() {
+  PlannedAida aidaWith2x2Squares() {
     const squares = [
       PlannedSquare(id: 0, x: 0, y: 0),
       PlannedSquare(id: 1, x: 1, y: 0),
@@ -273,7 +274,7 @@ void main() {
     });
 
     test('single square at (0,0) with cellSize=10 → -5..5 bounds', () {
-      final b = computeGridBounds(_oneSquare(), 10.0);
+      final b = computeGridBounds(oneSquare(), 10.0);
       expect(b.left, closeTo(-5.0, 1e-9));
       expect(b.top, closeTo(-5.0, 1e-9));
       expect(b.right, closeTo(5.0, 1e-9));
@@ -281,7 +282,7 @@ void main() {
     });
 
     test('2×2 grid with cellSize=10 → width and height are 20', () {
-      final b = computeGridBounds(_aidaWith2x2Squares(), 10.0);
+      final b = computeGridBounds(aidaWith2x2Squares(), 10.0);
       expect(b.width, closeTo(20.0, 1e-9));
       expect(b.height, closeTo(20.0, 1e-9));
     });
@@ -289,7 +290,7 @@ void main() {
 
   group('stitch_renderer — resolveSegments', () {
     test('empty stitch list → empty segments', () {
-      final segs = resolveSegments(_oneSquare(), cellSize: 10.0);
+      final segs = resolveSegments(oneSquare(), cellSize: 10.0);
       expect(segs, isEmpty);
     });
 

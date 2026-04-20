@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
-import '../../lib/models/layer.dart';
-import '../../lib/models/layer_item.dart';
-import '../../lib/models/pattern.dart';
-import '../../lib/models/stitch.dart';
-import '../../lib/models/thread.dart';
-import '../../lib/services/format_service.dart';
+import 'package:stitches/models/layer.dart';
+import 'package:stitches/models/layer_item.dart';
+import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/thread.dart';
+import 'package:stitches/services/format_service.dart';
 
 void main() {
   group('FormatService OXS', () {
@@ -20,7 +20,7 @@ void main() {
       expect(pattern.name, equals('minimal'));
       expect(pattern.width, equals(10));
       expect(pattern.height, equals(10));
-      expect(pattern.aidaColor.value, equals(const Color(0xFFFFFFFF).value));
+      expect(pattern.aidaColor, equals(const Color(0xFFFFFFFF)));
 
       // Threads: index 0 is cloth (skipped), index 1 is DMC 310
       expect(pattern.threads.length, 1);
@@ -101,7 +101,7 @@ void main() {
         expect(decoded.name, equals('roundtrip'));
         expect(decoded.width, equals(20));
         expect(decoded.height, equals(20));
-        expect(decoded.aidaColor.value, equals(original.aidaColor.value));
+        expect(decoded.aidaColor, equals(original.aidaColor));
         expect(decoded.threads.length, 1);
         expect(decoded.threads.first.dmcCode, equals('310'));
 

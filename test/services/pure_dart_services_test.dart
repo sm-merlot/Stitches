@@ -1,13 +1,12 @@
 /// Tests for pure-Dart services: color_space, dashed_line.
 ///
 /// No Flutter imports, no fakes needed — these functions are stateless.
-
-import 'dart:math' as math;
+library;
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/services/color_space.dart';
-import '../../lib/services/dashed_line.dart';
+import 'package:stitches/services/color_space.dart';
+import 'package:stitches/services/dashed_line.dart';
 
 void main() {
   // ─── color_space ──────────────────────────────────────────────────────────
@@ -34,12 +33,12 @@ void main() {
     });
 
     test('pure red has a > 0 (reddish hue)', () {
-      final (_, a, __) = rgbToLab(255, 0, 0);
+      final (_, a, _) = rgbToLab(255, 0, 0);
       expect(a, greaterThan(30.0));
     });
 
     test('pure blue has b < 0 (blue hue)', () {
-      final (_, __, b) = rgbToLab(0, 0, 255);
+      final (_, _, b) = rgbToLab(0, 0, 255);
       expect(b, lessThan(-30.0));
     });
 

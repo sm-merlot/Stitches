@@ -3,13 +3,13 @@
 /// matchPixel is a static method with no side effects beyond a lazy-init
 /// cache. importRegion is exercised with a small synthetic image built using
 /// the `image` package (already a direct dependency).
+library;
 
-import 'package:flutter/material.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
-import '../../lib/models/stitch.dart';
-import '../../lib/services/sprite_importer.dart';
+import 'package:stitches/models/stitch.dart';
+import 'package:stitches/services/sprite_importer.dart';
 
 void main() {
   // ─── matchPixel ───────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ void main() {
 
   group('SpriteImporter.importRegion', () {
     /// Build a small solid-colour image.
-    img.Image _solid(int r, int g, int b, {int w = 4, int h = 4}) {
+    img.Image solid(int r, int g, int b, {int w = 4, int h = 4}) {
       final image = img.Image(width: w, height: h, numChannels: 4);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
@@ -63,7 +63,7 @@ void main() {
     }
 
     test('solid black 4×4 → 16 FullStitches, all same threadId', () {
-      final image = _solid(0, 0, 0);
+      final image = solid(0, 0, 0);
       final result = SpriteImporter.importRegion(image, 0, 0, 4, 4);
       expect(result.stitches, hasLength(16));
       expect(result.stitches.whereType<FullStitch>(), hasLength(16));
@@ -80,7 +80,7 @@ void main() {
     });
 
     test('region clamp: requesting out-of-bounds region does not throw', () {
-      final image = _solid(0, 0, 0, w: 3, h: 3);
+      final image = solid(0, 0, 0, w: 3, h: 3);
       expect(
         () => SpriteImporter.importRegion(image, 2, 2, 10, 10),
         returnsNormally,
@@ -88,7 +88,7 @@ void main() {
     });
 
     test('stitches are normalised to start at (0,0) relative to region', () {
-      final image = _solid(0, 0, 0, w: 10, h: 10);
+      final image = solid(0, 0, 0, w: 10, h: 10);
       // Import a 2×2 region starting at (3,5).
       final result = SpriteImporter.importRegion(image, 3, 5, 2, 2);
       final xs = result.stitches.whereType<FullStitch>().map((s) => s.x);

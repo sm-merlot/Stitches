@@ -10,6 +10,7 @@
 ///
 /// Run locally:
 ///   flutter test integration_test/editor_flows_test.dart -d macos
+library;
 
 import 'dart:io';
 

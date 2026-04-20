@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import '../../lib/services/editor_session_service.dart';
+import 'package:stitches/services/editor_session_service.dart';
 
 void main() {
   group('EditorSession JSON round-trip', () {

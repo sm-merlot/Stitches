@@ -33,6 +33,7 @@ dependencies:
   package_info_plus: ^9.0.1
 
 dev_dependencies:
+  path: ^1.9.1
   flutter_test:
     sdk: flutter
   integration_test:
