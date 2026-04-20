@@ -2,6 +2,59 @@
 
 ## 0.7.0
 
+### Minor Changes
+
+- c51f671: allow user to pass explicit stitches to generate gif
+- 66d71c0: Smarter fuzzy page edges: 2D floodfill scoring and vertical column detection to avoid stranding colour islands and produce consistent vertical boundaries
+- 29cd74b: ## Time tracking in StitchOps
+
+  Track how long you spend stitching, right inside StitchOps.
+
+  ### Timer
+
+  A **Timer** button appears in the stitch-mode right sidebar (below Mark and StitchDemo). Tap it to start a session; the button counts up live (`MM:SS` / `HH:MM:SS`) and turns highlighted while running. Tap again to stop — the elapsed time is saved to that day's log entry automatically.
+
+  The timer survives device sleep and app kills: the session start time is persisted to `SharedPreferences` and restored on next launch. Sessions older than 24 hours are discarded as stale.
+
+  ### Time section in StitchOps
+
+  A new **Time** card appears in StitchOps whenever any stitching has been logged:
+
+  - **Total** — all recorded stitching time across the project's lifetime
+  - **Today** / **Week** — rolling totals
+  - **Stitches / hour** — overall efficiency derived from logged time
+
+  ### Manual time adjustment
+
+  A pencil icon in the Time card header opens the **Edit time history** dialog. Every day with stitching activity is listed (newest first, with Today always at the top), each with editable **h** and **m** fields. Only changed entries are saved on confirm. Useful for correcting sessions where the timer was left running, or for retroactively logging time for days the timer wasn't used.
+
+  StitchOps updates immediately after saving — no need to close and reopen the dialog.
+
+  ### Persistence
+
+  Time is stored as a `minutes:` field on each `progressLog` entry in the `.stitches` file. Existing files load fine; the field is omitted when zero.
+
+### Patch Changes
+
+- aa52d2a: fix copty selection when "selecting from all visible layers" is enabled.
+- a42e79e: Add a tooltip that appears while dragging a selection or progress region, showing the selection size (W × H) and the from/to cell coordinates. The tooltip positions itself in the corner matching the drag direction.
+- 26252fc: In stitch mode with page mode enabled, add an "All / Page" toggle to the Colours panel. When "Page" is selected, only threads that have stitches on the current page are shown, with counts scoped to that page. Uses the composite (flattened) cache for full stitches so only the topmost visible colour per cell is counted. The toggle is hidden in view mode and when page mode is not active.
+- 4bbe7cb: Close the test coverage gap: add 350 unit/widget tests and 4 integration smoke tests across T1–T5.
+
+  **T1** – File format round-trip: v2 `.stitches` full round-trip, compressed/uncompressed paths, unknown-YAML-key safety, legacy v1 fixture
+
+  **T2** – EditorNotifier core: all stitch types, erase modes, layer CRUD, mode switching, undo/redo (200-step cap), thread management, progress marking, metadata
+
+  **T3** – EditorNotifier remainder: snippet CRUD/resize/transform/palettes, selection/copy/paste, `saveSelectionAsSnippet`; session service save/restore; progress log edge cases
+
+  **T4** – Pure-Dart services: `color_space`, `dashed_line`, `stitch_geometry`, `snippet_palette_resolver`, `page_layout`, `stitch_renderer`, `SpriteImporter`; widget smoke tests for six screens
+
+  **T5** – Integration tests: four end-to-end flows (draw→save→reload, copy→paste→undo, progress→save→reload, snippet round-trip) using real disk I/O; CI workflow added at `.github/workflows/test.yml`
+
+  All 350 `flutter test` tests pass in ~6 s. Integration tests run separately: `flutter test integration_test/ -d macos`.
+
+## 0.7.0
+
 ### Patch Changes
 
 - 0c19d73: Fix "select all visible layers" copy picking up stitch from occluded/transparent layers and missing stitches from the topmost visible layer.
