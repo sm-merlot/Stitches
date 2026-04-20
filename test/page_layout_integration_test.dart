@@ -46,7 +46,7 @@ void main() {
     };
     indexToSym = {
       for (int i = 0; i < pattern.threads.length; i++)
-        i: pattern.threads[i].symbol ?? '?',
+        i: pattern.threads[i].symbol,
     };
     snapColor = {};
     for (final entry in composite.compositeThreads.entries) {

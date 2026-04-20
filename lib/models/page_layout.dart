@@ -1,9 +1,7 @@
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'page_config.dart';
 import 'pattern.dart';
-import 'stitch.dart';
 import '../services/stitch_compositor.dart';
 
 /// Precomputed page layout derived from a [PageConfig] and the pattern's stitch
@@ -133,7 +131,9 @@ class PageLayout {
 
   static int _parseInt(String s, int start, int end) {
     var v = 0;
-    for (var i = start; i < end; i++) v = v * 10 + s.codeUnitAt(i) - 48;
+    for (var i = start; i < end; i++) {
+      v = v * 10 + s.codeUnitAt(i) - 48;
+    }
     return v;
   }
 

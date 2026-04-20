@@ -21,7 +21,7 @@ const int D = 4;
 /// Build a colorAt closure from a flat list (index = primary / col).
 /// Null entries represent empty (unstitched) cells.
 int? Function(int, int) colorMap(List<int?> cells) =>
-    (int primary, int _crossIndex) =>
+    (int primary, int crossIndex) =>
         (primary >= 0 && primary < cells.length) ? cells[primary] : null;
 
 /// Convenience: call computeOffset with crossIndex=0, seed=0, maxBoundary=cells.length.
@@ -88,7 +88,9 @@ void main() {
       final range = PageLayout.snapRange;
       final cells = List<int?>.filled(range * 3, A);
       cells[range] = B;
-      for (int i = range + 1; i < cells.length; i++) cells[i] = B;
+      for (int i = range + 1; i < cells.length; i++) {
+        cells[i] = B;
+      }
       expect(snap(cells, 0), range);
     });
 

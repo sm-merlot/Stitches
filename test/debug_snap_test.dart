@@ -40,7 +40,7 @@ void main() {
     };
     final indexToSym = <int, String>{
       for (int i = 0; i < pattern.threads.length; i++)
-        i: pattern.threads[i].symbol ?? '?',
+        i: pattern.threads[i].symbol,
     };
     final snapColor = <int, int?>{};
     for (final entry in composite.compositeThreads.entries) {
@@ -64,7 +64,7 @@ void main() {
     final endCol = nominal + 9;
 
     final sb = StringBuffer();
-    sb.writeln('\nCanvas view (thread symbols, cols ${startCol}–${endCol - 1}):');
+    sb.writeln('\nCanvas view (thread symbols, cols $startCol–${endCol - 1}):');
     sb.writeln('Nominal boundary at col $nominal');
     sb.write('row  ');
     for (int c = startCol; c < endCol; c++) {
@@ -73,7 +73,9 @@ void main() {
     sb.writeln();
     for (int row = startRow; row < endRow; row++) {
       sb.write(' ${row.toString().padLeft(2)}: ');
-      for (int col = startCol; col < endCol; col++) sb.write(symAt(col, row));
+      for (int col = startCol; col < endCol; col++) {
+        sb.write(symAt(col, row));
+      }
       sb.writeln();
     }
 
@@ -88,7 +90,9 @@ void main() {
     sb.writeln();
     for (int row = startRow; row < endRow; row++) {
       sb.write(' ${row.toString().padLeft(2)}: ');
-      for (int col = wideStart; col < wideEnd; col++) sb.write(symAt(col, row));
+      for (int col = wideStart; col < wideEnd; col++) {
+        sb.write(symAt(col, row));
+      }
       sb.writeln();
     }
 
