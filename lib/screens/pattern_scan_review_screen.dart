@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
 import '../screens/pattern_scan_cell_screen.dart';
-import '../services/ai/ai_provider.dart';
+import '../services/scan_result.dart';
 import '../services/grid_symbol_matcher.dart';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────

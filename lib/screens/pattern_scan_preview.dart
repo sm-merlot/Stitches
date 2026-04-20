@@ -10,7 +10,7 @@ import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
-import '../services/ai/ai_provider.dart';
+import '../services/scan_result.dart';
 
 /// Full-screen preview of a scanned/imported pattern.
 ///

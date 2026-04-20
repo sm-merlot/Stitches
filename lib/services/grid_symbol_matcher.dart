@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:image/image.dart' as img;
 
-import 'ai/ai_provider.dart';
+import 'scan_result.dart';
 import '../data/dmc_colors.dart';
 import '../models/snippet.dart';
 import '../models/stitch.dart';

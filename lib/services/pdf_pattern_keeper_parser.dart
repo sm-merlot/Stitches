@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../data/dmc_colors.dart';
-import 'ai/ai_provider.dart';
+import 'scan_result.dart';
 
 /// Tier-1 PDF import: parse a PatternKeeper-compatible (text-native) PDF
 /// directly from its text layer — no rasterisation, no user input required.
@@ -34,55 +34,28 @@ class PatternKeeperParser {
     try {
       doc = await PdfDocument.openFile(pdfPath);
 
-      final pageTexts = <PdfPageText?>[];
+      final pages = <PageTextData?>[];
       for (final page in doc.pages) {
         try {
-          pageTexts.add(await page.loadStructuredText());
+          final pt = await page.loadStructuredText();
+          pages.add(PageTextData(
+            fullText: pt.fullText,
+            fragments: pt.fragments
+                .map((f) => TextFragment(
+                      text: f.text,
+                      left: f.bounds.left,
+                      top: f.bounds.top,
+                      right: f.bounds.right,
+                      bottom: f.bounds.bottom,
+                    ))
+                .toList(),
+          ));
         } catch (_) {
-          pageTexts.add(null);
+          pages.add(null);
         }
       }
 
-      // Reject raster PDFs: need a meaningful amount of text.
-      final totalChars =
-          pageTexts.fold(0, (s, t) => s + (t?.fullText.length ?? 0));
-      if (totalChars < 100) {
-        debugPrint('[PKParser] not text-native ($totalChars chars total)');
-        return null;
-      }
-
-      final legend = _parseLegend(pageTexts);
-      if (legend.length < _kMinColors) {
-        debugPrint(
-            '[PKParser] legend too small (${legend.length} entries) — not PK format');
-        return null;
-      }
-      debugPrint('[PKParser] legend: ${legend.length} symbol→DMC entries');
-
-      final pageGrids = _parseAllGrids(pageTexts, legend);
-      if (pageGrids.isEmpty) {
-        debugPrint('[PKParser] no grid pages found');
-        return null;
-      }
-
-      final result = _assembleResult(pageGrids, legend);
-      if (result.stitches.isEmpty) {
-        debugPrint('[PKParser] no stitches after assembly');
-        return null;
-      }
-
-      // Reject sparse results: likely a raster PDF with incidental text matches.
-      final fillRatio = result.stitches.length / (result.width * result.height);
-      if (fillRatio < _kMinFillRatio) {
-        debugPrint('[PKParser] fill ratio too low '
-            '(${result.stitches.length}/${result.width * result.height} = '
-            '${(fillRatio * 100).toStringAsFixed(1)}%) — not PK format');
-        return null;
-      }
-
-      debugPrint('[PKParser] success: ${result.width}×${result.height}, '
-          '${result.stitches.length} stitches, ${result.threads.length} threads');
-      return result;
+      return tryParseFromText(pages);
     } catch (e, st) {
       debugPrint('[PKParser] parse error: $e\n$st');
       return null;
@@ -91,46 +64,127 @@ class PatternKeeperParser {
     }
   }
 
+  /// Parse pre-extracted page text data into a [PatternScanResult].
+  ///
+  /// This is the core logic, decoupled from pdfrx so it can be tested
+  /// without native PDF libraries.
+  @visibleForTesting
+  static PatternScanResult? tryParseFromText(List<PageTextData?> pages) {
+    // Reject raster PDFs: need a meaningful amount of text.
+    final totalChars =
+        pages.fold(0, (s, t) => s + (t?.fullText.length ?? 0));
+    if (totalChars < 100) {
+      debugPrint('[PKParser] not text-native ($totalChars chars total)');
+      return null;
+    }
+
+    final legend = _parseLegend(pages);
+    if (legend.length < _kMinColors) {
+      debugPrint(
+          '[PKParser] legend too small (${legend.length} entries) — not PK format');
+      return null;
+    }
+    debugPrint('[PKParser] legend: ${legend.length} symbol→DMC entries');
+
+    final pageGrids = _parseAllGrids(pages, legend);
+    if (pageGrids.isEmpty) {
+      debugPrint('[PKParser] no grid pages found');
+      return null;
+    }
+
+    final result = _assembleResult(pageGrids, legend);
+    if (result.stitches.isEmpty) {
+      debugPrint('[PKParser] no stitches after assembly');
+      return null;
+    }
+
+    // Reject sparse results: likely a raster PDF with incidental text matches.
+    final fillRatio = result.stitches.length / (result.width * result.height);
+    if (fillRatio < _kMinFillRatio) {
+      debugPrint('[PKParser] fill ratio too low '
+          '(${result.stitches.length}/${result.width * result.height} = '
+          '${(fillRatio * 100).toStringAsFixed(1)}%) — not PK format');
+      return null;
+    }
+
+    debugPrint('[PKParser] success: ${result.width}×${result.height}, '
+        '${result.stitches.length} stitches, ${result.threads.length} threads');
+    return result;
+  }
+
   // ─── Legend parsing ───────────────────────────────────────────────────────
 
   /// Scan all pages for rows that contain a known DMC code and extract
   /// the associated symbol character.  Returns symbol → dmcCode.
-  static Map<String, String> _parseLegend(List<PdfPageText?> pageTexts) {
+  ///
+  /// Handles two PDF extraction modes:
+  ///  • Per-word fragments (pdfrx/PDFium default): each word is its own fragment.
+  ///  • Whole-line fragments (some third-party generators): one fragment per row.
+  ///    In this case we split on whitespace to get sub-tokens.
+  static Map<String, String> _parseLegend(List<PageTextData?> pages) {
     final legend = <String, String>{};
 
-    for (final pageText in pageTexts) {
-      if (pageText == null) continue;
-      final frags = pageText.fragments;
+    for (final page in pages) {
+      if (page == null) continue;
+      final frags = page.fragments;
       if (frags.isEmpty) continue;
 
       // Group fragments into horizontal rows by Y position.
       final rows = _groupByY(frags);
 
       for (final row in rows.values) {
-        // Any fragment whose trimmed text is a valid DMC code?
-        final dmcFrags = row.where((f) {
-          final t = f.text.trim();
-          return t.isNotEmpty && dmcColorByCode(t) != null;
-        }).toList();
-        if (dmcFrags.isEmpty) continue;
+        // Expand each fragment into (text, approximateX) tokens.
+        // A fragment may be a single word OR an entire row (third-party PDFs).
+        // Splitting on whitespace handles both cases uniformly.
+        final tokens = <({String text, double left})>[];
+        for (final f in row) {
+          final raw = f.text.trim();
+          if (raw.isEmpty) continue;
+          final parts = raw.split(RegExp(r'\s+'));
+          if (parts.length > 1) {
+            // Distribute X positions evenly across sub-tokens.
+            final fWidth = f.right - f.left;
+            final partW = fWidth / parts.length;
+            for (int i = 0; i < parts.length; i++) {
+              if (parts[i].isNotEmpty) {
+                tokens.add((text: parts[i], left: f.left + i * partW));
+              }
+            }
+          } else {
+            tokens.add((text: raw, left: f.left));
+          }
+        }
 
-        for (final dmcFrag in dmcFrags) {
-          final dmcCode = dmcFrag.text.trim();
+        // Any token that is a valid DMC code?
+        final dmcTokens =
+            tokens.where((t) => dmcColorByCode(t.text) != null).toList();
+        if (dmcTokens.isEmpty) continue;
 
-          // Symbol: the leftmost short (1–3 char) fragment in the same row
-          // that is not the DMC-code fragment and not itself a valid DMC code.
-          // Note: we intentionally allow digit characters (e.g. '5', '8') —
-          // PK symbol fonts often map digits to cross-stitch symbols.
+        for (final dmcTok in dmcTokens) {
+          final dmcCode = dmcTok.text;
+
+          // Symbol: rightmost short (1–3 char) token that is STRICTLY LEFT of
+          // the DMC code token and is not itself a valid DMC code.
+          //
+          // In two-column legend tables, multiple symbol/DMC pairs share one
+          // y-group.  Picking the rightmost token that is still left of the
+          // current DMC code's x-position ensures we bind to the symbol in
+          // the same column, not one from the adjacent left column.
+          //
+          // Digits are allowed — symbol fonts often use digits as glyphs.
           String? symbol;
           double? symbolX;
-          for (final f in row) {
-            if (f == dmcFrag) continue;
-            final t = f.text.trim();
-            if (t.isEmpty || t.length > 3) continue;
-            if (dmcColorByCode(t) != null) continue;
-            if (symbol == null || f.bounds.left < symbolX!) {
-              symbol = t;
-              symbolX = f.bounds.left;
+          for (final tok in tokens) {
+            if (tok.text == dmcCode) continue;
+            if (tok.text.isEmpty || tok.text.length > 3) continue;
+            if (dmcColorByCode(tok.text) != null) continue;
+            if (tok.left >= dmcTok.left) continue; // must be left of DMC code
+            // Skip the literal "DMC" prefix used by some third-party generators
+            // (format: "[symbol] DMC [code] [name]").
+            if (tok.text.toUpperCase() == 'DMC') continue;
+            if (symbol == null || tok.left > symbolX!) {
+              symbol = tok.text;
+              symbolX = tok.left;
             }
           }
 
@@ -147,40 +201,51 @@ class PatternKeeperParser {
   // ─── Grid parsing ─────────────────────────────────────────────────────────
 
   // Regex matching the PKCHART marker embedded in StitchX-exported PK PDFs.
-  static final _kPkChartRe = RegExp(r'PKCHART:(\d+),(\d+)');
+  // Supports both legacy format (2 numbers: startCol,startRow) and current
+  // format (4 numbers: startCol,startRow,endCol,endRow).
+  static final _kPkChartRe =
+      RegExp(r'PKCHART:(\d+),(\d+)(?:,(\d+),(\d+))?');
 
   static List<_PageGrid> _parseAllGrids(
-      List<PdfPageText?> pageTexts, Map<String, String> legend) {
+      List<PageTextData?> pages, Map<String, String> legend) {
     final symbolSet = legend.keys.toSet();
     final grids = <_PageGrid>[];
 
-    for (int pi = 0; pi < pageTexts.length; pi++) {
-      final pageText = pageTexts[pi];
-      if (pageText == null) continue;
+    for (int pi = 0; pi < pages.length; pi++) {
+      final page = pages[pi];
+      if (page == null) continue;
 
-      // Scan all fragments for a PKCHART:col,row marker (exported by StitchX).
-      int? pkStartCol, pkStartRow;
-      for (final frag in pageText.fragments) {
-        final m = _kPkChartRe.firstMatch(frag.text);
-        if (m != null) {
-          pkStartCol = int.tryParse(m.group(1)!);
-          pkStartRow = int.tryParse(m.group(2)!);
-          break;
-        }
+      // Scan full joined text for PKCHART marker (pdfrx may split subtitle into
+      // word-level fragments, so fragment-by-fragment scanning misses it).
+      int? pkStartCol, pkStartRow, pkEndCol, pkEndRow;
+      final fullText = page.fullText;
+      final m = _kPkChartRe.firstMatch(fullText);
+      if (m != null) {
+        pkStartCol = int.tryParse(m.group(1)!);
+        pkStartRow = int.tryParse(m.group(2)!);
+        // Groups 3+4 only present in the current 4-number format.
+        pkEndCol = m.group(3) != null ? int.tryParse(m.group(3)!) : null;
+        pkEndRow = m.group(4) != null ? int.tryParse(m.group(4)!) : null;
       }
 
-      final symbolFrags = pageText.fragments
+      final symbolFrags = page.fragments
           .where((f) => symbolSet.contains(f.text.trim()))
           .toList();
-      if (symbolFrags.length < _kMinGridCells) continue;
+      if (symbolFrags.length < _kMinGridCells) {
+        debugPrint('[PKParser] page $pi: only ${symbolFrags.length} symbol '
+            'fragments (need $_kMinGridCells) — '
+            '${page.fragments.length} total frags, '
+            'likely raster grid');
+        continue;
+      }
 
       // Positions of symbol centres.
       final xCenters = symbolFrags
-          .map((f) => (f.bounds.left + f.bounds.right) / 2)
+          .map((f) => (f.left + f.right) / 2)
           .toList()
         ..sort();
       final yCenters = symbolFrags
-          .map((f) => (f.bounds.top + f.bounds.bottom) / 2)
+          .map((f) => (f.top + f.bottom) / 2)
           .toList()
         ..sort();
 
@@ -200,8 +265,8 @@ class PatternKeeperParser {
       int maxCol = 0, maxRow = 0;
 
       for (final frag in symbolFrags) {
-        final cx = (frag.bounds.left + frag.bounds.right) / 2;
-        final cy = (frag.bounds.top + frag.bounds.bottom) / 2;
+        final cx = (frag.left + frag.right) / 2;
+        final cy = (frag.top + frag.bottom) / 2;
         // PDF Y increases upward → flip to get visual row (0 = top).
         final col = ((cx - originX) / xStep).round();
         final row = ((originY - cy) / yStep).round();
@@ -213,32 +278,34 @@ class PatternKeeperParser {
 
       if (cells.isNotEmpty) {
         // ── Outlier filter ────────────────────────────────────────────────
-        // Footer text fragments ("Page", "1", "of", "5") land at very large
-        // row values — far beyond the actual grid extent — because the footer
-        // is below the grid and row = ((originY - cy) / yStep) is large there.
-        // Row ruler labels (left margin) already produce col < 0 and are
-        // filtered above.  Column ruler labels produce row < 0 and are filtered.
-        // Only footer produces valid (≥0) out-of-range rows.
+        // Footer/ruler text that matches a symbol in the legend lands at
+        // out-of-range row/col values.  Two strategies:
         //
-        // Use the 95th-percentile of actual row/col values as the "true" max;
-        // discard anything more than 2 steps beyond it.  With a uniform grid,
-        // p95 ≈ last row − a few, so real cells survive; footer phantoms at
-        // row >> maxActualRow are removed.
-        if (cells.length > 4) {
+        // 1. Exact bounds (preferred): PKCHART gives us endCol/endRow so we
+        //    know the precise grid dimensions — discard anything outside.
+        // 2. p95 heuristic (fallback for third-party PDFs without PKCHART):
+        //    footer phantoms are far beyond real cells, so p95+2 clips them.
+        if (pkStartCol != null && pkEndCol != null &&
+            pkStartRow != null && pkEndRow != null) {
+          final maxLocalCol = pkEndCol - pkStartCol - 1;
+          final maxLocalRow = pkEndRow - pkStartRow - 1;
+          cells.retainWhere(
+              (c) => c.col <= maxLocalCol && c.row <= maxLocalRow);
+        } else if (cells.length > 4) {
           final sortedRows = (cells.map((c) => c.row).toList()..sort());
           final sortedCols = (cells.map((c) => c.col).toList()..sort());
           final p95row = sortedRows[(sortedRows.length * 0.95).floor()];
           final p95col = sortedCols[(sortedCols.length * 0.95).floor()];
           cells.retainWhere((c) => c.row <= p95row + 2 && c.col <= p95col + 2);
-          if (cells.isEmpty) continue;
-          maxCol = cells.map((c) => c.col).reduce(max);
-          maxRow = cells.map((c) => c.row).reduce(max);
         }
+        if (cells.isEmpty) continue;
+        maxCol = cells.map((c) => c.col).reduce(max);
+        maxRow = cells.map((c) => c.row).reduce(max);
 
         debugPrint('[PKParser] page $pi: ${cells.length} symbols, '
             '${maxCol + 1}×${maxRow + 1} grid, '
             'step ${xStep.toStringAsFixed(1)}×${yStep.toStringAsFixed(1)} pt'
-            '${pkStartCol != null ? ', PKCHART offset $pkStartCol,$pkStartRow' : ''}');
+            '${pkStartCol != null ? ', PKCHART $pkStartCol,$pkStartRow→$pkEndCol,$pkEndRow' : ''}');
         grids.add(_PageGrid(
           cells: cells,
           cols: maxCol + 1,
@@ -258,25 +325,38 @@ class PatternKeeperParser {
       List<_PageGrid> pageGrids, Map<String, String> legend) {
     final _PageGrid combined;
 
-    if (pageGrids.length == 1) {
-      combined = pageGrids.first;
+    // If any page carries a PKCHART marker, discard pages without one —
+    // those are colour-table or legend pages incorrectly captured as grids
+    // (they contain symbol characters from the legend column but no marker).
+    final hasAnyMarker = pageGrids.any((g) => g.absStartCol != null);
+    final grids = hasAnyMarker
+        ? pageGrids.where((g) => g.absStartCol != null).toList()
+        : pageGrids;
+
+    if (grids.isEmpty) {
+      return PatternScanResult(
+          width: 0, height: 0, threads: [], stitches: []);
+    }
+
+    if (grids.length == 1) {
+      combined = grids.first;
     } else {
-      // If all pages carry PKCHART absolute offsets (StitchX export), use them
-      // directly — no heuristic needed.
+      // If all remaining pages carry PKCHART absolute offsets (StitchX export),
+      // place them directly — no heuristic needed.
       final allHaveMarkers =
-          pageGrids.every((g) => g.absStartCol != null && g.absStartRow != null);
+          grids.every((g) => g.absStartCol != null && g.absStartRow != null);
       if (allHaveMarkers) {
-        combined = _combineAbsolute(pageGrids);
+        combined = _combineAbsolute(grids);
       } else {
         // Fallback heuristic for third-party PK PDFs.
         // Decide stacking direction from column-count consistency.
-        final colCounts = pageGrids.map((g) => g.cols).toList();
+        final colCounts = grids.map((g) => g.cols).toList();
         final sortedCols = [...colCounts]..sort();
         final medianCols = sortedCols[sortedCols.length ~/ 2];
         final isVertical = colCounts.every((c) => (c - medianCols).abs() <= 2);
 
         combined =
-            isVertical ? _stackVertically(pageGrids) : _stackHorizontally(pageGrids);
+            isVertical ? _stackVertically(grids) : _stackHorizontally(grids);
       }
     }
 
@@ -419,24 +499,24 @@ class PatternKeeperParser {
   // ─── Utility ──────────────────────────────────────────────────────────────
 
   /// Group fragments into horizontal rows by proximity of their Y centres.
-  static Map<int, List<PdfPageTextFragment>> _groupByY(
-      List<PdfPageTextFragment> frags) {
+  static Map<int, List<TextFragment>> _groupByY(
+      List<TextFragment> frags) {
     if (frags.isEmpty) return {};
 
-    final heights = frags.map((f) => f.bounds.height).toList()..sort();
+    final heights = frags.map((f) => f.height).toList()..sort();
     final medianH = heights[heights.length ~/ 2];
     final tolerance = max(medianH * 0.6, 2.0);
 
     // Sort descending by Y (top of page = largest Y in PDF coords).
     final sorted = [...frags]
-      ..sort((a, b) => b.bounds.top.compareTo(a.bounds.top));
+      ..sort((a, b) => b.top.compareTo(a.top));
 
-    final groups = <int, List<PdfPageTextFragment>>{};
+    final groups = <int, List<TextFragment>>{};
     int id = 0;
     double? lastY;
 
     for (final frag in sorted) {
-      final cy = (frag.bounds.top + frag.bounds.bottom) / 2;
+      final cy = (frag.top + frag.bottom) / 2;
       if (lastY == null || (lastY - cy).abs() > tolerance) {
         id++;
         lastY = cy;
