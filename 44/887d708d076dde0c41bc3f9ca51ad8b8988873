@@ -1,0 +1,23 @@
+integration_test/pk_accuracy_test.dart
+  e3e3dae4c55d02ec 6-9,14-17,34-36,69-74,87-94,98-102,104,107,114-115,117,143,148,185-188,203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "44887d708d076dde0c41bc3f9ca51ad8b8988873",
+  "prompts": {
+    "e3e3dae4c55d02ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f020e4cd-faf0-4593-9af6-3b4962b08a03",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 44,
+      "total_deletions": 16,
+      "accepted_lines": 44,
+      "overriden_lines": 0
+    }
+  }
+}
