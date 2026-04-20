@@ -1,0 +1,23 @@
+docs/road-to-v1.md
+  aabf632914cf3520 63,75,77-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "8375fbaf8bb6824fced83023a9d13dd8d18762ee",
+  "prompts": {
+    "aabf632914cf3520": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2569e3df-06ce-45b1-924f-ffcce02c2502",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 1,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}
