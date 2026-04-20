@@ -7,7 +7,7 @@
 // Run with:
 //   flutter test test/debug_snap_test.dart --reporter=expanded
 //
-// The test always calls fail() so Flutter prints the output.
+// Skipped by default (diagnostic only). Remove @Skip to run manually.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +20,7 @@ void main() {
       'test/fixtures/super_metroid_samus_ridley.stitches';
 
   test('debug: snap simulation rows 17–32 at first vertical boundary',
-      skip: !File(filePath).existsSync() ? 'file not found' : false,
+      skip: 'diagnostic only — run manually to inspect snap output',
       () async {
     // ── Load pattern
     final bytes = await File(filePath).readAsBytes();
@@ -135,7 +135,7 @@ void main() {
     }
 
     printOnFailure(sb.toString());
-    // Always fail so Flutter test prints the output.
+    // Always fail so Flutter prints the output.
     fail(sb.toString());
   });
 }
