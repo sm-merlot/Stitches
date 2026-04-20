@@ -1,0 +1,23 @@
+test/services/format_service_test.dart
+  14aa4afdbffe9737 1-5,12-22,24-103,105-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "757215f12eed3b6e919c5e999e86a5a366220a1c",
+  "prompts": {
+    "14aa4afdbffe9737": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ef6bbdc-3306-4c26-80ef-478c6c0bb4bc",
+        "model": "google/gemma-4-26b-a4b"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 116,
+      "overriden_lines": 0
+    }
+  }
+}

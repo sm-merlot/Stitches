@@ -1,0 +1,43 @@
+test/models/progress_log_test.dart
+  266c0109da4e1e8e 1,3-162
+  h_c73f350bf316ee 2
+test/models/geometry_and_layout_test.dart
+  266c0109da4e1e8e 1-5,7-10,22-68,70,72,74-76,78-99,101-104,108-115,119-125,127-146,148-149,151-158,160-165,167-171,173-177,179-182,184-188,190-194,196-207,209-213,215-231,233-243,245-276,278-284,286-292,294-343
+  h_c73f350bf316ee 6,11-21,69,71,73,77,100,105-107,116-118,126,147,150,159,166,172,178,183,189,195,208,214,232,244,277,285,293
+test/services/sprite_importer_test.dart
+  266c0109da4e1e8e 1-5,7-10,13-54,56-65,67-82,84-90,92-113
+  h_c73f350bf316ee 6,11-12,55,66,83,91
+test/services/stitches_roundtrip_test.dart
+  266c0109da4e1e8e 1-4,7-8,23-32,34-82,85-168,171-273
+  2cc8b23fa41d50c6 5-6,21-22,83-84,169-170,274
+  h_c73f350bf316ee 9-20,33
+test/providers/editor_notifier_test.dart
+  266c0109da4e1e8e 1-4,12-403,405-721
+  h_c73f350bf316ee 5-11
+test/services/pure_dart_services_test.dart
+  h_c73f350bf316ee 1-3,6-7,10-35,37-40,42-189
+test/services/editor_session_test.dart
+  266c0109da4e1e8e 1-2,4-71
+  h_c73f350bf316ee 3
+pubspec.yaml
+  266c0109da4e1e8e 39-40
+  h_c73f350bf316ee 36
+integration_test/editor_flows_test.dart
+  266c0109da4e1e8e 1-12,14-223
+  h_c73f350bf316ee 13
+test/services/format_service_test.dart
+  14aa4afdbffe9737 1-5,12-22,24-103,105-124
+  h_c73f350bf316ee 6-11,104
+test/providers/editor_snippets_selection_test.dart
+  266c0109da4e1e8e 1-4,13-38,40-420
+  h_c73f350bf316ee 5-12,39
+test/widgets/screen_smoke_test.dart
+  266c0109da4e1e8e 1-5,7-12,28-80,82,84-98,100-136,138-155,157-161,163-258
+  h_c73f350bf316ee 6,13-27,137,156,162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "1e5cc5ba0784fff0aef3a4092bc95aa86562df54",
+  "prompts": {}
+}

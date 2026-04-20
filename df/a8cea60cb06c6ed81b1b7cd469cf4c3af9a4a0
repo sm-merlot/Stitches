@@ -1,0 +1,29 @@
+test/services/sprite_importer_test.dart
+  266c0109da4e1e8e 1-6,8-10,13-54,56-65,67-82,84-90,92-113
+test/widgets/screen_smoke_test.dart
+  266c0109da4e1e8e 1-11,27-79,85,87-101,105-141,143-160,162-166,168-263
+test/models/geometry_and_layout_test.dart
+  266c0109da4e1e8e 1-9,21-67,69,71,73-75,77-98,100-103,107-114,118-124,126-145,147-148,150-157,159-164,166-170,172-176,178-181,183-187,189-193,195-206,208-212,214-230,232-242,244-275,277-283,285-291,293-342
+test/services/pure_dart_services_test.dart
+  h_c73f350bf316ee 1-4,7-8,11-36,38-41,43-190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "dfa8cea60cb06c6ed81b1b7cd469cf4c3af9a4a0",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 70,
+      "total_deletions": 65,
+      "accepted_lines": 645,
+      "overriden_lines": 0
+    }
+  }
+}
