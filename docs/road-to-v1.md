@@ -60,7 +60,7 @@ Tracking everything needed before the first public release.
 - [ ] **Anchor colour database** – toggle exists in Settings but always shows DMC colours (database not fully populated); either complete it, remove the toggle, or clearly mark as "coming soon" so it doesn't look like a bug
 - [ ] **Windows file association** – register `.stitches` extension in the Windows installer (macOS, iOS, and Android already handle this via file associations)
 - [ ] **PDF Import Improvements** – add support for PatternKeeper as a minimum. What else can we improve in this space? (see [pdf-import-research](./specs/pdf-import-research.md))
-- [ ] **Remaining PatternKeeper-style features** – parking stitches, key view, rescan/adjust grid, session timer, long-press options (see [ideas-from-pattern-progress-trackers](./specs/ideas-from-pattern-progress-trackers.md) — items 1, 3, 7, 8, 9 timer, 10)
+- [ ] **Remaining PatternKeeper-style features** – parking stitches, key view, rescan/adjust grid, long-press options (see [ideas-from-pattern-progress-trackers](./specs/ideas-from-pattern-progress-trackers.md) — items 1, 3, 7, 8, 10)
 
 ---
 
@@ -72,7 +72,12 @@ Features landed since initial planning — no longer blockers, kept here for con
 - ✅ File format v2 with progress tracking (#35)
 - ✅ Stitch progress tracking with frogging support (#42)
 - ✅ StitchOps analytics: per-pattern + workspace aggregate stats, charts, pattern filter (#64)
+- ✅ StitchOps time tracking: session timer, time-per-pattern, time breakdown charts (#68)
 - ✅ B&W stitch mode — unmarked stitches show B&W symbol, done cells fill with colour (#53); realistic mode removed (#54)
+- ✅ Page colour filter in stitch mode — filter canvas to show only stitches matching the current page colour (#72)
+- ✅ 2D floodfill + vertical column detection for fuzzy PDF page edges (#74)
+- ✅ Selection drag size tooltip — shows W×H stitch count while rubber-banding a selection (#71)
+- ✅ GIF export with explicit stitch list from JSON file (#67)
 - ✅ Unified Share/Export with all formats (#39)
 - ✅ Home screen uplift: thumbnails, unified pickers, workspace improvements (#40)
 - ✅ Page mode in stitch view (#34)
