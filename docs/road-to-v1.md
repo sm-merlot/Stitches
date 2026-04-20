@@ -27,7 +27,7 @@ Tracking everything needed before the first public release.
 
 ## Quality & Testing
 
-- [ ] **Add tests** – as described in README (unit + integration coverage for core editor logic) (see [test-coverage](./specs/test-coverage.md))
+- [x] **Add tests** – as described in README (unit + integration coverage for core editor logic) (see [test-coverage pr](https://github.com/scme0/Stitches/pull/73))
 
 ---
 

@@ -34,7 +34,7 @@ These apps are built specifically for scanning pdfs and then tracking progress w
    - ✅ Total days stitching / streaks (current streak + longest streak)
    - ✅ Graphs — daily bar, cumulative line, activity heatmap; all with hover tooltips
    - ✅ Analytics — workspace StitchOps aggregates all patterns; filter to compare subsets
-   - ❌ Timer (how much time spent stitching) — not yet implemented
+   - ✅ Timer (how much time spent stitching) — not yet implemented
 
 10. Generally let's review how we mark stitches compared to other apps.
     - I feel like what we have is a bit more intuitive out the gate.

@@ -298,6 +298,12 @@ class FileService {
             buf.writeln('      - ${c.$1},${c.$2}');
           }
         }
+        if (prog.completedBackstitches.isNotEmpty) {
+          buf.writeln('    completedBackstitches:');
+          for (final b in prog.completedBackstitches) {
+            buf.writeln('      - ${b.$1},${b.$2},${b.$3},${b.$4}');
+          }
+        }
         if (prog.completedPages.isNotEmpty) {
           final pages = prog.completedPages.toList()..sort();
           buf.writeln('    completedPages: [${pages.join(', ')}]');
