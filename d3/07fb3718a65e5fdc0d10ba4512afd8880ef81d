@@ -1,0 +1,36 @@
+test/debug_snap_test.dart
+  4ae320c2c405564a 10,23,138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "d307fb3718a65e5fdc0d10ba4512afd8880ef81d",
+  "prompts": {
+    "28c23d0ae7c3e27a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "255c2d53-ee56-41c0-bc15-c2b97ab988ef",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 333,
+      "overriden_lines": 0
+    },
+    "4ae320c2c405564a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "277e9087-9d57-47f1-a758-47cff44f2db1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 4,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
