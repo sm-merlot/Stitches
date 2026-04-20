@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:xml/xml.dart';
+import 'package:yaml/yaml.dart';
 
 import 'package:uuid/uuid.dart';
 
@@ -17,7 +18,8 @@ import 'sprite_importer.dart';
 
 enum CrossStitchFormat {
   oxs('oxs', 'Open Cross Stitch (.oxs)'),
-  ;
+  stitches('stitches', '.stitches'),
+;
 
   const CrossStitchFormat(this.extension, this.label);
   final String extension;
@@ -33,7 +35,7 @@ enum CrossStitchFormat {
 }
 
 /// Set of file extensions (lowercase, with dot) that can be imported.
-const kImportableExtensions = {'.oxs'};
+const kImportableExtensions = {'.oxs', '.stitches'};
 
 // ─── Service ─────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,13 @@ class FormatService {
     final content = await File(path).readAsString();
     return switch (format) {
       CrossStitchFormat.oxs => _parseOxs(content, path),
+      CrossStitchFormat.stitches => () {
+          final doc = loadYaml(content);
+          if (doc is! Map) {
+            throw const FormatException('Invalid .stitches file');
+          }
+          return CrossStitchPattern.fromYaml(Map<String, dynamic>.from(doc));
+        }(),
     };
   }
 
@@ -54,6 +63,8 @@ class FormatService {
   static String encodeFile(CrossStitchPattern pattern, CrossStitchFormat format) {
     return switch (format) {
       CrossStitchFormat.oxs => _writeOxs(pattern),
+      CrossStitchFormat.stitches => throw UnsupportedError(
+          'Use FileService.toYamlString/saveFile for .stitches output.'),
     };
   }
 
@@ -187,31 +198,37 @@ class FormatService {
           if (thread != null) {
             stitches.add(HalfStitch(x: x, y: y, isForward: false, threadId: thread.dmcCode));
           }
+          break;
         case 2: // / half stitch
           final thread = pi2 != null ? palette[pi2] : null;
           if (thread != null) {
             stitches.add(HalfStitch(x: x, y: y, isForward: true, threadId: thread.dmcCode));
           }
+          break;
         case 3: // TL quarter
           final thread = pi1 != null ? palette[pi1] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.topLeft, threadId: thread.dmcCode));
           }
+          break;
         case 4: // BR quarter
           final thread = pi1 != null ? palette[pi1] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.bottomRight, threadId: thread.dmcCode));
           }
+          break;
         case 5: // TR quarter
           final thread = pi2 != null ? palette[pi2] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.topRight, threadId: thread.dmcCode));
           }
+          break;
         case 6: // BL quarter
           final thread = pi2 != null ? palette[pi2] : null;
           if (thread != null) {
             stitches.add(QuarterStitch(x: x, y: y, quadrant: QuadrantPosition.bottomLeft, threadId: thread.dmcCode));
           }
+          break;
       }
     }
 

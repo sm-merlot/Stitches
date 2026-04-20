@@ -1,0 +1,14 @@
+name: legacy_v1_flat
+width: 3
+height: 3
+aidaColor: '#FFFFFF'
+threads:
+  - dmcCode: '310'
+    color: '#000000'
+    name: 'Black'
+    symbol: 'X'
+stitches:
+  - {type: full, x: 1, y: 1, thread: '310'}
+  - {type: half, x: 2, y: 1, dir: forward, thread: '310'}
+  - {type: back, x1: 0.5, y1: 0.5, x2: 1.5, y2: 1.5, thread: '310'}
+

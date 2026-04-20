@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chart>
+  <properties oxsversion="1.0" software="Stitches" chartheight="10" chartwidth="10" palettecount="1" />
+  <palette>
+    <palette_item index="0" number="cloth" name="cloth" color="FFFFFF" printcolor="FFFFFF" blendcolor="nil" comments="" strands="2" symbol="100" dashpattern="" bsstrands="2" bscolor="FFFFFF" />
+    <palette_item index="1" number="DMC 310" name="Black" color="000000" printcolor="000000" blendcolor="nil" comments="" strands="2" symbol="2" dashpattern="" bsstrands="2" bscolor="000000" />
+  </palette>
+  <fullstitches>
+    <stitch x="1" y="1" palindex="1" />
+  </fullstitches>
+  <partstitches>
+    <partstitch x="2" y="2" palindex1="1" palindex2="0" direction="1" />
+    <partstitch x="3" y="3" palindex1="0" palindex2="1" direction="2" />
+    <partstitch x="4" y="4" palindex1="1" palindex2="0" direction="3" />
+    <partstitch x="5" y="5" palindex1="1" palindex2="0" direction="4" />
+    <partstitch x="6" y="6" palindex1="0" palindex2="1" direction="5" />
+    <partstitch x="7" y="7" palindex1="0" palindex2="1" direction="6" />
+  </partstitches>
+  <backstitches>
+    <backstitch x1="8.0" y1="8.0" x2="9.0" y2="9.0" palindex="1" objecttype="backstitch" sequence="0" />
+  </backstitches>
+</chart>
