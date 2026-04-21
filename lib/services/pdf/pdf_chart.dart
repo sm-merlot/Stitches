@@ -42,8 +42,19 @@ void _drawChartPage(
   // ── Header ───────────────────────────────────────────────────────────
   // In PatternKeeper mode embed an absolute-origin marker so the parser can
   // reassemble multi-page exports without relying on fragile heuristics.
+  //
+  // The marker includes the PDF-space centre of local col 0 (ox) and local
+  // row 0 (oy) so the parser knows the true grid origin even when the first
+  // visible rows/columns of a page are empty.
+  //
+  // ox = centre X of local col 0  = gridOriginX + cellSize/2
+  // oy = centre Y of local row 0  = gridOriginY + (rows-1)*cellSize + cellSize/2
+  //   (PDF Y increases upward, so row 0 has the LARGEST Y on the page)
+  final pkOx = gridOriginX + cellSize / 2;
+  final pkOy = gridOriginY + (rows - 1) * cellSize + cellSize / 2;
   final subtitle = patternKeeperMode
-      ? 'PKCHART:$startX,$startY,$endX,$endY  |  Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages'
+      ? 'PKCHART:$startX,$startY,$endX,$endY,${pkOx.toStringAsFixed(3)},${pkOy.toStringAsFixed(3)}'
+          '  |  Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages'
       : 'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages';
   _drawPageHeader(
     canvas,

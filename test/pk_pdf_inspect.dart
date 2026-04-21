@@ -12,9 +12,8 @@ import 'package:pdfrx/pdfrx.dart';
 
 // ── Edit these paths ─────────────────────────────────────────────────────────
 const kPdfPaths = [
-  '/private/tmp/stitches-pdfs/SuperMetroid-PK.pdf',
-  '/private/tmp/stitches-pdfs/SuperMetroidStatus-PK.pdf',
-  '/private/tmp/stitches-pdfs/Dachshund-PK.pdf',
+  'test/fixtures/pdfs/dachshund_pk.pdf',
+  'test/fixtures/pdfs/super_metroid_pk.pdf',
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 

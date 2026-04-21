@@ -279,6 +279,78 @@ void main() {
       final result = PatternKeeperParser.tryParseFromText([page]);
       expect(result, isNull);
     });
+
+    test('v3 PKCHART origin fixes empty leading rows/cols', () {
+      // Regression test for the empty-edge coordinate offset bug.
+      //
+      // A page where local cols 0-1 and rows 0-2 have NO stitches.
+      // Without v3 origin embedded in the marker, the parser anchors
+      // from the first ACTUAL symbol (col 2, row 3) and computes all
+      // absolute coords 2 cols and 3 rows too low.
+      //
+      // With v3 origin (ox, oy = true PDF-space centre of col 0 / row 0),
+      // all absolute coords must be exactly pkStartCol+localCol.
+      const threads = [
+        ('A', '310', 'Black'),
+        ('B', '666', 'Bright Red'),
+        ('C', '820', 'Royal Blue'),
+        ('D', '702', 'Kelly Green'),
+        ('E', 'White', 'White'),
+        ('F', '3371', 'Black Brown'),
+      ];
+      final legend = _legendPage(threads);
+
+      const step = 8.0;
+      const trueOriginX = 50.0; // PDF-space centre of local col 0
+      const trueOriginY = 700.0; // PDF-space centre of local row 0 (largest Y)
+
+      // pkStartCol=30, pkStartRow=20; page grid is 10×10.
+      // Symbols only in local cols 2-9, rows 3-9 (empty top+left edges).
+      final cellFrags = <TextFragment>[];
+      final expectedMap = <(int, int), String>{};
+
+      for (int row = 3; row < 10; row++) {
+        for (int col = 2; col < 10; col++) {
+          final idx = (col + row) % threads.length;
+          final sym = threads[idx].$1;
+          final x = trueOriginX + col * step;
+          final y = trueOriginY - row * step; // PDF Y up
+          cellFrags.add(_frag(sym, x, y, w: step * 0.8, h: step * 0.8));
+          // Absolute canvas position:
+          expectedMap[(30 + col, 20 + row)] = threads[idx].$2;
+        }
+      }
+
+      // v3 marker: startCol,startRow,endCol,endRow,ox,oy
+      final pkMarker =
+          'PKCHART:30,20,40,30,${trueOriginX.toStringAsFixed(3)},${trueOriginY.toStringAsFixed(3)}';
+      cellFrags.add(_frag(pkMarker, 50, 750, w: 300));
+
+      final gridPage = PageTextData(
+        fullText: '$pkMarker ${cellFrags.map((f) => f.text).join(' ')}',
+        fragments: cellFrags,
+      );
+
+      final result = PatternKeeperParser.tryParseFromText([legend, gridPage]);
+      expect(result, isNotNull, reason: 'should parse');
+
+      final parsedMap = <(int, int), String>{};
+      for (final s in result!.stitches) {
+        parsedMap[(s.x, s.y)] = s.dmcCode;
+      }
+
+      final mismatches = <String>[];
+      for (final entry in expectedMap.entries) {
+        final got = parsedMap[entry.key];
+        if (got != entry.value) {
+          mismatches.add('${entry.key}: expected ${entry.value}, got $got');
+        }
+      }
+      expect(mismatches, isEmpty,
+          reason: 'Origin offset bug — ${mismatches.length} wrong positions:\n'
+              '${mismatches.take(5).join('\n')}');
+      expect(parsedMap.length, equals(expectedMap.length));
+    });
   });
 
   // ─── Multi-page assembly ────────────────────────────────────────────────

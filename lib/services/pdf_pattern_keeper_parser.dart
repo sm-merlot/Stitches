@@ -25,6 +25,44 @@ class PatternKeeperParser {
 
   // ─── Public entry point ───────────────────────────────────────────────────
 
+  /// Extract raw page text data from [pdfPath] without parsing.
+  ///
+  /// Returns one [PageTextData?] per page (null when a page fails extraction).
+  /// Returns null if the file cannot be opened.
+  /// Useful for CLI diagnostics: inspect exactly what pdfrx extracts.
+  static Future<List<PageTextData?>?> extractPageText(String pdfPath) async {
+    PdfDocument? doc;
+    try {
+      doc = await PdfDocument.openFile(pdfPath);
+      final pages = <PageTextData?>[];
+      for (final page in doc.pages) {
+        try {
+          final pt = await page.loadStructuredText();
+          pages.add(PageTextData(
+            fullText: pt.fullText,
+            fragments: pt.fragments
+                .map((f) => TextFragment(
+                      text: f.text,
+                      left: f.bounds.left,
+                      top: f.bounds.top,
+                      right: f.bounds.right,
+                      bottom: f.bounds.bottom,
+                    ))
+                .toList(),
+          ));
+        } catch (_) {
+          pages.add(null);
+        }
+      }
+      return pages;
+    } catch (e, st) {
+      debugPrint('[PKParser] extractPageText error: $e\n$st');
+      return null;
+    } finally {
+      await doc?.dispose();
+    }
+  }
+
   /// Try to parse [pdfPath] as a PatternKeeper-compatible PDF.
   ///
   /// Returns a [PatternScanResult] on success, or null when the PDF is raster
@@ -155,6 +193,13 @@ class PatternKeeperParser {
           }
         }
 
+        // Sort left-to-right so the DMC-code column (small x) is always
+        // processed before the stitch-count column (large x).  pdfrx may
+        // return fragments in content-stream order (e.g. right-to-left by
+        // column), causing a stitch-count that happens to equal a valid DMC
+        // code to steal the symbol from the real DMC code token.
+        tokens.sort((a, b) => a.left.compareTo(b.left));
+
         // Any token that is a valid DMC code?
         final dmcTokens =
             tokens.where((t) => dmcColorByCode(t.text) != null).toList();
@@ -201,10 +246,15 @@ class PatternKeeperParser {
   // ─── Grid parsing ─────────────────────────────────────────────────────────
 
   // Regex matching the PKCHART marker embedded in StitchX-exported PK PDFs.
-  // Supports both legacy format (2 numbers: startCol,startRow) and current
-  // format (4 numbers: startCol,startRow,endCol,endRow).
-  static final _kPkChartRe =
-      RegExp(r'PKCHART:(\d+),(\d+)(?:,(\d+),(\d+))?');
+  //
+  // Supported formats (all backward-compatible):
+  //   v1: PKCHART:startCol,startRow
+  //   v2: PKCHART:startCol,startRow,endCol,endRow
+  //   v3: PKCHART:startCol,startRow,endCol,endRow,ox,oy
+  //         ox = PDF-space centre X of local col 0
+  //         oy = PDF-space centre Y of local row 0 (largest Y = visually top)
+  static final _kPkChartRe = RegExp(
+      r'PKCHART:(\d+),(\d+)(?:,(\d+),(\d+)(?:,([\d.]+),([\d.]+))?)?');
 
   static List<_PageGrid> _parseAllGrids(
       List<PageTextData?> pages, Map<String, String> legend) {
@@ -218,14 +268,20 @@ class PatternKeeperParser {
       // Scan full joined text for PKCHART marker (pdfrx may split subtitle into
       // word-level fragments, so fragment-by-fragment scanning misses it).
       int? pkStartCol, pkStartRow, pkEndCol, pkEndRow;
+      double? pkOriginX, pkOriginY;
       final fullText = page.fullText;
       final m = _kPkChartRe.firstMatch(fullText);
       if (m != null) {
         pkStartCol = int.tryParse(m.group(1)!);
         pkStartRow = int.tryParse(m.group(2)!);
-        // Groups 3+4 only present in the current 4-number format.
-        pkEndCol = m.group(3) != null ? int.tryParse(m.group(3)!) : null;
-        pkEndRow = m.group(4) != null ? int.tryParse(m.group(4)!) : null;
+        pkEndCol   = m.group(3) != null ? int.tryParse(m.group(3)!) : null;
+        pkEndRow   = m.group(4) != null ? int.tryParse(m.group(4)!) : null;
+        // v3 marker: explicit PDF-space grid origin (fixes empty-edge offset bug).
+        // Guard groupCount in case binary was compiled against an older regex.
+        if (m.groupCount >= 5) {
+          pkOriginX = m.group(5) != null ? double.tryParse(m.group(5)!) : null;
+          pkOriginY = m.group(6) != null ? double.tryParse(m.group(6)!) : null;
+        }
       }
 
       final symbolFrags = page.fragments
@@ -257,9 +313,57 @@ class PatternKeeperParser {
         continue;
       }
 
-      // Grid origin: smallest X (left column) and largest Y (top row in PDF coords).
-      final originX = xCenters.first;
-      final originY = yCenters.last;
+      // Grid origin: the PDF-space centre of local col 0 / row 0.
+      // pkOriginX is per-page (same physical layout on every page), so it IS
+      // the per-page origin for local col 0.  Fall back to first/last symbol
+      // for third-party PDFs that lack the v3 marker.
+      final originX = pkOriginX ?? xCenters.first;
+      final originY = pkOriginY ?? yCenters.last;
+
+      // ── Step refinement (v3 PKCHART only) ────────────────────────────────
+      // _computeStep median can still have small errors due to render spread.
+      // With explicit ox/oy (per-page origin) we compute a more accurate step
+      // via median( (cx - ox) / round((cx-ox)/roughStep) ) across all symbols.
+      double refinedXStep = xStep;
+      double refinedYStep = yStep;
+      if (pkOriginX != null && pkOriginY != null) {
+        // Restrict to symbols in the first ~10 rows/cols from the per-page
+        // origin.  With a rough step error ε = |roughStep - trueStep|, the
+        // rounding error at col n is n·ε/roughStep.  For n ≤ 10 this stays
+        // below 0.5 as long as ε < roughStep/20 (≈5 % error), which covers
+        // typical _computeStep variation.  This avoids biasing the median
+        // with symbols at large col/row indices where the rough rounding
+        // already rounds to the wrong integer.
+        final xRatios = <double>[];
+        final yRatios = <double>[];
+        // Safe radius: 8 × roughStep keeps rounding error < 0.5 when rough
+        // step is within ~6 % of true step.  Using median from _computeStep
+        // the actual error is typically < 2 %, so this is very conservative.
+        final xLimit = xStep * 10.5;
+        final yLimit = yStep * 10.5;
+        for (final frag in symbolFrags) {
+          final cx = (frag.left + frag.right) / 2;
+          final cy = (frag.top + frag.bottom) / 2;
+          final dx = cx - pkOriginX;
+          final dy = pkOriginY - cy;
+          if (dx > 0 && dx < xLimit) {
+            final col = (dx / xStep).round();
+            if (col > 0) xRatios.add(dx / col);
+          }
+          if (dy > 0 && dy < yLimit) {
+            final row = (dy / yStep).round();
+            if (row > 0) yRatios.add(dy / row);
+          }
+        }
+        if (xRatios.length >= 10) {
+          xRatios.sort();
+          refinedXStep = xRatios[xRatios.length ~/ 2];
+        }
+        if (yRatios.length >= 10) {
+          yRatios.sort();
+          refinedYStep = yRatios[yRatios.length ~/ 2];
+        }
+      }
 
       final cells = <_GridCell>[];
       int maxCol = 0, maxRow = 0;
@@ -268,8 +372,8 @@ class PatternKeeperParser {
         final cx = (frag.left + frag.right) / 2;
         final cy = (frag.top + frag.bottom) / 2;
         // PDF Y increases upward → flip to get visual row (0 = top).
-        final col = ((cx - originX) / xStep).round();
-        final row = ((originY - cy) / yStep).round();
+        final col = ((cx - originX) / refinedXStep).round();
+        final row = ((originY - cy) / refinedYStep).round();
         if (col < 0 || row < 0) continue;
         cells.add(_GridCell(frag.text.trim(), col, row));
         if (col > maxCol) maxCol = col;
@@ -283,8 +387,12 @@ class PatternKeeperParser {
         //
         // 1. Exact bounds (preferred): PKCHART gives us endCol/endRow so we
         //    know the precise grid dimensions — discard anything outside.
-        // 2. p95 heuristic (fallback for third-party PDFs without PKCHART):
-        //    footer phantoms are far beyond real cells, so p95+2 clips them.
+        // 2. Gap detection (fallback for third-party PDFs without PKCHART):
+        //    footer phantoms are far beyond the grid — there is always a large
+        //    blank band between the grid bottom and the "Colours Used" footer.
+        //    Find the first gap of > kFooterGap consecutive empty rows/cols
+        //    and discard everything beyond it.  This preserves sparse edge
+        //    stitches (e.g. dog legs) that a p95 heuristic would clip.
         if (pkStartCol != null && pkEndCol != null &&
             pkStartRow != null && pkEndRow != null) {
           final maxLocalCol = pkEndCol - pkStartCol - 1;
@@ -292,11 +400,29 @@ class PatternKeeperParser {
           cells.retainWhere(
               (c) => c.col <= maxLocalCol && c.row <= maxLocalRow);
         } else if (cells.length > 4) {
-          final sortedRows = (cells.map((c) => c.row).toList()..sort());
-          final sortedCols = (cells.map((c) => c.col).toList()..sort());
-          final p95row = sortedRows[(sortedRows.length * 0.95).floor()];
-          final p95col = sortedCols[(sortedCols.length * 0.95).floor()];
-          cells.retainWhere((c) => c.row <= p95row + 2 && c.col <= p95col + 2);
+          const kFooterGap = 8; // gap of 8+ empty rows/cols → footer content
+          final uniqueRows = (cells.map((c) => c.row).toSet().toList()..sort());
+          final uniqueCols = (cells.map((c) => c.col).toSet().toList()..sort());
+
+          int maxRealRow = uniqueRows.last;
+          for (int i = 1; i < uniqueRows.length; i++) {
+            if (uniqueRows[i] - uniqueRows[i - 1] > kFooterGap) {
+              maxRealRow = uniqueRows[i - 1];
+              break;
+            }
+          }
+          int maxRealCol = uniqueCols.last;
+          for (int i = 1; i < uniqueCols.length; i++) {
+            if (uniqueCols[i] - uniqueCols[i - 1] > kFooterGap) {
+              maxRealCol = uniqueCols[i - 1];
+              break;
+            }
+          }
+
+          if (maxRealRow < uniqueRows.last || maxRealCol < uniqueCols.last) {
+            cells.retainWhere(
+                (c) => c.row <= maxRealRow && c.col <= maxRealCol);
+          }
         }
         if (cells.isEmpty) continue;
         maxCol = cells.map((c) => c.col).reduce(max);
@@ -305,7 +431,9 @@ class PatternKeeperParser {
         debugPrint('[PKParser] page $pi: ${cells.length} symbols, '
             '${maxCol + 1}×${maxRow + 1} grid, '
             'step ${xStep.toStringAsFixed(1)}×${yStep.toStringAsFixed(1)} pt'
-            '${pkStartCol != null ? ', PKCHART $pkStartCol,$pkStartRow→$pkEndCol,$pkEndRow' : ''}');
+            '(refined ${refinedXStep.toStringAsFixed(3)}×${refinedYStep.toStringAsFixed(3)})'
+            '${pkStartCol != null ? ', PKCHART $pkStartCol,$pkStartRow→$pkEndCol,$pkEndRow' : ''}'
+            '${pkOriginX != null ? ', origin=(${pkOriginX.toStringAsFixed(1)},${pkOriginY!.toStringAsFixed(1)})' : ' (heuristic origin)'}');
         grids.add(_PageGrid(
           cells: cells,
           cols: maxCol + 1,
@@ -339,7 +467,12 @@ class PatternKeeperParser {
     }
 
     if (grids.length == 1) {
-      combined = grids.first;
+      final g = grids.first;
+      // If the single page carries a PKCHART marker, apply absolute offset
+      // so stitches land at the correct canvas coordinates, not local (0,0).
+      combined = (g.absStartCol != null && g.absStartRow != null)
+          ? _combineAbsolute(grids)
+          : g;
     } else {
       // If all remaining pages carry PKCHART absolute offsets (StitchX export),
       // place them directly — no heuristic needed.
@@ -543,8 +676,10 @@ class PatternKeeperParser {
     if (diffs.length < 3) return null;
     diffs.sort();
 
-    // Lower-quartile avoids multi-cell gaps inflating the estimate.
-    final candidate = diffs[diffs.length ~/ 4];
+    // Median: robust to both intra-column render jitter (which populates the
+    // lower tail) and multi-cell empty-column gaps (upper tail).  Multi-cell
+    // gaps are valid multiples so the validation below still accepts them.
+    final candidate = diffs[diffs.length ~/ 2];
     if (candidate < 1.0) return null;
 
     // Validate: ≥60 % of diffs should be close to a whole multiple of candidate.
