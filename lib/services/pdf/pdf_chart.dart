@@ -47,13 +47,18 @@ void _drawChartPage(
   // row 0 (oy) so the parser knows the true grid origin even when the first
   // visible rows/columns of a page are empty.
   //
+  // v4 also embeds cellSize so the parser uses the exact grid step instead
+  // of the heuristic refinement, which suffers from a systematic glyph-
+  // baseline offset (text is drawn at baseline – fs*0.35 rather than at the
+  // cell centre) that inflates the computed step and shifts the last few rows.
+  //
   // ox = centre X of local col 0  = gridOriginX + cellSize/2
   // oy = centre Y of local row 0  = gridOriginY + (rows-1)*cellSize + cellSize/2
   //   (PDF Y increases upward, so row 0 has the LARGEST Y on the page)
   final pkOx = gridOriginX + cellSize / 2;
   final pkOy = gridOriginY + (rows - 1) * cellSize + cellSize / 2;
   final subtitle = patternKeeperMode
-      ? 'PKCHART:$startX,$startY,$endX,$endY,${pkOx.toStringAsFixed(3)},${pkOy.toStringAsFixed(3)}'
+      ? 'PKCHART:$startX,$startY,$endX,$endY,${pkOx.toStringAsFixed(3)},${pkOy.toStringAsFixed(3)},${cellSize.toStringAsFixed(3)}'
           '  |  Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages'
       : 'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages';
   _drawPageHeader(
@@ -98,7 +103,17 @@ void _drawChartPage(
     // In PK mode every cell always shows a symbol at the full-cell centre —
     // PatternKeeper treats all stitches as full cells, and sub-region sizes for
     // QuarterStitch / HalfCrossStitch (cs/2 ≈ 3.5 pt) would fail the 4 pt guard.
-    final sym = blendedCellSymbols[cellKey] ?? pdfSymbols[thread.dmcCode] ?? '';
+    //
+    // In PatternKeeper mode: always use pdfSymbols[thread.dmcCode] (the symbolStitch
+    // thread's own symbol) and never the composite blend-result symbol from
+    // blendedCellSymbols.  Using the composite symbol would cause the import to
+    // read the blend-result DMC code instead of the symbolStitch thread's DMC code,
+    // breaking the round trip.  The symbolStitch thread IS guaranteed to be in
+    // pdfSymbols because _buildPdfBytes augments crossStitchEquiv with all
+    // symbolStitch threads in PK mode.
+    final sym = patternKeeperMode
+        ? pdfSymbols[thread.dmcCode] ?? ''
+        : blendedCellSymbols[cellKey] ?? pdfSymbols[thread.dmcCode] ?? '';
     if (symbolIsVisible(sym)) {
       final double subSize;
       final double sx, sy;
