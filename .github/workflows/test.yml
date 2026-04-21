@@ -5,8 +5,11 @@ on:
     branches: [main, "feat/**", "fix/**", "chore/**"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   unit-tests:
     name: Unit and widget tests
@@ -23,21 +26,11 @@ jobs:
       - run: flutter pub get
       - name: Run unit and widget tests
         run: flutter test --reporter=expanded
-      # Integration tests require a real device.
-      # Run manually as part of the v1 release checklist:
-      #   flutter test integration_test/ -d macos
-name: Tests
-on:
-  push:
-    branches: [main, "feat/**", "fix/**", "chore/**"]
-  pull_request:
-    branches: [main]
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-jobs:
-  unit-tests:
-    name: Unit and widget tests
+
+  integration-pk-roundtrip:
+    name: PK PDF roundtrip integration test
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Write placeholder secrets
@@ -48,8 +41,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - name: Run unit and widget tests
-        run: flutter test --reporter=expanded
-      # Integration tests require a real device.
-      # Run manually as part of the v1 release checklist:
-      #   flutter test integration_test/ -d macos
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+      - name: Run PK PDF roundtrip integration test
+        run: flutter test integration_test/pk_roundtrip_test.dart -d macos --no-pub --reporter=expanded
