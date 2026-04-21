@@ -1,0 +1,25 @@
+lib/services/pdf_pattern_keeper_parser.dart
+  266c0109da4e1e8e 170-177,182,185-188,199,203,231-245,253-256,286-290,292,306,320-323,407-415,431-496
+lib/services/pdf_service.dart
+  266c0109da4e1e8e 79-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "8ce24375d1417714c60f5f99511bdaf76ed730a6",
+  "prompts": {
+    "266c0109da4e1e8e": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776579312295",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 200,
+      "total_deletions": 47,
+      "accepted_lines": 163,
+      "overriden_lines": 0
+    }
+  }
+}
