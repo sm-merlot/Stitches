@@ -76,7 +76,29 @@ class PdfService {
 
     // Stitch counts from the composite view (one stitch per cell regardless
     // of how many layers contributed to it — matches what the stitcher actually stitches).
-    final crossStitchEquiv = compositeResult.crossStitchEquiv;
+    //
+    // In PatternKeeper mode we must also ensure that every symbol-stitch thread
+    // (i.e. the thread whose symbol is drawn in each cell) is present in
+    // crossStitchEquiv so it gets an entry in pdfSymbols and in the legend table.
+    //
+    // For cells with a non-normal blend mode on the topmost layer, the compositor
+    // picks the BOTTOM stitch as the symbol stitch (it provides the primary visual
+    // identity). But the stitch count for that cell is attributed to the BLEND-RESULT
+    // thread (e.g. '307' from a multiply blend), not to the bottom thread (e.g. '918').
+    // If '918' has zero blend-result credit it is absent from crossStitchEquiv →
+    // excluded from pdfSymbols → the chart cell draws a blank → the cell is lost on
+    // import. Augmenting the map with a 0.0-count placeholder forces the thread into
+    // the legend and fixes the blank-cell problem without changing any stitch counts.
+    final Map<String, double> crossStitchEquiv;
+    if (patternKeeperMode) {
+      final mutable = Map<String, double>.from(compositeResult.crossStitchEquiv);
+      for (final s in nonBack) {
+        if (s is FullStitch) mutable.putIfAbsent(s.threadId, () => 0.0);
+      }
+      crossStitchEquiv = mutable;
+    } else {
+      crossStitchEquiv = compositeResult.crossStitchEquiv;
+    }
     final backStitchEquiv = compositeResult.backStitchEquiv;
 
     // Threads that have cross-type stitches / backstitches respectively,

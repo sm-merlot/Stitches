@@ -167,14 +167,25 @@ class PatternKeeperParser {
       final frags = page.fragments;
       if (frags.isEmpty) continue;
 
+      // Skip chart pages: the PKCHART marker is only present on grid pages.
+      // Scanning them for legend entries produces false positives — thread
+      // name words (e.g. "Red", "Tan") and stitch counts (e.g. "301") that
+      // happen to match valid DMC codes get treated as symbol→DMC mappings.
+      // For third-party PDFs (no PKCHART marker), all pages are scanned as
+      // before, which is the correct fallback for unknown page structures.
+      if (page.fullText.contains('PKCHART:')) continue;
+
       // Group fragments into horizontal rows by Y position.
       final rows = _groupByY(frags);
 
       for (final row in rows.values) {
-        // Expand each fragment into (text, approximateX) tokens.
+        // Expand each fragment into (text, approximateX, isInline) tokens.
         // A fragment may be a single word OR an entire row (third-party PDFs).
         // Splitting on whitespace handles both cases uniformly.
-        final tokens = <({String text, double left})>[];
+        // isInline=true marks sub-tokens distributed from a single multi-word
+        // fragment; the proximity guard is relaxed for them (their computed
+        // x-positions are approximate and may be unrealistically far apart).
+        final tokens = <({String text, double left, bool isInline})>[];
         for (final f in row) {
           final raw = f.text.trim();
           if (raw.isEmpty) continue;
@@ -185,11 +196,11 @@ class PatternKeeperParser {
             final partW = fWidth / parts.length;
             for (int i = 0; i < parts.length; i++) {
               if (parts[i].isNotEmpty) {
-                tokens.add((text: parts[i], left: f.left + i * partW));
+                tokens.add((text: parts[i], left: f.left + i * partW, isInline: true));
               }
             }
           } else {
-            tokens.add((text: raw, left: f.left));
+            tokens.add((text: raw, left: f.left, isInline: false));
           }
         }
 
@@ -217,6 +228,21 @@ class PatternKeeperParser {
           // the same column, not one from the adjacent left column.
           //
           // Digits are allowed — symbol fonts often use digits as glyphs.
+          //
+          // Proximity guard: the symbol must be within 40 PDF points of the
+          // DMC code token when both come from separate per-word fragments.
+          // In PK PDFs, the swatch column (22pt) immediately precedes the
+          // DMC column, so the real symbol is always within ~25pt.
+          // The guard is NOT applied to inline (whole-line) tokens because
+          // their x-positions are evenly distributed and may be far apart
+          // even when symbol and DMC are adjacent in the original text.
+          // The guard rejects false positives from:
+          //  • short thread-name words ("Med", "Dk") in the name column that
+          //    lie 60–120pt left of a stitch-count that happens to be a valid
+          //    DMC code, and
+          //  • stitch counts from an adjacent table column (100+pt away) being
+          //    treated as DMC codes whose symbol is some distant short token.
+          const _kMaxSymbolDmcGap = 40.0;
           String? symbol;
           double? symbolX;
           for (final tok in tokens) {
@@ -224,6 +250,10 @@ class PatternKeeperParser {
             if (tok.text.isEmpty || tok.text.length > 3) continue;
             if (dmcColorByCode(tok.text) != null) continue;
             if (tok.left >= dmcTok.left) continue; // must be left of DMC code
+            // Proximity guard applies only when both tokens are standalone
+            // per-word fragments (not distributed inline sub-tokens).
+            if (!tok.isInline && !dmcTok.isInline &&
+                dmcTok.left - tok.left > _kMaxSymbolDmcGap) continue;
             // Skip the literal "DMC" prefix used by some third-party generators
             // (format: "[symbol] DMC [code] [name]").
             if (tok.text.toUpperCase() == 'DMC') continue;
@@ -253,8 +283,13 @@ class PatternKeeperParser {
   //   v3: PKCHART:startCol,startRow,endCol,endRow,ox,oy
   //         ox = PDF-space centre X of local col 0
   //         oy = PDF-space centre Y of local row 0 (largest Y = visually top)
+  //   v4: PKCHART:startCol,startRow,endCol,endRow,ox,oy,cellSize
+  //         cellSize = exact PDF-space cell size in points (both X and Y)
+  //         Using the embedded cellSize avoids the heuristic step refinement,
+  //         which suffers from a systematic glyph-baseline offset that inflates
+  //         the computed step and shifts the last few rows of each page.
   static final _kPkChartRe = RegExp(
-      r'PKCHART:(\d+),(\d+)(?:,(\d+),(\d+)(?:,([\d.]+),([\d.]+))?)?');
+      r'PKCHART:(\d+),(\d+)(?:,(\d+),(\d+)(?:,([\d.]+),([\d.]+)(?:,([\d.]+))?)?)?');
 
   static List<_PageGrid> _parseAllGrids(
       List<PageTextData?> pages, Map<String, String> legend) {
@@ -268,7 +303,7 @@ class PatternKeeperParser {
       // Scan full joined text for PKCHART marker (pdfrx may split subtitle into
       // word-level fragments, so fragment-by-fragment scanning misses it).
       int? pkStartCol, pkStartRow, pkEndCol, pkEndRow;
-      double? pkOriginX, pkOriginY;
+      double? pkOriginX, pkOriginY, pkCellSize;
       final fullText = page.fullText;
       final m = _kPkChartRe.firstMatch(fullText);
       if (m != null) {
@@ -281,6 +316,10 @@ class PatternKeeperParser {
         if (m.groupCount >= 5) {
           pkOriginX = m.group(5) != null ? double.tryParse(m.group(5)!) : null;
           pkOriginY = m.group(6) != null ? double.tryParse(m.group(6)!) : null;
+        }
+        // v4 marker: explicit cell size — use instead of heuristic refinement.
+        if (m.groupCount >= 7) {
+          pkCellSize = m.group(7) != null ? double.tryParse(m.group(7)!) : null;
         }
       }
 
@@ -365,6 +404,15 @@ class PatternKeeperParser {
         }
       }
 
+      // v4 marker: use the embedded cellSize directly, overriding any
+      // heuristic refinement.  The heuristic is biased by the glyph baseline
+      // offset (symbols are drawn at centre_y − fs*0.35), inflating the
+      // computed step and misplacing the last several rows of each page.
+      if (pkCellSize != null) {
+        refinedXStep = pkCellSize;
+        refinedYStep = pkCellSize;
+      }
+
       final cells = <_GridCell>[];
       int maxCol = 0, maxRow = 0;
 
@@ -378,6 +426,74 @@ class PatternKeeperParser {
         cells.add(_GridCell(frag.text.trim(), col, row));
         if (col > maxCol) maxCol = col;
         if (row > maxRow) maxRow = row;
+      }
+
+      // ── Recover merged same-symbol column/row runs ──────────────────────
+      // pdfium consolidates consecutive same-character draws in a column (or
+      // row) into a single multi-char fragment.  These are invisible to the
+      // symbolFrags filter above (which only accepts single-char fragments).
+      // Columns with MIXED symbols are also merged into one fragment (each
+      // char represents one row's symbol, top-to-bottom).
+      // Decompose them here now that origin and step are known.
+      for (final frag in page.fragments) {
+        final text = frag.text.trim();
+        if (text.length < 2) continue;
+        final runes = text.runes.toList();
+        if (runes.isEmpty) continue;
+
+        final fragH = frag.top - frag.bottom; // PDF: top > bottom
+        final fragW = frag.right - frag.left;
+
+        // Check that at least one char is a valid symbol; pure header/footer
+        // text will have no symbol chars so skip those immediately.
+        final hasAnySymbol =
+            runes.any((r) => symbolSet.contains(String.fromCharCode(r)));
+        if (!hasAnySymbol) continue;
+
+        if (fragH >= fragW) {
+          // Column merge: each char is one row's symbol, top→bottom.
+          // Guard against short header/footer text (e.g. page number "21")
+          // whose fragH ≥ fragW but is much shorter than a genuine column
+          // spanning N × cellHeight.  A real N-row merge has:
+          //   fragH ≈ (N−1)×step + glyphHeight  ≥  N×step×0.65
+          if (fragH < runes.length * refinedYStep * 0.65) continue;
+
+          // Process char-by-char so a single unrecognised char doesn't cause
+          // us to discard the entire column run.
+          final col = (((frag.left + frag.right) / 2 - originX) / refinedXStep).round();
+          if (col < 0) continue;
+          // frag.top is ~ascent above the topmost cell centre, so
+          // (originY − frag.top)/step is slightly negative for row 0 —
+          // round() naturally returns 0 in that case.
+          final firstRow = ((originY - frag.top) / refinedYStep).round();
+          final safeFirst = firstRow < 0 ? 0 : firstRow;
+          for (int i = 0; i < runes.length; i++) {
+            final sym = String.fromCharCode(runes[i]);
+            if (!symbolSet.contains(sym)) continue;
+            cells.add(_GridCell(sym, col, safeFirst + i));
+          }
+        } else {
+          // Row merge: each char is one column's symbol, left→right.
+          final row = ((originY - (frag.top + frag.bottom) / 2) / refinedYStep).round();
+          if (row < 0) continue;
+          // frag.left is ~half-glyph-width left of the first cell centre;
+          // adding half a step before dividing snaps to the nearest column.
+          final firstCol = ((frag.left - originX + refinedXStep * 0.5) / refinedXStep).round();
+          for (int i = 0; i < runes.length; i++) {
+            final sym = String.fromCharCode(runes[i]);
+            if (!symbolSet.contains(sym)) continue;
+            final col = firstCol + i;
+            if (col >= 0) cells.add(_GridCell(sym, col, row));
+          }
+        }
+      }
+
+      // Deduplicate: a position can appear in both the symbolFrags path and
+      // the merged-run path above.  Keep the first occurrence at each
+      // (col, row) coordinate so single-char fragments take priority.
+      {
+        final seen = <(int, int)>{};
+        cells.retainWhere((c) => seen.add((c.col, c.row)));
       }
 
       if (cells.isNotEmpty) {
