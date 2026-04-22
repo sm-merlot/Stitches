@@ -14,10 +14,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/page_layout.dart';
 import 'package:stitches/services/file_service.dart';
 import 'package:stitches/services/stitch_compositor.dart';
+import 'test_fixtures.dart';
 
 void main() {
-  const filePath =
-      'test/fixtures/sm_test.stitches';
+  final filePath = testFixturePath('sm_test.stitches');
 
   test('debug: snap simulation rows 17–32 at first vertical boundary',
       skip: 'diagnostic only — run manually to inspect snap output',
