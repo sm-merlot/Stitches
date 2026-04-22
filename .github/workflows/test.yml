@@ -36,7 +36,7 @@ jobs:
   integration-tests:
     name: Integration tests (PK parser + roundtrip)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Checkout private test fixtures
