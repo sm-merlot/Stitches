@@ -1,0 +1,23 @@
+lib/services/pdf_pattern_keeper_parser.dart
+  4714a2bad27d9481 355-362,364-383,386-443,449-467,473-474,477,528-541,662
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "101e3df8f8491de79abf4b97ab2f6b23dd0ba7e7",
+  "prompts": {
+    "4714a2bad27d9481": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "251e1400-a342-4f09-b31e-eda6ad1ac6c5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 137,
+      "total_deletions": 49,
+      "accepted_lines": 130,
+      "overriden_lines": 0
+    }
+  }
+}
