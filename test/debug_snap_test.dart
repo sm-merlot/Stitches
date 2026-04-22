@@ -17,7 +17,7 @@ import 'package:stitches/services/stitch_compositor.dart';
 
 void main() {
   const filePath =
-      'test/fixtures/super_metroid_samus_ridley.stitches';
+      'test/fixtures/sm_test.stitches';
 
   test('debug: snap simulation rows 17–32 at first vertical boundary',
       skip: 'diagnostic only — run manually to inspect snap output',

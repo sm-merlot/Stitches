@@ -15,12 +15,15 @@ class PatternShareResult {
   final bool stripPageSettings;
   /// If true, render PDF/PNG with realistic stitch line-art instead of blocks.
   final bool realisticStitches;
+  /// If true (PDF only), also generate a PatternKeeper-compatible PDF.
+  final bool patternKeeperPdf;
 
   const PatternShareResult({
     required this.format,
     this.stripProgress = false,
     this.stripPageSettings = false,
     this.realisticStitches = true,
+    this.patternKeeperPdf = false,
   });
 }
 
@@ -99,6 +102,7 @@ class _ShareFormatSheetState extends State<_ShareFormatSheet> {
   bool _stripProgress = true;
   bool _stripPageSettings = false;
   bool _realisticStitches = true;
+  bool _patternKeeperPdf = false;
 
   void _confirm() {
     Navigator.of(context).pop(PatternShareResult(
@@ -106,6 +110,7 @@ class _ShareFormatSheetState extends State<_ShareFormatSheet> {
       stripProgress: _stripProgress,
       stripPageSettings: _stripPageSettings,
       realisticStitches: _realisticStitches,
+      patternKeeperPdf: _patternKeeperPdf,
     ));
   }
 
@@ -116,6 +121,7 @@ class _ShareFormatSheetState extends State<_ShareFormatSheet> {
         (widget.hasProgress || widget.hasPageSettings);
     final showRealisticOption =
         _format == ShareFormat.pdf || _format == ShareFormat.png;
+    final showPdfOptions = _format == ShareFormat.pdf;
 
     return SafeArea(
       child: Padding(
@@ -173,6 +179,16 @@ class _ShareFormatSheetState extends State<_ShareFormatSheet> {
                 onChanged: (v) => setState(() => _realisticStitches = v ?? true),
               ),
             ],
+            if (showPdfOptions) ...[
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Also export PatternKeeper PDF'),
+                subtitle: const Text('Adds a _PatternKeeper.pdf for use in PatternKeeper'),
+                value: _patternKeeperPdf,
+                onChanged: (v) => setState(() => _patternKeeperPdf = v ?? false),
+              ),
+            ],
             const SizedBox(height: 16),
             FilledButton(
               onPressed: _confirm,
@@ -208,6 +224,7 @@ class _ShareFormatDialogState extends State<_ShareFormatDialog> {
   bool _stripProgress = true;
   bool _stripPageSettings = false;
   bool _realisticStitches = true;
+  bool _patternKeeperPdf = false;
 
   void _confirm() {
     Navigator.of(context).pop(PatternShareResult(
@@ -215,6 +232,7 @@ class _ShareFormatDialogState extends State<_ShareFormatDialog> {
       stripProgress: _stripProgress,
       stripPageSettings: _stripPageSettings,
       realisticStitches: _realisticStitches,
+      patternKeeperPdf: _patternKeeperPdf,
     ));
   }
 
@@ -225,6 +243,7 @@ class _ShareFormatDialogState extends State<_ShareFormatDialog> {
         (widget.hasProgress || widget.hasPageSettings);
     final showRealisticOption =
         _format == ShareFormat.pdf || _format == ShareFormat.png;
+    final showPdfOptions = _format == ShareFormat.pdf;
 
     return AlertDialog(
       title: Text(widget.title ?? 'Share as…'),
@@ -276,6 +295,16 @@ class _ShareFormatDialogState extends State<_ShareFormatDialog> {
                 subtitle: const Text('Line-art cross-stitch rendering'),
                 value: _realisticStitches,
                 onChanged: (v) => setState(() => _realisticStitches = v ?? true),
+              ),
+            ],
+            if (showPdfOptions) ...[
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Also export PatternKeeper PDF'),
+                subtitle: const Text('Adds a _PatternKeeper.pdf for use in PatternKeeper'),
+                value: _patternKeeperPdf,
+                onChanged: (v) => setState(() => _patternKeeperPdf = v ?? false),
               ),
             ],
           ],

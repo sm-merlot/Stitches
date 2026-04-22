@@ -17,6 +17,7 @@ double _drawColourTablePage(
   required int pageNum,
   required int totalPages,
   required _PdfFonts fonts,
+  bool patternKeeperMode = false,
 }) {
   final subtitle = isBackstitch
       ? 'Backstitch Colour Table  |  Page $pageNum of $totalPages'
@@ -53,6 +54,11 @@ double _drawColourTablePage(
   final contentTopY = startY - sectionHeadFs - 6;
   final countHeader = isBackstitch ? 'Units' : 'Stitches';
 
+  // PatternKeeper uses 'Symbol' + 'Number' headers; standard uses swatch + 'DMC'
+  final headerCells = patternKeeperMode
+      ? ['Symbol', 'Number', 'Name', countHeader]
+      : ['', 'DMC', 'Name', countHeader];
+
   double finalY;
 
   if (!twoColumn) {
@@ -66,7 +72,7 @@ double _drawColourTablePage(
         colWidths: colWidths,
         rowH: headRowH,
         bgColor: PdfColors.grey200,
-        cells: ['', 'DMC', 'Name', countHeader],
+        cells: headerCells,
         fonts: fonts,
         fontSize: tableFs,
         isHeader: true);
@@ -83,7 +89,8 @@ double _drawColourTablePage(
           isBackstitch: isBackstitch,
           pdfSymbols: pdfSymbols,
           fonts: fonts,
-          tableFs: tableFs);
+          tableFs: tableFs,
+          patternKeeperMode: patternKeeperMode);
       y -= rowH;
     }
     finalY = y;
@@ -108,7 +115,7 @@ double _drawColourTablePage(
           colWidths: colWidths,
           rowH: headRowH,
           bgColor: PdfColors.grey200,
-          cells: ['', 'DMC', 'Name', countHeader],
+          cells: headerCells,
           fonts: fonts,
           fontSize: tableFs,
           isHeader: true);
@@ -125,7 +132,8 @@ double _drawColourTablePage(
             isBackstitch: isBackstitch,
             pdfSymbols: pdfSymbols,
             fonts: fonts,
-            tableFs: tableFs);
+            tableFs: tableFs,
+            patternKeeperMode: patternKeeperMode);
         y -= rowH;
       }
     }
@@ -159,6 +167,7 @@ void _drawThreadRow(
   required Map<String, String> pdfSymbols,
   required _PdfFonts fonts,
   required double tableFs,
+  bool patternKeeperMode = false,
 }) {
   final equiv = stitchEquiv[t.dmcCode] ?? 0;
   final equivStr = isBackstitch
@@ -166,7 +175,22 @@ void _drawThreadRow(
       : (equiv == equiv.truncateToDouble()
           ? equiv.toInt().toString()
           : equiv.toStringAsFixed(1));
-  if (isBackstitch) {
+
+  if (patternKeeperMode) {
+    // PatternKeeper mode: col 0 = selectable symbol text, col 1 = DMC number
+    final sym = pdfSymbols[t.dmcCode] ?? '';
+    _drawTableRow(canvas,
+        x: x,
+        y: y,
+        colWidths: colWidths,
+        rowH: rowH,
+        bgColor: null,
+        cells: [sym, t.dmcCode, t.name, equivStr],
+        fonts: fonts,
+        fontSize: tableFs,
+        isHeader: false,
+        col0Font: fonts.symbol);
+  } else if (isBackstitch) {
     _drawTableRow(canvas,
         x: x,
         y: y,
@@ -272,6 +296,7 @@ void _drawStitchPreview(
 /// Draws a single table row.
 /// - [swatchColor] + [swatchSymbol]: col 0 filled with colour + symbol text centred on top.
 /// - [linePreviewColor]: col 0 shows a thick coloured horizontal line (for backstitches).
+/// - [col0Font]: when set, col 0 text is rendered centred using this font (PatternKeeper symbol column).
 void _drawTableRow(
   PdfGraphics canvas, {
   required double x,
@@ -286,6 +311,7 @@ void _drawTableRow(
   PdfColor? swatchColor,
   String? swatchSymbol,
   PdfColor? linePreviewColor,
+  PdfFont? col0Font,
 }) {
   assert(cells.length == colWidths.length);
   double cx = x;
@@ -318,7 +344,18 @@ void _drawTableRow(
       canvas.strokePath();
     }
 
-    if (i == 0 && linePreviewColor != null) {
+    if (i == 0 && col0Font != null && cells[i].isNotEmpty) {
+      // PatternKeeper symbol column: selectable text centred in the cell.
+      // Use _fontFor so ASCII/Greek symbols use the regular font (NotoSansSymbols2
+      // lacks Basic Latin and Greek glyphs); U+2200+ symbols use col0Font.
+      final sf = math.max(3.5, (rowH - 4.0) * 0.58);
+      final effectiveFont = _fontFor(cells[i], fonts.regular, col0Font);
+      final tw = _textWidth(effectiveFont, sf, cells[i]);
+      canvas.setFillColor(PdfColors.black);
+      canvas.drawString(effectiveFont, sf, cells[i],
+          cx + (cw - tw) / 2,
+          y - rowH + (rowH - sf) / 2 + 1.0);
+    } else if (i == 0 && linePreviewColor != null) {
       // Backstitch line preview: thick coloured line across the cell centre
       const pad = 4.0;
       canvas.setStrokeColor(linePreviewColor);

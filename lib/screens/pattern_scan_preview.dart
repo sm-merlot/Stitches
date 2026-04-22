@@ -10,9 +10,9 @@ import '../models/layer_item.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
-import '../services/ai/ai_provider.dart';
+import '../services/scan_result.dart';
 
-/// Full-screen preview of an AI-scanned pattern.
+/// Full-screen preview of a scanned/imported pattern.
 ///
 /// Pops with a [CrossStitchPattern] if the user taps "Use Pattern",
 /// or null if they cancel.
@@ -190,7 +190,7 @@ class PatternScanPreviewScreen extends StatelessWidget {
 
           const SizedBox(height: 24),
           Text(
-            'AI-generated patterns may contain errors. '
+            'Imported patterns may contain errors. '
             'Review and correct in the editor after importing.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),

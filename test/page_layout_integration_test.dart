@@ -23,7 +23,7 @@ import 'package:stitches/services/file_service.dart';
 import 'package:stitches/services/stitch_compositor.dart';
 
 void main() {
-  const fixturePath = 'test/fixtures/super_metroid_samus_ridley.stitches';
+  const fixturePath = 'test/fixtures/sm_test.stitches';
   // The fixture is configured with pageWidth=50 — the first boundary is col 50.
   const nominal = 50;
 

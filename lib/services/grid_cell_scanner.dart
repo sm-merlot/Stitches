@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
-import 'ai/ai_provider.dart';
+import 'scan_result.dart';
 import 'color_space.dart';
 import 'grid_symbol_matcher.dart';
 
