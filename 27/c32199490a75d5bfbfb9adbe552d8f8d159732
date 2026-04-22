@@ -1,0 +1,25 @@
+integration_test/pk_real_pdf_parse_test.dart
+  76f7dc33d083bde1 1-63
+.github/workflows/test.yml
+  76f7dc33d083bde1 36-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "27c32199490a75d5bfbfb9adbe552d8f8d159732",
+  "prompts": {
+    "76f7dc33d083bde1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d81e148-578e-46e2-b458-c1d5676c985c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 138,
+      "total_deletions": 41,
+      "accepted_lines": 97,
+      "overriden_lines": 0
+    }
+  }
+}
