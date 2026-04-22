@@ -181,6 +181,79 @@ Each may need legend or grid parsing adjustments. Need test PDFs to confirm:
 
 ---
 
+### Testing strategy for copyrighted PDFs
+
+Most real-world cross-stitch PDFs are copyrighted and cannot be committed to a
+public repo. The test strategy uses two complementary layers:
+
+#### Layer 1 — Synthetic PDFs (public repo, unit tests)
+
+Generated programmatically for legend-parsing and format-detection logic.
+The app already uses the `pdf` package; extend it to emit minimal legend pages
+in each known format. Run in the normal `unit-tests` CI job (ubuntu-latest,
+no device needed).
+
+Scope: legend symbol→DMC mapping for Format A and Format B; `tryParseFromText`
+directly (no pdfium involved). Does **not** exercise text-flow grid extraction —
+pdfium's extraction mode depends on how the source tool wrote the PDF; a
+`pdf`-package file uses positioned characters, not text-flow.
+
+Location: `test/pk_legend_format_test.dart` (to be added).
+
+#### Layer 2 — Private fixtures repo (CI integration tests)
+
+A separate **private** GitHub repository (`scme0/stitches-test-fixtures`)
+holds copyrighted PDFs. CI checks it out via a fine-grained PAT stored as a
+GitHub Actions secret (`FIXTURES_PAT`). The main repo never contains the
+files.
+
+```yaml
+# .github/workflows/test.yml — third-party PDF integration job
+third-party-pdf-tests:
+  runs-on: ubuntu-latest
+  if: github.event_name == 'pull_request'
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+      with:
+        repository: scme0/stitches-test-fixtures
+        token: ${{ secrets.FIXTURES_PAT }}
+        path: test/fixtures/private
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.41.4'
+    - run: flutter pub get
+    - run: |
+        sudo apt-get install -y libgtk-3-dev ninja-build
+        flutter create --platforms=linux .
+        xvfb-run flutter test \
+          integration_test/third_party_pdf_test.dart \
+          -d linux --no-pub --reporter=expanded
+```
+
+The `FIXTURES_PAT` needs only `contents: read` on the private fixtures repo.
+Rotate annually. The job is skipped on push-to-main (fixtures only needed on
+PRs that touch the parser).
+
+#### Local-only testing (no CI)
+
+For PDFs that can't even go in a private repo (e.g. purchased commercial
+patterns with strict terms): keep them in a local directory and use
+`test/pk_pdf_inspect.dart` to run diagnostic dumps manually. Edit `kPdfPaths`
+in that file, run with `flutter test test/pk_pdf_inspect.dart --no-pub -d macos`.
+Results inform parser changes; the PDFs never leave the developer's machine.
+
+#### Summary
+
+| Scope | Location | Who runs | PDFs |
+|---|---|---|---|
+| Legend parsing (Format A/B) | `test/pk_legend_format_test.dart` | CI (ubuntu) | Synthetic |
+| StitchX round-trip | `integration_test/pk_roundtrip_test.dart` | CI (ubuntu+xvfb) | `sm_test.stitches` fixture |
+| Third-party format integration | `integration_test/third_party_pdf_test.dart` | CI (ubuntu+xvfb) | Private fixtures repo |
+| New format diagnostics | `test/pk_pdf_inspect.dart` (edit paths) | Local only | Developer's machine |
+
+---
+
 ### Planned follow-up PRs
 
 **PR: Fix multi-page text-flow assembly**
