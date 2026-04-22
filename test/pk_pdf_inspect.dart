@@ -13,8 +13,8 @@ import 'package:pdfrx/pdfrx.dart';
 
 // ── Edit these paths ─────────────────────────────────────────────────────────
 const kPdfPaths = [
-  'test/fixtures/pdfs/dachshund_pk.pdf',
-  'test/fixtures/pdfs/super_metroid_pk.pdf',
+  'test/fixtures/pdfs/Super Metroid - Samus battles Ridley_PatternKeeper.pdf',
+  'test/fixtures/pdfs/Dachshund-PK.pdf',
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 

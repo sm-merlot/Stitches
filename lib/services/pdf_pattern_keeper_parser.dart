@@ -218,49 +218,74 @@ class PatternKeeperParser {
         for (final dmcTok in dmcTokens) {
           final dmcCode = dmcTok.text;
 
-          // Symbol: rightmost short (1–3 char) token that is STRICTLY LEFT of
-          // the DMC code token and is not itself a valid DMC code.
+          // Symbol detection — two formats:
           //
-          // In two-column legend tables, multiple symbol/DMC pairs share one
-          // y-group.  Picking the rightmost token that is still left of the
-          // current DMC code's x-position ensures we bind to the symbol in
-          // the same column, not one from the adjacent left column.
+          // A. StitchX/PK-style:       "[symbol] [code] [name]"
+          //    "[symbol] DMC [code]"   (Dachshund / third-party)
+          //    Symbol is within ~25pt of the code; proximity guard ≤ 40pt.
           //
-          // Digits are allowed — symbol fonts often use digits as glyphs.
-          //
-          // Proximity guard: the symbol must be within 40 PDF points of the
-          // DMC code token when both come from separate per-word fragments.
-          // In PK PDFs, the swatch column (22pt) immediately precedes the
-          // DMC column, so the real symbol is always within ~25pt.
-          // The guard is NOT applied to inline (whole-line) tokens because
-          // their x-positions are evenly distributed and may be far apart
-          // even when symbol and DMC are adjacent in the original text.
-          // The guard rejects false positives from:
-          //  • short thread-name words ("Med", "Dk") in the name column that
-          //    lie 60–120pt left of a stitch-count that happens to be a valid
-          //    DMC code, and
-          //  • stitch counts from an adjacent table column (100+pt away) being
-          //    treated as DMC codes whose symbol is some distant short token.
+          // B. Artecy/HAED-style: "[symbol] [strands] DMC [code] [name]"
+          //    An explicit 'DMC' literal separates the symbol+strands column
+          //    from the code column.  The strand count (a 1–2 digit number)
+          //    sits immediately left of 'DMC' and must be skipped.
+          //    No proximity guard needed — the DMC literal is the anchor.
           const kMaxSymbolDmcGap = 40.0;
           String? symbol;
           double? symbolX;
-          for (final tok in tokens) {
-            if (tok.text == dmcCode) continue;
-            if (tok.text.isEmpty || tok.text.length > 3) continue;
-            if (dmcColorByCode(tok.text) != null) continue;
-            if (tok.left >= dmcTok.left) continue; // must be left of DMC code
-            // Proximity guard applies only when both tokens are standalone
-            // per-word fragments (not distributed inline sub-tokens).
-            if (!tok.isInline && !dmcTok.isInline &&
-                dmcTok.left - tok.left > kMaxSymbolDmcGap) {
-              continue;
+
+          // Detect Format B: is there a 'DMC' literal to the left of the code?
+          final dmcLiteralList = tokens
+              .where((t) =>
+                  t.text.toUpperCase() == 'DMC' && t.left < dmcTok.left)
+              .toList();
+          final dmcLiteral =
+              dmcLiteralList.isEmpty ? null : dmcLiteralList.last;
+
+          if (dmcLiteral != null) {
+            // Format B: collect candidates left of the 'DMC' literal.
+            final candidates = tokens
+                .where((t) =>
+                    t.left < dmcLiteral.left &&
+                    t.text.isNotEmpty &&
+                    t.text.length <= 3 &&
+                    dmcColorByCode(t.text) == null)
+                .toList();
+            // Drop the rightmost pure-digit token — that's the strands count
+            // (e.g. '2' in "Ò 2 DMC 827 Blue-VY LT").  Only drop it when
+            // other candidates remain so a digit symbol isn't incorrectly lost.
+            final strandIdx = candidates
+                .lastIndexWhere((t) => RegExp(r'^\d+$').hasMatch(t.text));
+            if (strandIdx >= 0 && candidates.length > 1) {
+              candidates.removeAt(strandIdx);
             }
-            // Skip the literal "DMC" prefix used by some third-party generators
-            // (format: "[symbol] DMC [code] [name]").
-            if (tok.text.toUpperCase() == 'DMC') continue;
-            if (symbol == null || tok.left > symbolX!) {
-              symbol = tok.text;
-              symbolX = tok.left;
+            if (candidates.isNotEmpty) {
+              final symTok =
+                  candidates.reduce((a, b) => a.left > b.left ? a : b);
+              symbol = symTok.text;
+              symbolX = symTok.left;
+            }
+          } else {
+            // Format A: proximity-guarded search left of the code token.
+            for (final tok in tokens) {
+              if (tok.text == dmcCode) continue;
+              if (tok.text.isEmpty || tok.text.length > 3) continue;
+              if (dmcColorByCode(tok.text) != null) continue;
+              if (tok.left >= dmcTok.left) continue;
+              // Proximity guard: skip when both tokens are per-word fragments
+              // and the symbol is suspiciously far (> 40pt) from the code.
+              // Rejects thread-name words and stitch-count false positives.
+              // Not applied to inline (whole-line-split) tokens whose x
+              // positions are approximate.
+              if (!tok.isInline && !dmcTok.isInline &&
+                  dmcTok.left - tok.left > kMaxSymbolDmcGap) {
+                continue;
+              }
+              // Skip the literal "DMC" prefix (Dachshund/third-party format).
+              if (tok.text.toUpperCase() == 'DMC') continue;
+              if (symbol == null || tok.left > symbolX!) {
+                symbol = tok.text;
+                symbolX = tok.left;
+              }
             }
           }
 
