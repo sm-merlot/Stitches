@@ -1,0 +1,23 @@
+.github/workflows/test.yml
+  29d97ae11345a820 36-37,39,67,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "9fa621f3ecbd6a8b0f8ce54fdfbe7e72be04a3c2",
+  "prompts": {
+    "29d97ae11345a820": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b2b3434-43a6-4731-a109-6e58dc93d2b5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 37,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
