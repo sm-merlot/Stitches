@@ -6,9 +6,19 @@ import 'dart:io';
 ///   ~/dev/Stitches/               ← this repo
 ///   ~/dev/stitches-test-fixtures/ ← private fixtures repo
 ///
-/// In CI the fixtures repo is checked out at ../stitches-test-fixtures
-/// relative to the workspace root, producing the same relative layout.
-String testFixturePath(String name) =>
-    Uri.directory(Directory.current.path)
-        .resolve('../stitches-test-fixtures/$name')
-        .toFilePath();
+/// In CI the fixtures repo is checked out at test-fixtures/ inside the
+/// workspace (actions/checkout forbids paths outside the workspace root).
+/// The helper checks both locations so local and CI work without changes.
+String testFixturePath(String name) {
+  // CI path: <workspace>/test-fixtures/<name>
+  final ciPath = Uri.directory(Directory.current.path)
+      .resolve('test-fixtures/$name')
+      .toFilePath();
+  if (File(ciPath).existsSync() || Directory(ciPath).existsSync()) {
+    return ciPath;
+  }
+  // Local path: sibling repo at ../stitches-test-fixtures/<name>
+  return Uri.directory(Directory.current.path)
+      .resolve('../stitches-test-fixtures/$name')
+      .toFilePath();
+}
