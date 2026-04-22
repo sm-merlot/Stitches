@@ -33,10 +33,10 @@ jobs:
       - name: Run unit and widget tests
         run: flutter test --reporter=expanded
 
-  integration-pk-real-pdfs:
-    name: PK parser — real-world PDFs
+  integration-tests:
+    name: Integration tests (PK parser + roundtrip)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Checkout private test fixtures
@@ -64,39 +64,7 @@ jobs:
         run: |
           flutter config --enable-linux-desktop
           flutter create --platforms=linux .
-      - name: Run real-world PDF parse test
+      - name: PK parser — real-world PDFs
         run: xvfb-run flutter test integration_test/pk_real_pdf_parse_test.dart -d linux --no-pub --reporter=expanded
-
-  integration-pk-roundtrip:
-    name: PK PDF roundtrip integration test
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - name: Checkout private test fixtures
-        uses: actions/checkout@v4
-        with:
-          repository: scme0/stitches-test-fixtures
-          token: ${{ secrets.FIXTURES_TOKEN }}
-          path: test-fixtures
-      - name: Write placeholder secrets
-        run: cp secrets.json.example secrets.json
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.41.4"
-          channel: stable
-          cache: true
-      - name: Install Linux desktop dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends \
-            clang cmake ninja-build pkg-config \
-            libgtk-3-dev libblkid-dev liblzma-dev \
-            xvfb
-      - run: flutter pub get
-      - name: Enable Linux desktop and scaffold platform
-        run: |
-          flutter config --enable-linux-desktop
-          flutter create --platforms=linux .
-      - name: Run PK PDF roundtrip integration test
+      - name: PK PDF roundtrip
         run: xvfb-run flutter test integration_test/pk_roundtrip_test.dart -d linux --no-pub --reporter=expanded
