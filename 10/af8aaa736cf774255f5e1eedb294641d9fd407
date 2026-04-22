@@ -1,0 +1,31 @@
+.github/workflows/test.yml
+  76f7dc33d083bde1 19-24,42-47
+test/debug_snap_test.dart
+  76f7dc33d083bde1 17,20
+test/page_layout_integration_test.dart
+  76f7dc33d083bde1 24,27
+test/test_fixtures.dart
+  76f7dc33d083bde1 1-14
+integration_test/pk_roundtrip_test.dart
+  76f7dc33d083bde1 21-22,54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "10af8aaa736cf774255f5e1eedb294641d9fd407",
+  "prompts": {
+    "76f7dc33d083bde1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d81e148-578e-46e2-b458-c1d5676c985c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 8,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    }
+  }
+}
