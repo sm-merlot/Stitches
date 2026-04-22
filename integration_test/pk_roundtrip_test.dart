@@ -52,7 +52,7 @@ void main() {
     test('.stitches fixture → PK PDF → parse → same stitches', () async {
       final stitchesPath = p.join(
         Directory.current.path,
-        'test', 'fixtures', 'super_metroid_samus_ridley.stitches',
+        'test', 'fixtures', 'sm_test.stitches',
       );
       expect(File(stitchesPath).existsSync(), isTrue,
           reason: 'fixture not found: $stitchesPath');
