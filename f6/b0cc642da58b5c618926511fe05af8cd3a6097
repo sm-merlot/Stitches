@@ -1,0 +1,23 @@
+docs/specs/pdf-import-research.md
+  4714a2bad27d9481 1-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "f6b0cc642da58b5c618926511fe05af8cd3a6097",
+  "prompts": {
+    "4714a2bad27d9481": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "251e1400-a342-4f09-b31e-eda6ad1ac6c5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 223,
+      "total_deletions": 0,
+      "accepted_lines": 223,
+      "overriden_lines": 0
+    }
+  }
+}
