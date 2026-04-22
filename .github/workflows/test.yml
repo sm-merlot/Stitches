@@ -16,6 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout private test fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: scme0/stitches-test-fixtures
+          token: ${{ secrets.FIXTURES_TOKEN }}
+          path: ../stitches-test-fixtures
       - name: Write placeholder secrets
         run: cp secrets.json.example secrets.json
       - uses: subosito/flutter-action@v2
@@ -33,6 +39,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout private test fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: scme0/stitches-test-fixtures
+          token: ${{ secrets.FIXTURES_TOKEN }}
+          path: ../stitches-test-fixtures
       - name: Write placeholder secrets
         run: cp secrets.json.example secrets.json
       - uses: subosito/flutter-action@v2

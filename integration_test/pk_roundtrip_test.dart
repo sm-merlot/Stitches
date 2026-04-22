@@ -16,8 +16,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
+
+import '../test/test_fixtures.dart';
 
 import 'package:stitches/models/stitch.dart';
 import 'package:stitches/services/file_service.dart';
@@ -50,10 +51,7 @@ void main() {
 
   group('PK PDF full round-trip (integration)', () {
     test('.stitches fixture → PK PDF → parse → same stitches', () async {
-      final stitchesPath = p.join(
-        Directory.current.path,
-        'test', 'fixtures', 'sm_test.stitches',
-      );
+      final stitchesPath = testFixturePath('sm_test.stitches');
       expect(File(stitchesPath).existsSync(), isTrue,
           reason: 'fixture not found: $stitchesPath');
 
