@@ -90,13 +90,197 @@ In rough order of bang-for-buck:
 
 ## Concrete recommendation
 
-Update `project_pdf_scanner_redesign.md` to a **two-tier import pipeline**:
+A **two-tier import pipeline** — Tier 1 is now implemented:
 
-- **Tier 1 (text-native PDFs):** parse `/Producer` → if known, apply preset;
-  extract text positions for symbols; parse legend table by header names.
-  ~95% of pro patterns hit this path with near-zero user friction.
+- **Tier 1 (text-native PDFs) — ✅ DONE** (`lib/services/pdf_pattern_keeper_parser.dart`):
+  Load each page's structured text layer via pdfrx `loadStructuredText()`.
+  Detect the legend table (rows where a fragment matches a known DMC code),
+  build a symbol→DMC map, then parse the chart grid from character positions.
+  Multi-page grids are stitched together with automatic overlap detection.
+  Zero user input required — falls through silently to Tier 2 if detection
+  fails.  `/Producer` fingerprinting not yet implemented (not needed in
+  practice — the legend-detection heuristic is sufficient).
 - **Tier 2 (raster PDFs / photos):** existing sample-one-cell template-
   matching design, with the human-assisted grid overlay borrowed from PK.
+
+---
+
+## Current implementation status (as of 2026-04-22)
+
+### What works ✅
+
+**StitchX round-trip (primary target)**
+- StitchX exports a PK-compatible PDF (`patternKeeperMode: true`) that
+  re-imports cleanly. 57,344-stitch Super Metroid test passes with ≤10 missing
+  stitches (Linux pdfium deduplication tolerance). macOS: exact.
+- PKCHART v1–v4 metadata markers fully parsed; absolute page placement uses
+  embedded origin and cell-size to avoid heuristic drift.
+
+**Legend parsing — two formats supported**
+- Format A (StitchX / StitchX-generated / Dachshund / third-party):
+  `[symbol] [code] [name]` or `[symbol] DMC [code] [name]`.
+  Proximity guard (≤40pt) rejects false positives from name-column words and
+  stitch-count columns.
+- Format B (Artecy / HAED): `[symbol] [strands] DMC [code] [name]`.
+  Detected by presence of explicit `DMC` literal left of code; strand-count
+  digit skipped. Artecy: 99 entries. HAED: 90 entries.
+
+**Grid parsing — two encodings supported**
+- Positioned-character encoding (StitchX, Dachshund): each symbol is a
+  single positioned TTF character extracted as a 1-char fragment. Step
+  detected from inter-symbol distances; multi-page absolute assembly from
+  PKCHART offsets.
+- Text-flow encoding (Artecy, HAED — partially working): pdfium extracts
+  each chart row as one long multi-char fragment. Detected when
+  "symbol-rich" multi-char fragments are present; step estimated from
+  fragment width / rune count; row step from Y-position differences.
+  Single-char cell placement is skipped; the row-merge recovery loop places
+  all cells.
+
+---
+
+### What's partially working / known issues ⚠️
+
+**Artecy grid parsing**
+- Legend: 99 entries ✅
+- Page 5 (one chart page) detects correctly as positioned-char: 3634 symbols,
+  53×76 grid, step 18.9×9.5 pt. Suspicious non-square step — may be a
+  non-chart page or a page with mixed encoding.
+- Most other chart pages: text-flow detection was just added (2026-04-22) but
+  not yet confirmed working with real PDFs. Needs test files committed.
+
+**HAED grid parsing**
+- Legend: 90 entries ✅
+- Chart pages (8–31 in test PDF): text-flow detection added. Not yet confirmed.
+  HAED has 24 chart pages — multi-page assembly will use the heuristic vertical
+  stacking path (no PKCHART markers). The `originX` heuristic (leftmost
+  fragment edge) assumes all pages share the same left margin; this breaks for
+  pages that cover different column ranges. The page-stacking overlap detection
+  will need to handle this.
+
+**StitchX PK round-trip — missing stitches**
+- ~3 stitches out of 57,344 missed on Linux CI (0.005%). Passes on macOS.
+- Root cause: pdfium on Linux deduplicates adjacent same-symbol horizontal runs
+  differently. A 3-char row-merge fragment may be extracted as 2 chars.
+- Fix direction: in `_parseAllGrids` row-merge branch (~line 550–570):
+  check if fragment span > runes.length × step; interpolate missing chars.
+  See memory file `project_pdf_improvements.md` for detail.
+- Current workaround: `kMissingTolerance = 10` in `pk_roundtrip_test.dart`.
+
+**Other designer outputs PK supports (not yet tested)**
+PK's supported designer list includes formats we haven't encountered yet.
+Each may need legend or grid parsing adjustments. Need test PDFs to confirm:
+- Chatelaine
+- Heaven and Earth Designs (HAED) — partially in progress
+- Stoney Creek
+- Ursa Software (MacStitch / WinStitch exports)
+- PCStitch exports
+- KG-Chart
+- StitchFiddle
+- Various small independent designers
+
+---
+
+### Testing strategy for copyrighted PDFs
+
+Most real-world cross-stitch PDFs are copyrighted and cannot be committed to a
+public repo. The test strategy uses two complementary layers:
+
+#### Layer 1 — Synthetic PDFs (public repo, unit tests)
+
+Generated programmatically for legend-parsing and format-detection logic.
+The app already uses the `pdf` package; extend it to emit minimal legend pages
+in each known format. Run in the normal `unit-tests` CI job (ubuntu-latest,
+no device needed).
+
+Scope: legend symbol→DMC mapping for Format A and Format B; `tryParseFromText`
+directly (no pdfium involved). Does **not** exercise text-flow grid extraction —
+pdfium's extraction mode depends on how the source tool wrote the PDF; a
+`pdf`-package file uses positioned characters, not text-flow.
+
+Location: `test/pk_legend_format_test.dart` (to be added).
+
+#### Layer 2 — Private fixtures repo (CI integration tests)
+
+A separate **private** GitHub repository (`scme0/stitches-test-fixtures`)
+holds copyrighted PDFs. CI checks it out via a fine-grained PAT stored as a
+GitHub Actions secret (`FIXTURES_PAT`). The main repo never contains the
+files.
+
+```yaml
+# .github/workflows/test.yml — third-party PDF integration job
+third-party-pdf-tests:
+  runs-on: ubuntu-latest
+  if: github.event_name == 'pull_request'
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+      with:
+        repository: scme0/stitches-test-fixtures
+        token: ${{ secrets.FIXTURES_PAT }}
+        path: test/fixtures/private
+    - uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.41.4'
+    - run: flutter pub get
+    - run: |
+        sudo apt-get install -y libgtk-3-dev ninja-build
+        flutter create --platforms=linux .
+        xvfb-run flutter test \
+          integration_test/third_party_pdf_test.dart \
+          -d linux --no-pub --reporter=expanded
+```
+
+The `FIXTURES_PAT` needs only `contents: read` on the private fixtures repo.
+Rotate annually. The job is skipped on push-to-main (fixtures only needed on
+PRs that touch the parser).
+
+#### Local-only testing (no CI)
+
+For PDFs that can't even go in a private repo (e.g. purchased commercial
+patterns with strict terms): keep them in a local directory and use
+`test/pk_pdf_inspect.dart` to run diagnostic dumps manually. Edit `kPdfPaths`
+in that file, run with `flutter test test/pk_pdf_inspect.dart --no-pub -d macos`.
+Results inform parser changes; the PDFs never leave the developer's machine.
+
+#### Summary
+
+| Scope | Location | Who runs | PDFs |
+|---|---|---|---|
+| Legend parsing (Format A/B) | `test/pk_legend_format_test.dart` | CI (ubuntu) | Synthetic |
+| StitchX round-trip | `integration_test/pk_roundtrip_test.dart` | CI (ubuntu+xvfb) | `sm_test.stitches` fixture |
+| Third-party format integration | `integration_test/third_party_pdf_test.dart` | CI (ubuntu+xvfb) | Private fixtures repo |
+| New format diagnostics | `test/pk_pdf_inspect.dart` (edit paths) | Local only | Developer's machine |
+
+---
+
+### Planned follow-up PRs
+
+**PR: Fix multi-page text-flow assembly**
+- Problem: text-flow pages (Artecy/HAED) don't have PKCHART offsets, so
+  `originX` is estimated as the leftmost fragment on each page. For a 24-page
+  chart where page N covers cols 200–250, this gives wrong absolute positions.
+- Fix: detect text-flow pages' column ranges via overlap between adjacent
+  pages (same approach as `_detectVerticalOverlap` / `_detectHorizontalOverlap`),
+  or infer absolute col offset from page number and consistent column width.
+
+**PR: Fix Linux pdfium row-merge off-by-one**
+- Symptom: 3/57,344 stitches missing on Linux.
+- Fix: after computing `firstCol`, compare fragment span vs.
+  `runes.length × step`; if span > (runes.length + 0.5) × step, the fragment
+  was truncated — interpolate the missing char.
+
+**PR: Widen designer coverage**
+- Commit test PDFs as fixtures for each new format.
+- Adjust legend and grid parsing per-format as needed.
+- Goal: match PK's supported-designer list for the major publishers.
+
+**PR: Producer-string fingerprinting**
+- Read `/Producer` and `/Creator` from PDF metadata to pre-select the
+  right legend/grid parsing mode rather than relying on heuristic detection.
+- Faster, more robust for edge cases where heuristics conflict.
+
+---
 
 ## Sources
 

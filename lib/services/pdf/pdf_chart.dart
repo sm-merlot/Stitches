@@ -27,6 +27,7 @@ void _drawChartPage(
   required int totalPages,
   required _PdfFonts fonts,
   required bool realistic,
+  bool patternKeeperMode = false,
 }) {
   final cols = endX - startX;
   final rows = endY - startY;
@@ -39,23 +40,44 @@ void _drawChartPage(
   final gridOriginY = format.height - margin - headerH - rulerH - gridH;
 
   // ── Header ───────────────────────────────────────────────────────────
+  // In PatternKeeper mode embed an absolute-origin marker so the parser can
+  // reassemble multi-page exports without relying on fragile heuristics.
+  //
+  // The marker includes the PDF-space centre of local col 0 (ox) and local
+  // row 0 (oy) so the parser knows the true grid origin even when the first
+  // visible rows/columns of a page are empty.
+  //
+  // v4 also embeds cellSize so the parser uses the exact grid step instead
+  // of the heuristic refinement, which suffers from a systematic glyph-
+  // baseline offset (text is drawn at baseline – fs*0.35 rather than at the
+  // cell centre) that inflates the computed step and shifts the last few rows.
+  //
+  // ox = centre X of local col 0  = gridOriginX + cellSize/2
+  // oy = centre Y of local row 0  = gridOriginY + (rows-1)*cellSize + cellSize/2
+  //   (PDF Y increases upward, so row 0 has the LARGEST Y on the page)
+  final pkOx = gridOriginX + cellSize / 2;
+  final pkOy = gridOriginY + (rows - 1) * cellSize + cellSize / 2;
+  final subtitle = patternKeeperMode
+      ? 'PKCHART:$startX,$startY,$endX,$endY,${pkOx.toStringAsFixed(3)},${pkOy.toStringAsFixed(3)},${cellSize.toStringAsFixed(3)}'
+          '  |  Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages'
+      : 'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages';
   _drawPageHeader(
     canvas,
     format: format,
     pattern: pattern,
     margin: margin,
     headerH: headerH,
-    subtitle:
-        'Cols ${startX + 1}-$endX, Rows ${startY + 1}-$endY  |  Page $pageNum of $totalPages',
+    subtitle: subtitle,
     fonts: fonts,
   );
 
-  // ── Aida background ──────────────────────────────────────────────────
-  canvas.setFillColor(_pdfColor(pattern.aidaColor));
+  // ── Background ───────────────────────────────────────────────────────
+  // PatternKeeper mode: white background, no colour fills — symbols only.
+  canvas.setFillColor(patternKeeperMode ? PdfColors.white : _pdfColor(pattern.aidaColor));
   canvas.drawRect(gridOriginX, gridOriginY, gridW, gridH);
   canvas.fillPath();
 
-  // ── Stitch fills (each stitch drawn individually, preserving partial shapes) ─
+  // ── Stitch cells ─────────────────────────────────────────────────────
   for (final s in nonBack) {
     final cx = _stitches(s);
     final cy = _stitchY(s);
@@ -67,22 +89,52 @@ void _drawChartPage(
     final gy = gridOriginY + (rows - (cy - startY) - 1) * cellSize;
 
     final cellKey = '$cx,$cy';
-    // Use nearest-DMC colour (matches canvas), falling back to raw blend or
-    // the source thread colour when no nearest-DMC match was found.
     final effectiveColor =
         blendedCellColors[cellKey] ?? blendedColors[cellKey] ?? thread.color;
-    canvas.setFillColor(_pdfColor(effectiveColor));
-    _fillStitch(canvas, s, gx, gy, cellSize);
+
+    // Colour fill: skip in PatternKeeper mode (B&W symbols only).
+    if (!patternKeeperMode) {
+      canvas.setFillColor(_pdfColor(effectiveColor));
+      _fillStitch(canvas, s, gx, gy, cellSize);
+    }
 
     // Symbol centred in the stitch's sub-region (shown when sub-region >= 4 pt).
     // Blended cells use the composite symbol so the PDF grid matches the canvas.
-    final sym = blendedCellSymbols[cellKey] ?? pdfSymbols[thread.dmcCode] ?? '';
+    // In PK mode every cell always shows a symbol at the full-cell centre —
+    // PatternKeeper treats all stitches as full cells, and sub-region sizes for
+    // QuarterStitch / HalfCrossStitch (cs/2 ≈ 3.5 pt) would fail the 4 pt guard.
+    //
+    // In PatternKeeper mode: always use pdfSymbols[thread.dmcCode] (the symbolStitch
+    // thread's own symbol) and never the composite blend-result symbol from
+    // blendedCellSymbols.  Using the composite symbol would cause the import to
+    // read the blend-result DMC code instead of the symbolStitch thread's DMC code,
+    // breaking the round trip.  The symbolStitch thread IS guaranteed to be in
+    // pdfSymbols because _buildPdfBytes augments crossStitchEquiv with all
+    // symbolStitch threads in PK mode.
+    final sym = patternKeeperMode
+        ? pdfSymbols[thread.dmcCode] ?? ''
+        : blendedCellSymbols[cellKey] ?? pdfSymbols[thread.dmcCode] ?? '';
     if (symbolIsVisible(sym)) {
-      final subSize = _stitchSubRegionSize(s, cellSize);
+      final double subSize;
+      final double sx, sy;
+      if (patternKeeperMode) {
+        subSize = cellSize;
+        sx = gx + cellSize / 2;
+        sy = gy + cellSize / 2;
+      } else {
+        subSize = _stitchSubRegionSize(s, cellSize);
+        (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
+      }
       if (subSize >= 4) {
-        final (sx, sy) = _stitchSymbolCenter(s, gx, gy, cellSize);
-        final lum = effectiveColor.computeLuminance();
-        final textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
+        // In PK mode always use black text (white background).
+        // In standard mode contrast against the fill colour.
+        final PdfColor textColor;
+        if (patternKeeperMode) {
+          textColor = PdfColors.black;
+        } else {
+          final lum = effectiveColor.computeLuminance();
+          textColor = lum > 0.35 ? PdfColors.black : PdfColors.white;
+        }
         final fs = math.max(3.5, subSize * 0.44);
         canvas.setFillColor(textColor);
         final symFont = _fontFor(sym, fonts.regular, fonts.symbol);
@@ -93,8 +145,10 @@ void _drawChartPage(
   }
 
   // ── Backstitch lines (drawn above fills, before grid lines) ──────────
-  canvas.setLineWidth(math.max(0.6, cellSize * 0.15));
+  // PatternKeeper does not support backstitches; skip in PK mode.
+  if (!patternKeeperMode) canvas.setLineWidth(math.max(0.6, cellSize * 0.15));
   for (final bs in backstitches) {
+    if (patternKeeperMode) break;
     final minBx = math.min(bs.x1, bs.x2);
     final maxBx = math.max(bs.x1, bs.x2);
     final minBy = math.min(bs.y1, bs.y2);

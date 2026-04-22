@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../providers/editor/editor_provider.dart';
+import '../providers/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/page_config.dart';
@@ -148,6 +149,19 @@ class EditorScreen extends ConsumerWidget {
       if (!context.mounted) return;
       if (id != null) {
         showSuccess(context, 'Exported to Drive as $fileName');
+        refreshFolder(ref, folder);
+        if (result.format == ShareFormat.pdf && result.patternKeeperPdf && context.mounted) {
+          final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+              useDmc: ref.read(settingsProvider).useDmc,
+              patternKeeperMode: true);
+          final pkFileName = '${suggested}_PatternKeeper.pdf';
+          final pkId = await ref.read(googleDriveProvider.notifier)
+              .uploadRawFile(name: pkFileName, bytes: pkBytes, parentFolderId: folder.folderId);
+          if (context.mounted && pkId != null) {
+            showSuccess(context, 'Also exported PatternKeeper PDF');
+            refreshFolder(ref, folder);
+          }
+        }
       } else {
         showError(context, 'Drive export failed');
       }
@@ -226,6 +240,16 @@ class EditorScreen extends ConsumerWidget {
             await FilePicker.saveFile(
               fileName: '$suggested.pdf', type: FileType.any, bytes: bytes);
             if (context.mounted) showSuccess(context, 'Exported $suggested.pdf');
+            if (result.patternKeeperPdf && context.mounted) {
+              final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+                  useDmc: ref.read(settingsProvider).useDmc,
+                  patternKeeperMode: true);
+              if (context.mounted) {
+                await FilePicker.saveFile(
+                  fileName: '${suggested}_PatternKeeper.pdf', type: FileType.any, bytes: pkBytes);
+                if (context.mounted) showSuccess(context, 'Exported PatternKeeper PDF');
+              }
+            }
           } else {
             final path = await FilePicker.saveFile(
               fileName: suggested,
@@ -238,6 +262,16 @@ class EditorScreen extends ConsumerWidget {
             await File(finalPath).writeAsBytes(bytes);
             if (context.mounted) {
               showSuccess(context, 'Exported ${finalPath.split(Platform.pathSeparator).last}');
+            }
+            if (result.patternKeeperPdf && context.mounted) {
+              final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+                  useDmc: ref.read(settingsProvider).useDmc,
+                  patternKeeperMode: true);
+              final pkPath = finalPath.replaceFirst(RegExp(r'\.pdf$'), '_PatternKeeper.pdf');
+              await File(pkPath).writeAsBytes(pkBytes);
+              if (context.mounted) {
+                showSuccess(context, 'Also saved ${pkPath.split(Platform.pathSeparator).last}');
+              }
             }
           }
         case ShareFormat.png:
@@ -371,8 +405,19 @@ class EditorScreen extends ConsumerWidget {
       final tmpFile = File('${tmpDir.path}/$fileName');
       await tmpFile.writeAsBytes(bytes, flush: true);
 
+      final shareFiles = <XFile>[XFile(tmpFile.path, mimeType: mimeType, name: fileName)];
+      if (result.format == ShareFormat.pdf && result.patternKeeperPdf) {
+        final pkBytes = await PdfService.buildPdfBytes(pattern,
+            useDmc: ref.read(settingsProvider).useDmc,
+            patternKeeperMode: true);
+        final pkName = '${suggested}_PatternKeeper.pdf';
+        final pkFile = File('${tmpDir.path}/$pkName');
+        await pkFile.writeAsBytes(pkBytes, flush: true);
+        shareFiles.add(XFile(pkFile.path, mimeType: 'application/pdf', name: pkName));
+      }
+
       await SharePlus.instance.share(ShareParams(
-        files: [XFile(tmpFile.path, mimeType: mimeType, name: fileName)],
+        files: shareFiles,
         sharePositionOrigin: origin,
       ));
     } catch (e) {

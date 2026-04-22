@@ -36,6 +36,7 @@ import 'drive_folder_picker_dialog.dart';
 import 'materials_list_screen.dart';
 import '../services/grid_detector.dart';
 import '../services/grid_symbol_matcher.dart';
+import '../services/pdf_pattern_keeper_parser.dart';
 import '../services/pdf_scanner.dart';
 import 'pattern_scan_symbol_screen.dart';
 import '../widgets/editor_canvas_area.dart';
@@ -426,8 +427,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       final tmpFile = File('${tmpDir.path}/$fileName');
       await tmpFile.writeAsBytes(bytes, flush: true);
 
+      final shareFiles = <XFile>[XFile(tmpFile.path, mimeType: mimeType, name: fileName)];
+      if (result.format == ShareFormat.pdf && result.patternKeeperPdf) {
+        final pkBytes = await PdfService.buildPdfBytes(pattern,
+            useDmc: ref.read(settingsProvider).useDmc,
+            patternKeeperMode: true);
+        final pkName = '${suggested}_PatternKeeper.pdf';
+        final pkFile = File('${tmpDir.path}/$pkName');
+        await pkFile.writeAsBytes(pkBytes, flush: true);
+        shareFiles.add(XFile(pkFile.path, mimeType: 'application/pdf', name: pkName));
+      }
+
       await SharePlus.instance.share(ShareParams(
-        files: [XFile(tmpFile.path, mimeType: mimeType, name: fileName)],
+        files: shareFiles,
         sharePositionOrigin: origin,
       ));
     } catch (e) {
@@ -506,6 +518,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       if (!context.mounted) return;
       if (id != null) {
         showSuccess(context, 'Exported to Drive as $fileName');
+        refreshFolder(ref, folder);
+        if (result.format == ShareFormat.pdf && result.patternKeeperPdf && context.mounted) {
+          final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+              useDmc: ref.read(settingsProvider).useDmc,
+              patternKeeperMode: true);
+          final pkFileName = '${suggested}_PatternKeeper.pdf';
+          final pkId = await ref.read(googleDriveProvider.notifier)
+              .uploadRawFile(name: pkFileName, bytes: pkBytes, parentFolderId: folder.folderId);
+          if (context.mounted && pkId != null) {
+            showSuccess(context, 'Also exported PatternKeeper PDF');
+            refreshFolder(ref, folder);
+          }
+        }
       } else {
         showError(context, 'Drive export failed');
       }
@@ -598,6 +623,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               bytes: bytes,
             );
             if (context.mounted) showSuccess(context, 'Exported $suggested.pdf');
+            if (result.patternKeeperPdf && context.mounted) {
+              final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+                  useDmc: ref.read(settingsProvider).useDmc,
+                  patternKeeperMode: true);
+              if (context.mounted) {
+                await FilePicker.saveFile(
+                  fileName: '${suggested}_PatternKeeper.pdf', type: FileType.any, bytes: pkBytes);
+                if (context.mounted) showSuccess(context, 'Exported PatternKeeper PDF');
+              }
+            }
           } else {
             final path = await FilePicker.saveFile(
               fileName: suggested,
@@ -611,6 +646,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             if (context.mounted) {
               showSuccess(context,
                   'Exported ${finalPath.split(Platform.pathSeparator).last}');
+            }
+            if (result.patternKeeperPdf && context.mounted) {
+              final pkBytes = await PdfService.buildPdfBytes(state.pattern,
+                  useDmc: ref.read(settingsProvider).useDmc,
+                  patternKeeperMode: true);
+              final pkPath = finalPath.replaceFirst(RegExp(r'\.pdf$'), '_PatternKeeper.pdf');
+              await File(pkPath).writeAsBytes(pkBytes);
+              if (context.mounted) {
+                showSuccess(context, 'Also saved ${pkPath.split(Platform.pathSeparator).last}');
+              }
             }
           }
         case ShareFormat.png:
@@ -1055,23 +1100,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ),
         );
         if (pattern != null && context.mounted) {
-          // Auto-save the new pattern next to the source PDF.
-          final savePath =
-              '${File(pdfPath).parent.path}${Platform.pathSeparator}$title.stitches';
-          final scanCompress = ref.read(settingsProvider).compressNewFiles;
-          try {
-            await FileService.saveFile(pattern, savePath, compress: scanCompress);
-          } catch (_) {
-            // Saving failed (e.g. read-only location) — load without a file path.
-          }
-          if (!context.mounted) return;
-          ref.read(editorProvider.notifier).loadPattern(
-            pattern,
-            filePath: File(savePath).existsSync() ? savePath : null,
-            compressOnSave: scanCompress,
-          );
-          ref.read(pdfViewerProvider.notifier).set(null);
-    ref.read(imageViewerProvider.notifier).set(null);
+          await _saveAndOpenScannedPattern(context, pattern, pdfPath, title);
         }
       } else {
         // ── Multiple grids: each page becomes a Snippet ──────────────────────
@@ -1100,6 +1129,27 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     } finally {
       _removeScanOverlay();
     }
+  }
+
+  /// Save [pattern] next to [sourcePath] and open it in the editor.
+  Future<void> _saveAndOpenScannedPattern(BuildContext context,
+      CrossStitchPattern pattern, String sourcePath, String title) async {
+    final savePath =
+        '${File(sourcePath).parent.path}${Platform.pathSeparator}$title.stitches';
+    final compress = ref.read(settingsProvider).compressNewFiles;
+    try {
+      await FileService.saveFile(pattern, savePath, compress: compress);
+    } catch (_) {
+      // Read-only location — load without a file path.
+    }
+    if (!context.mounted) return;
+    ref.read(editorProvider.notifier).loadPattern(
+      pattern,
+      filePath: File(savePath).existsSync() ? savePath : null,
+      compressOnSave: compress,
+    );
+    ref.read(pdfViewerProvider.notifier).set(null);
+    ref.read(imageViewerProvider.notifier).set(null);
   }
 
   /// Dialog shown when the AI did not detect pattern dimensions.
@@ -1371,6 +1421,27 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 icon: const Icon(Icons.document_scanner_outlined),
                 tooltip: 'Scan page as pattern (Beta)',
                 onPressed: () async {
+                  // Tier 1: try PatternKeeper text-layer parsing (zero user input).
+                  _showScanOverlay(context, 'Detecting PDF format…');
+                  final pkResult = await PatternKeeperParser.tryParse(
+                      openPdf.localPath);
+                  _removeScanOverlay();
+                  if (!context.mounted) return;
+
+                  if (pkResult != null) {
+                    final pattern = await Navigator.of(context)
+                        .push<CrossStitchPattern>(MaterialPageRoute(
+                      builder: (_) => PatternScanPreviewScreen(
+                          result: pkResult, patternName: openPdf.title),
+                    ));
+                    if (pattern != null && context.mounted) {
+                      await _saveAndOpenScannedPattern(
+                          context, pattern, openPdf.localPath, openPdf.title);
+                    }
+                    return;
+                  }
+
+                  // Tier 2: fall back to manual raster scan.
                   final picked = await PdfPagePickerDialog.show(
                     context,
                     pdfPath: openPdf.localPath,
