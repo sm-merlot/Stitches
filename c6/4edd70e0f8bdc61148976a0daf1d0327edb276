@@ -1,0 +1,25 @@
+.github/workflows/test.yml
+  29d97ae11345a820 24,47,81
+test/test_fixtures.dart
+  29d97ae11345a820 9-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "c64edd70e0f8bdc61148976a0daf1d0327edb276",
+  "prompts": {
+    "29d97ae11345a820": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b2b3434-43a6-4731-a109-6e58dc93d2b5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 19,
+      "total_deletions": 9,
+      "accepted_lines": 19,
+      "overriden_lines": 0
+    }
+  }
+}
