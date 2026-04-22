@@ -352,46 +352,129 @@ class PatternKeeperParser {
       final symbolFrags = page.fragments
           .where((f) => symbolSet.contains(f.text.trim()))
           .toList();
+
+      // ── Text-flow detection ───────────────────────────────────────────────
+      // Artecy / HAED PDFs use text-flow encoding: pdfium extracts each chart
+      // row as one long multi-char fragment (e.g. "AAABBBCCC...").  These
+      // fragments contain no single-char symbol matches, so symbolFrags stays
+      // tiny.  Detect this case via "symbol-rich" multi-char fragments and
+      // compute step / origin from them instead of from symbolFrags positions.
+      final bool isTextFlow;
       if (symbolFrags.length < _kMinGridCells) {
-        debugPrint('[PKParser] page $pi: only ${symbolFrags.length} symbol '
-            'fragments (need $_kMinGridCells) — '
-            '${page.fragments.length} total frags, '
-            'likely raster grid');
-        continue;
+        final richFrags = page.fragments.where((f) {
+          final runes = f.text.trim().runes.toList();
+          if (runes.length < 2) return false;
+          final symCount =
+              runes.where((r) => symbolSet.contains(String.fromCharCode(r))).length;
+          return symCount >= 2 && symCount * 2 >= runes.length;
+        }).toList();
+
+        if (richFrags.length < 3) {
+          debugPrint('[PKParser] page $pi: only ${symbolFrags.length} symbol '
+              'fragments (need $_kMinGridCells), '
+              '${page.fragments.length} total frags — '
+              'likely raster grid');
+          continue;
+        }
+        isTextFlow = true;
+        debugPrint('[PKParser] page $pi: text-flow encoding '
+            '(${richFrags.length} symbol-rich frags, ${symbolFrags.length} single-char)');
+      } else {
+        isTextFlow = false;
       }
 
-      // Positions of symbol centres.
-      final xCenters = symbolFrags
-          .map((f) => (f.left + f.right) / 2)
-          .toList()
-        ..sort();
-      final yCenters = symbolFrags
-          .map((f) => (f.top + f.bottom) / 2)
-          .toList()
-        ..sort();
+      // Positions of symbol centres — used for step/origin in normal mode only.
+      final xCenters = isTextFlow
+          ? <double>[]
+          : (symbolFrags.map((f) => (f.left + f.right) / 2).toList()..sort());
+      final yCenters = isTextFlow
+          ? <double>[]
+          : (symbolFrags.map((f) => (f.top + f.bottom) / 2).toList()..sort());
 
-      final xStep = _computeStep(xCenters);
-      final yStep = _computeStep(yCenters);
+      double? xStep, yStep;
+      if (!isTextFlow) {
+        xStep = _computeStep(xCenters);
+        yStep = _computeStep(yCenters);
+        if (xStep == null || yStep == null) {
+          debugPrint('[PKParser] page $pi: irregular grid — skipping');
+          continue;
+        }
+      } else {
+        // Text-flow: estimate character step from fragment widths.
+        final richFrags = page.fragments.where((f) {
+          final runes = f.text.trim().runes.toList();
+          if (runes.length < 2) return false;
+          final symCount =
+              runes.where((r) => symbolSet.contains(String.fromCharCode(r))).length;
+          return symCount >= 2 && symCount * 2 >= runes.length;
+        }).toList();
 
-      if (xStep == null || yStep == null) {
-        debugPrint('[PKParser] page $pi: irregular grid — skipping');
-        continue;
+        final charWidths = richFrags.map((f) {
+          final n = f.text.trim().runes.length;
+          return (f.right - f.left) / n;
+        }).toList()..sort();
+
+        xStep = charWidths[charWidths.length ~/ 2];
+        if (xStep < 2.0) {
+          debugPrint('[PKParser] page $pi: text-flow char step too small — skip');
+          continue;
+        }
+
+        // Row step: median Y-diff between adjacent rows of rich fragments.
+        final richByY = _groupByY(richFrags);
+        final rowYs = richByY.values
+            .map((row) {
+              final cy = row.map((f) => (f.top + f.bottom) / 2).reduce((a, b) => a + b) / row.length;
+              return cy;
+            })
+            .toList()
+          ..sort((a, b) => b.compareTo(a)); // descending (top of page = largest Y)
+
+        if (rowYs.length < 2) {
+          debugPrint('[PKParser] page $pi: text-flow: too few rows — skip');
+          continue;
+        }
+        final rowDiffs = [for (int i = 1; i < rowYs.length; i++) rowYs[i - 1] - rowYs[i]];
+        rowDiffs.sort();
+        yStep = rowDiffs[rowDiffs.length ~/ 2];
+        if (yStep < 2.0) {
+          debugPrint('[PKParser] page $pi: text-flow row step too small — skip');
+          continue;
+        }
       }
 
       // Grid origin: the PDF-space centre of local col 0 / row 0.
       // pkOriginX is per-page (same physical layout on every page), so it IS
       // the per-page origin for local col 0.  Fall back to first/last symbol
-      // for third-party PDFs that lack the v3 marker.
-      final originX = pkOriginX ?? xCenters.first;
-      final originY = pkOriginY ?? yCenters.last;
+      // for normal PDFs, or leftmost/topmost fragment for text-flow.
+      final double originX;
+      final double originY;
+      if (isTextFlow) {
+        // For text-flow, use the leftmost X of symbol-rich fragments as origin,
+        // and the topmost row Y as the row-0 centre.
+        final richFrags = page.fragments.where((f) {
+          final runes = f.text.trim().runes.toList();
+          if (runes.length < 2) return false;
+          final symCount =
+              runes.where((r) => symbolSet.contains(String.fromCharCode(r))).length;
+          return symCount >= 2 && symCount * 2 >= runes.length;
+        }).toList();
+        originX = richFrags.map((f) => f.left).reduce(min);
+        originY = richFrags.map((f) => (f.top + f.bottom) / 2).reduce(max);
+      } else {
+        originX = pkOriginX ?? xCenters.first;
+        originY = pkOriginY ?? yCenters.last;
+      }
 
       // ── Step refinement (v3 PKCHART only) ────────────────────────────────
       // _computeStep median can still have small errors due to render spread.
       // With explicit ox/oy (per-page origin) we compute a more accurate step
       // via median( (cx - ox) / round((cx-ox)/roughStep) ) across all symbols.
+      // By this point xStep and yStep are always non-null (we continue'd otherwise).
+      // Dart flow analysis promotes double? → double after the null-guarded blocks.
       double refinedXStep = xStep;
       double refinedYStep = yStep;
-      if (pkOriginX != null && pkOriginY != null) {
+      if (pkOriginX != null && pkOriginY != null && !isTextFlow) {
         // Restrict to symbols in the first ~10 rows/cols from the per-page
         // origin.  With a rough step error ε = |roughStep - trueStep|, the
         // rounding error at col n is n·ε/roughStep.  For n ≤ 10 this stays
@@ -442,16 +525,20 @@ class PatternKeeperParser {
       final cells = <_GridCell>[];
       int maxCol = 0, maxRow = 0;
 
-      for (final frag in symbolFrags) {
-        final cx = (frag.left + frag.right) / 2;
-        final cy = (frag.top + frag.bottom) / 2;
-        // PDF Y increases upward → flip to get visual row (0 = top).
-        final col = ((cx - originX) / refinedXStep).round();
-        final row = ((originY - cy) / refinedYStep).round();
-        if (col < 0 || row < 0) continue;
-        cells.add(_GridCell(frag.text.trim(), col, row));
-        if (col > maxCol) maxCol = col;
-        if (row > maxRow) maxRow = row;
+      // Single-char cell placement (skipped for text-flow; merge-recovery below
+      // handles all cells for text-flow pages).
+      if (!isTextFlow) {
+        for (final frag in symbolFrags) {
+          final cx = (frag.left + frag.right) / 2;
+          final cy = (frag.top + frag.bottom) / 2;
+          // PDF Y increases upward → flip to get visual row (0 = top).
+          final col = ((cx - originX) / refinedXStep).round();
+          final row = ((originY - cy) / refinedYStep).round();
+          if (col < 0 || row < 0) continue;
+          cells.add(_GridCell(frag.text.trim(), col, row));
+          if (col > maxCol) maxCol = col;
+          if (row > maxRow) maxRow = row;
+        }
       }
 
       // ── Recover merged same-symbol column/row runs ──────────────────────
@@ -572,6 +659,7 @@ class PatternKeeperParser {
 
         debugPrint('[PKParser] page $pi: ${cells.length} symbols, '
             '${maxCol + 1}×${maxRow + 1} grid, '
+            '${isTextFlow ? "text-flow " : ""}'
             'step ${xStep.toStringAsFixed(1)}×${yStep.toStringAsFixed(1)} pt'
             '(refined ${refinedXStep.toStringAsFixed(3)}×${refinedYStep.toStringAsFixed(3)})'
             '${pkStartCol != null ? ', PKCHART $pkStartCol,$pkStartRow→$pkEndCol,$pkEndRow' : ''}'
