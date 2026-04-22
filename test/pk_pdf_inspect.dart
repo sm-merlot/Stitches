@@ -2,6 +2,7 @@
 /// Run with: flutter test test/pk_pdf_inspect.dart --no-pub
 ///
 /// Usage: edit [kPdfPaths] below, then run.
+// ignore_for_file: avoid_print
 library;
 
 import 'dart:io';

@@ -106,7 +106,6 @@ class PatternKeeperParser {
   ///
   /// This is the core logic, decoupled from pdfrx so it can be tested
   /// without native PDF libraries.
-  @visibleForTesting
   static PatternScanResult? tryParseFromText(List<PageTextData?> pages) {
     // Reject raster PDFs: need a meaningful amount of text.
     final totalChars =
@@ -242,7 +241,7 @@ class PatternKeeperParser {
           //    DMC code, and
           //  • stitch counts from an adjacent table column (100+pt away) being
           //    treated as DMC codes whose symbol is some distant short token.
-          const _kMaxSymbolDmcGap = 40.0;
+          const kMaxSymbolDmcGap = 40.0;
           String? symbol;
           double? symbolX;
           for (final tok in tokens) {
@@ -253,7 +252,9 @@ class PatternKeeperParser {
             // Proximity guard applies only when both tokens are standalone
             // per-word fragments (not distributed inline sub-tokens).
             if (!tok.isInline && !dmcTok.isInline &&
-                dmcTok.left - tok.left > _kMaxSymbolDmcGap) continue;
+                dmcTok.left - tok.left > kMaxSymbolDmcGap) {
+              continue;
+            }
             // Skip the literal "DMC" prefix used by some third-party generators
             // (format: "[symbol] DMC [code] [name]").
             if (tok.text.toUpperCase() == 'DMC') continue;
