@@ -31,6 +31,13 @@ String get _prBodyPath {
   return runnerTemp != null ? '$runnerTemp/.pr_body.md' : 'tool/.pr_body.md';
 }
 
+String get _changesetPath {
+  final now = DateTime.now();
+  final slug =
+      'dmc-colors-${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  return '.changeset/$slug.md';
+}
+
 // ─── Data model ───────────────────────────────────────────────────────────────
 
 class _Color implements Comparable<_Color> {
@@ -348,6 +355,32 @@ Future<void> main() async {
   }
 
   _writePrBody(added: added, retired: retired, updated: updated);
+  _writeChangeset(added: added, retired: retired, updated: updated);
   _setOutput('has_changes', 'true');
   _setOutput('pr_body_path', _prBodyPath);
+}
+
+void _writeChangeset({
+  required List<_Color> added,
+  required List<_Color> retired,
+  required List<_Update> updated,
+}) {
+  final parts = [
+    if (added.isNotEmpty) '${added.length} added',
+    if (updated.isNotEmpty) '${updated.length} updated',
+    if (retired.isNotEmpty) '${retired.length} possibly retired',
+  ];
+  final summary = parts.join(', ');
+
+  final buf = StringBuffer()
+    ..writeln('---')
+    ..writeln('"stitches": patch')
+    ..writeln('---')
+    ..writeln()
+    ..writeln('Update DMC colour list from community source')
+    ..writeln()
+    ..writeln('Automated sync: $summary.');
+
+  File(_changesetPath).writeAsStringSync(buf.toString());
+  print('Changeset written to $_changesetPath');
 }

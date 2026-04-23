@@ -39,6 +39,9 @@ jobs:
           commit-message: 'chore: update DMC color list from community source'
           title: 'chore: update DMC color list'
           body-path: ${{ steps.update.outputs.pr_body_path }}
+          add-paths: |
+            lib/data/dmc_colors.dart
+            .changeset/
           labels: |
             chore
             colors
