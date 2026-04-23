@@ -78,7 +78,7 @@ List<_Color> _parseSource(String json) {
     return _Color(
       (m['dmcCode'] as String).trim(),
       (m['dmcName'] as String).trim(),
-      (m['hexCode'] as String).trim().toUpperCase(),
+      (m['hexCode'] as String).trim().replaceFirst('#', '').toUpperCase(),
     );
   }).toList()
     ..sort());
