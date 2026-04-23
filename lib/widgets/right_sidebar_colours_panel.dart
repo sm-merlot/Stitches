@@ -203,13 +203,19 @@ class _DesignColoursPanel extends ConsumerWidget {
               final isLayerThread = state.pattern.threads
                   .any((pt) => pt.dmcCode == t.dmcCode);
               if (isLayerThread) {
-                _showSymbolPicker(
-                  context, notifier, t,
-                  state.pattern.threads
+                // Include composite symbols so the picker won't offer a symbol
+                // already assigned to a blended/composite thread.
+                final usedByOthers = <String>{
+                  ...state.pattern.threads
                       .where((pt) => pt.dmcCode != t.dmcCode)
                       .map((pt) => pt.symbol)
-                      .where(symbolIsVisible)
-                      .toSet(),
+                      .where(symbolIsVisible),
+                  ...state.pattern.compositeSymbols.values
+                      .where(symbolIsVisible),
+                };
+                _showSymbolPicker(
+                  context, notifier, t,
+                  usedByOthers,
                 );
               } else {
                 // Composite thread — use changeCompositeSymbol so the

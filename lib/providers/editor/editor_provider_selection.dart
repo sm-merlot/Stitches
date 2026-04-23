@@ -16,6 +16,7 @@ mixin SelectionMixin on Notifier<EditorState> {
   CrossStitchPattern _pruneUnusedThreads(CrossStitchPattern pattern);
   Thread _resolveThreadSymbol(Thread thread, List<Thread> existingThreads);
   String _serializeClipboard(List<Thread> threads, List<Stitch> stitches);
+  void refreshCompositeCache(); // provided by LayersMixin
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
@@ -162,9 +163,11 @@ mixin SelectionMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    refreshCompositeCache();
   }
 
   void moveSelection(int dx, int dy) {
@@ -201,9 +204,11 @@ mixin SelectionMixin on Notifier<EditorState> {
         pattern: newPattern,
         selectionRect: newRect,
         undoStack: _buildUndoStack(),
+        compositeResult: null,
         isDirty: true,
         redoStack: [],
       );
+      refreshCompositeCache();
       return;
     }
     final activeStitches = state.activeLayer.stitches;
@@ -226,9 +231,11 @@ mixin SelectionMixin on Notifier<EditorState> {
       pattern: newPattern,
       selectionRect: newRect,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    refreshCompositeCache();
   }
 
   void deleteSelection() {
@@ -252,9 +259,11 @@ mixin SelectionMixin on Notifier<EditorState> {
         pattern: newPattern,
         selectionRect: null,
         undoStack: _buildUndoStack(),
+        compositeResult: null,
         isDirty: true,
         redoStack: [],
       );
+      refreshCompositeCache();
       return;
     }
     final activeStitches = state.activeLayer.stitches;
@@ -270,9 +279,11 @@ mixin SelectionMixin on Notifier<EditorState> {
       pattern: newPattern,
       selectionRect: null,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    refreshCompositeCache();
   }
 
   /// Escape: if in paste mode, exit back to select; otherwise clear selection rect.

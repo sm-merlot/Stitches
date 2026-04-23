@@ -19,6 +19,10 @@ mixin DrawingMixin on Notifier<EditorState> {
   List<SnippetPalette> syncPaletteSymbolsToPrimary(
       List<SnippetPalette> palettes); // provided by SnippetsMixin
 
+  // Debounce timer: refreshCompositeCache is deferred during high-frequency
+  // drag drawing so it doesn't run on every pointer-move event.
+  Timer? _drawCompositeDebounce;
+
   // ─── Private helpers (unique to this mixin) ───────────────────────────────
 
   bool _stitchAtCell(Stitch s, int cellX, int cellY) {
@@ -345,9 +349,15 @@ mixin DrawingMixin on Notifier<EditorState> {
       pattern: newPattern,
       snippetPalettes: snippetPalettes,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    // Debounce composite refresh so drag-drawing doesn't recompute on every
+    // pointer-move event. 80 ms is imperceptible as a post-draw delay.
+    _drawCompositeDebounce?.cancel();
+    _drawCompositeDebounce =
+        Timer(const Duration(milliseconds: 80), refreshCompositeCache);
   }
 
   void removeStitchesAt(int x, int y) {
@@ -361,9 +371,13 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    _drawCompositeDebounce?.cancel();
+    _drawCompositeDebounce =
+        Timer(const Duration(milliseconds: 80), refreshCompositeCache);
   }
 
   /// Erases all stitches in a [size]×[size] box centred on (cx, cy).
@@ -391,9 +405,13 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    _drawCompositeDebounce?.cancel();
+    _drawCompositeDebounce =
+        Timer(const Duration(milliseconds: 80), refreshCompositeCache);
   }
 
   void setEraserSize(int size) {
@@ -481,9 +499,11 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    refreshCompositeCache();
   }
 
   void removeBackstitchAt(double x1, double y1, double x2, double y2) {
@@ -497,9 +517,11 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
+      compositeResult: null,
       isDirty: true,
       redoStack: [],
     );
+    refreshCompositeCache();
   }
 
   void setBackstitchStart(Offset? point) {

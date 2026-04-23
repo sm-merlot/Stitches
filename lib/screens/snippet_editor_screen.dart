@@ -83,8 +83,10 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   int? _selectedPresetIndex = 1; // default 16×16
   int _canvasW = 16;
   int _canvasH = 16;
-  // Dirty-state proxy: stitch fingerprint at load time (D3).
+  // Dirty-state proxy: fingerprints captured at load time (D3).
   int _initialStitchHash = 0;
+  int _initialThreadHash = 0;
+  List<SnippetPalette> _initialPalettes = const [];
 
   /// Max width of the title area (display + editor). Beyond this the static
   /// label ellipsises; the inline editor scrolls.
@@ -162,16 +164,17 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         editorNotifier.initSnippetPalettesLocal(
             [SnippetPalette.create(name: 'Palette 1')], 0);
       }
-      // Capture initial stitch fingerprint for dirty-state detection (D3).
+      // Capture initial fingerprints for dirty-state detection (D3).
       // Run after a microtask so the state has settled.
       Future.microtask(() {
         if (mounted) {
+          final s = ref.read(editorProvider);
           setState(() {
-            _initialStitchHash = ref
-                .read(editorProvider)
-                .pattern
-                .stitches
-                .fold(0, (h, s) => Object.hash(h, s));
+            _initialStitchHash =
+                s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
+            _initialThreadHash = s.pattern.threads.fold(
+                0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
+            _initialPalettes = s.snippetPalettes;
           });
         }
       });
@@ -186,13 +189,27 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   }
 
   void _loadEmptyPattern() {
-    ref.read(editorProvider.notifier).loadPattern(
+    final notifier = ref.read(editorProvider.notifier);
+    notifier.loadPattern(
       CrossStitchPattern.empty(
         name: _nameController.text,
         width: _canvasW,
         height: _canvasH,
       ).copyWith(aidaColor: widget.aidaColor),
     );
+    // loadPattern resets mode to AppMode.view; restore edit mode so the
+    // toolbar stays visible when the user changes the canvas size.
+    notifier.setMode(AppMode.edit);
+    // Re-initialise local palette state for the fresh canvas.
+    notifier.initSnippetPalettesLocal(
+        [SnippetPalette.create(name: 'Palette 1')], 0);
+    // Reset dirty fingerprints so the new canvas starts clean.
+    final s = ref.read(editorProvider);
+    _initialStitchHash =
+        s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
+    _initialThreadHash = s.pattern.threads.fold(
+        0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
+    _initialPalettes = s.snippetPalettes;
   }
 
   void _onPresetSelected(int? index) {
@@ -637,17 +654,21 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   }
 
   bool _isDirty() {
-    // Stitch changes
-    final current = ref
-        .read(editorProvider)
-        .pattern
-        .stitches
-        .fold(0, (h, s) => Object.hash(h, s));
-    if (current != _initialStitchHash) return true;
+    final s = ref.read(editorProvider);
+    // Stitch position changes
+    final stitchHash =
+        s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
+    if (stitchHash != _initialStitchHash) return true;
+    // Thread list changes (colour/DMC replacements via replaceThread)
+    final threadHash = s.pattern.threads.fold(
+        0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
+    if (threadHash != _initialThreadHash) return true;
+    // Palette changes (secondary colorway edits via setSnippetPaletteThreadColor)
+    if (!identical(s.snippetPalettes, _initialPalettes)) return true;
     // Name changes (existing snippets only — new snippets with only a name
     // change and no stitches aren't worth warning about)
     if (widget.snippet != null &&
-        _nameController.text.trim() != widget.snippet!.name) { return true; }
+        _nameController.text.trim() != widget.snippet!.name) return true;
     return false;
   }
 }
