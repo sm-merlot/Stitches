@@ -1,0 +1,26 @@
+tool/update_dmc_colors.dart
+  78bd48f7925e35c1 85
+  b61aa3ed63decd03 13,28-32,306
+.github/workflows/update-dmc-colors.yml
+  b61aa3ed63decd03 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "7fb9f28d477cdc054b6302f4567ad3c25cc55714",
+  "prompts": {
+    "b61aa3ed63decd03": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b66ba68-4fab-4e57-acc8-a85cf15894bf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 3,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    }
+  }
+}
