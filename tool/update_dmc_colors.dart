@@ -1,6 +1,6 @@
 // Fetches the latest DMC thread color list and updates lib/data/dmc_colors.dart.
 //
-// Source: cheshire137/cross-stitch-color-conversion (JSON, ~447 colors)
+// Source: KDE/kxstitch schemes/dmc.xml (~489 colors)
 //
 // What it does:
 //   • Adds colors present in the source but missing from the app list.
@@ -20,9 +20,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-const _sourceUrl = 'https://raw.githubusercontent.com/'
-    'cheshire137/cross-stitch-color-conversion/'
-    'main/src/assets/dmc-color-codes-names.json';
+/// Source: KDE/kxstitch DMC scheme XML.
+const _sourceUrl =
+    'https://raw.githubusercontent.com/KDE/kxstitch/master/schemes/dmc.xml';
 
 const _colorsPath = 'lib/data/dmc_colors.dart';
 // In CI, write outside the checkout so create-pull-request doesn't commit it.
@@ -82,17 +82,27 @@ Future<String> _get(String url) async {
 
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
-List<_Color> _parseSource(String json) {
-  final list = jsonDecode(json) as List;
-  return (list.map((e) {
-    final m = e as Map;
-    return _Color(
-      (m['dmcCode'] as String).trim(),
-      (m['dmcName'] as String).trim(),
-      (m['hexCode'] as String).trim().replaceFirst('#', '').toUpperCase(),
-    );
-  }).toList()
-    ..sort());
+/// Parses the KXStitch DMC XML and returns all colors as [_Color] objects.
+List<_Color> _parseKxStitch(String xml) {
+  final colors = <_Color>[];
+  // Simple regex-based parse — avoids pulling in an xml package.
+  final flossRe = RegExp(
+    r'<floss>.*?<name>(.*?)</name>.*?<description>(.*?)</description>'
+    r'.*?<red>(\d+)</red>.*?<green>(\d+)</green>.*?<blue>(\d+)</blue>.*?</floss>',
+    dotAll: true,
+  );
+  for (final m in flossRe.allMatches(xml)) {
+    final code = m.group(1)!.trim();
+    final name = m.group(2)!.trim();
+    final r = int.parse(m.group(3)!);
+    final g = int.parse(m.group(4)!);
+    final b = int.parse(m.group(5)!);
+    final hex = r.toRadixString(16).padLeft(2, '0') +
+        g.toRadixString(16).padLeft(2, '0') +
+        b.toRadixString(16).padLeft(2, '0');
+    colors.add(_Color(code, name, hex.toUpperCase()));
+  }
+  return colors..sort();
 }
 
 final _entryRe = RegExp(
@@ -148,8 +158,7 @@ void _writePrBody({
   final total = added.length + retired.length + updated.length;
   buf.writeln('## DMC Color List Update\n');
   buf.writeln('Automated monthly sync against the '
-      '[cheshire137/cross-stitch-color-conversion]'
-      '(https://github.com/cheshire137/cross-stitch-color-conversion) dataset.\n');
+      '[KDE/kxstitch](https://github.com/KDE/kxstitch) DMC colour dataset.\n');
 
   if (total == 0) {
     buf.writeln('No changes detected.');
@@ -177,7 +186,7 @@ void _writePrBody({
   if (retired.isNotEmpty) {
     buf.writeln('\n### 🗑️ Possibly retired (removed from dmcColors)\n');
     buf.writeln(
-        'These colors were absent from the community source and have been removed '
+        'These colors were absent from the source and have been removed '
         'from `dmcColors`. Placeholder entries (empty replacement) have been added '
         'to `dmcReplacements`.\n\n'
         '**Before merging:** fill in each replacement code in `dmcReplacements`, '
@@ -244,16 +253,16 @@ void _setOutput(String key, String value) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 Future<void> main() async {
-  print('Fetching source colors from community dataset…');
-  final String sourceJson;
+  print('Fetching DMC colors from KXStitch…');
+  final String sourceXml;
   try {
-    sourceJson = await _get(_sourceUrl);
+    sourceXml = await _get(_sourceUrl);
   } catch (e) {
     stderr.writeln('Error: could not fetch source — $e');
     exit(1);
   }
 
-  final sourceColors = _parseSource(sourceJson);
+  final sourceColors = _parseKxStitch(sourceXml);
   print('Source: ${sourceColors.length} colors');
 
   final currentContent = File(_colorsPath).readAsStringSync();
@@ -377,7 +386,7 @@ void _writeChangeset({
     ..writeln('"stitches": patch')
     ..writeln('---')
     ..writeln()
-    ..writeln('Update DMC colour list from community source')
+    ..writeln('Update DMC colour list from KXStitch source')
     ..writeln()
     ..writeln('Automated sync: $summary.');
 
