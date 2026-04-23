@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- 2b8cdf2: Add PatternKeeper PDF import and export support.
+
+  **Import (Tier-1 parser):** When opening a PDF in workspace scan mode, StitchX now tries a text-layer parse before falling back to the manual raster scan. PatternKeeper-format PDFs (and most PDFs produced by MacStitch, WinStitch, PCStitch) embed symbols as selectable TTF characters — the parser reads symbol positions and the legend table directly from the text layer with no user input required. Falls back automatically to the existing sample-one-cell raster scan for image-only PDFs.
+
+  **Export:** A new "Also export PatternKeeper PDF" checkbox appears in the PDF export/share picker. When checked, a `_PatternKeeper.pdf` is generated alongside the standard PDF. The PatternKeeper-format PDF omits the title page (which PatternKeeper would misread as chart data), caps pages at 60 stitches, and renders the colour legend with `Symbol`/`Number` column headers and TTF symbol characters as selectable text — satisfying PatternKeeper's import requirements.
+
+### Patch Changes
+
+- 1bb5f79: Bump `googleapis_auth` from 2.0.0 to 2.3.0
+
+  Obtain Access credentials for Google services using OAuth 2.0
+
+- 926d3ff: Bump `wakelock_plus` from 1.5.1 to 1.5.2
+
+  Plugin that allows you to keep the device screen awake, i.e. prevent the screen from sleeping on Android, iOS, macOS, Windows, Linux, and web.
+
+- cf8c0eb: Add real-world PDF parse integration test sourced from private fixtures repo.
+
+  A new CI job (`integration-test`) clones `stitches-test-fixtures` (private) and runs `pk_real_pdf_parse_test` against actual PatternKeeper PDFs to guard against regressions in the Tier-1 text-layer parser. Fixture path resolution updated across existing tests to use the shared `TestFixtures` helper.
+
 ## 0.7.0
 
 ### Minor Changes
