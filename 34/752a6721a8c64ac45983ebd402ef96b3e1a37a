@@ -1,0 +1,23 @@
+lib/data/dmc_colors.dart
+  2e58387b064bff94 12-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "34752a6721a8c64ac45983ebd402ef96b3e1a37a",
+  "prompts": {
+    "2e58387b064bff94": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776958287142",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 2,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
