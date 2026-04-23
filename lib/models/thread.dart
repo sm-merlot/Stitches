@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/dmc_colors.dart';
 
 class Thread {
   final String dmcCode;
@@ -24,15 +25,22 @@ class Thread {
       };
 
   factory Thread.fromYaml(Map<String, dynamic> yaml) {
-    final hex =
-        (yaml['color'] as String).replaceAll('#', '');
-    final r = int.parse(hex.substring(0, 2), radix: 16);
-    final g = int.parse(hex.substring(2, 4), radix: 16);
-    final b = int.parse(hex.substring(4, 6), radix: 16);
+    final code = yaml['dmcCode'] as String;
+    final canonical = dmcColorByCode(code);
+    final Color color;
+    if (canonical != null) {
+      color = canonical.color;
+    } else {
+      final hex = (yaml['color'] as String).replaceAll('#', '');
+      final r = int.parse(hex.substring(0, 2), radix: 16);
+      final g = int.parse(hex.substring(2, 4), radix: 16);
+      final b = int.parse(hex.substring(4, 6), radix: 16);
+      color = Color.fromARGB(255, r, g, b);
+    }
     return Thread(
-      dmcCode: yaml['dmcCode'] as String,
-      color: Color.fromARGB(255, r, g, b),
-      name: yaml['name'] as String,
+      dmcCode: code,
+      color: color,
+      name: canonical?.name ?? yaml['name'] as String,
       symbol: (yaml['symbol'] as String?) ?? '',
     );
   }
