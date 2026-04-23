@@ -1,21 +1,14 @@
 // Fetches the latest DMC thread color list and updates lib/data/dmc_colors.dart.
 //
-// Primary source:   cheshire137/cross-stitch-color-conversion (JSON, ~456 colors)
-// Supplementary:    KDE/kxstitch schemes/dmc.xml (XML, ~489 colors)
-//
-// The KXStitch XML is used to fill in colors that the primary JSON source omits.
-// Currently this covers DMC 01–35 (released 2017/2018), which the cheshire137
-// dataset has never included. If primary has a code, its data wins; if only
-// KXStitch has it, KXStitch data is used instead.
+// Source: KDE/kxstitch schemes/dmc.xml (~489 colors)
 //
 // What it does:
-//   • Adds colors present in either source but missing from the app list.
-//   • Removes colors absent from BOTH sources: moves them out of dmcColors and
+//   • Adds colors present in the source but missing from the app list.
+//   • Removes colors absent from the source: moves them out of dmcColors and
 //     adds placeholder entries (empty replacement) to dmcReplacements so they
 //     show up in the PR for review. Fill in the replacement before merging, or
 //     revert the change if it turns out to be a false alarm.
-//   • Updates name/hex for colors whose details changed in the primary source
-//     (KXStitch-only entries are never overwritten by the primary source).
+//   • Updates name/hex for colors whose details changed in the source.
 //   • Never overwrites existing Anchor codes; preserves them on updates.
 //   • Writes PR body to $RUNNER_TEMP (CI) or tool/.pr_body.md (local); sets GITHUB_OUTPUT.
 //
@@ -27,13 +20,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-const _sourceUrl = 'https://raw.githubusercontent.com/'
-    'cheshire137/cross-stitch-color-conversion/'
-    'main/src/assets/dmc-color-codes-names.json';
-
-/// Supplementary source: KDE/kxstitch DMC scheme XML.
-/// Used only for codes the primary JSON source does not include (e.g. 01–35).
-const _supplementaryUrl =
+/// Source: KDE/kxstitch DMC scheme XML.
+const _sourceUrl =
     'https://raw.githubusercontent.com/KDE/kxstitch/master/schemes/dmc.xml';
 
 const _colorsPath = 'lib/data/dmc_colors.dart';
@@ -94,23 +82,8 @@ Future<String> _get(String url) async {
 
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
-List<_Color> _parseSource(String json) {
-  final list = jsonDecode(json) as List;
-  return (list.map((e) {
-    final m = e as Map;
-    return _Color(
-      (m['dmcCode'] as String).trim(),
-      (m['dmcName'] as String).trim(),
-      (m['hexCode'] as String).trim().replaceFirst('#', '').toUpperCase(),
-    );
-  }).toList()
-    ..sort());
-}
-
-/// Parses the KXStitch DMC XML and returns colors as [_Color] objects.
-/// Only colors NOT already present in [primaryCodes] are returned, so the
-/// primary source always wins when both cover the same code.
-List<_Color> _parseSupplementary(String xml, Set<String> primaryCodes) {
+/// Parses the KXStitch DMC XML and returns all colors as [_Color] objects.
+List<_Color> _parseKxStitch(String xml) {
   final colors = <_Color>[];
   // Simple regex-based parse — avoids pulling in an xml package.
   final flossRe = RegExp(
@@ -120,7 +93,6 @@ List<_Color> _parseSupplementary(String xml, Set<String> primaryCodes) {
   );
   for (final m in flossRe.allMatches(xml)) {
     final code = m.group(1)!.trim();
-    if (primaryCodes.contains(code)) continue; // primary source wins
     final name = m.group(2)!.trim();
     final r = int.parse(m.group(3)!);
     final g = int.parse(m.group(4)!);
@@ -130,7 +102,7 @@ List<_Color> _parseSupplementary(String xml, Set<String> primaryCodes) {
         b.toRadixString(16).padLeft(2, '0');
     colors.add(_Color(code, name, hex.toUpperCase()));
   }
-  return colors;
+  return colors..sort();
 }
 
 final _entryRe = RegExp(
@@ -186,10 +158,7 @@ void _writePrBody({
   final total = added.length + retired.length + updated.length;
   buf.writeln('## DMC Color List Update\n');
   buf.writeln('Automated monthly sync against the '
-      '[cheshire137/cross-stitch-color-conversion]'
-      '(https://github.com/cheshire137/cross-stitch-color-conversion) dataset, '
-      'supplemented by [KDE/kxstitch](https://github.com/KDE/kxstitch) for codes '
-      'the primary source omits (e.g. DMC 01–35).\n');
+      '[KDE/kxstitch](https://github.com/KDE/kxstitch) DMC colour dataset.\n');
 
   if (total == 0) {
     buf.writeln('No changes detected.');
@@ -217,7 +186,7 @@ void _writePrBody({
   if (retired.isNotEmpty) {
     buf.writeln('\n### 🗑️ Possibly retired (removed from dmcColors)\n');
     buf.writeln(
-        'These colors were absent from the community source and have been removed '
+        'These colors were absent from the source and have been removed '
         'from `dmcColors`. Placeholder entries (empty replacement) have been added '
         'to `dmcReplacements`.\n\n'
         '**Before merging:** fill in each replacement code in `dmcReplacements`, '
@@ -284,41 +253,17 @@ void _setOutput(String key, String value) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 Future<void> main() async {
-  print('Fetching source colors from community dataset…');
-  final String sourceJson;
+  print('Fetching DMC colors from KXStitch…');
+  final String sourceXml;
   try {
-    sourceJson = await _get(_sourceUrl);
+    sourceXml = await _get(_sourceUrl);
   } catch (e) {
     stderr.writeln('Error: could not fetch source — $e');
     exit(1);
   }
 
-  final primaryColors = _parseSource(sourceJson);
-  print('Primary source: ${primaryColors.length} colors');
-
-  // Fetch supplementary source (KXStitch XML) for codes the primary omits.
-  print('Fetching supplementary source (KXStitch XML)…');
-  String supplementaryXml;
-  try {
-    supplementaryXml = await _get(_supplementaryUrl);
-  } catch (e) {
-    stderr.writeln('Warning: could not fetch supplementary source — $e');
-    stderr.writeln('Continuing with primary source only.');
-    supplementaryXml = '';
-  }
-
-  final primaryCodes = {for (final c in primaryColors) c.code};
-  final supplementaryColors = supplementaryXml.isNotEmpty
-      ? _parseSupplementary(supplementaryXml, primaryCodes)
-      : <_Color>[];
-  if (supplementaryColors.isNotEmpty) {
-    print('Supplementary: ${supplementaryColors.length} additional codes'
-        ' (e.g. ${supplementaryColors.take(3).map((c) => c.code).join(', ')}…)');
-  }
-
-  // Merged view of all known upstream colors. Primary takes precedence.
-  final sourceColors = [...primaryColors, ...supplementaryColors]..sort();
-  print('Source (merged): ${sourceColors.length} colors');
+  final sourceColors = _parseKxStitch(sourceXml);
+  print('Source: ${sourceColors.length} colors');
 
   final currentContent = File(_colorsPath).readAsStringSync();
   final currentColors = _parseCurrentFile(currentContent);
@@ -441,7 +386,7 @@ void _writeChangeset({
     ..writeln('"stitches": patch')
     ..writeln('---')
     ..writeln()
-    ..writeln('Update DMC colour list from community source')
+    ..writeln('Update DMC colour list from KXStitch source')
     ..writeln()
     ..writeln('Automated sync: $summary.');
 
