@@ -25,6 +25,30 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  // Register the file-open MethodChannel (mirrors macOS AppDelegate).
+  file_open_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "com.scme0.stitches/file_open",
+          &flutter::StandardMethodCodec::GetInstance());
+
+  file_open_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == "getInitialFile") {
+          if (!initial_file_path_.empty()) {
+            result->Success(flutter::EncodableValue(initial_file_path_));
+            initial_file_path_.clear();
+          } else {
+            result->Success(flutter::EncodableValue());
+          }
+        } else {
+          result->NotImplemented();
+        }
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

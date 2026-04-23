@@ -58,7 +58,7 @@ Tracking everything needed before the first public release.
 ## Known Issues / Feature Gaps to Resolve Pre-1.0
 
 - [ ] **Anchor colour database** – toggle exists in Settings but always shows DMC colours (database not fully populated); either complete it, remove the toggle, or clearly mark as "coming soon" so it doesn't look like a bug
-- [ ] **Windows file association** – register `.stitches` extension in the Windows installer (macOS, iOS, and Android already handle this via file associations)
+- [x] **Windows file association** – self-registers `.stitches` → `StitchesFile` under `HKCU\Software\Classes` at launch (no admin required); file path passed via `com.scme0.stitches/file_open` MethodChannel matching macOS behaviour
 - [ ] **PDF Import Improvements** – add support for PatternKeeper as a minimum. What else can we improve in this space? (see [pdf-import-research](./specs/pdf-import-research.md))
 - [ ] **Remaining PatternKeeper-style features** – parking stitches, key view, rescan/adjust grid, long-press options (see [ideas-from-pattern-progress-trackers](./specs/ideas-from-pattern-progress-trackers.md) — items 1, 3, 7, 8, 10)
 
