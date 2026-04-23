@@ -33,6 +33,7 @@ dependencies:
   package_info_plus: ^9.0.1
   integration_test:
     sdk: flutter
+  desktop_drop: ^0.7.1
 
 dev_dependencies:
   path: ^1.9.1
