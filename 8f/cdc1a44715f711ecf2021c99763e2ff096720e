@@ -1,0 +1,23 @@
+lib/screens/color_picker_screen.dart
+  5c7994c9a13ad609 7-8,55,75-109,131-264,272,280-307,310-330,334-365,368-400
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "8fcdc1a44715f711ecf2021c99763e2ff096720e",
+  "prompts": {
+    "5c7994c9a13ad609": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f705c5c3-e687-4422-8179-cf5761bb58ec",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 287,
+      "total_deletions": 82,
+      "accepted_lines": 287,
+      "overriden_lines": 0
+    }
+  }
+}
