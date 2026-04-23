@@ -9,8 +9,18 @@ class DmcColor {
   const DmcColor(this.code, this.name, this.color, [this.anchorCode]);
 }
 
-DmcColor? dmcColorByCode(String code) =>
-    dmcColors.where((c) => c.code == code).firstOrNull;
+/// Returns the [DmcColor] for [code], following [dmcReplacements] if needed.
+///
+/// If [code] is not in [dmcColors] but has a non-empty replacement, the
+/// replacement code is looked up instead (one level of indirection).
+/// Returns null when the code is unknown or the replacement is empty / missing.
+DmcColor? dmcColorByCode(String code) {
+  final direct = dmcColors.where((c) => c.code == code).firstOrNull;
+  if (direct != null) return direct;
+  final replacement = dmcReplacements[code];
+  if (replacement == null || replacement.isEmpty) return null;
+  return dmcColors.where((c) => c.code == replacement).firstOrNull;
+}
 
 /// Maps discontinued DMC codes to their replacements.
 ///
