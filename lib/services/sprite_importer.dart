@@ -281,14 +281,16 @@ class SpriteImporter {
       return (color: c, l: l, a: a, b: bb);
     }).toList();
 
-    final out = img.Image(width: w, height: h);
+    // RGBA output — unset pixels are transparent (alpha=0), not opaque black.
+    final out = img.Image(width: w, height: h, numChannels: 4);
+    final hasAlpha = image.numChannels >= 4;
 
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
-        // Do not skip low-alpha pixels here: indexed PNGs (e.g. SNES rips) mark
-        // background palette entries as transparent even when the pixels carry
-        // real colour data. The drop threshold below handles background exclusion.
+        // Skip genuinely transparent pixels; the drop-threshold below handles
+        // opaque background colours that simply aren't in the palette.
+        if (hasAlpha && pixel.a.toInt() < 128) continue;
 
         final pixelLab =
             rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
@@ -348,7 +350,8 @@ class SpriteImporter {
     if (x1 <= x0 || y1 <= y0) return null;
 
     final hasAlpha = image.numChannels >= 4;
-    final out = img.Image(width: x1 - x0, height: y1 - y0);
+    // RGBA output so unset (dropped) pixels are transparent, not opaque black.
+    final out = img.Image(width: x1 - x0, height: y1 - y0, numChannels: 4);
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
@@ -536,14 +539,15 @@ class SpriteImporter {
     });
 
     final dropThreshold = 30.0 * _algorithmDropScale();
+    final hasAlpha = image.numChannels >= 4;
     final stitches = <Stitch>[];
 
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
-        // Do not skip low-alpha pixels: indexed PNGs (e.g. SNES rips) mark
-        // background entries as transparent even when they carry real colour.
-        // The drop threshold below provides background exclusion instead.
+        // Skip genuinely transparent pixels; the drop threshold below handles
+        // opaque background colours that aren't in the palette.
+        if (hasAlpha && pixel.a.toInt() < 128) continue;
 
         final pixelLab =
             rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());

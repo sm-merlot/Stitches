@@ -155,11 +155,14 @@ class _DmcImportPreviewScreenState extends State<DmcImportPreviewScreen> {
           child: const SizedBox.expand(),
         ),
         if (_previewBytes != null)
-          Center(
-            child: Image.memory(
-              _previewBytes!,
-              filterQuality: FilterQuality.none,
-              fit: BoxFit.contain,
+          InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 40.0,
+            child: Center(
+              child: Image.memory(
+                _previewBytes!,
+                filterQuality: FilterQuality.none,
+              ),
             ),
           )
         else
