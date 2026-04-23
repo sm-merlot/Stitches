@@ -33,12 +33,12 @@ jobs:
         if: steps.update.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}
           branch: chore/update-dmc-colors
           delete-branch: true
           commit-message: 'chore: update DMC color list from community source'
           title: 'chore: update DMC color list'
-          body-path: tool/.pr_body.md
+          body-path: ${{ steps.update.outputs.pr_body_path }}
           labels: |
             chore
             colors

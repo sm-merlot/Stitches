@@ -10,7 +10,7 @@
 //     revert the change if it turns out to be a false alarm.
 //   • Updates name/hex for colors whose details changed in the source.
 //   • Never overwrites existing Anchor codes; preserves them on updates.
-//   • Writes tool/.pr_body.md and sets GITHUB_OUTPUT for CI use.
+//   • Writes PR body to $RUNNER_TEMP (CI) or tool/.pr_body.md (local); sets GITHUB_OUTPUT.
 //
 // Usage:
 //   dart run tool/update_dmc_colors.dart
@@ -25,7 +25,11 @@ const _sourceUrl = 'https://raw.githubusercontent.com/'
     'main/src/assets/dmc-color-codes-names.json';
 
 const _colorsPath = 'lib/data/dmc_colors.dart';
-const _prBodyPath = 'tool/.pr_body.md';
+// In CI, write outside the checkout so create-pull-request doesn't commit it.
+String get _prBodyPath {
+  final runnerTemp = Platform.environment['RUNNER_TEMP'];
+  return runnerTemp != null ? '$runnerTemp/.pr_body.md' : 'tool/.pr_body.md';
+}
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
@@ -78,7 +82,7 @@ List<_Color> _parseSource(String json) {
     return _Color(
       (m['dmcCode'] as String).trim(),
       (m['dmcName'] as String).trim(),
-      (m['hexCode'] as String).trim().toUpperCase(),
+      (m['hexCode'] as String).trim().replaceFirst('#', '').toUpperCase(),
     );
   }).toList()
     ..sort());
@@ -113,12 +117,24 @@ Set<String> _parseReplacementKeys(String content) {
       .toSet();
 }
 
+// ─── Update record ────────────────────────────────────────────────────────────
+
+class _Update {
+  final _Color oldColor;
+  final _Color newColor;
+
+  const _Update(this.oldColor, this.newColor);
+
+  bool get hexChanged => oldColor.hex != newColor.hex;
+  bool get nameChanged => oldColor.name != newColor.name;
+}
+
 // ─── PR body ──────────────────────────────────────────────────────────────────
 
 void _writePrBody({
   required List<_Color> added,
   required List<_Color> retired,
-  required List<_Color> updated,
+  required List<_Update> updated,
 }) {
   final buf = StringBuffer();
 
@@ -135,7 +151,7 @@ void _writePrBody({
       if (added.isNotEmpty) '**${added.length} added**',
       if (retired.isNotEmpty)
         '**${retired.length} possibly retired** (removed from list, replacement TBD)',
-      if (updated.isNotEmpty) '**${updated.length} updated** (name or hex changed)',
+      if (updated.isNotEmpty) '**${updated.length} updated**',
     ];
     buf.writeln(parts.join(' · '));
   }
@@ -167,11 +183,42 @@ void _writePrBody({
   }
 
   if (updated.isNotEmpty) {
-    buf.writeln('\n### ✏️ Name or hex updated\n');
-    buf.writeln('| DMC | Name | New Hex |');
-    buf.writeln('|-----|------|---------|');
-    for (final c in updated) {
-      buf.writeln('| ${c.code} | ${c.name} | `#${c.hex}` |');
+    final hexAndName = updated.where((u) => u.hexChanged && u.nameChanged).toList();
+    final hexOnly = updated.where((u) => u.hexChanged && !u.nameChanged).toList();
+    final nameOnly = updated.where((u) => u.nameChanged && !u.hexChanged).toList();
+
+    buf.writeln('\n### ✏️ Updated colors\n');
+
+    if (hexAndName.isNotEmpty) {
+      buf.writeln('#### Hex + name changed\n');
+      buf.writeln('| DMC | Old Name | New Name | Old Hex | New Hex |');
+      buf.writeln('|-----|----------|----------|---------|---------|');
+      for (final u in hexAndName) {
+        buf.writeln(
+            '| ${u.newColor.code} | ${u.oldColor.name} | ${u.newColor.name} | `#${u.oldColor.hex}` | `#${u.newColor.hex}` |');
+      }
+      buf.writeln();
+    }
+
+    if (hexOnly.isNotEmpty) {
+      buf.writeln('#### Hex only\n');
+      buf.writeln('| DMC | Name | Old Hex | New Hex |');
+      buf.writeln('|-----|------|---------|---------|');
+      for (final u in hexOnly) {
+        buf.writeln(
+            '| ${u.newColor.code} | ${u.newColor.name} | `#${u.oldColor.hex}` | `#${u.newColor.hex}` |');
+      }
+      buf.writeln();
+    }
+
+    if (nameOnly.isNotEmpty) {
+      buf.writeln('#### Name only\n');
+      buf.writeln('| DMC | Old Name | New Name | Hex |');
+      buf.writeln('|-----|----------|----------|-----|');
+      for (final u in nameOnly) {
+        buf.writeln(
+            '| ${u.newColor.code} | ${u.oldColor.name} | ${u.newColor.name} | `#${u.newColor.hex}` |');
+      }
     }
   }
 
@@ -225,11 +272,14 @@ Future<void> main() async {
       .toList();
 
   // Colors in both but with different name or hex in source.
-  final updated = currentColors.where((c) {
-    final s = sourceByCode[c.code];
-    if (s == null) return false;
-    return s.name != c.name || s.hex != c.hex;
-  }).toList();
+  final updated = currentColors
+      .where((c) {
+        final s = sourceByCode[c.code];
+        if (s == null) return false;
+        return s.name != c.name || s.hex != c.hex;
+      })
+      .map((c) => _Update(c, sourceByCode[c.code]!))
+      .toList();
 
   if (added.isEmpty && updated.isEmpty && retired.isEmpty) {
     print('No changes detected.');
@@ -299,4 +349,5 @@ Future<void> main() async {
 
   _writePrBody(added: added, retired: retired, updated: updated);
   _setOutput('has_changes', 'true');
+  _setOutput('pr_body_path', _prBodyPath);
 }
