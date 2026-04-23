@@ -38,7 +38,7 @@ jobs:
           delete-branch: true
           commit-message: 'chore: update DMC color list from community source'
           title: 'chore: update DMC color list'
-          body-path: tool/.pr_body.md
+          body-path: ${{ steps.update.outputs.pr_body_path }}
           labels: |
             chore
             colors

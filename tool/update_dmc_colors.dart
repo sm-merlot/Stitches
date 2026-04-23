@@ -10,7 +10,7 @@
 //     revert the change if it turns out to be a false alarm.
 //   • Updates name/hex for colors whose details changed in the source.
 //   • Never overwrites existing Anchor codes; preserves them on updates.
-//   • Writes tool/.pr_body.md and sets GITHUB_OUTPUT for CI use.
+//   • Writes PR body to $RUNNER_TEMP (CI) or tool/.pr_body.md (local); sets GITHUB_OUTPUT.
 //
 // Usage:
 //   dart run tool/update_dmc_colors.dart
@@ -25,7 +25,11 @@ const _sourceUrl = 'https://raw.githubusercontent.com/'
     'main/src/assets/dmc-color-codes-names.json';
 
 const _colorsPath = 'lib/data/dmc_colors.dart';
-const _prBodyPath = 'tool/.pr_body.md';
+// In CI, write outside the checkout so create-pull-request doesn't commit it.
+String get _prBodyPath {
+  final runnerTemp = Platform.environment['RUNNER_TEMP'];
+  return runnerTemp != null ? '$runnerTemp/.pr_body.md' : 'tool/.pr_body.md';
+}
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
@@ -299,4 +303,5 @@ Future<void> main() async {
 
   _writePrBody(added: added, retired: retired, updated: updated);
   _setOutput('has_changes', 'true');
+  _setOutput('pr_body_path', _prBodyPath);
 }
