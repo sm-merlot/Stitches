@@ -1,0 +1,23 @@
+.changeset/windows-file-association.md
+  29d97ae11345a820 6-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "28fa2fcdc595ca156e5dc29461a880c4cbddc698",
+  "prompts": {
+    "29d97ae11345a820": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b2b3434-43a6-4731-a109-6e58dc93d2b5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 0,
+      "accepted_lines": 36,
+      "overriden_lines": 0
+    }
+  }
+}
