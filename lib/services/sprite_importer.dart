@@ -282,9 +282,9 @@ class SpriteImporter {
   /// left-to-right or top-to-bottom depending on [horizontal].
   ///
   /// Assumes the strip is a clean, indexed PNG where every pixel within a slot
-  /// is the same uniform colour. A new slot is recorded the instant the midline
-  /// pixel differs from the previous slot by more than [_transitionThreshold]
-  /// CIE-76 ΔE units — no minimum run-length is required.
+  /// is the same uniform colour. A new slot is recorded whenever the midline
+  /// pixel has a different RGB value from the previous pixel — no colour-space
+  /// conversion or distance calculation is involved.
   ///
   /// Raw pixel values are returned without any averaging, quantisation, or DMC
   /// mapping so that downstream matching compares sprite pixels against the
@@ -297,17 +297,15 @@ class SpriteImporter {
     final y1 = region.bottom.round().clamp(0, image.height);
     if (x1 <= x0 || y1 <= y0) return [];
 
-    const _transitionThreshold = 15.0; // ΔE*76 — below this = same slot
-
     final colours = <Color>[];
-    LabColor? lastLab;
+    int? lastPacked;
 
     void processPixel(int x, int y) {
       final px = image.getPixel(x, y);
-      final lab = rgbToLab(px.r.toInt(), px.g.toInt(), px.b.toInt());
-      if (lastLab == null || labDistance(lab, lastLab!) > _transitionThreshold) {
+      final packed = (px.r.toInt() << 16) | (px.g.toInt() << 8) | px.b.toInt();
+      if (packed != lastPacked) {
         colours.add(Color.fromARGB(255, px.r.toInt(), px.g.toInt(), px.b.toInt()));
-        lastLab = lab;
+        lastPacked = packed;
       }
     }
 
