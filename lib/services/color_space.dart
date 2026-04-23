@@ -8,6 +8,10 @@ import 'dart:math' as math;
 /// CIE Lab is used throughout the app for perceptual colour comparison
 /// (matching DMC threads, contrast checks, palette merging) because Euclidean
 /// distance in sRGB is a poor proxy for perceived colour difference.
+///
+/// DMC thread matching uses [ciede2000] for the highest perceptual accuracy.
+/// CIE-76 helpers ([labDistance], [labDistanceSquared], [nearestLabIndex]) are
+/// retained for cases where speed matters more than precision.
 
 /// A record representing a CIE L*a*b* colour.
 typedef LabColor = (double l, double a, double b);
@@ -53,6 +57,105 @@ double labDistanceSquared(LabColor a, LabColor b) {
 /// CIE-76 ΔE between two Lab colours.
 double labDistance(LabColor a, LabColor b) =>
     math.sqrt(labDistanceSquared(a, b));
+
+// ── CIEDE2000 ────────────────────────────────────────────────────────────────
+
+/// CIEDE2000 ΔE between two CIE L*a*b* colours.
+///
+/// Significantly more perceptually accurate than CIE-76, particularly in:
+///   - Blue/violet regions (hue-rotation correction)
+///   - Dark/near-neutral colours (chroma and lightness weighting)
+///   - Saturated colours (hue-dependent SH term)
+///
+/// Uses the standard formula from Luo, Cui & Rigg (2001).
+/// Returns a value where ΔE ≈ 1 is just noticeable to the human eye.
+double ciede2000(LabColor lab1, LabColor lab2) {
+  final L1 = lab1.$1, a1 = lab1.$2, b1 = lab1.$3;
+  final L2 = lab2.$1, a2 = lab2.$2, b2 = lab2.$3;
+
+  // Step 1 — adjusted a' values (chroma-weighted hue rotation)
+  final C1ab = math.sqrt(a1 * a1 + b1 * b1);
+  final C2ab = math.sqrt(a2 * a2 + b2 * b2);
+  final Cabavg = (C1ab + C2ab) / 2.0;
+  final Cabavg7 = math.pow(Cabavg, 7).toDouble();
+  const p25_7 = 6103515625.0; // 25^7
+  final G = 0.5 * (1.0 - math.sqrt(Cabavg7 / (Cabavg7 + p25_7)));
+  final a1p = a1 * (1.0 + G);
+  final a2p = a2 * (1.0 + G);
+  final C1p = math.sqrt(a1p * a1p + b1 * b1);
+  final C2p = math.sqrt(a2p * a2p + b2 * b2);
+
+  // h' angle [0°, 360°)
+  double hprime(double ap, double bp) {
+    if (ap == 0.0 && bp == 0.0) return 0.0;
+    final h = math.atan2(bp, ap) * 180.0 / math.pi;
+    return h >= 0.0 ? h : h + 360.0;
+  }
+  final h1p = hprime(a1p, b1);
+  final h2p = hprime(a2p, b2);
+
+  // Step 2 — ΔL', ΔC', ΔH'
+  final dLp = L2 - L1;
+  final dCp = C2p - C1p;
+
+  final double dhp;
+  if (C1p * C2p == 0.0) {
+    dhp = 0.0;
+  } else if ((h2p - h1p).abs() <= 180.0) {
+    dhp = h2p - h1p;
+  } else if (h2p - h1p > 180.0) {
+    dhp = h2p - h1p - 360.0;
+  } else {
+    dhp = h2p - h1p + 360.0;
+  }
+  final dHp =
+      2.0 * math.sqrt(C1p * C2p) * math.sin(dhp * math.pi / 360.0);
+
+  // Step 3 — arithmetic means
+  final Lp_avg = (L1 + L2) / 2.0;
+  final Cp_avg = (C1p + C2p) / 2.0;
+
+  final double hp_avg;
+  if (C1p * C2p == 0.0) {
+    hp_avg = h1p + h2p;
+  } else if ((h1p - h2p).abs() <= 180.0) {
+    hp_avg = (h1p + h2p) / 2.0;
+  } else if (h1p + h2p < 360.0) {
+    hp_avg = (h1p + h2p + 360.0) / 2.0;
+  } else {
+    hp_avg = (h1p + h2p - 360.0) / 2.0;
+  }
+
+  // Step 4 — weighting functions
+  double deg(double d) => d * math.pi / 180.0;
+
+  final T = 1.0
+      - 0.17 * math.cos(deg(hp_avg - 30.0))
+      + 0.24 * math.cos(deg(2.0 * hp_avg))
+      + 0.32 * math.cos(deg(3.0 * hp_avg + 6.0))
+      - 0.20 * math.cos(deg(4.0 * hp_avg - 63.0));
+
+  final SL = 1.0 +
+      0.015 *
+          math.pow(Lp_avg - 50.0, 2) /
+          math.sqrt(20.0 + math.pow(Lp_avg - 50.0, 2));
+  final SC = 1.0 + 0.045 * Cp_avg;
+  final SH = 1.0 + 0.015 * Cp_avg * T;
+
+  // Rotation term
+  final Cp_avg7 = math.pow(Cp_avg, 7).toDouble();
+  final RC = 2.0 * math.sqrt(Cp_avg7 / (Cp_avg7 + p25_7));
+  final dTheta =
+      30.0 * math.exp(-math.pow((hp_avg - 275.0) / 25.0, 2).toDouble());
+  final RT = -math.sin(deg(2.0 * dTheta)) * RC;
+
+  return math.sqrt(
+    math.pow(dLp / SL, 2) +
+        math.pow(dCp / SC, 2) +
+        math.pow(dHp / SH, 2) +
+        RT * (dCp / SC) * (dHp / SH),
+  );
+}
 
 /// Returns the index of the entry in [labValues] whose Lab distance to
 /// [target] is smallest. Returns `-1` if [labValues] is empty.

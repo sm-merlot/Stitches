@@ -23,11 +23,16 @@ typedef _LabEntry = ({
 });
 
 /// Service that converts image pixel regions into cross-stitch data by matching
-/// each pixel to the nearest DMC thread colour in CIE Lab space.
+/// each pixel to the nearest DMC thread colour using CIEDE2000.
 class SpriteImporter {
   SpriteImporter._();
 
   static List<_LabEntry>? _palette;
+
+  /// Per-pixel match cache keyed by packed RGB (bits 23-0).
+  /// Sprite sheets typically reuse a small set of colours, so cache hit rates
+  /// are very high and make the CIEDE2000 cost negligible in practice.
+  static final Map<int, DmcColor?> _matchCache = {};
 
   // ── Lab palette ─────────────────────────────────────────────────────────────
 
@@ -43,20 +48,26 @@ class SpriteImporter {
 
   // ── Public API ───────────────────────────────────────────────────────────────
 
-  /// Matches a pixel to the nearest DMC colour by CIE Lab Euclidean distance.
+  /// Matches a pixel to the nearest DMC colour using CIEDE2000.
+  ///
+  /// Results are cached by RGB value — repeated colours (common in sprite art)
+  /// are free after the first lookup.
+  ///
   /// Returns null for transparent pixels (alpha < 128).
   static DmcColor? matchPixel(int r, int g, int b, int a) {
     if (a < 128) return null;
+    final key = (r << 16) | (g << 8) | b;
+    return _matchCache.putIfAbsent(key, () => _matchUncached(r, g, b));
+  }
+
+  static DmcColor? _matchUncached(int r, int g, int b) {
     final palette = _labPalette();
-    final (pl, pa, pb) = rgbToLab(r, g, b);
+    final pixelLab = rgbToLab(r, g, b);
 
     double best = double.infinity;
     _LabEntry? bestEntry;
     for (final entry in palette) {
-      final dl = pl - entry.l;
-      final da = pa - entry.a;
-      final db = pb - entry.b;
-      final dist = dl * dl + da * da + db * db;
+      final dist = ciede2000(pixelLab, (entry.l, entry.a, entry.b));
       if (dist < best) {
         best = dist;
         bestEntry = entry;
@@ -128,14 +139,12 @@ class SpriteImporter {
         for (final code in codeCounts.keys) {
           if (frequent.contains(code)) continue;
           final src = labFor[code]!;
+          final srcLab = (src.l, src.a, src.b);
           double best = double.infinity;
           String bestCode = frequent.first;
           for (final fCode in frequent) {
             final dst = labFor[fCode]!;
-            final dl = src.l - dst.l;
-            final da = src.a - dst.a;
-            final db = src.b - dst.b;
-            final dist = dl * dl + da * da + db * db;
+            final dist = ciede2000(srcLab, (dst.l, dst.a, dst.b));
             if (dist < best) {
               best = dist;
               bestCode = fCode;
@@ -217,9 +226,6 @@ class SpriteImporter {
       return (color: c, l: l, a: a, b: bb);
     }).toList();
 
-    // Squared threshold — avoids sqrt per pixel.
-    final dropSq = dropThreshold * dropThreshold;
-
     final out = img.Image(width: w, height: h);
 
     for (var py = y0; py < y1; py++) {
@@ -229,17 +235,14 @@ class SpriteImporter {
         // background palette entries as transparent even when the pixels carry
         // real colour data. The drop threshold below handles background exclusion.
 
-        final (pl, pa, pb) =
+        final pixelLab =
             rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
 
         double best = double.infinity;
         int bestIdx = 0;
         for (int i = 0; i < paletteLab.length; i++) {
           final entry = paletteLab[i];
-          final dl = pl - entry.l;
-          final da = pa - entry.a;
-          final db = pb - entry.b;
-          final dist = dl * dl + da * da + db * db;
+          final dist = ciede2000(pixelLab, (entry.l, entry.a, entry.b));
           if (dist < best) {
             best = dist;
             bestIdx = i;
@@ -247,7 +250,7 @@ class SpriteImporter {
         }
 
         // Drop pixel if it doesn't closely match any palette colour (= background).
-        if (best > dropSq) continue;
+        if (best > dropThreshold) continue;
 
         // Use outputPalette positionally if provided, else matched colour.
         final Color outColor;
@@ -274,8 +277,17 @@ class SpriteImporter {
   // ── Palette strip detection ──────────────────────────────────────────────────
 
   /// Detects colour blocks in a palette strip region.
+  ///
   /// Returns list of dominant colours (one per slot), ordered left-to-right or
   /// top-to-bottom depending on [horizontal].
+  ///
+  /// Each slot's representative colour is the average of ALL pixels in that
+  /// column (horizontal) or row (vertical), which is significantly more robust
+  /// than sampling a single midline scan when images have anti-aliasing, JPEG
+  /// artefacts, or partially-transparent edges.
+  ///
+  /// Block boundaries are detected using CIE-76 Lab distance to avoid the
+  /// quantisation artefacts of the previous sRGB + 16-step grid approach.
   static List<Color> detectPaletteStrip(
       img.Image image, Rect region, bool horizontal) {
     final x0 = region.left.round().clamp(0, image.width - 1);
@@ -284,51 +296,88 @@ class SpriteImporter {
     final y1 = region.bottom.round().clamp(0, image.height);
     if (x1 <= x0 || y1 <= y0) return [];
 
-    final colours = <Color>[];
-    Color? lastColour;
-    int consecutiveCount = 0;
-    const minBlockWidth = 3;
+    // Build a list of average Lab values along the scan axis.
+    // For horizontal strips: one averaged Lab value per column (x).
+    // For vertical strips:   one averaged Lab value per row    (y).
+    final List<LabColor> scanLab;
+    final List<Color> scanAvgColor;
 
-    void processPixel(int x, int y) {
-      final pixel = image.getPixel(x, y);
-      final c = Color.fromARGB(
-          pixel.a.toInt(), pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
-      final quantized = _quantizeColor(c);
-      if (lastColour == null || _colorDistance(quantized, lastColour!) > 20) {
-        if (consecutiveCount >= minBlockWidth && lastColour != null) {
-          colours.add(lastColour!);
+    if (horizontal) {
+      scanLab = List.generate(x1 - x0, (xi) {
+        double sumL = 0, sumA = 0, sumB = 0;
+        for (int y = y0; y < y1; y++) {
+          final px = image.getPixel(x0 + xi, y);
+          final lab = rgbToLab(px.r.toInt(), px.g.toInt(), px.b.toInt());
+          sumL += lab.$1; sumA += lab.$2; sumB += lab.$3;
         }
-        lastColour = quantized;
+        final n = (y1 - y0).toDouble();
+        return (sumL / n, sumA / n, sumB / n);
+      });
+      scanAvgColor = List.generate(x1 - x0, (xi) {
+        double sumR = 0, sumG = 0, sumB = 0;
+        for (int y = y0; y < y1; y++) {
+          final px = image.getPixel(x0 + xi, y);
+          sumR += px.r.toDouble(); sumG += px.g.toDouble(); sumB += px.b.toDouble();
+        }
+        final n = (y1 - y0).toDouble();
+        return Color.fromARGB(
+            255, (sumR / n).round(), (sumG / n).round(), (sumB / n).round());
+      });
+    } else {
+      scanLab = List.generate(y1 - y0, (yi) {
+        double sumL = 0, sumA = 0, sumB = 0;
+        for (int x = x0; x < x1; x++) {
+          final px = image.getPixel(x, y0 + yi);
+          final lab = rgbToLab(px.r.toInt(), px.g.toInt(), px.b.toInt());
+          sumL += lab.$1; sumA += lab.$2; sumB += lab.$3;
+        }
+        final n = (x1 - x0).toDouble();
+        return (sumL / n, sumA / n, sumB / n);
+      });
+      scanAvgColor = List.generate(y1 - y0, (yi) {
+        double sumR = 0, sumG = 0, sumB = 0;
+        for (int x = x0; x < x1; x++) {
+          final px = image.getPixel(x, y0 + yi);
+          sumR += px.r.toDouble(); sumG += px.g.toDouble(); sumB += px.b.toDouble();
+        }
+        final n = (x1 - x0).toDouble();
+        return Color.fromARGB(
+            255, (sumR / n).round(), (sumG / n).round(), (sumB / n).round());
+      });
+    }
+
+    // Run-length block detection on the averaged Lab values.
+    // A new block starts when CIE-76 distance exceeds [_blockTransitionThreshold].
+    // CIE-76 is used here (not CIEDE2000) because we're detecting gross colour
+    // changes between palette slots, not making perceptual quality judgements.
+    const _blockTransitionThreshold = 15.0; // ΔE*76 units
+    const _minBlockWidth = 3;
+
+    final colours = <Color>[];
+    LabColor? lastLab;
+    Color? lastColor;
+    int consecutiveCount = 0;
+
+    for (int i = 0; i < scanLab.length; i++) {
+      final lab = scanLab[i];
+      if (lastLab == null ||
+          labDistance(lab, lastLab) > _blockTransitionThreshold) {
+        if (consecutiveCount >= _minBlockWidth && lastColor != null) {
+          colours.add(lastColor);
+        }
+        lastLab = lab;
+        lastColor = scanAvgColor[i];
         consecutiveCount = 1;
       } else {
         consecutiveCount++;
       }
     }
-
-    if (horizontal) {
-      final midY = ((y0 + y1) / 2).round().clamp(y0, y1 - 1);
-      for (int x = x0; x < x1; x++) { processPixel(x, midY); }
-    } else {
-      final midX = ((x0 + x1) / 2).round().clamp(x0, x1 - 1);
-      for (int y = y0; y < y1; y++) { processPixel(midX, y); }
-    }
-    if (consecutiveCount >= minBlockWidth && lastColour != null) {
-      colours.add(lastColour!);
+    if (consecutiveCount >= _minBlockWidth && lastColor != null) {
+      colours.add(lastColor);
     }
     return colours;
   }
 
-  static Color _quantizeColor(Color c) {
-    int q(double v) => ((v * 255 / 16).round() * 16).clamp(0, 255);
-    return Color.fromARGB(255, q(c.r), q(c.g), q(c.b));
-  }
-
-  static double _colorDistance(Color a, Color b) {
-    final dr = (a.r - b.r) * 255;
-    final dg = (a.g - b.g) * 255;
-    final db = (a.b - b.b) * 255;
-    return sqrt(dr * dr + dg * dg + db * db);
-  }
 
   /// Imports a crop region and builds palettes from detected palette strips.
   ///
@@ -450,7 +499,7 @@ class SpriteImporter {
       return (thread: dmcThreads[i], l: l, a: a, b: bb);
     });
 
-    const dropSq = 30.0 * 30.0;
+    const dropThreshold = 30.0; // CIEDE2000 units
     final stitches = <Stitch>[];
 
     for (var py = y0; py < y1; py++) {
@@ -460,23 +509,20 @@ class SpriteImporter {
         // background entries as transparent even when they carry real colour.
         // The drop threshold below provides background exclusion instead.
 
-        final (pl, pa, pb) =
+        final pixelLab =
             rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
 
         double best = double.infinity;
         Thread? bestThread;
         for (final entry in stripLab) {
-          final dl = pl - entry.l;
-          final da = pa - entry.a;
-          final db = pb - entry.b;
-          final dist = dl * dl + da * da + db * db;
+          final dist = ciede2000(pixelLab, (entry.l, entry.a, entry.b));
           if (dist < best) {
             best = dist;
             bestThread = entry.thread;
           }
         }
 
-        if (best > dropSq || bestThread == null) continue;
+        if (best > dropThreshold || bestThread == null) continue;
 
         stitches.add(FullStitch(
             x: px - x0, y: py - y0, threadId: bestThread.dmcCode));

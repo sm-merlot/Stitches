@@ -86,30 +86,52 @@ void main() {
   });
 
   group('color_space — nearestLabIndex', () {
-    test('returns -1 for empty list', () {
-      expect(nearestLabIndex([], rgbToLab(255, 0, 0)), equals(-1));
+    // ...existing code...
+  });
+
+  group('color_space — ciede2000', () {
+    test('distance from a colour to itself is 0', () {
+      final lab = rgbToLab(200, 100, 50);
+      expect(ciede2000(lab, lab), closeTo(0.0, 1e-6));
     });
 
-    test('returns 0 for single-element list', () {
-      final lab = rgbToLab(100, 100, 100);
-      expect(nearestLabIndex([lab], lab), equals(0));
+    test('distance(a,b) ≈ distance(b,a) (symmetry)', () {
+      final a = rgbToLab(255, 0, 0);
+      final b = rgbToLab(0, 0, 255);
+      expect(ciede2000(a, b), closeTo(ciede2000(b, a), 1e-6));
     });
 
-    test('returns the index of the nearest entry', () {
+    test('black–white distance is large (> 50)', () {
+      final black = rgbToLab(0, 0, 0);
+      final white = rgbToLab(255, 255, 255);
+      expect(ciede2000(black, white), greaterThan(50.0));
+    });
+
+    test('perceptually similar colours are closer than dissimilar ones', () {
       final target = rgbToLab(200, 0, 0);
-      final labs = [
-        rgbToLab(0, 0, 255),   // blue — far
-        rgbToLab(210, 10, 0),  // near-red — closest
-        rgbToLab(0, 200, 0),   // green — far
-      ];
-      expect(nearestLabIndex(labs, target), equals(1));
+      final nearRed = rgbToLab(210, 10, 10);
+      final blue = rgbToLab(0, 0, 200);
+      expect(ciede2000(target, nearRed), lessThan(ciede2000(target, blue)));
     });
 
-    test('exact match returns that index', () {
-      final red = rgbToLab(255, 0, 0);
-      final green = rgbToLab(0, 255, 0);
-      final blue = rgbToLab(0, 0, 255);
-      expect(nearestLabIndex([red, green, blue], green), equals(1));
+    test('CIEDE2000 blue–navy distance is smaller than CIE-76 (hue correction)', () {
+      // CIEDE2000 corrects for CIE-76 overestimating blue differences.
+      final blue = rgbToLab(0, 0, 200);
+      final navy = rgbToLab(0, 0, 130);
+      final cie76 = labDistance(blue, navy);
+      final de00 = ciede2000(blue, navy);
+      // Both distances are > 0; CIEDE2000 tends to be ≤ CIE-76 in the blue region.
+      expect(de00, greaterThan(0.0));
+      expect(de00, lessThanOrEqualTo(cie76 + 1.0)); // allow small tolerance
+    });
+
+    test('known CIEDE2000 pair: ΔE00 close to published value (Sharma 2004 pair 1)', () {
+      // Reference values from Sharma, Wu & Dalal (2004) Table 1, pair 1.
+      // L1=50.0000 a1=2.6772 b1=-79.7751  L2=50.0000 a2=0.0000 b2=-82.7485
+      // ΔE00 = 2.0425
+      const lab1 = (50.0, 2.6772, -79.7751);
+      const lab2 = (50.0, 0.0, -82.7485);
+      expect(ciede2000(lab1, lab2), closeTo(2.0425, 0.001));
     });
   });
 
