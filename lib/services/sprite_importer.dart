@@ -34,6 +34,37 @@ class SpriteImporter {
   /// are very high and make the CIEDE2000 cost negligible in practice.
   static final Map<int, DmcColor?> _matchCache = {};
 
+  /// Active colour-distance algorithm.  Changing this clears [_matchCache].
+  static MatchAlgorithm _matchAlgorithm = MatchAlgorithm.ciede2000;
+
+  static MatchAlgorithm get matchAlgorithm => _matchAlgorithm;
+  static set matchAlgorithm(MatchAlgorithm algo) {
+    if (_matchAlgorithm != algo) {
+      _matchAlgorithm = algo;
+      _matchCache.clear(); // cached distances are algorithm-specific
+    }
+  }
+
+  // ── Distance dispatch ────────────────────────────────────────────────────────
+
+  /// Dispatches to the active algorithm.
+  /// [pLab]/[eLab]: precomputed Lab.  [pr..pb]/[er..eb]: raw RGB 0–255.
+  static double _dist(
+    LabColor pLab, int pr, int pg, int pb,
+    LabColor eLab, int er, int eg, int eb,
+  ) => switch (_matchAlgorithm) {
+    MatchAlgorithm.ciede2000 => ciede2000(pLab, eLab),
+    MatchAlgorithm.cie94     => cie94(pLab, eLab),
+    MatchAlgorithm.cie76     => labDistance(pLab, eLab),
+    MatchAlgorithm.redmean   => redmeanDist(pr, pg, pb, er, eg, eb),
+  };
+
+  /// Scales a CIEDE2000-equivalent drop threshold to the active algorithm's
+  /// distance scale.  Lab-based algorithms share the same ≈0–100 range;
+  /// redmean's black→white range is ≈765, so the factor is 765/100 = 7.65.
+  static double _algorithmDropScale() =>
+      _matchAlgorithm == MatchAlgorithm.redmean ? 7.65 : 1.0;
+
   // ── Lab palette ─────────────────────────────────────────────────────────────
 
   static List<_LabEntry> _labPalette() {
@@ -67,13 +98,37 @@ class SpriteImporter {
     double best = double.infinity;
     _LabEntry? bestEntry;
     for (final entry in palette) {
-      final dist = ciede2000(pixelLab, (entry.l, entry.a, entry.b));
+      final er = (entry.color.r * 255).round();
+      final eg = (entry.color.g * 255).round();
+      final eb = (entry.color.b * 255).round();
+      final dist = _dist(pixelLab, r, g, b, (entry.l, entry.a, entry.b), er, eg, eb);
       if (dist < best) {
         best = dist;
         bestEntry = entry;
       }
     }
     return bestEntry == null ? null : dmcColorByCode(bestEntry.code);
+  }
+
+  /// Returns the [count] DMC colours nearest to (r, g, b) under the active
+  /// algorithm, sorted ascending by distance.  Useful for presenting
+  /// user-selectable alternatives.
+  static List<DmcColor> nearestDmcColours(int r, int g, int b, {int count = 12}) {
+    final palette = _labPalette();
+    final pixelLab = rgbToLab(r, g, b);
+    final ranked = palette.map((entry) {
+      final er = (entry.color.r * 255).round();
+      final eg = (entry.color.g * 255).round();
+      final eb = (entry.color.b * 255).round();
+      final dist = _dist(pixelLab, r, g, b, (entry.l, entry.a, entry.b), er, eg, eb);
+      return (dist: dist, code: entry.code);
+    }).toList()
+      ..sort((a, b) => a.dist.compareTo(b.dist));
+    return ranked
+        .take(count)
+        .map((e) => dmcColorByCode(e.code))
+        .whereType<DmcColor>()
+        .toList();
   }
 
   /// Imports a rectangular region from [image] (image-space coordinates) as
@@ -242,7 +297,13 @@ class SpriteImporter {
         int bestIdx = 0;
         for (int i = 0; i < paletteLab.length; i++) {
           final entry = paletteLab[i];
-          final dist = ciede2000(pixelLab, (entry.l, entry.a, entry.b));
+          final er = (entry.color.r * 255).round();
+          final eg = (entry.color.g * 255).round();
+          final eb = (entry.color.b * 255).round();
+          final dist = _dist(
+            pixelLab, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(),
+            (entry.l, entry.a, entry.b), er, eg, eb,
+          );
           if (dist < best) {
             best = dist;
             bestIdx = i;
@@ -250,7 +311,7 @@ class SpriteImporter {
         }
 
         // Drop pixel if it doesn't closely match any palette colour (= background).
-        if (best > dropThreshold) continue;
+        if (best > dropThreshold * _algorithmDropScale()) continue;
 
         // Use outputPalette positionally if provided, else matched colour.
         final Color outColor;
@@ -271,6 +332,40 @@ class SpriteImporter {
       }
     }
 
+    return Uint8List.fromList(img.encodePng(out));
+  }
+
+  /// Renders the crop [region] with every pixel replaced by its nearest DMC
+  /// colour under the active algorithm.  Uses [matchPixel]'s cache, so
+  /// repeated calls with the same region and algorithm are fast.
+  ///
+  /// Returns null if the region is empty or out of bounds.
+  static Uint8List? renderAsDmcMatched(img.Image image, Rect region) {
+    final x0 = region.left.round().clamp(0, image.width);
+    final y0 = region.top.round().clamp(0, image.height);
+    final x1 = region.right.round().clamp(x0, image.width);
+    final y1 = region.bottom.round().clamp(y0, image.height);
+    if (x1 <= x0 || y1 <= y0) return null;
+
+    final hasAlpha = image.numChannels >= 4;
+    final out = img.Image(width: x1 - x0, height: y1 - y0);
+    for (var py = y0; py < y1; py++) {
+      for (var px = x0; px < x1; px++) {
+        final pixel = image.getPixel(px, py);
+        final match = matchPixel(
+          pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(),
+          hasAlpha ? pixel.a.toInt() : 255,
+        );
+        if (match == null) continue;
+        out.setPixelRgba(
+          px - x0, py - y0,
+          (match.color.r * 255).round(),
+          (match.color.g * 255).round(),
+          (match.color.b * 255).round(),
+          255,
+        );
+      }
+    }
     return Uint8List.fromList(img.encodePng(out));
   }
 
@@ -433,14 +528,14 @@ class SpriteImporter {
 
     final stripLab = List.generate(rawStripColors.length, (i) {
       final c = rawStripColors[i];
-      final r = (c.r * 255).round();
-      final g = (c.g * 255).round();
-      final b = (c.b * 255).round();
-      final (l, a, bb) = rgbToLab(r, g, b);
-      return (thread: dmcThreads[i], l: l, a: a, b: bb);
+      final ri = (c.r * 255).round();
+      final gi = (c.g * 255).round();
+      final bi = (c.b * 255).round();
+      final (l, a, bl) = rgbToLab(ri, gi, bi);
+      return (thread: dmcThreads[i], ri: ri, gi: gi, bi: bi, l: l, a: a, bl: bl);
     });
 
-    const dropThreshold = 30.0; // CIEDE2000 units
+    final dropThreshold = 30.0 * _algorithmDropScale();
     final stitches = <Stitch>[];
 
     for (var py = y0; py < y1; py++) {
@@ -456,7 +551,11 @@ class SpriteImporter {
         double best = double.infinity;
         Thread? bestThread;
         for (final entry in stripLab) {
-          final dist = ciede2000(pixelLab, (entry.l, entry.a, entry.b));
+          final eLab = (entry.l, entry.a, entry.bl);
+          final dist = _dist(
+            pixelLab, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(),
+            eLab, entry.ri, entry.gi, entry.bi,
+          );
           if (dist < best) {
             best = dist;
             bestThread = entry.thread;

@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 
 import '../providers/editor/editor_provider.dart';
+import '../services/color_space.dart';
 import '../services/sprite_importer.dart';
 import '../utils/snackbars.dart';
 import '../widgets/sprite_sheet_painter.dart';
@@ -16,6 +17,10 @@ import '../widgets/sprite_sheet_painter.dart';
 // ── Corner handle types ───────────────────────────────────────────────────────
 
 enum _Corner { tl, tr, bl, br }
+
+// ── Preview mode ──────────────────────────────────────────────────────────────
+
+enum _PreviewMode { raw, palette, dmc }
 
 sealed class _CornerHit {
   final _Corner corner;
@@ -106,9 +111,13 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
 
   // ── Preview ──────────────────────────────────────────────────────────────────
   Uint8List? _cropPreviewBytes;
+  Uint8List? _dmcPreviewBytes;
   final List<Uint8List?> _palettePreviewBytes = [];
   int? _activePaletteIndex;
-  bool _showRaw = false;
+  _PreviewMode _previewMode = _PreviewMode.palette;
+
+  // ── Match algorithm ───────────────────────────────────────────────────────────
+  MatchAlgorithm _matchAlgorithm = MatchAlgorithm.ciede2000;
 
   // ── Panel width ───────────────────────────────────────────────────────────────
   double _panelWidth = 260.0;
@@ -166,6 +175,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     _confirmedStrips.clear();
     _detectedStripColours.clear();
     _palettePreviewBytes.clear();
+    _dmcPreviewBytes = null;
     _activePaletteIndex = null;
   }
 
@@ -295,6 +305,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   void _refreshCropPreview() {
     if (!_hasCrop || _image == null) {
       _cropPreviewBytes = null;
+      _dmcPreviewBytes = null;
       return;
     }
     final crop = Rect.fromPoints(_cropStart!, _cropEnd!).intersect(
@@ -330,6 +341,9 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     } else {
       _cropPreviewBytes = Uint8List.fromList(img.encodePng(cropped));
     }
+    // DMC preview: replace each pixel with its closest DMC thread colour.
+    _dmcPreviewBytes = SpriteImporter.renderAsDmcMatched(
+        _image!, Rect.fromPoints(_cropStart!, _cropEnd!));
   }
 
   /// Regenerates all palette preview images from current crop + strip colours.
@@ -363,6 +377,17 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         _palettePreviewBytes.add(bytes);
       }
     }
+  }
+
+  /// Called when the user picks a different matching algorithm.
+  /// Clears the match cache and regenerates all previews in real time.
+  void _onAlgorithmChanged(MatchAlgorithm algo) {
+    setState(() {
+      _matchAlgorithm = algo;
+      SpriteImporter.matchAlgorithm = algo; // clears cache
+      _refreshCropPreview();
+      _regeneratePalettePreviews();
+    });
   }
 
   /// Refreshes detected colours and preview for strip at [i] after resize.
@@ -1049,17 +1074,27 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   }
 
   Widget _buildPreviewSection(ThemeData theme) {
-    // Decide what to display.
+    final hasStrips = _confirmedStrips.isNotEmpty;
+
+    // Decide what image to display.
     Uint8List? previewBytes;
-    if (_showRaw || _activePaletteIndex == null) {
-      previewBytes = _cropPreviewBytes;
-    } else if (_activePaletteIndex! < _palettePreviewBytes.length) {
-      previewBytes = _palettePreviewBytes[_activePaletteIndex!];
+    switch (_previewMode) {
+      case _PreviewMode.raw:
+        previewBytes = _cropPreviewBytes;
+      case _PreviewMode.dmc:
+        previewBytes = _dmcPreviewBytes;
+      case _PreviewMode.palette:
+        if (_activePaletteIndex != null &&
+            _activePaletteIndex! < _palettePreviewBytes.length) {
+          previewBytes = _palettePreviewBytes[_activePaletteIndex!];
+        } else {
+          previewBytes = _cropPreviewBytes;
+        }
     }
 
     final placeholder = !_hasCrop
         ? 'Draw a crop region to preview'
-        : (_activePaletteIndex == null
+        : (_previewMode == _PreviewMode.palette && !hasStrips
             ? 'Add a palette strip to see\npalette-filtered preview'
             : 'No preview available');
 
@@ -1073,12 +1108,13 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // ── Image ──────────────────────────────────────────────────────────
           Text('Preview',
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 6),
           SizedBox(
-            height: 180,
+            height: 160,
             child: Container(
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
@@ -1086,36 +1122,69 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: previewBytes != null
-                  ? Image.memory(
-                      previewBytes,
-                      filterQuality: FilterQuality.none,
-                      fit: BoxFit.contain,
-                    )
+                  ? Image.memory(previewBytes,
+                      filterQuality: FilterQuality.none, fit: BoxFit.contain)
                   : Center(
-                      child: Text(
-                        placeholder,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.disabledColor),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                      child: Text(placeholder,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.disabledColor),
+                          textAlign: TextAlign.center)),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
+
+          // ── Preview mode toggle ─────────────────────────────────────────────
+          SegmentedButton<_PreviewMode>(
+            segments: [
+              const ButtonSegment(value: _PreviewMode.raw, label: Text('Raw')),
+              ButtonSegment(
+                value: _PreviewMode.palette,
+                label: const Text('Palette'),
+                enabled: hasStrips,
+              ),
+              const ButtonSegment(value: _PreviewMode.dmc, label: Text('DMC')),
+            ],
+            selected: {_previewMode},
+            onSelectionChanged: (s) => setState(() => _previewMode = s.first),
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              textStyle: WidgetStateProperty.all(
+                  const TextStyle(fontSize: 11)),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // ── Algorithm dropdown ──────────────────────────────────────────────
           Row(
             children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: Checkbox(
-                  value: _showRaw,
-                  onChanged: (v) => setState(() => _showRaw = v ?? false),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
+              Text('Algorithm',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<MatchAlgorithm>(
+                  initialValue: _matchAlgorithm,
+                  isDense: true,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    isDense: true,
+                  ),
+                  style: theme.textTheme.bodySmall,
+                  items: MatchAlgorithm.values
+                      .map((a) => DropdownMenuItem(
+                            value: a,
+                            child: Text(matchAlgorithmLabel(a),
+                                overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  onChanged: (a) {
+                    if (a != null) _onAlgorithmChanged(a);
+                  },
                 ),
               ),
-              const SizedBox(width: 6),
-              Text('Show raw', style: theme.textTheme.bodySmall),
             ],
           ),
         ],

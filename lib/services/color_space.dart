@@ -157,6 +157,69 @@ double ciede2000(LabColor lab1, LabColor lab2) {
   );
 }
 
+// ── Additional distance metrics ──────────────────────────────────────────────
+
+/// CIE94 ΔE between two CIE L*a*b* colours.
+///
+/// Intermediate accuracy between CIE-76 and CIEDE2000. Uses the graphic-arts
+/// weighting factors (kL = kC = kH = 1, K1 = 0.045, K2 = 0.015).
+double cie94(LabColor lab1, LabColor lab2) {
+  final dL = lab1.$1 - lab2.$1;
+  final C1 = math.sqrt(lab1.$2 * lab1.$2 + lab1.$3 * lab1.$3);
+  final C2 = math.sqrt(lab2.$2 * lab2.$2 + lab2.$3 * lab2.$3);
+  final dC = C1 - C2;
+  final da = lab1.$2 - lab2.$2;
+  final db = lab1.$3 - lab2.$3;
+  final dH = math.sqrt(math.max(0.0, da * da + db * db - dC * dC));
+  final SC = 1.0 + 0.045 * C1;
+  final SH = 1.0 + 0.015 * C1;
+  return math.sqrt(dL * dL + math.pow(dC / SC, 2) + math.pow(dH / SH, 2));
+}
+
+/// Redmean weighted sRGB distance between two colours (0–255 ints).
+///
+/// Fast — requires no colour-space conversion. Weights the R and B channels
+/// by the average redness of the two colours to approximate eye sensitivity.
+double redmeanDist(int r1, int g1, int b1, int r2, int g2, int b2) {
+  final rBar = (r1 + r2) / 2.0;
+  final dR = (r1 - r2).toDouble();
+  final dG = (g1 - g2).toDouble();
+  final dB = (b1 - b2).toDouble();
+  return math.sqrt(
+    (2.0 + rBar / 256.0) * dR * dR +
+    4.0 * dG * dG +
+    (2.0 + (255.0 - rBar) / 256.0) * dB * dB,
+  );
+}
+
+// ── Algorithm enum ────────────────────────────────────────────────────────────
+
+/// Selectable colour-distance algorithms for DMC thread matching.
+///
+/// All algorithms operate on the ~450-colour DMC palette. The chosen algorithm
+/// affects both the live preview and the final imported thread assignments.
+enum MatchAlgorithm {
+  /// CIEDE2000 — industry-standard perceptual distance (recommended).
+  ciede2000,
+
+  /// CIE94 — good accuracy, simpler than CIEDE2000.
+  cie94,
+
+  /// CIE-76 — simple Lab Euclidean; fast but less accurate in blues/darks.
+  cie76,
+
+  /// Weighted sRGB (redmean) — no Lab conversion; fast for similar colours.
+  redmean,
+}
+
+/// Human-readable label for each [MatchAlgorithm].
+String matchAlgorithmLabel(MatchAlgorithm algo) => switch (algo) {
+      MatchAlgorithm.ciede2000 => 'CIEDE2000 (recommended)',
+      MatchAlgorithm.cie94     => 'CIE94',
+      MatchAlgorithm.cie76     => 'CIE-76',
+      MatchAlgorithm.redmean   => 'Weighted sRGB',
+    };
+
 /// Returns the index of the entry in [labValues] whose Lab distance to
 /// [target] is smallest. Returns `-1` if [labValues] is empty.
 int nearestLabIndex(List<LabColor> labValues, LabColor target) {
