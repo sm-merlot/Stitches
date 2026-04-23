@@ -1,0 +1,38 @@
+tool/update_dmc_colors.dart
+  2da56470a48d6922 3,6-7,11,23-24,85-86,105,161,189,256-257,259,265-266,389
+.changeset/fix-dmc-color-tool-kxstitch-only.md
+  2e58387b064bff94 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "0955fc0d4ea464f568c01403e6feca3e3857308b",
+  "prompts": {
+    "2da56470a48d6922": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe9e9cac-9f12-41df-bc18-a63e36727cd5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    },
+    "2e58387b064bff94": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1776958287142",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 11,
+      "overriden_lines": 0
+    }
+  }
+}
