@@ -1,0 +1,25 @@
+lib/screens/home_screen.dart
+  29d97ae11345a820 3,42,705-715,888-914,916
+pubspec.yaml
+  29d97ae11345a820 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "877639a10e2748c3a4c5e693a5ba5c03ff5978df",
+  "prompts": {
+    "29d97ae11345a820": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b2b3434-43a6-4731-a109-6e58dc93d2b5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 72,
+      "total_deletions": 1,
+      "accepted_lines": 72,
+      "overriden_lines": 0
+    }
+  }
+}
