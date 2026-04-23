@@ -28,8 +28,8 @@ const Map<String, String> dmcReplacements = {
   '3745': '3047',// Yellow Beige Very Light       → Yellow Beige Light
   '3773': '407', // Desert Sand Medium            → Sportsman Flesh Ultra Dk
   '994': '993', // Aquamarine Very Light          → Aquamarine - VY LT
-  'White': '', // White (#FFFFFF) — possibly retired; fill in replacement
-  '868': '', // Hazel Nut Brown (#995C30) — possibly retired; fill in replacement
+  'White': 'Blanc',
+  '868': '801', // Hazel Nut Brown (#995C30)      → Coffee Brown Dark
 };
 
 const List<DmcColor> dmcColors = [
