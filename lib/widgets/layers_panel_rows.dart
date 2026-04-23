@@ -244,6 +244,7 @@ class _LayerRow extends StatefulWidget {
   final ValueChanged<String> onRename;
   final VoidCallback onDuplicate;
   final VoidCallback? onMergeDown;
+  final VoidCallback? onReplaceColour;
   final VoidCallback? onDelete;
   final Widget dragHandle;
 
@@ -263,6 +264,7 @@ class _LayerRow extends StatefulWidget {
     required this.onRename,
     required this.onDuplicate,
     this.onMergeDown,
+    this.onReplaceColour,
     this.onDelete,
     required this.dragHandle,
   });
@@ -438,6 +440,8 @@ class _LayerRowState extends State<_LayerRow> {
                         widget.onDuplicate();
                       case _LayerAction.mergeDown:
                         widget.onMergeDown?.call();
+                      case _LayerAction.replaceColour:
+                        widget.onReplaceColour?.call();
                       case _LayerAction.delete:
                         widget.onDelete?.call();
                     }
@@ -453,6 +457,12 @@ class _LayerRowState extends State<_LayerRow> {
                       'Merge Down',
                       enabled: widget.onMergeDown != null,
                       iconRotation: pi,
+                    ),
+                    _menuItem(
+                      _LayerAction.replaceColour,
+                      Icons.swap_horiz,
+                      'Replace colour…',
+                      enabled: widget.onReplaceColour != null,
                     ),
                     _menuItem(
                       _LayerAction.delete,

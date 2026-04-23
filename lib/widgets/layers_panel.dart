@@ -5,11 +5,110 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/layer.dart';
 import '../models/layer_blend_mode.dart';
 import '../models/layer_item.dart';
+import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import 'dialogs/confirm_dialog.dart';
+import 'dialogs/dmc_picker_dialog.dart';
 
 part 'layers_panel_helpers.dart';
 part 'layers_panel_rows.dart';
+
+// ─── Layer-scoped replace-colour flow ─────────────────────────────────────────
+
+/// Step 1: pick which colour to replace; step 2: pick the replacement via
+/// [DmcPickerDialog]; step 3: call [replaceThreadInLayer].
+Future<void> _showLayerReplaceColour(
+  BuildContext context,
+  Layer layer,
+  List<Thread> patternThreads,
+  EditorNotifier notifier,
+) async {
+  // Collect distinct thread codes used by this layer.
+  final usedCodes = layer.stitches.map((s) => s.threadId).toSet();
+  final layerThreads =
+      patternThreads.where((t) => usedCodes.contains(t.dmcCode)).toList();
+  if (layerThreads.isEmpty) return;
+
+  // If only one colour in the layer, skip the pick-source step.
+  Thread? source;
+  if (layerThreads.length == 1) {
+    source = layerThreads.first;
+  } else {
+    source = await showDialog<Thread>(
+      context: context,
+      builder: (_) => _PickSourceColourDialog(threads: layerThreads),
+    );
+  }
+  if (source == null) return;
+  if (!context.mounted) return;
+
+  final result = await showDialog<Thread>(
+    context: context,
+    builder: (_) => DmcPickerDialog(initialThread: source!),
+  );
+  if (result == null) return;
+
+  notifier.replaceThreadInLayer(
+      layer.id, source.dmcCode, result.dmcCode, result.color, result.name);
+}
+
+class _PickSourceColourDialog extends StatelessWidget {
+  final List<Thread> threads;
+  const _PickSourceColourDialog({required this.threads});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Replace which colour?'),
+      content: SizedBox(
+        width: 280,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: threads
+              .map((t) => Tooltip(
+                    message: 'DMC ${t.dmcCode} · ${t.name}',
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(t),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: t.color,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.black12),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          SizedBox(
+                            width: 44,
+                            child: Text(
+                              t.dmcCode,
+                              style: const TextStyle(
+                                  fontSize: 9, fontWeight: FontWeight.w600),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ))
+              .toList(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
 
 /// The inner content of the layers panel (header + list).
 /// Used by [LayersPanel] and directly by [RightSidebar].
@@ -173,6 +272,8 @@ class LayersPanelBody extends ConsumerWidget {
                   onMergeDown: canMerge
                       ? () => notifier.mergeLayers(layer.id)
                       : null,
+                  onReplaceColour: () => _showLayerReplaceColour(
+                      context, layer, state.pattern.threads, notifier),
                   onDelete: totalLayerCount > 1
                       ? () => notifier.deleteLayer(layer.id)
                       : null,

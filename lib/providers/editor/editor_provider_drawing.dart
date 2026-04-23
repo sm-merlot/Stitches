@@ -246,6 +246,45 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
   }
 
+  /// Replaces every stitch using [oldDmcCode] with [newDmcCode] within a
+  /// single layer only. Other layers are untouched.
+  /// If [oldDmcCode] is no longer used in any layer after the replacement,
+  /// it is removed from the pattern thread palette.
+  void replaceThreadInLayer(
+      String layerId, String oldDmcCode, String newDmcCode, Color newColor, String newName) {
+    if (oldDmcCode == newDmcCode) return;
+    final oldThread =
+        state.pattern.threads.where((t) => t.dmcCode == oldDmcCode).firstOrNull;
+    if (oldThread == null) return;
+
+    final mappedPattern = state.pattern.mapLayers((l) {
+      if (l.id != layerId) return l;
+      return l.copyWith(
+        stitches: l.stitches
+            .map((s) => s.threadId == oldDmcCode ? _withThreadId(s, newDmcCode) : s)
+            .toList(),
+      );
+    });
+
+    var threads = mappedPattern.threads.toList();
+    if (!threads.any((t) => t.dmcCode == newDmcCode)) {
+      threads.add(Thread(
+          dmcCode: newDmcCode,
+          color: newColor,
+          name: newName,
+          symbol: oldThread.symbol));
+    }
+
+    final pruned = _pruneUnusedThreads(mappedPattern.copyWith(threads: threads));
+
+    state = state.copyWith(
+      pattern: pruned,
+      undoStack: _buildUndoStack(),
+      isDirty: true,
+      redoStack: [],
+    );
+  }
+
   /// Changes the symbol displayed on a thread's swatch.
   /// Clears the composite cache so the colours panel immediately reflects the
   /// updated symbol rather than serving stale Thread objects from the cache.
