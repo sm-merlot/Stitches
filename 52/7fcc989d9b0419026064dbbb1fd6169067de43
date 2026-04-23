@@ -1,0 +1,23 @@
+.changeset/fix-canvas-update-snippet-palette-symbols.md
+  b53b10521f93842f 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "527fcc989d9b0419026064dbbb1fd6169067de43",
+  "prompts": {
+    "b53b10521f93842f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "304778f4-352f-4272-8288-7457ffae94a5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 11,
+      "total_deletions": 0,
+      "accepted_lines": 11,
+      "overriden_lines": 0
+    }
+  }
+}
