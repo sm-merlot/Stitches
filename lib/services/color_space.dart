@@ -70,20 +70,20 @@ double labDistance(LabColor a, LabColor b) =>
 /// Uses the standard formula from Luo, Cui & Rigg (2001).
 /// Returns a value where ΔE ≈ 1 is just noticeable to the human eye.
 double ciede2000(LabColor lab1, LabColor lab2) {
-  final L1 = lab1.$1, a1 = lab1.$2, b1 = lab1.$3;
-  final L2 = lab2.$1, a2 = lab2.$2, b2 = lab2.$3;
+  final l1 = lab1.$1, a1 = lab1.$2, b1 = lab1.$3;
+  final l2 = lab2.$1, a2 = lab2.$2, b2 = lab2.$3;
 
   // Step 1 — adjusted a' values (chroma-weighted hue rotation)
-  final C1ab = math.sqrt(a1 * a1 + b1 * b1);
-  final C2ab = math.sqrt(a2 * a2 + b2 * b2);
-  final Cabavg = (C1ab + C2ab) / 2.0;
-  final Cabavg7 = math.pow(Cabavg, 7).toDouble();
+  final c1Ab = math.sqrt(a1 * a1 + b1 * b1);
+  final c2Ab = math.sqrt(a2 * a2 + b2 * b2);
+  final cabAvg = (c1Ab + c2Ab) / 2.0;
+  final cabAvg7 = math.pow(cabAvg, 7).toDouble();
   const p25_7 = 6103515625.0; // 25^7
-  final G = 0.5 * (1.0 - math.sqrt(Cabavg7 / (Cabavg7 + p25_7)));
-  final a1p = a1 * (1.0 + G);
-  final a2p = a2 * (1.0 + G);
-  final C1p = math.sqrt(a1p * a1p + b1 * b1);
-  final C2p = math.sqrt(a2p * a2p + b2 * b2);
+  final g = 0.5 * (1.0 - math.sqrt(cabAvg7 / (cabAvg7 + p25_7)));
+  final a1p = a1 * (1.0 + g);
+  final a2p = a2 * (1.0 + g);
+  final c1p = math.sqrt(a1p * a1p + b1 * b1);
+  final c2p = math.sqrt(a2p * a2p + b2 * b2);
 
   // h' angle [0°, 360°)
   double hprime(double ap, double bp) {
@@ -95,11 +95,11 @@ double ciede2000(LabColor lab1, LabColor lab2) {
   final h2p = hprime(a2p, b2);
 
   // Step 2 — ΔL', ΔC', ΔH'
-  final dLp = L2 - L1;
-  final dCp = C2p - C1p;
+  final dLp = l2 - l1;
+  final dCp = c2p - c1p;
 
   final double dhp;
-  if (C1p * C2p == 0.0) {
+  if (c1p * c2p == 0.0) {
     dhp = 0.0;
   } else if ((h2p - h1p).abs() <= 180.0) {
     dhp = h2p - h1p;
@@ -109,51 +109,51 @@ double ciede2000(LabColor lab1, LabColor lab2) {
     dhp = h2p - h1p + 360.0;
   }
   final dHp =
-      2.0 * math.sqrt(C1p * C2p) * math.sin(dhp * math.pi / 360.0);
+      2.0 * math.sqrt(c1p * c2p) * math.sin(dhp * math.pi / 360.0);
 
   // Step 3 — arithmetic means
-  final Lp_avg = (L1 + L2) / 2.0;
-  final Cp_avg = (C1p + C2p) / 2.0;
+  final lpAvg = (l1 + l2) / 2.0;
+  final cpAvg = (c1p + c2p) / 2.0;
 
-  final double hp_avg;
-  if (C1p * C2p == 0.0) {
-    hp_avg = h1p + h2p;
+  final double hpAvg;
+  if (c1p * c2p == 0.0) {
+    hpAvg = h1p + h2p;
   } else if ((h1p - h2p).abs() <= 180.0) {
-    hp_avg = (h1p + h2p) / 2.0;
+    hpAvg = (h1p + h2p) / 2.0;
   } else if (h1p + h2p < 360.0) {
-    hp_avg = (h1p + h2p + 360.0) / 2.0;
+    hpAvg = (h1p + h2p + 360.0) / 2.0;
   } else {
-    hp_avg = (h1p + h2p - 360.0) / 2.0;
+    hpAvg = (h1p + h2p - 360.0) / 2.0;
   }
 
   // Step 4 — weighting functions
   double deg(double d) => d * math.pi / 180.0;
 
-  final T = 1.0
-      - 0.17 * math.cos(deg(hp_avg - 30.0))
-      + 0.24 * math.cos(deg(2.0 * hp_avg))
-      + 0.32 * math.cos(deg(3.0 * hp_avg + 6.0))
-      - 0.20 * math.cos(deg(4.0 * hp_avg - 63.0));
+  final t = 1.0
+      - 0.17 * math.cos(deg(hpAvg - 30.0))
+      + 0.24 * math.cos(deg(2.0 * hpAvg))
+      + 0.32 * math.cos(deg(3.0 * hpAvg + 6.0))
+      - 0.20 * math.cos(deg(4.0 * hpAvg - 63.0));
 
-  final SL = 1.0 +
+  final sl = 1.0 +
       0.015 *
-          math.pow(Lp_avg - 50.0, 2) /
-          math.sqrt(20.0 + math.pow(Lp_avg - 50.0, 2));
-  final SC = 1.0 + 0.045 * Cp_avg;
-  final SH = 1.0 + 0.015 * Cp_avg * T;
+          math.pow(lpAvg - 50.0, 2) /
+          math.sqrt(20.0 + math.pow(lpAvg - 50.0, 2));
+  final sc = 1.0 + 0.045 * cpAvg;
+  final sh = 1.0 + 0.015 * cpAvg * t;
 
   // Rotation term
-  final Cp_avg7 = math.pow(Cp_avg, 7).toDouble();
-  final RC = 2.0 * math.sqrt(Cp_avg7 / (Cp_avg7 + p25_7));
+  final cpAvg7 = math.pow(cpAvg, 7).toDouble();
+  final rc = 2.0 * math.sqrt(cpAvg7 / (cpAvg7 + p25_7));
   final dTheta =
-      30.0 * math.exp(-math.pow((hp_avg - 275.0) / 25.0, 2).toDouble());
-  final RT = -math.sin(deg(2.0 * dTheta)) * RC;
+      30.0 * math.exp(-math.pow((hpAvg - 275.0) / 25.0, 2).toDouble());
+  final rt = -math.sin(deg(2.0 * dTheta)) * rc;
 
   return math.sqrt(
-    math.pow(dLp / SL, 2) +
-        math.pow(dCp / SC, 2) +
-        math.pow(dHp / SH, 2) +
-        RT * (dCp / SC) * (dHp / SH),
+    math.pow(dLp / sl, 2) +
+        math.pow(dCp / sc, 2) +
+        math.pow(dHp / sh, 2) +
+        rt * (dCp / sc) * (dHp / sh),
   );
 }
 
@@ -165,15 +165,15 @@ double ciede2000(LabColor lab1, LabColor lab2) {
 /// weighting factors (kL = kC = kH = 1, K1 = 0.045, K2 = 0.015).
 double cie94(LabColor lab1, LabColor lab2) {
   final dL = lab1.$1 - lab2.$1;
-  final C1 = math.sqrt(lab1.$2 * lab1.$2 + lab1.$3 * lab1.$3);
-  final C2 = math.sqrt(lab2.$2 * lab2.$2 + lab2.$3 * lab2.$3);
-  final dC = C1 - C2;
+  final c1 = math.sqrt(lab1.$2 * lab1.$2 + lab1.$3 * lab1.$3);
+  final c2 = math.sqrt(lab2.$2 * lab2.$2 + lab2.$3 * lab2.$3);
+  final dC = c1 - c2;
   final da = lab1.$2 - lab2.$2;
   final db = lab1.$3 - lab2.$3;
   final dH = math.sqrt(math.max(0.0, da * da + db * db - dC * dC));
-  final SC = 1.0 + 0.045 * C1;
-  final SH = 1.0 + 0.015 * C1;
-  return math.sqrt(dL * dL + math.pow(dC / SC, 2) + math.pow(dH / SH, 2));
+  final sc = 1.0 + 0.045 * c1;
+  final sh = 1.0 + 0.015 * c1;
+  return math.sqrt(dL * dL + math.pow(dC / sc, 2) + math.pow(dH / sh, 2));
 }
 
 /// Redmean weighted sRGB distance between two colours (0–255 ints).
