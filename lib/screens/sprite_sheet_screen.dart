@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 
 import '../providers/editor/editor_provider.dart';
+import '../screens/dmc_import_preview_screen.dart';
 import '../services/sprite_importer.dart';
 import '../utils/snackbars.dart';
 import '../widgets/sprite_sheet_painter.dart';
@@ -16,6 +17,10 @@ import '../widgets/sprite_sheet_painter.dart';
 // ── Corner handle types ───────────────────────────────────────────────────────
 
 enum _Corner { tl, tr, bl, br }
+
+// ── Preview mode ──────────────────────────────────────────────────────────────
+
+enum _PreviewMode { raw, palette }
 
 sealed class _CornerHit {
   final _Corner corner;
@@ -108,7 +113,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   Uint8List? _cropPreviewBytes;
   final List<Uint8List?> _palettePreviewBytes = [];
   int? _activePaletteIndex;
-  bool _showRaw = false;
+  _PreviewMode _previewMode = _PreviewMode.palette;
 
   // ── Panel width ───────────────────────────────────────────────────────────────
   double _panelWidth = 260.0;
@@ -117,6 +122,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   late final TextEditingController _nameCtrl;
   int _addedCount = 0;
   bool _importing = false;
+  bool _previewBeforeAdd = false;
 
   bool get _hasCrop => _cropStart != null && _cropEnd != null;
 
@@ -364,6 +370,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
       }
     }
   }
+
 
   /// Refreshes detected colours and preview for strip at [i] after resize.
   void _refreshStripAt(int i) {
@@ -677,29 +684,50 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     return r;
   }
 
+  /// Returns the detected raw colours for each confirmed palette strip.
+  List<List<Color>> _buildPaletteStripColours() {
+    final result = <List<Color>>[];
+    for (final stripRect in _confirmedStrips) {
+      final horizontal = stripRect.width >= stripRect.height;
+      final colours =
+          SpriteImporter.detectPaletteStrip(_image!, stripRect, horizontal);
+      if (colours.isNotEmpty) result.add(colours);
+    }
+    return result;
+  }
+
   Future<void> _addToSnippets() async {
     final region = _selectedRegion;
     if (region == null || _image == null) return;
 
+    final name =
+        _nameCtrl.text.trim().isEmpty ? 'Sprite' : _nameCtrl.text.trim();
+
+    // If preview mode is enabled, open the DMC preview screen first.
+    if (_previewBeforeAdd) {
+      final paletteStrips = _buildPaletteStripColours();
+      final confirmed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => DmcImportPreviewScreen(
+            image: _image!,
+            region: region,
+            paletteStrips: paletteStrips,
+            snippetName: name,
+          ),
+        ),
+      );
+      // Refresh palette previews in case algorithm was changed in the review screen.
+      if (mounted) setState(_regeneratePalettePreviews);
+      if (confirmed != true) return;
+    }
+
     setState(() => _importing = true);
     try {
-      final List<List<Color>> paletteStripColours = [];
-      for (final stripRect in _confirmedStrips) {
-        final horizontal = stripRect.width >= stripRect.height;
-        final colours =
-            SpriteImporter.detectPaletteStrip(_image!, stripRect, horizontal);
-        if (colours.isNotEmpty) paletteStripColours.add(colours);
-      }
-
-      final name = _nameCtrl.text.trim().isEmpty
-          ? 'Sprite'
-          : _nameCtrl.text.trim();
-
       final snippet = await SpriteImporter.importRegionWithPalettes(
         image: _image!,
         region: region,
         name: name,
-        paletteStrips: paletteStripColours,
+        paletteStrips: _buildPaletteStripColours(),
       );
 
       if (snippet.stitches.isEmpty) {
@@ -963,7 +991,31 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                         EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+                // Preview checkbox
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: Checkbox(
+                        value: _previewBeforeAdd,
+                        onChanged: (v) =>
+                            setState(() => _previewBeforeAdd = v ?? false),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Preview as DMC before adding',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 FilledButton.icon(
                   onPressed: (_hasCrop && !_importing) ? _addToSnippets : null,
                   icon: _importing
@@ -1049,17 +1101,21 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   }
 
   Widget _buildPreviewSection(ThemeData theme) {
-    // Decide what to display.
+    final hasStrips = _confirmedStrips.isNotEmpty;
+
     Uint8List? previewBytes;
-    if (_showRaw || _activePaletteIndex == null) {
+    if (_previewMode == _PreviewMode.raw || !hasStrips) {
       previewBytes = _cropPreviewBytes;
-    } else if (_activePaletteIndex! < _palettePreviewBytes.length) {
+    } else if (_activePaletteIndex != null &&
+        _activePaletteIndex! < _palettePreviewBytes.length) {
       previewBytes = _palettePreviewBytes[_activePaletteIndex!];
+    } else {
+      previewBytes = _cropPreviewBytes;
     }
 
     final placeholder = !_hasCrop
         ? 'Draw a crop region to preview'
-        : (_activePaletteIndex == null
+        : (_previewMode == _PreviewMode.palette && !hasStrips
             ? 'Add a palette strip to see\npalette-filtered preview'
             : 'No preview available');
 
@@ -1078,7 +1134,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 6),
           SizedBox(
-            height: 180,
+            height: 160,
             child: Container(
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
@@ -1086,37 +1142,32 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: previewBytes != null
-                  ? Image.memory(
-                      previewBytes,
-                      filterQuality: FilterQuality.none,
-                      fit: BoxFit.contain,
-                    )
+                  ? Image.memory(previewBytes,
+                      filterQuality: FilterQuality.none, fit: BoxFit.contain)
                   : Center(
-                      child: Text(
-                        placeholder,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.disabledColor),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                      child: Text(placeholder,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.disabledColor),
+                          textAlign: TextAlign.center)),
             ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: Checkbox(
-                  value: _showRaw,
-                  onChanged: (v) => setState(() => _showRaw = v ?? false),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                ),
+          const SizedBox(height: 8),
+          SegmentedButton<_PreviewMode>(
+            segments: [
+              const ButtonSegment(value: _PreviewMode.raw, label: Text('Raw')),
+              ButtonSegment(
+                value: _PreviewMode.palette,
+                label: const Text('Palette'),
+                enabled: hasStrips,
               ),
-              const SizedBox(width: 6),
-              Text('Show raw', style: theme.textTheme.bodySmall),
             ],
+            selected: {_previewMode},
+            onSelectionChanged: (s) => setState(() => _previewMode = s.first),
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              textStyle: WidgetStateProperty.all(
+                  const TextStyle(fontSize: 11)),
+            ),
           ),
         ],
       ),

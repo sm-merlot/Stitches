@@ -8,6 +8,10 @@ import 'dart:math' as math;
 /// CIE Lab is used throughout the app for perceptual colour comparison
 /// (matching DMC threads, contrast checks, palette merging) because Euclidean
 /// distance in sRGB is a poor proxy for perceived colour difference.
+///
+/// DMC thread matching uses [ciede2000] for the highest perceptual accuracy.
+/// CIE-76 helpers ([labDistance], [labDistanceSquared], [nearestLabIndex]) are
+/// retained for cases where speed matters more than precision.
 
 /// A record representing a CIE L*a*b* colour.
 typedef LabColor = (double l, double a, double b);
@@ -53,6 +57,168 @@ double labDistanceSquared(LabColor a, LabColor b) {
 /// CIE-76 ΔE between two Lab colours.
 double labDistance(LabColor a, LabColor b) =>
     math.sqrt(labDistanceSquared(a, b));
+
+// ── CIEDE2000 ────────────────────────────────────────────────────────────────
+
+/// CIEDE2000 ΔE between two CIE L*a*b* colours.
+///
+/// Significantly more perceptually accurate than CIE-76, particularly in:
+///   - Blue/violet regions (hue-rotation correction)
+///   - Dark/near-neutral colours (chroma and lightness weighting)
+///   - Saturated colours (hue-dependent SH term)
+///
+/// Uses the standard formula from Luo, Cui & Rigg (2001).
+/// Returns a value where ΔE ≈ 1 is just noticeable to the human eye.
+double ciede2000(LabColor lab1, LabColor lab2) {
+  final l1 = lab1.$1, a1 = lab1.$2, b1 = lab1.$3;
+  final l2 = lab2.$1, a2 = lab2.$2, b2 = lab2.$3;
+
+  // Step 1 — adjusted a' values (chroma-weighted hue rotation)
+  final c1Ab = math.sqrt(a1 * a1 + b1 * b1);
+  final c2Ab = math.sqrt(a2 * a2 + b2 * b2);
+  final cabAvg = (c1Ab + c2Ab) / 2.0;
+  final cabAvg7 = math.pow(cabAvg, 7).toDouble();
+  const p25_7 = 6103515625.0; // 25^7
+  final g = 0.5 * (1.0 - math.sqrt(cabAvg7 / (cabAvg7 + p25_7)));
+  final a1p = a1 * (1.0 + g);
+  final a2p = a2 * (1.0 + g);
+  final c1p = math.sqrt(a1p * a1p + b1 * b1);
+  final c2p = math.sqrt(a2p * a2p + b2 * b2);
+
+  // h' angle [0°, 360°)
+  double hprime(double ap, double bp) {
+    if (ap == 0.0 && bp == 0.0) return 0.0;
+    final h = math.atan2(bp, ap) * 180.0 / math.pi;
+    return h >= 0.0 ? h : h + 360.0;
+  }
+  final h1p = hprime(a1p, b1);
+  final h2p = hprime(a2p, b2);
+
+  // Step 2 — ΔL', ΔC', ΔH'
+  final dLp = l2 - l1;
+  final dCp = c2p - c1p;
+
+  final double dhp;
+  if (c1p * c2p == 0.0) {
+    dhp = 0.0;
+  } else if ((h2p - h1p).abs() <= 180.0) {
+    dhp = h2p - h1p;
+  } else if (h2p - h1p > 180.0) {
+    dhp = h2p - h1p - 360.0;
+  } else {
+    dhp = h2p - h1p + 360.0;
+  }
+  final dHp =
+      2.0 * math.sqrt(c1p * c2p) * math.sin(dhp * math.pi / 360.0);
+
+  // Step 3 — arithmetic means
+  final lpAvg = (l1 + l2) / 2.0;
+  final cpAvg = (c1p + c2p) / 2.0;
+
+  final double hpAvg;
+  if (c1p * c2p == 0.0) {
+    hpAvg = h1p + h2p;
+  } else if ((h1p - h2p).abs() <= 180.0) {
+    hpAvg = (h1p + h2p) / 2.0;
+  } else if (h1p + h2p < 360.0) {
+    hpAvg = (h1p + h2p + 360.0) / 2.0;
+  } else {
+    hpAvg = (h1p + h2p - 360.0) / 2.0;
+  }
+
+  // Step 4 — weighting functions
+  double deg(double d) => d * math.pi / 180.0;
+
+  final t = 1.0
+      - 0.17 * math.cos(deg(hpAvg - 30.0))
+      + 0.24 * math.cos(deg(2.0 * hpAvg))
+      + 0.32 * math.cos(deg(3.0 * hpAvg + 6.0))
+      - 0.20 * math.cos(deg(4.0 * hpAvg - 63.0));
+
+  final sl = 1.0 +
+      0.015 *
+          math.pow(lpAvg - 50.0, 2) /
+          math.sqrt(20.0 + math.pow(lpAvg - 50.0, 2));
+  final sc = 1.0 + 0.045 * cpAvg;
+  final sh = 1.0 + 0.015 * cpAvg * t;
+
+  // Rotation term
+  final cpAvg7 = math.pow(cpAvg, 7).toDouble();
+  final rc = 2.0 * math.sqrt(cpAvg7 / (cpAvg7 + p25_7));
+  final dTheta =
+      30.0 * math.exp(-math.pow((hpAvg - 275.0) / 25.0, 2).toDouble());
+  final rt = -math.sin(deg(2.0 * dTheta)) * rc;
+
+  return math.sqrt(
+    math.pow(dLp / sl, 2) +
+        math.pow(dCp / sc, 2) +
+        math.pow(dHp / sh, 2) +
+        rt * (dCp / sc) * (dHp / sh),
+  );
+}
+
+// ── Additional distance metrics ──────────────────────────────────────────────
+
+/// CIE94 ΔE between two CIE L*a*b* colours.
+///
+/// Intermediate accuracy between CIE-76 and CIEDE2000. Uses the graphic-arts
+/// weighting factors (kL = kC = kH = 1, K1 = 0.045, K2 = 0.015).
+double cie94(LabColor lab1, LabColor lab2) {
+  final dL = lab1.$1 - lab2.$1;
+  final c1 = math.sqrt(lab1.$2 * lab1.$2 + lab1.$3 * lab1.$3);
+  final c2 = math.sqrt(lab2.$2 * lab2.$2 + lab2.$3 * lab2.$3);
+  final dC = c1 - c2;
+  final da = lab1.$2 - lab2.$2;
+  final db = lab1.$3 - lab2.$3;
+  final dH = math.sqrt(math.max(0.0, da * da + db * db - dC * dC));
+  final sc = 1.0 + 0.045 * c1;
+  final sh = 1.0 + 0.015 * c1;
+  return math.sqrt(dL * dL + math.pow(dC / sc, 2) + math.pow(dH / sh, 2));
+}
+
+/// Redmean weighted sRGB distance between two colours (0–255 ints).
+///
+/// Fast — requires no colour-space conversion. Weights the R and B channels
+/// by the average redness of the two colours to approximate eye sensitivity.
+double redmeanDist(int r1, int g1, int b1, int r2, int g2, int b2) {
+  final rBar = (r1 + r2) / 2.0;
+  final dR = (r1 - r2).toDouble();
+  final dG = (g1 - g2).toDouble();
+  final dB = (b1 - b2).toDouble();
+  return math.sqrt(
+    (2.0 + rBar / 256.0) * dR * dR +
+    4.0 * dG * dG +
+    (2.0 + (255.0 - rBar) / 256.0) * dB * dB,
+  );
+}
+
+// ── Algorithm enum ────────────────────────────────────────────────────────────
+
+/// Selectable colour-distance algorithms for DMC thread matching.
+///
+/// All algorithms operate on the ~450-colour DMC palette. The chosen algorithm
+/// affects both the live preview and the final imported thread assignments.
+enum MatchAlgorithm {
+  /// CIEDE2000 — industry-standard perceptual distance (recommended).
+  ciede2000,
+
+  /// CIE94 — good accuracy, simpler than CIEDE2000.
+  cie94,
+
+  /// CIE-76 — simple Lab Euclidean; fast but less accurate in blues/darks.
+  cie76,
+
+  /// Weighted sRGB (redmean) — no Lab conversion; fast for similar colours.
+  redmean,
+}
+
+/// Human-readable label for each [MatchAlgorithm].
+String matchAlgorithmLabel(MatchAlgorithm algo) => switch (algo) {
+      MatchAlgorithm.ciede2000 => 'CIEDE2000 (recommended)',
+      MatchAlgorithm.cie94     => 'CIE94',
+      MatchAlgorithm.cie76     => 'CIE-76',
+      MatchAlgorithm.redmean   => 'Weighted sRGB',
+    };
 
 /// Returns the index of the entry in [labValues] whose Lab distance to
 /// [target] is smallest. Returns `-1` if [labValues] is empty.

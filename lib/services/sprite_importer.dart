@@ -23,11 +23,47 @@ typedef _LabEntry = ({
 });
 
 /// Service that converts image pixel regions into cross-stitch data by matching
-/// each pixel to the nearest DMC thread colour in CIE Lab space.
+/// each pixel to the nearest DMC thread colour using CIEDE2000.
 class SpriteImporter {
   SpriteImporter._();
 
   static List<_LabEntry>? _palette;
+
+  /// Per-pixel match cache keyed by packed RGB (bits 23-0).
+  /// Sprite sheets typically reuse a small set of colours, so cache hit rates
+  /// are very high and make the CIEDE2000 cost negligible in practice.
+  static final Map<int, DmcColor?> _matchCache = {};
+
+  /// Active colour-distance algorithm.  Changing this clears [_matchCache].
+  static MatchAlgorithm _matchAlgorithm = MatchAlgorithm.ciede2000;
+
+  static MatchAlgorithm get matchAlgorithm => _matchAlgorithm;
+  static set matchAlgorithm(MatchAlgorithm algo) {
+    if (_matchAlgorithm != algo) {
+      _matchAlgorithm = algo;
+      _matchCache.clear(); // cached distances are algorithm-specific
+    }
+  }
+
+  // ── Distance dispatch ────────────────────────────────────────────────────────
+
+  /// Dispatches to the active algorithm.
+  /// [pLab]/[eLab]: precomputed Lab.  [pr..pb]/[er..eb]: raw RGB 0–255.
+  static double _dist(
+    LabColor pLab, int pr, int pg, int pb,
+    LabColor eLab, int er, int eg, int eb,
+  ) => switch (_matchAlgorithm) {
+    MatchAlgorithm.ciede2000 => ciede2000(pLab, eLab),
+    MatchAlgorithm.cie94     => cie94(pLab, eLab),
+    MatchAlgorithm.cie76     => labDistance(pLab, eLab),
+    MatchAlgorithm.redmean   => redmeanDist(pr, pg, pb, er, eg, eb),
+  };
+
+  /// Scales a CIEDE2000-equivalent drop threshold to the active algorithm's
+  /// distance scale.  Lab-based algorithms share the same ≈0–100 range;
+  /// redmean's black→white range is ≈765, so the factor is 765/100 = 7.65.
+  static double _algorithmDropScale() =>
+      _matchAlgorithm == MatchAlgorithm.redmean ? 7.65 : 1.0;
 
   // ── Lab palette ─────────────────────────────────────────────────────────────
 
@@ -43,26 +79,56 @@ class SpriteImporter {
 
   // ── Public API ───────────────────────────────────────────────────────────────
 
-  /// Matches a pixel to the nearest DMC colour by CIE Lab Euclidean distance.
+  /// Matches a pixel to the nearest DMC colour using CIEDE2000.
+  ///
+  /// Results are cached by RGB value — repeated colours (common in sprite art)
+  /// are free after the first lookup.
+  ///
   /// Returns null for transparent pixels (alpha < 128).
   static DmcColor? matchPixel(int r, int g, int b, int a) {
     if (a < 128) return null;
+    final key = (r << 16) | (g << 8) | b;
+    return _matchCache.putIfAbsent(key, () => _matchUncached(r, g, b));
+  }
+
+  static DmcColor? _matchUncached(int r, int g, int b) {
     final palette = _labPalette();
-    final (pl, pa, pb) = rgbToLab(r, g, b);
+    final pixelLab = rgbToLab(r, g, b);
 
     double best = double.infinity;
     _LabEntry? bestEntry;
     for (final entry in palette) {
-      final dl = pl - entry.l;
-      final da = pa - entry.a;
-      final db = pb - entry.b;
-      final dist = dl * dl + da * da + db * db;
+      final er = (entry.color.r * 255).round();
+      final eg = (entry.color.g * 255).round();
+      final eb = (entry.color.b * 255).round();
+      final dist = _dist(pixelLab, r, g, b, (entry.l, entry.a, entry.b), er, eg, eb);
       if (dist < best) {
         best = dist;
         bestEntry = entry;
       }
     }
     return bestEntry == null ? null : dmcColorByCode(bestEntry.code);
+  }
+
+  /// Returns the [count] DMC colours nearest to (r, g, b) under the active
+  /// algorithm, sorted ascending by distance.  Useful for presenting
+  /// user-selectable alternatives.
+  static List<DmcColor> nearestDmcColours(int r, int g, int b, {int count = 12}) {
+    final palette = _labPalette();
+    final pixelLab = rgbToLab(r, g, b);
+    final ranked = palette.map((entry) {
+      final er = (entry.color.r * 255).round();
+      final eg = (entry.color.g * 255).round();
+      final eb = (entry.color.b * 255).round();
+      final dist = _dist(pixelLab, r, g, b, (entry.l, entry.a, entry.b), er, eg, eb);
+      return (dist: dist, code: entry.code);
+    }).toList()
+      ..sort((a, b) => a.dist.compareTo(b.dist));
+    return ranked
+        .take(count)
+        .map((e) => dmcColorByCode(e.code))
+        .whereType<DmcColor>()
+        .toList();
   }
 
   /// Imports a rectangular region from [image] (image-space coordinates) as
@@ -128,14 +194,12 @@ class SpriteImporter {
         for (final code in codeCounts.keys) {
           if (frequent.contains(code)) continue;
           final src = labFor[code]!;
+          final srcLab = (src.l, src.a, src.b);
           double best = double.infinity;
           String bestCode = frequent.first;
           for (final fCode in frequent) {
             final dst = labFor[fCode]!;
-            final dl = src.l - dst.l;
-            final da = src.a - dst.a;
-            final db = src.b - dst.b;
-            final dist = dl * dl + da * da + db * db;
+            final dist = ciede2000(srcLab, (dst.l, dst.a, dst.b));
             if (dist < best) {
               best = dist;
               bestCode = fCode;
@@ -217,29 +281,31 @@ class SpriteImporter {
       return (color: c, l: l, a: a, b: bb);
     }).toList();
 
-    // Squared threshold — avoids sqrt per pixel.
-    final dropSq = dropThreshold * dropThreshold;
-
-    final out = img.Image(width: w, height: h);
+    // RGBA output — unset pixels are transparent (alpha=0), not opaque black.
+    final out = img.Image(width: w, height: h, numChannels: 4);
+    final hasAlpha = image.numChannels >= 4;
 
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
-        // Do not skip low-alpha pixels here: indexed PNGs (e.g. SNES rips) mark
-        // background palette entries as transparent even when the pixels carry
-        // real colour data. The drop threshold below handles background exclusion.
+        // Skip genuinely transparent pixels; the drop-threshold below handles
+        // opaque background colours that simply aren't in the palette.
+        if (hasAlpha && pixel.a.toInt() < 128) continue;
 
-        final (pl, pa, pb) =
+        final pixelLab =
             rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
 
         double best = double.infinity;
         int bestIdx = 0;
         for (int i = 0; i < paletteLab.length; i++) {
           final entry = paletteLab[i];
-          final dl = pl - entry.l;
-          final da = pa - entry.a;
-          final db = pb - entry.b;
-          final dist = dl * dl + da * da + db * db;
+          final er = (entry.color.r * 255).round();
+          final eg = (entry.color.g * 255).round();
+          final eb = (entry.color.b * 255).round();
+          final dist = _dist(
+            pixelLab, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(),
+            (entry.l, entry.a, entry.b), er, eg, eb,
+          );
           if (dist < best) {
             best = dist;
             bestIdx = i;
@@ -247,7 +313,7 @@ class SpriteImporter {
         }
 
         // Drop pixel if it doesn't closely match any palette colour (= background).
-        if (best > dropSq) continue;
+        if (best > dropThreshold * _algorithmDropScale()) continue;
 
         // Use outputPalette positionally if provided, else matched colour.
         final Color outColor;
@@ -271,11 +337,56 @@ class SpriteImporter {
     return Uint8List.fromList(img.encodePng(out));
   }
 
+  /// Renders the crop [region] with every pixel replaced by its nearest DMC
+  /// colour under the active algorithm.  Uses [matchPixel]'s cache, so
+  /// repeated calls with the same region and algorithm are fast.
+  ///
+  /// Returns null if the region is empty or out of bounds.
+  static Uint8List? renderAsDmcMatched(img.Image image, Rect region) {
+    final x0 = region.left.round().clamp(0, image.width);
+    final y0 = region.top.round().clamp(0, image.height);
+    final x1 = region.right.round().clamp(x0, image.width);
+    final y1 = region.bottom.round().clamp(y0, image.height);
+    if (x1 <= x0 || y1 <= y0) return null;
+
+    final hasAlpha = image.numChannels >= 4;
+    // RGBA output so unset (dropped) pixels are transparent, not opaque black.
+    final out = img.Image(width: x1 - x0, height: y1 - y0, numChannels: 4);
+    for (var py = y0; py < y1; py++) {
+      for (var px = x0; px < x1; px++) {
+        final pixel = image.getPixel(px, py);
+        final match = matchPixel(
+          pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(),
+          hasAlpha ? pixel.a.toInt() : 255,
+        );
+        if (match == null) continue;
+        out.setPixelRgba(
+          px - x0, py - y0,
+          (match.color.r * 255).round(),
+          (match.color.g * 255).round(),
+          (match.color.b * 255).round(),
+          255,
+        );
+      }
+    }
+    return Uint8List.fromList(img.encodePng(out));
+  }
+
   // ── Palette strip detection ──────────────────────────────────────────────────
 
-  /// Detects colour blocks in a palette strip region.
-  /// Returns list of dominant colours (one per slot), ordered left-to-right or
-  /// top-to-bottom depending on [horizontal].
+  /// Detects colour slots in a palette strip region.
+  ///
+  /// Returns the **exact raw pixel colour** of each distinct slot, ordered
+  /// left-to-right or top-to-bottom depending on [horizontal].
+  ///
+  /// Assumes the strip is a clean, indexed PNG where every pixel within a slot
+  /// is the same uniform colour. A new slot is recorded whenever the midline
+  /// pixel has a different RGB value from the previous pixel — no colour-space
+  /// conversion or distance calculation is involved.
+  ///
+  /// Raw pixel values are returned without any averaging, quantisation, or DMC
+  /// mapping so that downstream matching compares sprite pixels against the
+  /// same unmodified values that appear in the source image.
   static List<Color> detectPaletteStrip(
       img.Image image, Rect region, bool horizontal) {
     final x0 = region.left.round().clamp(0, image.width - 1);
@@ -285,23 +396,14 @@ class SpriteImporter {
     if (x1 <= x0 || y1 <= y0) return [];
 
     final colours = <Color>[];
-    Color? lastColour;
-    int consecutiveCount = 0;
-    const minBlockWidth = 3;
+    int? lastPacked;
 
     void processPixel(int x, int y) {
-      final pixel = image.getPixel(x, y);
-      final c = Color.fromARGB(
-          pixel.a.toInt(), pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
-      final quantized = _quantizeColor(c);
-      if (lastColour == null || _colorDistance(quantized, lastColour!) > 20) {
-        if (consecutiveCount >= minBlockWidth && lastColour != null) {
-          colours.add(lastColour!);
-        }
-        lastColour = quantized;
-        consecutiveCount = 1;
-      } else {
-        consecutiveCount++;
+      final px = image.getPixel(x, y);
+      final packed = (px.r.toInt() << 16) | (px.g.toInt() << 8) | px.b.toInt();
+      if (packed != lastPacked) {
+        colours.add(Color.fromARGB(255, px.r.toInt(), px.g.toInt(), px.b.toInt()));
+        lastPacked = packed;
       }
     }
 
@@ -312,23 +414,9 @@ class SpriteImporter {
       final midX = ((x0 + x1) / 2).round().clamp(x0, x1 - 1);
       for (int y = y0; y < y1; y++) { processPixel(midX, y); }
     }
-    if (consecutiveCount >= minBlockWidth && lastColour != null) {
-      colours.add(lastColour!);
-    }
     return colours;
   }
 
-  static Color _quantizeColor(Color c) {
-    int q(double v) => ((v * 255 / 16).round() * 16).clamp(0, 255);
-    return Color.fromARGB(255, q(c.r), q(c.g), q(c.b));
-  }
-
-  static double _colorDistance(Color a, Color b) {
-    final dr = (a.r - b.r) * 255;
-    final dg = (a.g - b.g) * 255;
-    final db = (a.b - b.b) * 255;
-    return sqrt(dr * dr + dg * dg + db * db);
-  }
 
   /// Imports a crop region and builds palettes from detected palette strips.
   ///
@@ -443,40 +531,42 @@ class SpriteImporter {
 
     final stripLab = List.generate(rawStripColors.length, (i) {
       final c = rawStripColors[i];
-      final r = (c.r * 255).round();
-      final g = (c.g * 255).round();
-      final b = (c.b * 255).round();
-      final (l, a, bb) = rgbToLab(r, g, b);
-      return (thread: dmcThreads[i], l: l, a: a, b: bb);
+      final ri = (c.r * 255).round();
+      final gi = (c.g * 255).round();
+      final bi = (c.b * 255).round();
+      final (l, a, bl) = rgbToLab(ri, gi, bi);
+      return (thread: dmcThreads[i], ri: ri, gi: gi, bi: bi, l: l, a: a, bl: bl);
     });
 
-    const dropSq = 30.0 * 30.0;
+    final dropThreshold = 30.0 * _algorithmDropScale();
+    final hasAlpha = image.numChannels >= 4;
     final stitches = <Stitch>[];
 
     for (var py = y0; py < y1; py++) {
       for (var px = x0; px < x1; px++) {
         final pixel = image.getPixel(px, py);
-        // Do not skip low-alpha pixels: indexed PNGs (e.g. SNES rips) mark
-        // background entries as transparent even when they carry real colour.
-        // The drop threshold below provides background exclusion instead.
+        // Skip genuinely transparent pixels; the drop threshold below handles
+        // opaque background colours that aren't in the palette.
+        if (hasAlpha && pixel.a.toInt() < 128) continue;
 
-        final (pl, pa, pb) =
+        final pixelLab =
             rgbToLab(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
 
         double best = double.infinity;
         Thread? bestThread;
         for (final entry in stripLab) {
-          final dl = pl - entry.l;
-          final da = pa - entry.a;
-          final db = pb - entry.b;
-          final dist = dl * dl + da * da + db * db;
+          final eLab = (entry.l, entry.a, entry.bl);
+          final dist = _dist(
+            pixelLab, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(),
+            eLab, entry.ri, entry.gi, entry.bi,
+          );
           if (dist < best) {
             best = dist;
             bestThread = entry.thread;
           }
         }
 
-        if (best > dropSq || bestThread == null) continue;
+        if (best > dropThreshold || bestThread == null) continue;
 
         stitches.add(FullStitch(
             x: px - x0, y: py - y0, threadId: bestThread.dmcCode));
