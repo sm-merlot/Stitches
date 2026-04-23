@@ -668,7 +668,9 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     // Name changes (existing snippets only — new snippets with only a name
     // change and no stitches aren't worth warning about)
     if (widget.snippet != null &&
-        _nameController.text.trim() != widget.snippet!.name) return true;
+        _nameController.text.trim() != widget.snippet!.name) {
+      return true;
+    }
     return false;
   }
 }
