@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +39,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _loading = false;
+  bool _isDragOver = false;
   StreamSubscription<String>? _incomingFileSub;
   StreamSubscription<String>? _incomingFolderSub;
   String? _homeFolderPath;
@@ -700,7 +702,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final recents = ref.watch(recentItemsProvider);
     final theme = Theme.of(context);
 
-    return Stack(
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _isDragOver = true),
+      onDragExited: (_) => setState(() => _isDragOver = false),
+      onDragDone: (details) {
+        setState(() => _isDragOver = false);
+        final file = details.files
+            .where((f) => f.path.endsWith('.stitches'))
+            .firstOrNull;
+        if (file != null) _openFromIncomingPath(file.path);
+      },
+      child: Stack(
       children: [
         Scaffold(
           appBar: AppBar(
@@ -873,7 +885,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
+
+        // Drag-over highlight.
+        if (_isDragOver)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 3,
+                  ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withAlpha(30),
+                ),
+                child: Center(
+                  child: Text(
+                    'Drop to open',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
+      ),
     );
   }
 }
