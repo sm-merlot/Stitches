@@ -278,16 +278,17 @@ class SpriteImporter {
 
   /// Detects colour blocks in a palette strip region.
   ///
-  /// Returns list of dominant colours (one per slot), ordered left-to-right or
-  /// top-to-bottom depending on [horizontal].
+  /// Returns the **exact raw pixel colour** from the midline of each detected
+  /// block (one entry per slot), ordered left-to-right or top-to-bottom
+  /// depending on [horizontal].
   ///
-  /// Each slot's representative colour is the average of ALL pixels in that
-  /// column (horizontal) or row (vertical), which is significantly more robust
-  /// than sampling a single midline scan when images have anti-aliasing, JPEG
-  /// artefacts, or partially-transparent edges.
+  /// Raw pixel values are returned without any averaging, quantisation, or DMC
+  /// mapping so that downstream matching (in [_importRegionRestrictedFromRaw])
+  /// compares sprite pixels against the same unmodified values that appear in
+  /// the source image.
   ///
-  /// Block boundaries are detected using CIE-76 Lab distance to avoid the
-  /// quantisation artefacts of the previous sRGB + 16-step grid approach.
+  /// Block boundaries are detected using CIE-76 Lab distance, which avoids the
+  /// boundary-artefacts of the previous sRGB + 16-step quantisation approach.
   static List<Color> detectPaletteStrip(
       img.Image image, Rect region, bool horizontal) {
     final x0 = region.left.round().clamp(0, image.width - 1);
@@ -296,84 +297,45 @@ class SpriteImporter {
     final y1 = region.bottom.round().clamp(0, image.height);
     if (x1 <= x0 || y1 <= y0) return [];
 
-    // Build a list of average Lab values along the scan axis.
-    // For horizontal strips: one averaged Lab value per column (x).
-    // For vertical strips:   one averaged Lab value per row    (y).
-    final List<LabColor> scanLab;
-    final List<Color> scanAvgColor;
-
-    if (horizontal) {
-      scanLab = List.generate(x1 - x0, (xi) {
-        double sumL = 0, sumA = 0, sumB = 0;
-        for (int y = y0; y < y1; y++) {
-          final px = image.getPixel(x0 + xi, y);
-          final lab = rgbToLab(px.r.toInt(), px.g.toInt(), px.b.toInt());
-          sumL += lab.$1; sumA += lab.$2; sumB += lab.$3;
-        }
-        final n = (y1 - y0).toDouble();
-        return (sumL / n, sumA / n, sumB / n);
-      });
-      scanAvgColor = List.generate(x1 - x0, (xi) {
-        double sumR = 0, sumG = 0, sumB = 0;
-        for (int y = y0; y < y1; y++) {
-          final px = image.getPixel(x0 + xi, y);
-          sumR += px.r.toDouble(); sumG += px.g.toDouble(); sumB += px.b.toDouble();
-        }
-        final n = (y1 - y0).toDouble();
-        return Color.fromARGB(
-            255, (sumR / n).round(), (sumG / n).round(), (sumB / n).round());
-      });
-    } else {
-      scanLab = List.generate(y1 - y0, (yi) {
-        double sumL = 0, sumA = 0, sumB = 0;
-        for (int x = x0; x < x1; x++) {
-          final px = image.getPixel(x, y0 + yi);
-          final lab = rgbToLab(px.r.toInt(), px.g.toInt(), px.b.toInt());
-          sumL += lab.$1; sumA += lab.$2; sumB += lab.$3;
-        }
-        final n = (x1 - x0).toDouble();
-        return (sumL / n, sumA / n, sumB / n);
-      });
-      scanAvgColor = List.generate(y1 - y0, (yi) {
-        double sumR = 0, sumG = 0, sumB = 0;
-        for (int x = x0; x < x1; x++) {
-          final px = image.getPixel(x, y0 + yi);
-          sumR += px.r.toDouble(); sumG += px.g.toDouble(); sumB += px.b.toDouble();
-        }
-        final n = (x1 - x0).toDouble();
-        return Color.fromARGB(
-            255, (sumR / n).round(), (sumG / n).round(), (sumB / n).round());
-      });
-    }
-
-    // Run-length block detection on the averaged Lab values.
-    // A new block starts when CIE-76 distance exceeds [_blockTransitionThreshold].
-    // CIE-76 is used here (not CIEDE2000) because we're detecting gross colour
-    // changes between palette slots, not making perceptual quality judgements.
-    const _blockTransitionThreshold = 15.0; // ΔE*76 units
+    // Scan the midline of the strip pixel by pixel.
+    // Using the midline means we read a real, unblended pixel value from the
+    // centre of the strip for every position — no averaging, no transformation.
+    // CIE-76 distance is used for transition detection (not CIEDE2000: we need
+    // cheap gross-change detection, not perceptual precision here).
+    const _blockTransitionThreshold = 15.0; // ΔE*76
     const _minBlockWidth = 3;
 
     final colours = <Color>[];
     LabColor? lastLab;
-    Color? lastColor;
+    Color? blockColor; // raw pixel colour of the first pixel in the current block
     int consecutiveCount = 0;
 
-    for (int i = 0; i < scanLab.length; i++) {
-      final lab = scanLab[i];
-      if (lastLab == null ||
-          labDistance(lab, lastLab) > _blockTransitionThreshold) {
-        if (consecutiveCount >= _minBlockWidth && lastColor != null) {
-          colours.add(lastColor);
+    void processPixel(int x, int y) {
+      final px = image.getPixel(x, y);
+      final c = Color.fromARGB(255, px.r.toInt(), px.g.toInt(), px.b.toInt());
+      final lab = rgbToLab(px.r.toInt(), px.g.toInt(), px.b.toInt());
+
+      if (lastLab == null || labDistance(lab, lastLab!) > _blockTransitionThreshold) {
+        if (consecutiveCount >= _minBlockWidth && blockColor != null) {
+          colours.add(blockColor!);
         }
         lastLab = lab;
-        lastColor = scanAvgColor[i];
+        blockColor = c;
         consecutiveCount = 1;
       } else {
         consecutiveCount++;
       }
     }
-    if (consecutiveCount >= _minBlockWidth && lastColor != null) {
-      colours.add(lastColor);
+
+    if (horizontal) {
+      final midY = ((y0 + y1) / 2).round().clamp(y0, y1 - 1);
+      for (int x = x0; x < x1; x++) { processPixel(x, midY); }
+    } else {
+      final midX = ((x0 + x1) / 2).round().clamp(x0, x1 - 1);
+      for (int y = y0; y < y1; y++) { processPixel(midX, y); }
+    }
+    if (consecutiveCount >= _minBlockWidth && blockColor != null) {
+      colours.add(blockColor!);
     }
     return colours;
   }
