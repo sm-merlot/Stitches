@@ -244,6 +244,16 @@ void main() {
       // Slot 0 of P2 should now have P1's slot 0 symbol.
       expect(synced[1].threads.first.symbol, equals('X'));
     });
+
+    test('setSnippetPaletteThreadColor produces new snippetPalettes instance', () {
+      n(c).initSnippetPalettesLocal(
+          [SnippetPalette.create(name: 'P1', threads: [_black])], 0);
+      final before = s(c).snippetPalettes;
+      n(c).setSnippetPaletteThreadColor(0, 0, _red);
+      expect(identical(s(c).snippetPalettes, before), isFalse,
+          reason: 'setSnippetPaletteThreadColor must return a new List instance '
+              'so identity-based dirty detection in the snippet editor triggers');
+    });
   });
 
   // ─── saveSelectionAsSnippet ───────────────────────────────────────────────────
@@ -385,6 +395,65 @@ void main() {
       await n(c).copySelection();
       expect(s(c).pendingCanvasWarning, isNotNull);
     });
+
+    test('commitPaste clears and refreshes compositeResult', () async {
+      final snippet = _makeSnippet();
+      final p = s(c).pattern.copyWith(snippets: [snippet]);
+      n(c).loadPattern(p,
+          session: EditorSession(selectedThreadId: p.editorSelectedThreadId));
+      n(c).setMode(AppMode.edit);
+      await n(c).loadSnippetToClipboard(snippet);
+      n(c).refreshCompositeCache();
+      final before = s(c).compositeResult;
+      n(c).commitPaste(0, 0);
+      expect(identical(s(c).compositeResult, before), isFalse);
+    });
+  });
+
+  // ─── loadSnippetToClipboard ───────────────────────────────────────────────────
+
+  group('EditorNotifier — loadSnippetToClipboard', () {
+    late ProviderContainer c;
+    setUp(() {
+      c = makeContainer();
+      loadEmpty(c);
+    });
+    tearDown(() => c.dispose());
+
+    test('switches to edit mode when called from view mode', () async {
+      final snippet = _makeSnippet();
+      final p = s(c).pattern.copyWith(snippets: [snippet]);
+      n(c).loadPattern(p,
+          session: EditorSession(selectedThreadId: p.editorSelectedThreadId));
+      expect(s(c).editMode, isFalse, reason: 'loadPattern stays in view mode');
+
+      await n(c).loadSnippetToClipboard(snippet);
+
+      expect(s(c).editMode, isTrue);
+      expect(s(c).drawingMode, DrawingMode.paste,
+          reason: 'must enter paste mode so commitPaste guard passes');
+    });
+
+    test('commitPaste works after loadSnippetToClipboard from view mode', () async {
+      final snippet = _makeSnippet();
+      final p = s(c).pattern.copyWith(snippets: [snippet]);
+      n(c).loadPattern(p,
+          session: EditorSession(selectedThreadId: p.editorSelectedThreadId));
+      await n(c).loadSnippetToClipboard(snippet);
+      n(c).commitPaste(2, 3);
+      final placed = s(c).pattern.stitches.whereType<FullStitch>()
+          .where((st) => st.x == 2 && st.y == 3);
+      expect(placed, hasLength(1));
+    });
+
+    test('clipboardFromSnippet is true after loadSnippetToClipboard', () async {
+      final snippet = _makeSnippet();
+      final p = s(c).pattern.copyWith(snippets: [snippet]);
+      n(c).loadPattern(p,
+          session: EditorSession(selectedThreadId: p.editorSelectedThreadId));
+      await n(c).loadSnippetToClipboard(snippet);
+      expect(s(c).clipboardFromSnippet, isTrue);
+    });
   });
 
   // ─── deleteSelection / moveSelection ──────────────────────────────────────────
@@ -414,6 +483,24 @@ void main() {
       final stitch = s(c).pattern.stitches.whereType<FullStitch>().single;
       expect(stitch.x, equals(4)); // 1 + 3
       expect(stitch.y, equals(3)); // 1 + 2
+    });
+
+    test('deleteSelection clears and refreshes compositeResult', () {
+      n(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      n(c).refreshCompositeCache();
+      final before = s(c).compositeResult;
+      n(c).setSelectionRect(const Rect.fromLTWH(0, 0, 3, 3));
+      n(c).deleteSelection();
+      expect(identical(s(c).compositeResult, before), isFalse);
+    });
+
+    test('moveSelection clears and refreshes compositeResult', () {
+      n(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      n(c).refreshCompositeCache();
+      final before = s(c).compositeResult;
+      n(c).setSelectionRect(const Rect.fromLTWH(0, 0, 2, 2));
+      n(c).moveSelection(1, 1);
+      expect(identical(s(c).compositeResult, before), isFalse);
     });
   });
 }
