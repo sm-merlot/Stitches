@@ -371,16 +371,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     }
   }
 
-  /// Called when the user picks a different matching algorithm.
-  /// Clears the match cache and regenerates all previews in real time.
-  void _onAlgorithmChanged(MatchAlgorithm algo) {
-    setState(() {
-      _matchAlgorithm = algo;
-      SpriteImporter.matchAlgorithm = algo; // clears cache
-      _refreshCropPreview();
-      _regeneratePalettePreviews();
-    });
-  }
 
   /// Refreshes detected colours and preview for strip at [i] after resize.
   void _refreshStripAt(int i) {
