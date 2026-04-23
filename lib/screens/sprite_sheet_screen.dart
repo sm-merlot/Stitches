@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 
 import '../providers/editor/editor_provider.dart';
-import '../services/color_space.dart';
+import '../screens/dmc_import_preview_screen.dart';
 import '../services/sprite_importer.dart';
 import '../utils/snackbars.dart';
 import '../widgets/sprite_sheet_painter.dart';
@@ -20,7 +20,7 @@ enum _Corner { tl, tr, bl, br }
 
 // ── Preview mode ──────────────────────────────────────────────────────────────
 
-enum _PreviewMode { raw, palette, dmc }
+enum _PreviewMode { raw, palette }
 
 sealed class _CornerHit {
   final _Corner corner;
@@ -111,13 +111,9 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
 
   // ── Preview ──────────────────────────────────────────────────────────────────
   Uint8List? _cropPreviewBytes;
-  Uint8List? _dmcPreviewBytes;
   final List<Uint8List?> _palettePreviewBytes = [];
   int? _activePaletteIndex;
   _PreviewMode _previewMode = _PreviewMode.palette;
-
-  // ── Match algorithm ───────────────────────────────────────────────────────────
-  MatchAlgorithm _matchAlgorithm = MatchAlgorithm.ciede2000;
 
   // ── Panel width ───────────────────────────────────────────────────────────────
   double _panelWidth = 260.0;
@@ -126,6 +122,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   late final TextEditingController _nameCtrl;
   int _addedCount = 0;
   bool _importing = false;
+  bool _previewBeforeAdd = false;
 
   bool get _hasCrop => _cropStart != null && _cropEnd != null;
 
@@ -175,7 +172,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     _confirmedStrips.clear();
     _detectedStripColours.clear();
     _palettePreviewBytes.clear();
-    _dmcPreviewBytes = null;
     _activePaletteIndex = null;
   }
 
@@ -305,7 +301,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   void _refreshCropPreview() {
     if (!_hasCrop || _image == null) {
       _cropPreviewBytes = null;
-      _dmcPreviewBytes = null;
       return;
     }
     final crop = Rect.fromPoints(_cropStart!, _cropEnd!).intersect(
@@ -341,9 +336,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     } else {
       _cropPreviewBytes = Uint8List.fromList(img.encodePng(cropped));
     }
-    // DMC preview: replace each pixel with its closest DMC thread colour.
-    _dmcPreviewBytes = SpriteImporter.renderAsDmcMatched(
-        _image!, Rect.fromPoints(_cropStart!, _cropEnd!));
   }
 
   /// Regenerates all palette preview images from current crop + strip colours.
@@ -702,29 +694,50 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     return r;
   }
 
+  /// Returns the detected raw colours for each confirmed palette strip.
+  List<List<Color>> _buildPaletteStripColours() {
+    final result = <List<Color>>[];
+    for (final stripRect in _confirmedStrips) {
+      final horizontal = stripRect.width >= stripRect.height;
+      final colours =
+          SpriteImporter.detectPaletteStrip(_image!, stripRect, horizontal);
+      if (colours.isNotEmpty) result.add(colours);
+    }
+    return result;
+  }
+
   Future<void> _addToSnippets() async {
     final region = _selectedRegion;
     if (region == null || _image == null) return;
 
+    final name =
+        _nameCtrl.text.trim().isEmpty ? 'Sprite' : _nameCtrl.text.trim();
+
+    // If preview mode is enabled, open the DMC preview screen first.
+    if (_previewBeforeAdd) {
+      final paletteStrips = _buildPaletteStripColours();
+      final confirmed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => DmcImportPreviewScreen(
+            image: _image!,
+            region: region,
+            paletteStrips: paletteStrips,
+            snippetName: name,
+          ),
+        ),
+      );
+      // Refresh palette previews in case algorithm was changed in the review screen.
+      if (mounted) setState(_regeneratePalettePreviews);
+      if (confirmed != true) return;
+    }
+
     setState(() => _importing = true);
     try {
-      final List<List<Color>> paletteStripColours = [];
-      for (final stripRect in _confirmedStrips) {
-        final horizontal = stripRect.width >= stripRect.height;
-        final colours =
-            SpriteImporter.detectPaletteStrip(_image!, stripRect, horizontal);
-        if (colours.isNotEmpty) paletteStripColours.add(colours);
-      }
-
-      final name = _nameCtrl.text.trim().isEmpty
-          ? 'Sprite'
-          : _nameCtrl.text.trim();
-
       final snippet = await SpriteImporter.importRegionWithPalettes(
         image: _image!,
         region: region,
         name: name,
-        paletteStrips: paletteStripColours,
+        paletteStrips: _buildPaletteStripColours(),
       );
 
       if (snippet.stitches.isEmpty) {
@@ -988,7 +1001,31 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                         EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+                // Preview checkbox
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: Checkbox(
+                        value: _previewBeforeAdd,
+                        onChanged: (v) =>
+                            setState(() => _previewBeforeAdd = v ?? false),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Preview as DMC before adding',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 FilledButton.icon(
                   onPressed: (_hasCrop && !_importing) ? _addToSnippets : null,
                   icon: _importing
@@ -1076,20 +1113,14 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   Widget _buildPreviewSection(ThemeData theme) {
     final hasStrips = _confirmedStrips.isNotEmpty;
 
-    // Decide what image to display.
     Uint8List? previewBytes;
-    switch (_previewMode) {
-      case _PreviewMode.raw:
-        previewBytes = _cropPreviewBytes;
-      case _PreviewMode.dmc:
-        previewBytes = _dmcPreviewBytes;
-      case _PreviewMode.palette:
-        if (_activePaletteIndex != null &&
-            _activePaletteIndex! < _palettePreviewBytes.length) {
-          previewBytes = _palettePreviewBytes[_activePaletteIndex!];
-        } else {
-          previewBytes = _cropPreviewBytes;
-        }
+    if (_previewMode == _PreviewMode.raw || !hasStrips) {
+      previewBytes = _cropPreviewBytes;
+    } else if (_activePaletteIndex != null &&
+        _activePaletteIndex! < _palettePreviewBytes.length) {
+      previewBytes = _palettePreviewBytes[_activePaletteIndex!];
+    } else {
+      previewBytes = _cropPreviewBytes;
     }
 
     final placeholder = !_hasCrop
@@ -1108,7 +1139,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Image ──────────────────────────────────────────────────────────
           Text('Preview',
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
@@ -1132,8 +1162,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // ── Preview mode toggle ─────────────────────────────────────────────
           SegmentedButton<_PreviewMode>(
             segments: [
               const ButtonSegment(value: _PreviewMode.raw, label: Text('Raw')),
@@ -1142,7 +1170,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                 label: const Text('Palette'),
                 enabled: hasStrips,
               ),
-              const ButtonSegment(value: _PreviewMode.dmc, label: Text('DMC')),
             ],
             selected: {_previewMode},
             onSelectionChanged: (s) => setState(() => _previewMode = s.first),
@@ -1151,41 +1178,6 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
               textStyle: WidgetStateProperty.all(
                   const TextStyle(fontSize: 11)),
             ),
-          ),
-          const SizedBox(height: 8),
-
-          // ── Algorithm dropdown ──────────────────────────────────────────────
-          Row(
-            children: [
-              Text('Algorithm',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<MatchAlgorithm>(
-                  initialValue: _matchAlgorithm,
-                  isDense: true,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    isDense: true,
-                  ),
-                  style: theme.textTheme.bodySmall,
-                  items: MatchAlgorithm.values
-                      .map((a) => DropdownMenuItem(
-                            value: a,
-                            child: Text(matchAlgorithmLabel(a),
-                                overflow: TextOverflow.ellipsis),
-                          ))
-                      .toList(),
-                  onChanged: (a) {
-                    if (a != null) _onAlgorithmChanged(a);
-                  },
-                ),
-              ),
-            ],
           ),
         ],
       ),
