@@ -298,11 +298,16 @@ mixin SnippetsMixin on Notifier<EditorState> {
     await Clipboard.setData(
       ClipboardData(text: _serializeClipboard(clipThreads, clipStitches)),
     );
+    // Auto-switch to edit mode so commitPaste() (which guards on editMode) works.
+    // If the user was in view mode (e.g. just browsing), entering paste mode
+    // from the snippets panel implies intent to draw.
+    final targetMode = state.editMode ? state.mode : AppMode.edit;
     state = state.copyWith(
-      clipboard: clipStitches,
-      clipboardThreads: clipThreads,
+      mode: targetMode,
       drawingMode: DrawingMode.paste,
       selectionRect: null,
+      clipboard: clipStitches,
+      clipboardThreads: clipThreads,
       clipboardFromSnippet: true,
     );
   }

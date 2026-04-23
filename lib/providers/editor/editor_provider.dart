@@ -82,7 +82,13 @@ class EditorNotifier extends Notifier<EditorState>
   static const int _maxUndoDepth = 200;
 
   @override
-  EditorState build() => EditorState(pattern: CrossStitchPattern.empty());
+  EditorState build() {
+    // Cancel any pending composite-refresh debounce when the notifier is
+    // re-built or disposed, so the timer callback never fires against a
+    // disposed Ref and tests don't see "Ref used after dispose" errors.
+    ref.onDispose(() => _drawCompositeDebounce?.cancel());
+    return EditorState(pattern: CrossStitchPattern.empty());
+  }
 
   // ─── File lifecycle ─────────────────────────────────────────────────────────
 
@@ -363,6 +369,8 @@ class EditorNotifier extends Notifier<EditorState>
       pattern: seeded,
       selectedThreadId: threads.first.dmcCode,
       recentThreadIds: [threads.first.dmcCode],
+      mode: AppMode.edit,
+      drawingMode: DrawingMode.draw,
       isFileOpen: true,
       activeLayerId: seeded.layers.isNotEmpty ? seeded.layers.first.id : '',
       compressOnSave: compress,

@@ -127,6 +127,36 @@ void main() {
       notifier(c).markSaved();
       expect(editorState(c).isDirty, isFalse);
     });
+
+    test('addStitch clears compositeResult so canvas repaints', () {
+      notifier(c).refreshCompositeCache();
+      assert(editorState(c).compositeResult != null);
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      expect(editorState(c).compositeResult, isNull);
+    });
+
+    test('removeStitchesAt clears compositeResult', () {
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      notifier(c).refreshCompositeCache();
+      notifier(c).removeStitchesAt(0, 0);
+      expect(editorState(c).compositeResult, isNull);
+    });
+
+    test('removeStitchesInBox clears compositeResult', () {
+      notifier(c).addStitch(const FullStitch(x: 2, y: 2, threadId: '310'));
+      notifier(c).refreshCompositeCache();
+      notifier(c).removeStitchesInBox(2, 2, 1);
+      expect(editorState(c).compositeResult, isNull);
+    });
+
+    test('removeBackstitchAt refreshes compositeResult', () {
+      notifier(c).addStitch(const BackStitch(
+          x1: 0.0, y1: 0.0, x2: 1.0, y2: 0.0, threadId: '310'));
+      notifier(c).refreshCompositeCache();
+      final before = editorState(c).compositeResult;
+      notifier(c).removeBackstitchAt(0.0, 0.0, 1.0, 0.0);
+      expect(identical(editorState(c).compositeResult, before), isFalse);
+    });
   });
 
   // ─── Undo / Redo ─────────────────────────────────────────────────────────────
@@ -346,6 +376,22 @@ void main() {
       loadEmpty(c, name: 'Pattern B');
       expect(editorState(c).clipboard, isNull);
     });
+
+    test('newPattern opens in edit mode', () {
+      notifier(c).newPattern(CrossStitchPattern.empty(name: 'New'));
+      expect(editorState(c).editMode, isTrue);
+    });
+
+    test('newPattern sets drawingMode = draw so canvas accepts input', () {
+      notifier(c).newPattern(CrossStitchPattern.empty(name: 'New'));
+      expect(editorState(c).drawingMode, DrawingMode.draw);
+    });
+
+    test('can addStitch immediately after newPattern without switching mode', () {
+      notifier(c).newPattern(CrossStitchPattern.empty(name: 'New'));
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      expect(editorState(c).pattern.stitches.whereType<FullStitch>(), hasLength(1));
+    });
   });
 
   // ─── resizePattern ────────────────────────────────────────────────────────
@@ -448,6 +494,15 @@ void main() {
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       notifier(c).floodFill(5, 5, erase: true); // no stitch at (5,5)
       expect(editorState(c).pattern.stitches, hasLength(1)); // original unchanged
+    });
+
+    test('floodFill refreshes compositeResult (not left stale)', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).setSelectedThread('310');
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      final before = editorState(c).compositeResult;
+      notifier(c).floodFill(0, 0, erase: true);
+      expect(identical(editorState(c).compositeResult, before), isFalse);
     });
   });
 
