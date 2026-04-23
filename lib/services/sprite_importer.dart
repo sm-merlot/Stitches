@@ -276,19 +276,19 @@ class SpriteImporter {
 
   // ── Palette strip detection ──────────────────────────────────────────────────
 
-  /// Detects colour blocks in a palette strip region.
+  /// Detects colour slots in a palette strip region.
   ///
-  /// Returns the **exact raw pixel colour** from the midline of each detected
-  /// block (one entry per slot), ordered left-to-right or top-to-bottom
-  /// depending on [horizontal].
+  /// Returns the **exact raw pixel colour** of each distinct slot, ordered
+  /// left-to-right or top-to-bottom depending on [horizontal].
+  ///
+  /// Assumes the strip is a clean, indexed PNG where every pixel within a slot
+  /// is the same uniform colour. A new slot is recorded the instant the midline
+  /// pixel differs from the previous slot by more than [_transitionThreshold]
+  /// CIE-76 ΔE units — no minimum run-length is required.
   ///
   /// Raw pixel values are returned without any averaging, quantisation, or DMC
-  /// mapping so that downstream matching (in [_importRegionRestrictedFromRaw])
-  /// compares sprite pixels against the same unmodified values that appear in
-  /// the source image.
-  ///
-  /// Block boundaries are detected using CIE-76 Lab distance, which avoids the
-  /// boundary-artefacts of the previous sRGB + 16-step quantisation approach.
+  /// mapping so that downstream matching compares sprite pixels against the
+  /// same unmodified values that appear in the source image.
   static List<Color> detectPaletteStrip(
       img.Image image, Rect region, bool horizontal) {
     final x0 = region.left.round().clamp(0, image.width - 1);
@@ -297,33 +297,17 @@ class SpriteImporter {
     final y1 = region.bottom.round().clamp(0, image.height);
     if (x1 <= x0 || y1 <= y0) return [];
 
-    // Scan the midline of the strip pixel by pixel.
-    // Using the midline means we read a real, unblended pixel value from the
-    // centre of the strip for every position — no averaging, no transformation.
-    // CIE-76 distance is used for transition detection (not CIEDE2000: we need
-    // cheap gross-change detection, not perceptual precision here).
-    const _blockTransitionThreshold = 15.0; // ΔE*76
-    const _minBlockWidth = 3;
+    const _transitionThreshold = 15.0; // ΔE*76 — below this = same slot
 
     final colours = <Color>[];
     LabColor? lastLab;
-    Color? blockColor; // raw pixel colour of the first pixel in the current block
-    int consecutiveCount = 0;
 
     void processPixel(int x, int y) {
       final px = image.getPixel(x, y);
-      final c = Color.fromARGB(255, px.r.toInt(), px.g.toInt(), px.b.toInt());
       final lab = rgbToLab(px.r.toInt(), px.g.toInt(), px.b.toInt());
-
-      if (lastLab == null || labDistance(lab, lastLab!) > _blockTransitionThreshold) {
-        if (consecutiveCount >= _minBlockWidth && blockColor != null) {
-          colours.add(blockColor!);
-        }
+      if (lastLab == null || labDistance(lab, lastLab!) > _transitionThreshold) {
+        colours.add(Color.fromARGB(255, px.r.toInt(), px.g.toInt(), px.b.toInt()));
         lastLab = lab;
-        blockColor = c;
-        consecutiveCount = 1;
-      } else {
-        consecutiveCount++;
       }
     }
 
@@ -333,9 +317,6 @@ class SpriteImporter {
     } else {
       final midX = ((x0 + x1) / 2).round().clamp(x0, x1 - 1);
       for (int y = y0; y < y1; y++) { processPixel(midX, y); }
-    }
-    if (consecutiveCount >= _minBlockWidth && blockColor != null) {
-      colours.add(blockColor!);
     }
     return colours;
   }
