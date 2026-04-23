@@ -1,0 +1,23 @@
+.changeset/chore-dmc-color-list-update-pr87.md
+  92bf80128b49294c 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "0bc5aa9e7f6aa158a597c38d8297aef27efce385",
+  "prompts": {
+    "92bf80128b49294c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "343ec2f8-74d1-4315-9f17-74390e2f0278",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 7,
+      "total_deletions": 0,
+      "accepted_lines": 7,
+      "overriden_lines": 0
+    }
+  }
+}
