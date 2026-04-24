@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.9.0
+
+### Minor Changes
+
+- 85219c7: Improve DMC colour matching accuracy with CIEDE2000
+
+  Replaces the CIE-76 squared-Euclidean distance used throughout the sprite importer with CIEDE2000 (Sharma, Wu & Dalal 2004), the current industry standard for perceptual colour difference. CIEDE2000 corrects known weaknesses in CIE-76, particularly for blues/violets, dark colours, and near-neutrals — all common in pixel-art palettes.
+
+  Changes:
+
+  - `matchPixel`, the palette-merge step, `renderCropWithPalette`, and `_importRegionRestrictedFromRaw` all now use CIEDE2000.
+  - Added a per-RGB match cache to `SpriteImporter`; sprite art typically reuses a tiny set of colours, so CIEDE2000's extra trig cost is paid once per unique colour rather than per pixel.
+  - Fixed a silent bug in `renderCropWithPalette` and `_importRegionRestrictedFromRaw` where the drop threshold was compared against a squared CIE-76 value (`30² = 900`) rather than the intended linear 30-unit distance. This is now a direct CIEDE2000 comparison against `30.0`.
+  - Replaced single-midline palette strip scanning with full-block column/row averaging. Each slot's representative colour is the average of all pixels in the corresponding column (horizontal strip) or row (vertical strip), making detection robust against JPEG artefacts and anti-aliased edges.
+  - Removed `_quantizeColor` (16-step grid snap). Grid-boundary artefacts caused incorrect block splits when a colour straddled a step boundary.
+  - Strip block-boundary detection now uses CIE-76 Lab distance (threshold 15 ΔE) instead of sRGB Euclidean, consistent with the rest of the pipeline.
+
+### Patch Changes
+
+- 0bc5aa9: Update DMC colour list from community source
+
+  Synced against cheshire137/cross-stitch-color-conversion: 13 colours added, 441 hex/name values updated, 1 possibly retired (994 Aquamarine Very Light moved to dmcReplacements).
+
+- ab31a6a: Update DMC colour list from KXStitch source
+
+  Automated sync: 35 added, 453 updated, 2 possibly retired.
+
+- 15a57be: Fix canvas not updating after drawing, snippet palette save, and symbol picker
+
+  - Canvas now repaints immediately after every draw/erase/fill/paste/move/delete operation — previously required hiding and re-showing a layer to trigger a repaint
+  - `loadSnippetToClipboard` auto-switches to edit mode so pasting a snippet from view mode works without a manual mode switch
+  - Snippet palette colour changes now mark the editor dirty so they can be saved
+  - Layer-thread symbol picker no longer allows picking a symbol already used by a composite (blended) thread
+  - `newPattern` opens directly in edit/draw mode instead of view mode
+
+- 8d976cc: Fix DMC colour update tool to use KXStitch as sole source
+
+  Removes the cheshire137/cross-stitch-color-conversion JSON as the primary
+  source and replaces the dual-source (primary + supplementary) logic with a
+  single KXStitch XML fetch. The KXStitch dataset covers all ~489 DMC colours
+  including the newer 01–35 range that the previous primary source omitted.
+
+- 3881ed6: Fix thread colour mismatch when loading old files
+
+  When a `.stitchx` file was saved before a DMC colour update, threads stored the outdated hex. Now `Thread.fromYaml` looks up the DMC code in the canonical colour table and uses the current hex — so existing stitches and newly drawn ones always match. Falls back to the saved hex for unknown/custom codes.
+
+- b3aae41: Fix the case where there is a duplicate colour in a primary palette on import, causing issues with colours on secondary palettes.
+- 0ea5b4f: Windows now registers the `.stitches` file association at launch — double-clicking a `.stitches` file in Explorer opens it directly in Stitches. No admin rights required (written to `HKCU`). Matches existing macOS/iOS/Android behaviour.
+
+  Drag and drop a `.stitches` file onto the home screen to open it on macOS, Windows, and Linux.
+
 ## 0.8.0
 
 ### Minor Changes
