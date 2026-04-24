@@ -1,0 +1,31 @@
+lib/services/render_cache.dart
+  45c17be4c7e18a48 1-315
+lib/widgets/canvas_painter.dart
+  45c17be4c7e18a48 12,18,21,37-43,55,69,124-143,161,181-184,186-203,205-212,217-219,269,271,277,279,312-315,317,325-327,347-350,356,375,461-466,495,497-499,503,518,535
+lib/widgets/pattern_canvas.dart
+  45c17be4c7e18a48 11,16-17,34-38,199-200,313-368,1430-1433,1530
+test/services/render_cache_test.dart
+  45c17be4c7e18a48 1-267
+.changeset/render-cache-extraction.md
+  45c17be4c7e18a48 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "806ee08b3691e95c35b73cb8971ecefe5b3f6087",
+  "prompts": {
+    "45c17be4c7e18a48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9beffbf4-cea9-4584-b1a8-21e08c3f3dbf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 784,
+      "total_deletions": 479,
+      "accepted_lines": 782,
+      "overriden_lines": 0
+    }
+  }
+}
