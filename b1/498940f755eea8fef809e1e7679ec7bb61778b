@@ -1,0 +1,44 @@
+test/models/geometry_and_layout_test.dart
+  45c17be4c7e18a48 67-133
+lib/widgets/canvas_painter.dart
+  45c17be4c7e18a48 184,225,228,573-576,596,673-674,684-687
+.changeset/stitch-geometry-extension.md
+  45c17be4c7e18a48 1-11
+lib/screens/stitch_ops_screen.dart
+  45c17be4c7e18a48 8,170,219
+lib/providers/editor/editor_state.dart
+  45c17be4c7e18a48 197-198
+lib/screens/stitch_ops_workspace_screen.dart
+  45c17be4c7e18a48 9,134
+lib/widgets/pattern_canvas.dart
+  45c17be4c7e18a48 12,513-517,541-545,593,595-596,599-600
+lib/providers/editor/editor_provider.dart
+  45c17be4c7e18a48 22
+lib/models/stitch_geometry.dart
+  45c17be4c7e18a48 1,15-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "b1498940f755eea8fef809e1e7679ec7bb61778b",
+  "prompts": {
+    "45c17be4c7e18a48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9beffbf4-cea9-4584-b1a8-21e08c3f3dbf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 229,
+      "total_deletions": 158,
+      "accepted_lines": 218,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
