@@ -317,9 +317,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final primary = palettes[0];
     final active = palettes[idx];
     final map = <String, Color>{};
+    // Use putIfAbsent so duplicate dmcCodes in the primary palette (where two
+    // strip colours matched the same DMC) always map to the FIRST slot's
+    // secondary colour — matching the behaviour of resolveThread's indexWhere.
     for (var i = 0; i < primary.threads.length; i++) {
       if (i < active.threads.length) {
-        map[primary.threads[i].dmcCode] = active.threads[i].color;
+        map.putIfAbsent(primary.threads[i].dmcCode, () => active.threads[i].color);
       }
     }
     return _paletteOverride = map.isEmpty ? null : map;
