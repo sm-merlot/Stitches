@@ -194,14 +194,8 @@ class EditorState {
     return activeLayer.stitches.where((s) => isStitchInRect(s, rect)).toList();
   }
 
-  static (int, int)? cellCoords(Stitch s) => switch (s) {
-    FullStitch(:final x, :final y) => (x, y),
-    HalfStitch(:final x, :final y) => (x, y),
-    HalfCrossStitch(:final x, :final y) => (x, y),
-    QuarterStitch(:final x, :final y) => (x, y),
-    QuarterCrossStitch(:final x, :final y) => (x, y),
-    BackStitch() => null,
-  };
+  /// Prefer [Stitch.cellCoords] extension getter over this static method.
+  static (int, int)? cellCoords(Stitch s) => s.cellCoords;
 
   static bool isStitchInRect(Stitch s, Rect rect) {
     final coords = cellCoords(s);

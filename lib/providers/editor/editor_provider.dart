@@ -19,6 +19,7 @@ import '../../models/snippet.dart';
 import '../../models/snippet_palette.dart';
 import '../../models/snippet_palette_resolver.dart';
 import '../../models/stitch.dart';
+import '../../models/stitch_geometry.dart';
 import '../../models/thread.dart';
 import '../../services/editor_session_service.dart';
 import '../../services/reference_image_service.dart';
