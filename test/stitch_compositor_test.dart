@@ -220,4 +220,148 @@ void main() {
     final r = StitchCompositor.compute(pattern);
     expect(r.backStitchEquiv['310'], closeTo(5.0, 0.001));
   });
+
+  // ─── CompositeLayer / instance API ───────────────────────────────────────────
+
+  group('StitchCompositor instance + CompositeLayer', () {
+    test('computeLayer matches compute for single-layer pattern', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [FullStitch(x: 2, y: 3, threadId: '310')])],
+      );
+      final result = StitchCompositor.compute(pattern);
+      final layer = StitchCompositor.computeLayer(pattern);
+      final fromLayer = layer.toCompositeResult();
+
+      expect(fromLayer.compositeThreads, equals(result.compositeThreads));
+      expect(fromLayer.blendedColors, equals(result.blendedColors));
+      expect(fromLayer.dedupedNonBack.length, result.dedupedNonBack.length);
+      expect(fromLayer.crossStitchEquiv, equals(result.crossStitchEquiv));
+      expect(fromLayer.backStitchEquiv, equals(result.backStitchEquiv));
+    });
+
+    test('CompositeLayer.fullStitches has one entry per full-stitch cell', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [
+          _layer(stitches: [
+            FullStitch(x: 0, y: 0, threadId: '310'),
+            FullStitch(x: 1, y: 1, threadId: '310'),
+          ])
+        ],
+      );
+      final layer = StitchCompositor.computeLayer(pattern);
+      expect(layer.fullStitches, hasLength(2));
+      expect(layer.fullStitches['0,0']?.resolvedThread.dmcCode, '310');
+      expect(layer.fullStitches['0,0']?.isBlended, false);
+    });
+
+    test('CompositeStitch.isBlended is true for multi-layer overlapping cells', () {
+      final t1 = _thread('310', const Color(0xFF000000));
+      final t2 = _thread('815', const Color(0xFF800000));
+      final pattern = _pattern(
+        threads: [t1, t2],
+        layers: [
+          _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')]),
+          _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '815')]),
+        ],
+      );
+      final layer = StitchCompositor.computeLayer(pattern);
+      final cs = layer.fullStitches['0,0'];
+      expect(cs, isNotNull);
+      expect(cs!.isBlended, true);
+    });
+
+    test('CompositeStitch.isBlended is false for single-layer cells', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [FullStitch(x: 5, y: 5, threadId: '310')])],
+      );
+      final layer = StitchCompositor.computeLayer(pattern);
+      expect(layer.fullStitches['5,5']?.isBlended, false);
+    });
+
+    test('otherStitches contains half/quarter stitches with resolved thread', () {
+      final t = _thread('321', const Color(0xFFCC0000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [
+          _layer(stitches: [
+            HalfStitch(x: 1, y: 1, threadId: '321', isForward: true),
+          ])
+        ],
+      );
+      final layer = StitchCompositor.computeLayer(pattern);
+      expect(layer.fullStitches, isEmpty);
+      expect(layer.otherStitches, hasLength(1));
+      expect(layer.otherStitches.first.resolvedThread.dmcCode, '321');
+    });
+
+    test('instance: compositeLayer is lazily built and cached', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
+      );
+      final compositor = StitchCompositor(pattern);
+      final first = compositor.compositeLayer;
+      final second = compositor.compositeLayer;
+      expect(identical(first, second), true); // same instance — not rebuilt
+    });
+
+    test('instance: updateCell invalidates cache — next access rebuilds', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
+      );
+      final compositor = StitchCompositor(pattern);
+      final before = compositor.compositeLayer;
+      compositor.updateCell(0, 0);
+      final after = compositor.compositeLayer;
+      expect(identical(before, after), false); // rebuilt after invalidation
+    });
+
+    test('instance: updateCells invalidates cache', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
+      );
+      final compositor = StitchCompositor(pattern);
+      final before = compositor.compositeLayer;
+      compositor.updateCells([(0, 0), (1, 1)]);
+      final after = compositor.compositeLayer;
+      expect(identical(before, after), false);
+    });
+
+    test('instance: rebuild invalidates cache', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
+      );
+      final compositor = StitchCompositor(pattern);
+      final before = compositor.compositeLayer;
+      compositor.rebuild();
+      final after = compositor.compositeLayer;
+      expect(identical(before, after), false);
+    });
+
+    test('instance: compositeResult matches static compute()', () {
+      final t = _thread('310', const Color(0xFF000000));
+      final pattern = _pattern(
+        threads: [t],
+        layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
+      );
+      final fromStatic = StitchCompositor.compute(pattern);
+      final fromInstance = StitchCompositor(pattern).compositeResult;
+      expect(fromInstance.compositeThreads.keys, equals(fromStatic.compositeThreads.keys));
+      expect(fromInstance.blendedColors, equals(fromStatic.blendedColors));
+      expect(fromInstance.crossStitchEquiv, equals(fromStatic.crossStitchEquiv));
+    });
+  });
 }
