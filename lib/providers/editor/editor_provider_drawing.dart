@@ -384,16 +384,19 @@ mixin DrawingMixin on Notifier<EditorState> {
     final rawPattern = _patternWithActiveLayerStitches(pattern, newStitches);
     // Prune threads whose last stitch was painted over by a different colour.
     final newPattern = _pruneUnusedThreads(rawPattern);
+    // Compute a lightweight composite immediately so compositeResult is never
+    // null — RenderCache can always use it, no raw-layer fallback needed.
+    // Symbol registry management is still debounced (cheap, imperceptible delay).
+    final quickComposite = StitchCompositor.compute(newPattern);
     state = state.copyWith(
       pattern: newPattern,
       snippetPalettes: snippetPalettes,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeResult: quickComposite,
       isDirty: true,
       redoStack: [],
     );
-    // Debounce composite refresh so drag-drawing doesn't recompute on every
-    // pointer-move event. 80 ms is imperceptible as a post-draw delay.
+    // Debounce full refresh so symbol management doesn't run on every drag event.
     _drawCompositeDebounce?.cancel();
     _drawCompositeDebounce =
         Timer(const Duration(milliseconds: 80), refreshCompositeCache);
@@ -410,7 +413,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeResult: StitchCompositor.compute(newPattern),
       isDirty: true,
       redoStack: [],
     );
@@ -444,7 +447,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeResult: StitchCompositor.compute(newPattern),
       isDirty: true,
       redoStack: [],
     );

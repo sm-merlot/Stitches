@@ -179,6 +179,7 @@ class RenderCache {
     }
   }
 
+
   void _addStitch(
     String key,
     Stitch stitch,
