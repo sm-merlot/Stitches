@@ -181,7 +181,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         if (!layer.visible) continue;
         for (final stitch in layer.stitches) {
           if (stitch is! BackStitch) continue;
-          if (!_backstichInRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
+          if (!stitch.isInViewport(minCX, minCY, maxCX, maxCY)) continue;
           final thread = _threadMap[stitch.threadId];
           if (thread == null) continue;
           var c = _resolveStitchColor(stitch.threadId,
@@ -222,10 +222,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         final occluded = upperFullStitchCells[layerIdx]!;
         for (final stitch in layer.stitches) {
           if (stitch is BackStitch) continue;
-          if (!_inCellRange(stitch, minCX, minCY, maxCX, maxCY)) continue;
+          if (!stitch.isInViewport(minCX, minCY, maxCX, maxCY)) continue;
           // Skip symbol if a higher visible layer has a FullStitch at this cell
           if (stitch is FullStitch && occluded.contains((stitch.x << 16) | stitch.y)) continue;
-          final sCoords = stitchXY(stitch);
+          final sCoords = stitch.cellCoords;
           if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
 
           // B&W stitch mode: skip symbols for done cells entirely.
@@ -570,8 +570,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           isCrossStitch: true);
       if (c == null) continue;
 
-      final rect = _stitchToBlockRect(stitch, cellSize);
-      if (rect == null) continue;
+      final block = stitch.blockCells;
+      if (block == null) continue;
+      final (bl, bt, bw, bh) = block;
+      final rect = Rect.fromLTWH(bl * cellSize, bt * cellSize, bw * cellSize, bh * cellSize);
 
       Color effectiveColor = c;
       if (stitch is FullStitch) {
@@ -591,7 +593,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       // Done + focused (or no focus) → full colour.
       // Done + non-focused → muted colour for orientation.
       if (stitchMode) {
-        final xy = stitchXY(stitch);
+        final xy = stitch.cellCoords;
         final isDone = xy != null && progress.completedStitches.contains(xy);
         if (!isDone) {
           effectiveColor = _bwGreyscale(
@@ -668,8 +670,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
     for (final stitch in layer.stitches) {
       if (stitch is BackStitch) continue;
-      if (!_inCellRange(stitch, minX, minY, maxX, maxY)) continue;
-      final xy = stitchXY(stitch);
+      if (!stitch.isInViewport(minX, minY, maxX, maxY)) continue;
+      final xy = stitch.cellCoords;
       if (xy == null || !_stitchOnPage(xy.$1, xy.$2)) continue;
 
       final thread = _threadMap[stitch.threadId];
@@ -679,8 +681,10 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           isCrossStitch: true);
       if (c == null) continue;
 
-      final rect = _stitchToBlockRect(stitch, cellSize);
-      if (rect == null) continue;
+      final block = stitch.blockCells;
+      if (block == null) continue;
+      final (bl, bt, bw, bh) = block;
+      final rect = Rect.fromLTWH(bl * cellSize, bt * cellSize, bw * cellSize, bh * cellSize);
 
       Color effectiveColor = c;
       if (stitch is FullStitch) {
@@ -726,74 +730,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           rect.bottom <= minPy || rect.top >= maxPy) { continue; }
       canvas.drawRect(rect, Paint()..color = effectiveColor);
     }
-  }
-
-  /// Returns the block-mode rect for [stitch] in canvas/pattern space, or null
-  /// if the stitch type has no block representation (e.g. [BackStitch]).
-  ///
-  /// Block mode renders each stitch as a solid colour rect — used at far-zoom
-  /// where stitch shapes are sub-pixel.  Each fractional-stitch type fills its
-  /// corresponding region of the cell (a quarter stitch fills its quadrant, a
-  /// half stitch fills its half), so the four quadrants of a cell tile cleanly.
-  static Rect? _stitchToBlockRect(Stitch stitch, double cellSize) {
-    final halfCell = cellSize * 0.5;
-    switch (stitch) {
-      case FullStitch(:final x, :final y):
-        return Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize);
-
-      case HalfStitch(:final x, :final y, isForward: true):
-        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
-      case HalfStitch(:final x, :final y, isForward: false):
-        return Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
-
-      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.left):
-        return Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, cellSize);
-      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.right):
-        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, cellSize);
-      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.top):
-        return Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, halfCell);
-      case HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom):
-        return Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, cellSize, halfCell);
-
-      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
-      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft):
-        return Rect.fromLTWH(x * cellSize, y * cellSize, halfCell, halfCell);
-      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
-      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight):
-        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize, halfCell, halfCell);
-      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
-      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft):
-        return Rect.fromLTWH(x * cellSize, y * cellSize + halfCell, halfCell, halfCell);
-      case QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
-      case QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight):
-        return Rect.fromLTWH(x * cellSize + halfCell, y * cellSize + halfCell, halfCell, halfCell);
-
-      case BackStitch():
-        return null;
-    }
-  }
-
-  // ── Viewport culling helpers ───────────────────────────────────────────────
-
-  bool _inCellRange(Stitch stitch, int minX, int minY, int maxX, int maxY) {
-    final (x, y) = switch (stitch) {
-      FullStitch(:final x, :final y) => (x, y),
-      HalfStitch(:final x, :final y) => (x, y),
-      QuarterStitch(:final x, :final y) => (x, y),
-      HalfCrossStitch(:final x, :final y) => (x, y),
-      QuarterCrossStitch(:final x, :final y) => (x, y),
-      BackStitch() => (-1, -1),
-    };
-    return x >= minX && x < maxX && y >= minY && y < maxY;
-  }
-
-  bool _backstichInRange(
-      BackStitch s, int minX, int minY, int maxX, int maxY) {
-    final bMinX = math.min(s.x1, s.x2);
-    final bMaxX = math.max(s.x1, s.x2);
-    final bMinY = math.min(s.y1, s.y2);
-    final bMaxY = math.max(s.y1, s.y2);
-    return bMaxX > minX && bMinX < maxX && bMaxY > minY && bMinY < maxY;
   }
 
   // ── Grid labels ────────────────────────────────────────────────────────────

@@ -64,6 +64,73 @@ void main() {
     });
   });
 
+  group('StitchGeometry.cellCoords', () {
+    test('FullStitch returns (x, y)', () {
+      expect(const FullStitch(x: 3, y: 7, threadId: 'a').cellCoords, equals((3, 7)));
+    });
+    test('BackStitch returns null', () {
+      expect(const BackStitch(x1: 0, y1: 0, x2: 1, y2: 1, threadId: 'a').cellCoords, isNull);
+    });
+  });
+
+  group('StitchGeometry.bounds', () {
+    test('FullStitch bounds wrap the cell', () {
+      final b = const FullStitch(x: 2, y: 3, threadId: 'a').bounds;
+      expect(b, (minX: 2.0, maxX: 3.0, minY: 3.0, maxY: 4.0));
+    });
+    test('BackStitch bounds use endpoint min/max', () {
+      final b = const BackStitch(x1: 1.5, y1: 0.0, x2: 3.0, y2: 2.5, threadId: 'a').bounds;
+      expect(b, (minX: 1.5, maxX: 3.0, minY: 0.0, maxY: 2.5));
+    });
+    test('BackStitch bounds are direction-independent', () {
+      final b = const BackStitch(x1: 3.0, y1: 2.5, x2: 1.5, y2: 0.0, threadId: 'a').bounds;
+      expect(b, (minX: 1.5, maxX: 3.0, minY: 0.0, maxY: 2.5));
+    });
+  });
+
+  group('StitchGeometry.blockCells', () {
+    test('FullStitch fills the full cell', () {
+      expect(const FullStitch(x: 1, y: 2, threadId: 'a').blockCells, (1.0, 2.0, 1.0, 1.0));
+    });
+    test('HalfStitch forward fills right half', () {
+      expect(const HalfStitch(x: 1, y: 2, isForward: true, threadId: 'a').blockCells,
+          (1.5, 2.0, 0.5, 1.0));
+    });
+    test('HalfStitch backward fills left half', () {
+      expect(const HalfStitch(x: 1, y: 2, isForward: false, threadId: 'a').blockCells,
+          (1.0, 2.0, 0.5, 1.0));
+    });
+    test('QuarterStitch topLeft fills top-left quadrant', () {
+      expect(const QuarterStitch(x: 0, y: 0, quadrant: QuadrantPosition.topLeft, threadId: 'a').blockCells,
+          (0.0, 0.0, 0.5, 0.5));
+    });
+    test('QuarterStitch bottomRight fills bottom-right quadrant', () {
+      expect(const QuarterStitch(x: 0, y: 0, quadrant: QuadrantPosition.bottomRight, threadId: 'a').blockCells,
+          (0.5, 0.5, 0.5, 0.5));
+    });
+    test('BackStitch returns null', () {
+      expect(const BackStitch(x1: 0, y1: 0, x2: 1, y2: 1, threadId: 'a').blockCells, isNull);
+    });
+  });
+
+  group('StitchGeometry.isInViewport', () {
+    test('FullStitch inside range returns true', () {
+      expect(const FullStitch(x: 5, y: 5, threadId: 'a').isInViewport(0, 0, 10, 10), isTrue);
+    });
+    test('FullStitch outside range returns false', () {
+      expect(const FullStitch(x: 15, y: 5, threadId: 'a').isInViewport(0, 0, 10, 10), isFalse);
+    });
+    test('FullStitch on right boundary (exclusive) returns false', () {
+      expect(const FullStitch(x: 10, y: 5, threadId: 'a').isInViewport(0, 0, 10, 10), isFalse);
+    });
+    test('BackStitch overlapping range returns true', () {
+      expect(const BackStitch(x1: 9.5, y1: 5.0, x2: 12.0, y2: 5.0, threadId: 'a').isInViewport(0, 0, 10, 10), isTrue);
+    });
+    test('BackStitch outside range returns false', () {
+      expect(const BackStitch(x1: 11.0, y1: 5.0, x2: 15.0, y2: 5.0, threadId: 'a').isInViewport(0, 0, 10, 10), isFalse);
+    });
+  });
+
   // ─── snippet_palette_resolver ─────────────────────────────────────────────
 
   const black = Thread(

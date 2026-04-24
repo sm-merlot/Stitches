@@ -5,6 +5,7 @@ import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
+import '../models/stitch_geometry.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 
@@ -166,7 +167,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
     if (s is BackStitch) {
       totalBackstitches++;
     } else {
-      final xy = _stitchXY(s);
+      final xy = s.cellCoords;
       if (xy != null) cellSet.add(xy);
     }
   }
@@ -215,7 +216,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
   // Non-FullStitch, non-BackStitch counted individually per stitch object.
   for (final s in pattern.stitches) {
     if (s is FullStitch || s is BackStitch) continue;
-    final xy = _stitchXY(s);
+    final xy = s.cellCoords;
     if (xy == null) continue;
     threadCounts[s.threadId] = (threadCounts[s.threadId] ?? 0) + 1;
     if (progress.completedStitches.contains(xy)) {
@@ -423,13 +424,6 @@ String _fmtMins(int mins) {
 String _isoFromDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-(int, int)? _stitchXY(Stitch s) => switch (s) {      FullStitch(:final x, :final y) => (x, y),
-      HalfStitch(:final x, :final y) => (x, y),
-      HalfCrossStitch(:final x, :final y) => (x, y),
-      QuarterStitch(:final x, :final y) => (x, y),
-      QuarterCrossStitch(:final x, :final y) => (x, y),
-      BackStitch() => null,
-    };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 

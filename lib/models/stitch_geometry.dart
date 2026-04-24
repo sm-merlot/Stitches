@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'stitch.dart';
 
 /// Pure geometry helpers for [Stitch] objects.
@@ -11,11 +12,104 @@ import 'stitch.dart';
 
 /// Returns the (x, y) cell coordinates of [stitch], or null for [BackStitch]
 /// (which has no single cell — use `(x1, y1, x2, y2)` directly).
-(int, int)? stitchXY(Stitch stitch) => switch (stitch) {
-      FullStitch(:final x, :final y) => (x, y),
-      HalfStitch(:final x, :final y) => (x, y),
-      HalfCrossStitch(:final x, :final y) => (x, y),
-      QuarterStitch(:final x, :final y) => (x, y),
-      QuarterCrossStitch(:final x, :final y) => (x, y),
-      BackStitch() => null,
-    };
+///
+/// Prefer [Stitch.cellCoords] extension getter over this free function.
+(int, int)? stitchXY(Stitch stitch) => stitch.cellCoords;
+
+extension StitchGeometry on Stitch {
+  /// Cell grid position. Null for [BackStitch] (which spans grid intersections).
+  (int, int)? get cellCoords => switch (this) {
+        FullStitch(:final x, :final y) => (x, y),
+        HalfStitch(:final x, :final y) => (x, y),
+        HalfCrossStitch(:final x, :final y) => (x, y),
+        QuarterStitch(:final x, :final y) => (x, y),
+        QuarterCrossStitch(:final x, :final y) => (x, y),
+        BackStitch() => null,
+      };
+
+  /// Bounding box in cell-unit space.
+  /// Non-backstitch types: always (minX: x, maxX: x+1, minY: y, maxY: y+1).
+  /// [BackStitch]: min/max of the two endpoints.
+  ({double minX, double maxX, double minY, double maxY}) get bounds => switch (this) {
+        BackStitch(:final x1, :final y1, :final x2, :final y2) => (
+            minX: math.min(x1, x2),
+            maxX: math.max(x1, x2),
+            minY: math.min(y1, y2),
+            maxY: math.max(y1, y2),
+          ),
+        FullStitch(:final x, :final y) ||
+        HalfStitch(:final x, :final y) ||
+        QuarterStitch(:final x, :final y) ||
+        HalfCrossStitch(:final x, :final y) ||
+        QuarterCrossStitch(:final x, :final y) =>
+          (
+            minX: x.toDouble(),
+            maxX: x + 1.0,
+            minY: y.toDouble(),
+            maxY: y + 1.0,
+          ),
+      };
+
+  /// Block-mode rect in cell-unit space: `(left, top, width, height)`.
+  /// Multiply each component by `cellSize` to convert to canvas pixels.
+  ///
+  /// Each fractional-stitch type fills its logical region of the cell so
+  /// that four quadrant stitches tile a cell cleanly:
+  /// - [FullStitch] → full cell (1×1)
+  /// - [HalfStitch] forward `/` → right half; backward `\` → left half
+  /// - [HalfCrossStitch] → corresponding left/right/top/bottom half
+  /// - [QuarterStitch] / [QuarterCrossStitch] → corresponding quarter
+  /// - [BackStitch] → null (no block representation)
+  (double left, double top, double width, double height)? get blockCells =>
+      switch (this) {
+        FullStitch(:final x, :final y) => (x.toDouble(), y.toDouble(), 1.0, 1.0),
+
+        HalfStitch(:final x, :final y, isForward: true) =>
+          (x + 0.5, y.toDouble(), 0.5, 1.0),
+        HalfStitch(:final x, :final y, isForward: false) =>
+          (x.toDouble(), y.toDouble(), 0.5, 1.0),
+
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.left) =>
+          (x.toDouble(), y.toDouble(), 0.5, 1.0),
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.right) =>
+          (x + 0.5, y.toDouble(), 0.5, 1.0),
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.top) =>
+          (x.toDouble(), y.toDouble(), 1.0, 0.5),
+        HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom) =>
+          (x.toDouble(), y + 0.5, 1.0, 0.5),
+
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
+          (x.toDouble(), y.toDouble(), 0.5, 0.5),
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
+          (x + 0.5, y.toDouble(), 0.5, 0.5),
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
+          (x.toDouble(), y + 0.5, 0.5, 0.5),
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) ||
+        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
+          (x + 0.5, y + 0.5, 0.5, 0.5),
+
+        BackStitch() => null,
+      };
+
+  /// Returns true when this stitch intersects the visible cell range
+  /// `[minX, maxX) × [minY, maxY)`.
+  ///
+  /// For non-backstitch types the cell `(x, y)` must fall inside the range.
+  /// For [BackStitch] the segment bounding box must overlap the range.
+  bool isInViewport(int minX, int minY, int maxX, int maxY) => switch (this) {
+        FullStitch(:final x, :final y) ||
+        HalfStitch(:final x, :final y) ||
+        QuarterStitch(:final x, :final y) ||
+        HalfCrossStitch(:final x, :final y) ||
+        QuarterCrossStitch(:final x, :final y) =>
+          x >= minX && x < maxX && y >= minY && y < maxY,
+        BackStitch(:final x1, :final y1, :final x2, :final y2) =>
+          math.max(x1, x2) > minX &&
+              math.min(x1, x2) < maxX &&
+              math.max(y1, y2) > minY &&
+              math.min(y1, y2) < maxY,
+      };
+}

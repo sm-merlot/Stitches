@@ -9,6 +9,7 @@ import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/page_layout.dart';
 import '../models/stitch.dart';
+import '../models/stitch_geometry.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import 'canvas_painter.dart';
@@ -503,37 +504,17 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   // ─── Paste centering ─────────────────────────────────────────────────────
 
-  /// Returns the (minX, maxX, minY, maxY) cell-space bounding box of a stitch.
-  (double, double, double, double) _stitchBounds(Stitch s) {
-    return switch (s) {
-      FullStitch(:final x, :final y) =>
-        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
-      HalfStitch(:final x, :final y) =>
-        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
-      QuarterStitch(:final x, :final y) =>
-        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
-      HalfCrossStitch(:final x, :final y) =>
-        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
-      QuarterCrossStitch(:final x, :final y) =>
-        (x.toDouble(), x + 1.0, y.toDouble(), y + 1.0),
-      BackStitch(:final x1, :final y1, :final x2, :final y2) => (
-          math.min(x1, x2), math.max(x1, x2),
-          math.min(y1, y2), math.max(y1, y2),
-        ),
-    };
-  }
-
   /// Computes the (dx, dy) offset so the clipboard is centered on [cursorCell].
   (int, int) _centeredPasteOffset(Offset cursorCell, List<Stitch> clips) {
     if (clips.isEmpty) return (cursorCell.dx.toInt(), cursorCell.dy.toInt());
     var minX = double.infinity, maxX = double.negativeInfinity;
     var minY = double.infinity, maxY = double.negativeInfinity;
     for (final s in clips) {
-      final (bx0, bx1, by0, by1) = _stitchBounds(s);
-      if (bx0 < minX) minX = bx0;
-      if (bx1 > maxX) maxX = bx1;
-      if (by0 < minY) minY = by0;
-      if (by1 > maxY) maxY = by1;
+      final b = s.bounds;
+      if (b.minX < minX) minX = b.minX;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxY > maxY) maxY = b.maxY;
     }
     final centerX = (minX + maxX) / 2;
     final centerY = (minY + maxY) / 2;
@@ -557,11 +538,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     var clipMinX = double.infinity, clipMaxX = double.negativeInfinity;
     var clipMinY = double.infinity, clipMaxY = double.negativeInfinity;
     for (final s in clips) {
-      final (bx0, bx1, by0, by1) = _stitchBounds(s);
-      if (bx0 < clipMinX) clipMinX = bx0;
-      if (bx1 > clipMaxX) clipMaxX = bx1;
-      if (by0 < clipMinY) clipMinY = by0;
-      if (by1 > clipMaxY) clipMaxY = by1;
+      final b = s.bounds;
+      if (b.minX < clipMinX) clipMinX = b.minX;
+      if (b.maxX > clipMaxX) clipMaxX = b.maxX;
+      if (b.minY < clipMinY) clipMinY = b.minY;
+      if (b.maxY > clipMaxY) clipMaxY = b.maxY;
     }
 
     final state = ref.read(editorProvider);
@@ -609,14 +590,14 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       final yCandidates = <double>[];
       for (final cs in state.pattern.stitches) {
         if (!clipThreadIds.contains(cs.threadId)) continue;
-        final (bx0, bx1, by0, by1) = _stitchBounds(cs);
+        final b = cs.bounds;
         if (snapDx == null) {
-          xCandidates.add(bx1 - clipMinX); // clipboard left butts canvas stitch right
-          xCandidates.add(bx0 - clipMaxX); // clipboard right butts canvas stitch left
+          xCandidates.add(b.maxX - clipMinX); // clipboard left butts canvas stitch right
+          xCandidates.add(b.minX - clipMaxX); // clipboard right butts canvas stitch left
         }
         if (snapDy == null) {
-          yCandidates.add(by1 - clipMinY); // clipboard top butts canvas stitch bottom
-          yCandidates.add(by0 - clipMaxY); // clipboard bottom butts canvas stitch top
+          yCandidates.add(b.maxY - clipMinY); // clipboard top butts canvas stitch bottom
+          yCandidates.add(b.minY - clipMaxY); // clipboard bottom butts canvas stitch top
         }
       }
       double? pickNearest(List<double> candidates, double current) {

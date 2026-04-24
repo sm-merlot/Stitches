@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
+import '../models/stitch_geometry.dart';
 import '../models/storage_location.dart';
 import '../providers/google_drive_provider.dart';
 import '../services/file_service.dart';
@@ -130,7 +131,7 @@ _PatternSummary _summarisePattern(CrossStitchPattern p) {
   final cellSet = <(int, int)>{};
   for (final s in p.stitches) {
     if (s is BackStitch) continue;
-    final xy = _stitchXY(s);
+    final xy = s.cellCoords;
     if (xy != null) cellSet.add(xy);
   }
 
@@ -343,14 +344,6 @@ _WorkspaceStats _aggregateStats(List<CrossStitchPattern> patterns) {
   );
 }
 
-(int, int)? _stitchXY(Stitch s) => switch (s) {
-      FullStitch(:final x, :final y) => (x, y),
-      HalfStitch(:final x, :final y) => (x, y),
-      HalfCrossStitch(:final x, :final y) => (x, y),
-      QuarterStitch(:final x, :final y) => (x, y),
-      QuarterCrossStitch(:final x, :final y) => (x, y),
-      BackStitch() => null,
-    };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
