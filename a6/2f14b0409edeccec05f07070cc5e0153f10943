@@ -1,0 +1,57 @@
+test/models/geometry_and_layout_test.dart
+  45c17be4c7e18a48 67-133
+lib/screens/stitch_ops_workspace_screen.dart
+  45c17be4c7e18a48 9,134
+lib/providers/editor/editor_provider.dart
+  45c17be4c7e18a48 22
+CHANGELOG.md
+  45c17be4c7e18a48 3-13
+lib/models/stitch_geometry.dart
+  45c17be4c7e18a48 1,15-115
+lib/widgets/canvas_painter.dart
+  45c17be4c7e18a48 184,225,228,573-576,596,673-674,684-687
+lib/providers/editor/editor_state.dart
+  45c17be4c7e18a48 197-198
+lib/screens/stitch_ops_screen.dart
+  45c17be4c7e18a48 8,170,219
+lib/widgets/pattern_canvas.dart
+  45c17be4c7e18a48 12,513-517,541-545,593,595-596,599-600
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a62f14b0409edeccec05f07070cc5e0153f10943",
+  "prompts": {
+    "45c17be4c7e18a48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9beffbf4-cea9-4584-b1a8-21e08c3f3dbf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 218,
+      "total_deletions": 147,
+      "accepted_lines": 218,
+      "overriden_lines": 0
+    },
+    "6d8e30979efb3e74": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1777011279060",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 225,
+      "total_deletions": 20,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
