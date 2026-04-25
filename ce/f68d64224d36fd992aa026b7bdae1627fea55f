@@ -1,0 +1,25 @@
+lib/services/pdf_service.dart
+  b979518e15614156 57,59,62-68,72-77,96,102,104,115-116,119,142-146
+lib/services/stitch_compositor.dart
+  b979518e15614156 95,98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "cef68d64224d36fd992aa026b7bdae1627fea55f",
+  "prompts": {
+    "b979518e15614156": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c128380d-5238-4094-986f-381e4eb50128",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 7,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    }
+  }
+}
