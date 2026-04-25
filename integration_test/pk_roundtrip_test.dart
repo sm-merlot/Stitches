@@ -29,10 +29,11 @@ import 'package:stitches/services/stitch_compositor.dart';
 
 /// Flatten visible layers to a position→dmcCode map (full stitches only).
 Map<(int, int), String> _flattenedStitchMap(dynamic pattern) {
-  final result = StitchCompositor.compute(pattern);
+  final result = StitchCompositor.computeLayer(pattern);
   final map = <(int, int), String>{};
-  for (final s in result.dedupedNonBack) {
-    if (s is FullStitch) map[(s.x, s.y)] = s.threadId;
+  for (final cs in result.fullStitches.values) {
+    final s = cs.stitch as FullStitch;
+    map[(s.x, s.y)] = s.threadId;
   }
   return map;
 }

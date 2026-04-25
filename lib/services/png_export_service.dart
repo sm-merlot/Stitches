@@ -21,11 +21,17 @@ class PngExportService {
     double cellSize = 20.0,
     bool realistic = true,
   }) async {
-    final composite = StitchCompositor.compute(pattern);
-    final nonBack = composite.dedupedNonBack;
+    final composite = StitchCompositor.computeLayer(pattern);
+    final nonBack = [
+      ...composite.fullStitches.values.map((cs) => cs.stitch),
+      ...composite.otherStitches.map((cs) => cs.stitch),
+    ];
     final backstitches = composite.backstitches;
     final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
-    final blendedColors = composite.blendedColors;
+    final blendedColors = {
+      for (final e in composite.fullStitches.entries)
+        if (e.value.isBlended) e.key: e.value.blendedColor,
+    };
 
     final pw = pattern.width * cellSize;
     final ph = pattern.height * cellSize;

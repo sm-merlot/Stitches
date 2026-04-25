@@ -43,19 +43,18 @@ CrossStitchPattern _pattern({
 void main() {
   // ─── Single layer ────────────────────────────────────────────────────────────
 
-  test('single layer, one FullStitch → one entry in compositeThreads, no blend', () {
+  test('single layer, one FullStitch → one entry in fullStitches, no blend', () {
     final t = _thread('310', const Color(0xFF000000));
     final pattern = _pattern(
       threads: [t],
       layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
     );
-    final r = StitchCompositor.compute(pattern);
+    final layer = StitchCompositor.computeLayer(pattern);
 
-    expect(r.compositeThreads, hasLength(1));
-    expect(r.compositeThreads['0,0']?.dmcCode, '310');
-    expect(r.blendedColors, isEmpty);
-    expect(r.dedupedNonBack, hasLength(1));
-    expect(r.backstitches, isEmpty);
+    expect(layer.fullStitches, hasLength(1));
+    expect(layer.fullStitches['0,0']?.resolvedThread.dmcCode, '310');
+    expect(layer.fullStitches['0,0']?.isBlended, false);
+    expect(layer.backstitches, isEmpty);
   });
 
   test('single layer, FullStitch → crossStitchEquiv 1.0 for that thread', () {
@@ -64,8 +63,8 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.crossStitchEquiv['310'], 1.0);
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.crossStitchEquiv['310'], 1.0);
   });
 
   test('single layer, HalfStitch → crossStitchEquiv 0.5', () {
@@ -74,8 +73,8 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [HalfStitch(x: 0, y: 0, isForward: true, threadId: '310')])],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.crossStitchEquiv['310'], closeTo(0.5, 0.001));
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.crossStitchEquiv['310'], closeTo(0.5, 0.001));
   });
 
   test('single layer, QuarterStitch → crossStitchEquiv 0.25', () {
@@ -86,8 +85,8 @@ void main() {
         QuarterStitch(x: 0, y: 0, quadrant: QuadrantPosition.topLeft, threadId: '310'),
       ])],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.crossStitchEquiv['310'], closeTo(0.25, 0.001));
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.crossStitchEquiv['310'], closeTo(0.25, 0.001));
   });
 
   test('hidden layer is excluded entirely', () {
@@ -98,15 +97,15 @@ void main() {
         _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')], visible: false),
       ],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.compositeThreads, isEmpty);
-    expect(r.dedupedNonBack, isEmpty);
-    expect(r.crossStitchEquiv, isEmpty);
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.fullStitches, isEmpty);
+    expect(layer.otherStitches, isEmpty);
+    expect(layer.crossStitchEquiv, isEmpty);
   });
 
   // ─── Multi-layer deduplication ───────────────────────────────────────────────
 
-  test('two layers with FullStitch at same cell → ONE entry in dedupedNonBack', () {
+  test('two layers with FullStitch at same cell → ONE entry in fullStitches, isBlended', () {
     final t1 = _thread('310', const Color(0xFF000000));
     final t2 = _thread('321', const Color(0xFFFF0000));
     final pattern = _pattern(
@@ -116,9 +115,9 @@ void main() {
         _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '321')]),
       ],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.dedupedNonBack, hasLength(1));
-    expect(r.blendedColors, contains('0,0'));
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.fullStitches, hasLength(1));
+    expect(layer.fullStitches['0,0']?.isBlended, true);
   });
 
   test('two layers same cell → crossStitchEquiv totals 1.0 (not 2.0)', () {
@@ -131,8 +130,8 @@ void main() {
         _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '321')]),
       ],
     );
-    final r = StitchCompositor.compute(pattern);
-    final total = r.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
+    final layer = StitchCompositor.computeLayer(pattern);
+    final total = layer.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
     expect(total, closeTo(1.0, 0.001));
   });
 
@@ -146,10 +145,11 @@ void main() {
         _layer(stitches: [FullStitch(x: 1, y: 0, threadId: '321')]),
       ],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.dedupedNonBack, hasLength(2));
-    expect(r.blendedColors, isEmpty);
-    final total = r.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.fullStitches, hasLength(2));
+    expect(layer.fullStitches['0,0']?.isBlended, false);
+    expect(layer.fullStitches['1,0']?.isBlended, false);
+    final total = layer.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
     expect(total, closeTo(2.0, 0.001));
   });
 
@@ -169,9 +169,10 @@ void main() {
         ),
       ],
     );
-    final r = StitchCompositor.compute(pattern);
-    final winner = r.dedupedNonBack.whereType<FullStitch>().first;
-    expect(winner.threadId, '321'); // top layer wins
+    final layer = StitchCompositor.computeLayer(pattern);
+    final cs = layer.fullStitches['0,0'];
+    expect(cs?.stitch, isA<FullStitch>());
+    expect((cs?.stitch as FullStitch).threadId, '321'); // top layer wins
   });
 
   test('Add blend → bottom stitch wins (symbol identity from base)', () {
@@ -188,9 +189,9 @@ void main() {
         ),
       ],
     );
-    final r = StitchCompositor.compute(pattern);
-    final winner = r.dedupedNonBack.whereType<FullStitch>().first;
-    expect(winner.threadId, '310'); // bottom layer wins for Add blend
+    final layer = StitchCompositor.computeLayer(pattern);
+    final cs = layer.fullStitches['0,0'];
+    expect((cs?.stitch as FullStitch).threadId, '310'); // bottom layer wins for Add blend
   });
 
   // ─── Backstitches ────────────────────────────────────────────────────────────
@@ -202,11 +203,11 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [bs])],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.backstitches, hasLength(1));
-    expect(r.backStitchEquiv['310'], closeTo(1.0, 0.001));
-    expect(r.dedupedNonBack, isEmpty);
-    expect(r.crossStitchEquiv, isEmpty);
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.backstitches, hasLength(1));
+    expect(layer.backStitchEquiv['310'], closeTo(1.0, 0.001));
+    expect(layer.fullStitches, isEmpty);
+    expect(layer.crossStitchEquiv, isEmpty);
   });
 
   test('diagonal BackStitch length is Euclidean', () {
@@ -217,30 +218,13 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [bs])],
     );
-    final r = StitchCompositor.compute(pattern);
-    expect(r.backStitchEquiv['310'], closeTo(5.0, 0.001));
+    final layer = StitchCompositor.computeLayer(pattern);
+    expect(layer.backStitchEquiv['310'], closeTo(5.0, 0.001));
   });
 
   // ─── CompositeLayer / instance API ───────────────────────────────────────────
 
   group('StitchCompositor instance + CompositeLayer', () {
-    test('computeLayer matches compute for single-layer pattern', () {
-      final t = _thread('310', const Color(0xFF000000));
-      final pattern = _pattern(
-        threads: [t],
-        layers: [_layer(stitches: [FullStitch(x: 2, y: 3, threadId: '310')])],
-      );
-      final result = StitchCompositor.compute(pattern);
-      final layer = StitchCompositor.computeLayer(pattern);
-      final fromLayer = layer.toCompositeResult();
-
-      expect(fromLayer.compositeThreads, equals(result.compositeThreads));
-      expect(fromLayer.blendedColors, equals(result.blendedColors));
-      expect(fromLayer.dedupedNonBack.length, result.dedupedNonBack.length);
-      expect(fromLayer.crossStitchEquiv, equals(result.crossStitchEquiv));
-      expect(fromLayer.backStitchEquiv, equals(result.backStitchEquiv));
-    });
-
     test('CompositeLayer.fullStitches has one entry per full-stitch cell', () {
       final t = _thread('310', const Color(0xFF000000));
       final pattern = _pattern(
@@ -349,19 +333,6 @@ void main() {
       compositor.rebuild();
       final after = compositor.compositeLayer;
       expect(identical(before, after), false);
-    });
-
-    test('instance: compositeResult matches static compute()', () {
-      final t = _thread('310', const Color(0xFF000000));
-      final pattern = _pattern(
-        threads: [t],
-        layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
-      );
-      final fromStatic = StitchCompositor.compute(pattern);
-      final fromInstance = StitchCompositor(pattern).compositeResult;
-      expect(fromInstance.compositeThreads.keys, equals(fromStatic.compositeThreads.keys));
-      expect(fromInstance.blendedColors, equals(fromStatic.blendedColors));
-      expect(fromInstance.crossStitchEquiv, equals(fromStatic.crossStitchEquiv));
     });
   });
 }

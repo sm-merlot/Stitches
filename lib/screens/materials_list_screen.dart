@@ -81,11 +81,11 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
 
   /// Unique threads to display — from composite cache if available, else pattern.threads.
   List<Thread> _threads() {
-    final cache = widget.state.compositeResult?.compositeThreads;
-    if (cache != null && cache.isNotEmpty) {
+    final layer = widget.state.compositeLayer;
+    if (layer != null && layer.fullStitches.isNotEmpty) {
       final unique = <String, Thread>{};
-      for (final t in cache.values) {
-        unique[t.dmcCode] = t;
+      for (final cs in layer.fullStitches.values) {
+        unique[cs.resolvedThread.dmcCode] ??= cs.resolvedThread;
       }
       return unique.values.toList();
     }
@@ -94,9 +94,9 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
 
   /// Cross-stitch equivalents per dmcCode (FullStitch=1.0, Half=0.5, Quarter=0.25).
   Map<String, double> _crossEquiv() {
-    final compositeResult = widget.state.compositeResult;
-    if (compositeResult != null) {
-      return Map<String, double>.from(compositeResult.crossStitchEquiv);
+    final layer = widget.state.compositeLayer;
+    if (layer != null) {
+      return Map<String, double>.from(layer.crossStitchEquiv);
     }
     // Fallback: no composite result yet — use raw single-layer stitches.
     final equiv = <String, double>{};
@@ -117,9 +117,9 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
 
   /// Backstitch Euclidean cell-unit length per dmcCode.
   Map<String, double> _backCells() {
-    final compositeResult = widget.state.compositeResult;
-    if (compositeResult != null) {
-      return Map<String, double>.from(compositeResult.backStitchEquiv);
+    final layer = widget.state.compositeLayer;
+    if (layer != null) {
+      return Map<String, double>.from(layer.backStitchEquiv);
     }
     // Fallback: no composite result yet.
     final cells = <String, double>{};

@@ -8,10 +8,13 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/page_layout.dart';
+import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/stitch_geometry.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/render_cache.dart';
+import '../services/stitch_compositor.dart';
 import 'canvas_painter.dart';
 import 'canvas_viewport.dart';
 
@@ -27,6 +30,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   double _scale = 1.0;
   Offset _panOffset = const Offset(20, 20);
+
+  // ── RenderCache ─────────────────────────────────────────────────────────────
+  // Owned here (not in Riverpod state) — UI concern, not business logic.
+  // Rebuilt when pattern/composite/mode changes; NOT rebuilt on pan/zoom.
+  final RenderCache _renderCache = RenderCache();
 
   // Touch pinch-to-zoom tracking
   final Map<int, Offset> _activePointers = {};
@@ -188,6 +196,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       _scale = editorState.viewScale;
       _panOffset = Offset(editorState.viewPanX, editorState.viewPanY);
     }
+    // Seed the render cache with the initial editor state.
+    _rebuildRenderCache(editorState);
   }
 
   @override
@@ -299,6 +309,63 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   }
 
   double get _cellSize => _baseCellSize;
+
+  // ── RenderCache maintenance ─────────────────────────────────────────────────
+
+  // Track the last values used to build the cache so we only rebuild when
+  // something relevant actually changed (not on every pan/zoom setState).
+  CrossStitchPattern? _lastCachedPattern;
+  CompositeLayer? _lastCachedComposite;
+  RenderViewConfig? _lastCachedViewConfig;
+
+  RenderViewConfig _buildViewConfig(EditorState state) => RenderViewConfig(
+        focusThreadId: state.stitchFocusThreadId,
+        stitchMode: state.stitchMode,
+        stitchBackMode: state.stitchBackMode,
+        stitchCrossMode: state.stitchCrossMode,
+        paletteOverride: _getOrBuildPaletteOverride(state),
+        progress: state.pattern.progress,
+        pageLayout: state.stitchMode ? state.pageLayout : null,
+        currentPage: state.currentPage,
+      );
+
+  void _rebuildRenderCache(EditorState state) {
+    final config = _buildViewConfig(state);
+    final layer = state.compositeLayer;
+    if (layer == null) {
+      _renderCache.clear();
+    } else {
+      _renderCache.rebuild(layer, config, _cellSize);
+    }
+    _lastCachedPattern = state.pattern;
+    _lastCachedComposite = state.compositeLayer;
+    _lastCachedViewConfig = config;
+  }
+
+  /// Rebuilds the render cache only when stitch data, composite, or view config
+  /// has changed since the last call. Pan/zoom changes are ignored here.
+  void _syncRenderCache(EditorState state) {
+    final config = _buildViewConfig(state);
+    final patternChanged = !identical(_lastCachedPattern, state.pattern);
+    final compositeChanged = !identical(_lastCachedComposite, state.compositeLayer);
+    final configChanged = config != _lastCachedViewConfig;
+
+    if (!patternChanged && !compositeChanged && !configChanged) return;
+
+    final layer = state.compositeLayer;
+    if (layer == null) {
+      _renderCache.clear();
+    } else if (configChanged && !patternChanged && !compositeChanged) {
+      // View config only (focus/mode/palette changed) — recolour without
+      // recomputing geometry.
+      _renderCache.rebuildViewConfig(layer, config, _cellSize);
+    } else {
+      _renderCache.rebuild(layer, config, _cellSize);
+    }
+    _lastCachedPattern = state.pattern;
+    _lastCachedComposite = state.compositeLayer;
+    _lastCachedViewConfig = config;
+  }
 
   /// Returns a stable [Map] instance for the active snippet palette override,
   /// rebuilding it only when [state.snippetPalettes] identity or the active
@@ -1361,6 +1428,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
 
+    // Keep the render cache in sync with pattern/composite/mode changes.
+    // Pan/zoom-only changes are filtered out by identity checks inside.
+    _syncRenderCache(state);
+
     // Show canvas warning banner triggered by the notifier (e.g. copy with no selection).
     ref.listen<EditorState>(editorProvider, (prev, next) {
       if (next.pendingCanvasWarning != null &&
@@ -1457,16 +1528,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   panOffset: _panOffset,
                   scale: _scale,
                   aidaColor: state.pattern.aidaColor,
+                  renderCache: _renderCache,
                   stitchMode: state.stitchMode,
-                  colourMode: state.colourMode,
                   stitchCrossMode: state.stitchCrossMode,
                   stitchBackMode: state.stitchBackMode,
                   stitchFocusThreadId: state.stitchFocusThreadId,
                   referenceImage: state.referenceImage,
                   referenceOpacity: state.referenceOpacity,
                   referenceVisible: state.referenceVisible,
-                  compositeResult: state.compositeResult,
-                  paletteOverride: _getOrBuildPaletteOverride(state),
+                  compositeLayer: state.compositeLayer,
                   // Pages are a stitch-mode concept — don't filter in edit/view.
                   pageLayout: state.stitchMode ? state.pageLayout : null,
                   currentPage: state.currentPage,

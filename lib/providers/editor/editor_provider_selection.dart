@@ -67,12 +67,14 @@ mixin SelectionMixin on Notifier<EditorState> {
       // copy matches exactly what is rendered on the canvas: one winner per cell
       // (topmost visible normal-blend opaque layer) plus all visible backstitches.
       // Falls back to raw layer iteration if the composite cache is stale/absent.
-      final composite = state.compositeResult;
-      if (composite != null) {
+      final layer = state.compositeLayer;
+      if (layer != null) {
         inSel = [
-          ...composite.dedupedNonBack
+          ...layer.fullStitches.values.map((cs) => cs.stitch)
               .where((s) => EditorState.isStitchInRect(s, rect)),
-          ...composite.backstitches
+          ...layer.otherStitches.map((cs) => cs.stitch)
+              .where((s) => EditorState.isStitchInRect(s, rect)),
+          ...layer.backstitches
               .where((s) => EditorState.isStitchInRect(s, rect)),
         ];
       } else {
@@ -163,7 +165,7 @@ mixin SelectionMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeLayer: null,
       isDirty: true,
       redoStack: [],
     );
@@ -204,7 +206,7 @@ mixin SelectionMixin on Notifier<EditorState> {
         pattern: newPattern,
         selectionRect: newRect,
         undoStack: _buildUndoStack(),
-        compositeResult: null,
+        compositeLayer: null,
         isDirty: true,
         redoStack: [],
       );
@@ -231,7 +233,7 @@ mixin SelectionMixin on Notifier<EditorState> {
       pattern: newPattern,
       selectionRect: newRect,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeLayer: null,
       isDirty: true,
       redoStack: [],
     );
@@ -259,7 +261,7 @@ mixin SelectionMixin on Notifier<EditorState> {
         pattern: newPattern,
         selectionRect: null,
         undoStack: _buildUndoStack(),
-        compositeResult: null,
+        compositeLayer: null,
         isDirty: true,
         redoStack: [],
       );
@@ -279,7 +281,7 @@ mixin SelectionMixin on Notifier<EditorState> {
       pattern: newPattern,
       selectionRect: null,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeLayer: null,
       isDirty: true,
       redoStack: [],
     );

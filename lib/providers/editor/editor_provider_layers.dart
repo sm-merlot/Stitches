@@ -115,7 +115,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -137,7 +137,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -151,7 +151,7 @@ mixin LayersMixin on Notifier<EditorState> {
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(visible: !l.visible));
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeResult: null);
+        pattern: newPattern, isDirty: true, compositeLayer: null);
     refreshCompositeCache();
   }
 
@@ -165,7 +165,7 @@ mixin LayersMixin on Notifier<EditorState> {
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeResult: null);
+        pattern: newPattern, isDirty: true, compositeLayer: null);
     refreshCompositeCache();
   }
 
@@ -174,7 +174,7 @@ mixin LayersMixin on Notifier<EditorState> {
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeResult: null);
+        pattern: newPattern, isDirty: true, compositeLayer: null);
     _opacityDebounce?.cancel();
     _opacityDebounce =
         Timer(const Duration(milliseconds: 150), refreshCompositeCache);
@@ -189,7 +189,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
     refreshCompositeCache();
   }
@@ -212,7 +212,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -245,7 +245,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
     refreshCompositeCache();
   }
@@ -267,7 +267,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -287,7 +287,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -330,7 +330,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -377,7 +377,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -400,7 +400,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -425,7 +425,7 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       isDirty: true,
-      compositeResult: null,
+      compositeLayer: null,
     );
     refreshCompositeCache();
   }
@@ -468,7 +468,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -486,7 +486,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -509,7 +509,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -522,7 +522,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -541,7 +541,7 @@ mixin LayersMixin on Notifier<EditorState> {
       undoStack: _buildUndoStack(),
       isDirty: true,
       redoStack: [],
-      compositeResult: null,
+      compositeLayer: null,
     );
   }
 
@@ -552,8 +552,8 @@ mixin LayersMixin on Notifier<EditorState> {
   }
 
   void refreshCompositeCache() {
-    final result = StitchCompositor.compute(state.pattern);
-    final activeCodes = result.compositeThreads.values.map((t) => t.dmcCode).toSet();
+    final layer = StitchCompositor.computeLayer(state.pattern);
+    final activeCodes = layer.fullStitches.values.map((cs) => cs.resolvedThread.dmcCode).toSet();
 
     final patternMap = <String, Thread>{
       for (final t in state.pattern.threads) t.dmcCode: t,
@@ -618,25 +618,32 @@ mixin LayersMixin on Notifier<EditorState> {
       }
     }
 
-    // Inject symbols from the resolved registry into composite threads.
+    // Inject symbols from the resolved registry into CompositeStitch.resolvedThread.
     // StitchCompositor doesn't know about compositeSymbols, so we apply them here.
-    final symbolizedCompositeThreads = <String, Thread>{};
-    for (final entry in result.compositeThreads.entries) {
-      final t = entry.value;
+    CompositeStitch applySymbol(CompositeStitch cs) {
+      final t = cs.resolvedThread;
       final sym = newRegistry[t.dmcCode] ?? t.symbol;
-      symbolizedCompositeThreads[entry.key] = sym == t.symbol ? t : t.copyWith(symbol: sym);
+      if (sym == t.symbol) return cs;
+      return CompositeStitch(
+        stitch: cs.stitch,
+        blendedColor: cs.blendedColor,
+        resolvedThread: t.copyWith(symbol: sym),
+        isBlended: cs.isBlended,
+      );
     }
-    final symbolizedResult = CompositeResult(
-      compositeThreads: symbolizedCompositeThreads,
-      blendedColors: result.blendedColors,
-      dedupedNonBack: result.dedupedNonBack,
-      backstitches: result.backstitches,
-      crossStitchEquiv: result.crossStitchEquiv,
-      backStitchEquiv: result.backStitchEquiv,
+
+    final symbolizedLayer = CompositeLayer(
+      fullStitches: {
+        for (final e in layer.fullStitches.entries) e.key: applySymbol(e.value),
+      },
+      otherStitches: [for (final cs in layer.otherStitches) applySymbol(cs)],
+      backstitches: layer.backstitches,
+      crossStitchEquiv: layer.crossStitchEquiv,
+      backStitchEquiv: layer.backStitchEquiv,
     );
 
     state = state.copyWith(
-      compositeResult: symbolizedResult,
+      compositeLayer: symbolizedLayer,
       pattern: state.pattern.copyWith(compositeSymbols: newRegistry),
       isDirty: registryChanged || state.isDirty,
     );

@@ -240,11 +240,11 @@ class _DesignColoursPanel extends ConsumerWidget {
   }
 
   List<Thread> _compositeThreads(EditorState state) {
-    final cache = state.compositeResult?.compositeThreads;
-    if (cache != null && cache.isNotEmpty) {
+    final layer = state.compositeLayer;
+    if (layer != null && layer.fullStitches.isNotEmpty) {
       final unique = <String, Thread>{};
-      for (final t in cache.values) {
-        unique[t.dmcCode] = t;
+      for (final cs in layer.fullStitches.values) {
+        unique[cs.resolvedThread.dmcCode] ??= cs.resolvedThread;
       }
       return unique.values.toList();
     }
@@ -313,16 +313,16 @@ Map<String, int> _countDoneStitches(EditorState state) {
 
   // FullStitches: use composite cache (topmost thread per cell) to match
   // _countStitchesComposite — avoids double-counting overlapping layers.
-  final cache = state.compositeResult?.compositeThreads;
-  if (cache != null && cache.isNotEmpty) {
-    for (final entry in cache.entries) {
+  final layer = state.compositeLayer;
+  if (layer != null && layer.fullStitches.isNotEmpty) {
+    for (final entry in layer.fullStitches.entries) {
       final parts = entry.key.split(',');
       if (parts.length != 2) continue;
       final x = int.tryParse(parts[0]);
       final y = int.tryParse(parts[1]);
       if (x == null || y == null) continue;
       if (progress.completedStitches.contains((x, y))) {
-        final id = entry.value.dmcCode;
+        final id = entry.value.resolvedThread.dmcCode;
         counts[id] = (counts[id] ?? 0) + 1;
       }
     }
@@ -370,11 +370,11 @@ Map<String, int> _countStitches(List<Stitch> stitches) {
 /// Counts stitches using the composite cache for FullStitches (deduplicates
 /// cells shared across layers) and raw threadId for non-FullStitch types.
 Map<String, int> _countStitchesComposite(EditorState state) {
-  final cache = state.compositeResult?.compositeThreads;
-  if (cache != null && cache.isNotEmpty) {
+  final layer = state.compositeLayer;
+  if (layer != null && layer.fullStitches.isNotEmpty) {
     final counts = <String, int>{};
-    for (final thread in cache.values) {
-      counts[thread.dmcCode] = (counts[thread.dmcCode] ?? 0) + 1;
+    for (final cs in layer.fullStitches.values) {
+      counts[cs.resolvedThread.dmcCode] = (counts[cs.resolvedThread.dmcCode] ?? 0) + 1;
     }
     for (final s in state.pattern.stitches) {
       if (s is FullStitch) continue;
@@ -429,16 +429,16 @@ class _StitchColoursPanel extends ConsumerWidget {
 
       // FullStitches: use the composite cache so only the topmost visible
       // stitch per cell is counted — matching the flattened view.
-      final cache = state.compositeResult?.compositeThreads;
-      if (cache != null && cache.isNotEmpty) {
-        for (final entry in cache.entries) {
+      final layer = state.compositeLayer;
+      if (layer != null && layer.fullStitches.isNotEmpty) {
+        for (final entry in layer.fullStitches.entries) {
           final parts = entry.key.split(',');
           if (parts.length != 2) continue;
           final sx = int.tryParse(parts[0]);
           final sy = int.tryParse(parts[1]);
           if (sx == null || sy == null) continue;
           if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) {
-            final id = entry.value.dmcCode;
+            final id = entry.value.resolvedThread.dmcCode;
             pageCounts[id] = (pageCounts[id] ?? 0) + 1;
           }
         }
@@ -607,11 +607,11 @@ class _StitchColoursPanel extends ConsumerWidget {
   }
 
   List<Thread> _compositeThreads(EditorState state) {
-    final cache = state.compositeResult?.compositeThreads;
-    if (cache != null && cache.isNotEmpty) {
+    final layer = state.compositeLayer;
+    if (layer != null && layer.fullStitches.isNotEmpty) {
       final unique = <String, Thread>{};
-      for (final t in cache.values) {
-        unique[t.dmcCode] = t;
+      for (final cs in layer.fullStitches.values) {
+        unique[cs.resolvedThread.dmcCode] ??= cs.resolvedThread;
       }
       return unique.values.toList();
     }

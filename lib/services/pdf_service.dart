@@ -54,25 +54,27 @@ class PdfService {
     final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
 
     // Single composite pass — matches the canvas view exactly.
-    final compositeResult = StitchCompositor.compute(pattern);
+    final compositeLayer = StitchCompositor.computeLayer(pattern);
 
-    // For blended cells, derive display color and symbol from CompositeResult.
+    // For blended cells, derive display color and symbol from CompositeLayer.
     final blendedCellColors = <String, Color>{};
     final blendedCellSymbols = <String, String>{};
-    for (final key in compositeResult.blendedColors.keys) {
-      final t = compositeResult.compositeThreads[key];
-      if (t != null) {
-        blendedCellColors[key] = t.color;
-        final sym = pattern.compositeSymbols[t.dmcCode] ?? '';
-        if (symbolIsVisible(sym) && !kPdfUnsupportedSymbols.contains(sym)) {
-          blendedCellSymbols[key] = sym;
-        }
+    for (final entry in compositeLayer.fullStitches.entries) {
+      if (!entry.value.isBlended) continue;
+      final t = entry.value.resolvedThread;
+      blendedCellColors[entry.key] = t.color;
+      final sym = pattern.compositeSymbols[t.dmcCode] ?? '';
+      if (symbolIsVisible(sym) && !kPdfUnsupportedSymbols.contains(sym)) {
+        blendedCellSymbols[entry.key] = sym;
       }
     }
 
-    final nonBack = compositeResult.dedupedNonBack;
-    final backstitches = compositeResult.backstitches;
-    final blendedColors = compositeResult.blendedColors;
+    final nonBack = [
+      ...compositeLayer.fullStitches.values.map((cs) => cs.stitch),
+      ...compositeLayer.otherStitches.map((cs) => cs.stitch),
+    ];
+    final backstitches = compositeLayer.backstitches;
+    final blendedColors = blendedCellColors;
 
     // Stitch counts from the composite view (one stitch per cell regardless
     // of how many layers contributed to it — matches what the stitcher actually stitches).
@@ -91,15 +93,15 @@ class PdfService {
     // the legend and fixes the blank-cell problem without changing any stitch counts.
     final Map<String, double> crossStitchEquiv;
     if (patternKeeperMode) {
-      final mutable = Map<String, double>.from(compositeResult.crossStitchEquiv);
+      final mutable = Map<String, double>.from(compositeLayer.crossStitchEquiv);
       for (final s in nonBack) {
         if (s is FullStitch) mutable.putIfAbsent(s.threadId, () => 0.0);
       }
       crossStitchEquiv = mutable;
     } else {
-      crossStitchEquiv = compositeResult.crossStitchEquiv;
+      crossStitchEquiv = compositeLayer.crossStitchEquiv;
     }
-    final backStitchEquiv = compositeResult.backStitchEquiv;
+    final backStitchEquiv = compositeLayer.backStitchEquiv;
 
     // Threads that have cross-type stitches / backstitches respectively,
     // sorted by DMC number so colour tables are easy to reference.
@@ -110,11 +112,11 @@ class PdfService {
     }
 
     // Build thread objects for all dmcCodes that appear in the composite counts.
-    // Source threads come from pattern.threads; composite (blended) threads come
-    // from compositeResult.compositeThreads values.
+    // Source threads come from pattern.threads; blended composite threads come
+    // from compositeLayer.fullStitches resolved threads.
     final allCompositeThreads = <String, Thread>{
       for (final t in pattern.threads) t.dmcCode: t,
-      for (final t in compositeResult.compositeThreads.values) t.dmcCode: t,
+      for (final cs in compositeLayer.fullStitches.values) cs.resolvedThread.dmcCode: cs.resolvedThread,
     };
     final crossThreads = allCompositeThreads.values
         .where((t) => crossStitchEquiv.containsKey(t.dmcCode))
@@ -137,12 +139,11 @@ class PdfService {
     // dmcCode, not the original layers'. So the original layer threads may not be in
     // pdfSymbols. Fill any remaining blendedCellSymbols entries using the composite
     // thread's PDF-assigned symbol so blended cells render correctly in the chart.
-    for (final key in compositeResult.blendedColors.keys) {
-      if (blendedCellSymbols.containsKey(key)) continue; // user composite symbol already set
-      final t = compositeResult.compositeThreads[key];
-      if (t == null) continue;
-      final sym = pdfSymbols[t.dmcCode] ?? '';
-      if (symbolIsVisible(sym)) blendedCellSymbols[key] = sym;
+    for (final entry in compositeLayer.fullStitches.entries) {
+      if (!entry.value.isBlended) continue;
+      if (blendedCellSymbols.containsKey(entry.key)) continue; // user composite symbol already set
+      final sym = pdfSymbols[entry.value.resolvedThread.dmcCode] ?? '';
+      if (symbolIsVisible(sym)) blendedCellSymbols[entry.key] = sym;
     }
 
     // ── Page layout constants ───────────────────────────────────────────────

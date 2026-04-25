@@ -454,7 +454,10 @@ class StitchOpsScreen extends ConsumerWidget {
     final editorState = ref.watch(editorProvider);
     final livePattern =
         editorState.isFileOpen ? editorState.pattern : pattern;
-    final compositeCache = editorState.compositeResult?.compositeThreads;
+    final compositeLayer = editorState.compositeLayer;
+    final compositeCache = compositeLayer == null ? null : {
+      for (final e in compositeLayer.fullStitches.entries) e.key: e.value.resolvedThread,
+    };
     final stats = _computeStats(livePattern, compositeCache: compositeCache);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;

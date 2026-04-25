@@ -2,7 +2,7 @@
 //
 // Coverage:
 //   • PdfService.buildPdfSymbolMapForTest — filters invisible / PDF-unsupported symbols
-//   • StitchCompositor.compute            — layer compositing for the PDF chart
+//   • StitchCompositor.computeLayer       — layer compositing for the PDF chart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,15 +95,15 @@ void main() {
   // ─── StitchCompositor integration (replaces compositeNonBack tests) ───────────
 
   group('StitchCompositor via PDF data prep', () {
-    test('single layer, single stitch → nonBack length 1, no blended', () {
+    test('single layer, single stitch → fullStitches length 1, not blended', () {
       final t = _thread('310', 'X');
       final pattern = _pattern(
         threads: [t],
         layers: [_layer(stitches: [const FullStitch(x: 0, y: 0, threadId: '310')])],
       );
-      final r = StitchCompositor.compute(pattern);
-      expect(r.dedupedNonBack, hasLength(1));
-      expect(r.blendedColors, isEmpty);
+      final r = StitchCompositor.computeLayer(pattern);
+      expect(r.fullStitches, hasLength(1));
+      expect(r.fullStitches['0,0']?.isBlended, false);
     });
 
     test('hidden layer is excluded', () {
@@ -117,12 +117,12 @@ void main() {
           ),
         ],
       );
-      final r = StitchCompositor.compute(pattern);
-      expect(r.dedupedNonBack, isEmpty);
-      expect(r.compositeThreads, isEmpty);
+      final r = StitchCompositor.computeLayer(pattern);
+      expect(r.fullStitches, isEmpty);
+      expect(r.otherStitches, isEmpty);
     });
 
-    test('two layers, same cell, Add blend → bottom stitch identity; blendedColors present', () {
+    test('two layers, same cell, Add blend → bottom stitch identity; isBlended', () {
       final t1 = _thread('310', 'X');
       final t2 = _thread('321', 'O');
       final pattern = _pattern(
@@ -135,14 +135,14 @@ void main() {
           ),
         ],
       );
-      final r = StitchCompositor.compute(pattern);
-      expect(r.dedupedNonBack, hasLength(1));
-      expect(r.blendedColors, contains('2,3'));
-      final winner = r.dedupedNonBack.whereType<FullStitch>().first;
+      final r = StitchCompositor.computeLayer(pattern);
+      expect(r.fullStitches, hasLength(1));
+      expect(r.fullStitches['2,3']?.isBlended, true);
+      final winner = r.fullStitches['2,3']?.stitch as FullStitch;
       expect(winner.threadId, '310');
     });
 
-    test('non-FullStitch types pass through without deduplication', () {
+    test('non-FullStitch types go to otherStitches without deduplication', () {
       final t = _thread('310', 'X');
       final pattern = _pattern(
         threads: [t],
@@ -153,9 +153,9 @@ void main() {
           ]),
         ],
       );
-      final r = StitchCompositor.compute(pattern);
-      expect(r.dedupedNonBack, hasLength(2));
-      expect(r.blendedColors, isEmpty);
+      final r = StitchCompositor.computeLayer(pattern);
+      expect(r.otherStitches, hasLength(2));
+      expect(r.fullStitches, isEmpty);
     });
 
     test('thread missing from threadMap — FullStitch cell skipped', () {
@@ -166,12 +166,12 @@ void main() {
           _layer(stitches: [const FullStitch(x: 0, y: 0, threadId: 'UNKNOWN')]),
         ],
       );
-      final r = StitchCompositor.compute(pattern);
-      expect(r.dedupedNonBack, isEmpty);
-      expect(r.compositeThreads, isEmpty);
+      final r = StitchCompositor.computeLayer(pattern);
+      expect(r.fullStitches, isEmpty);
+      expect(r.otherStitches, isEmpty);
     });
 
-    test('two different cells, no overlap — both in dedupedNonBack, no blend', () {
+    test('two different cells, no overlap — both in fullStitches, not blended', () {
       final t1 = _thread('310', 'X');
       final t2 = _thread('321', 'O');
       final pattern = _pattern(
@@ -181,9 +181,9 @@ void main() {
           _layer(stitches: [const FullStitch(x: 1, y: 0, threadId: '321')]),
         ],
       );
-      final r = StitchCompositor.compute(pattern);
-      expect(r.dedupedNonBack, hasLength(2));
-      expect(r.blendedColors, isEmpty);
+      final r = StitchCompositor.computeLayer(pattern);
+      expect(r.fullStitches, hasLength(2));
+      expect(r.fullStitches.values.any((cs) => cs.isBlended), false);
     });
 
     test('overlapping layers count as ONE stitch total, not two', () {
@@ -196,20 +196,20 @@ void main() {
           _layer(stitches: [const FullStitch(x: 0, y: 0, threadId: '321')]),
         ],
       );
-      final r = StitchCompositor.compute(pattern);
+      final r = StitchCompositor.computeLayer(pattern);
       final total = r.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
       expect(total, closeTo(1.0, 0.001));
     });
 
-    test('BackStitch is excluded from dedupedNonBack (goes to backstitches)', () {
+    test('BackStitch goes to backstitches, not fullStitches', () {
       final t = _thread('310', 'X');
       final bs = BackStitch(x1: 0, y1: 0, x2: 1, y2: 0, threadId: '310');
       final pattern = _pattern(
         threads: [t],
         layers: [_layer(stitches: [bs])],
       );
-      final r = StitchCompositor.compute(pattern);
-      expect(r.dedupedNonBack, isEmpty);
+      final r = StitchCompositor.computeLayer(pattern);
+      expect(r.fullStitches, isEmpty);
       expect(r.backstitches, hasLength(1));
     });
 
@@ -226,8 +226,8 @@ void main() {
           ),
         ],
       );
-      final r = StitchCompositor.compute(pattern);
-      final winner = r.dedupedNonBack.whereType<FullStitch>().first;
+      final r = StitchCompositor.computeLayer(pattern);
+      final winner = r.fullStitches['0,0']?.stitch as FullStitch;
       expect(winner.threadId, '321');
     });
   });

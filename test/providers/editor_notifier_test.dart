@@ -128,34 +128,40 @@ void main() {
       expect(editorState(c).isDirty, isFalse);
     });
 
-    test('addStitch clears compositeResult so canvas repaints', () {
+    test('addStitch provides quick compositeLayer immediately', () {
       notifier(c).refreshCompositeCache();
-      assert(editorState(c).compositeResult != null);
+      final before = editorState(c).compositeLayer;
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
-      expect(editorState(c).compositeResult, isNull);
+      // Quick composite computed immediately — not null, and different from before.
+      expect(editorState(c).compositeLayer, isNotNull);
+      expect(identical(editorState(c).compositeLayer, before), isFalse);
     });
 
-    test('removeStitchesAt clears compositeResult', () {
+    test('removeStitchesAt provides fresh compositeLayer immediately', () {
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       notifier(c).refreshCompositeCache();
+      final before = editorState(c).compositeLayer;
       notifier(c).removeStitchesAt(0, 0);
-      expect(editorState(c).compositeResult, isNull);
+      expect(editorState(c).compositeLayer, isNotNull);
+      expect(identical(editorState(c).compositeLayer, before), isFalse);
     });
 
-    test('removeStitchesInBox clears compositeResult', () {
+    test('removeStitchesInBox provides fresh compositeLayer immediately', () {
       notifier(c).addStitch(const FullStitch(x: 2, y: 2, threadId: '310'));
       notifier(c).refreshCompositeCache();
+      final before = editorState(c).compositeLayer;
       notifier(c).removeStitchesInBox(2, 2, 1);
-      expect(editorState(c).compositeResult, isNull);
+      expect(editorState(c).compositeLayer, isNotNull);
+      expect(identical(editorState(c).compositeLayer, before), isFalse);
     });
 
-    test('removeBackstitchAt refreshes compositeResult', () {
+    test('removeBackstitchAt refreshes compositeLayer', () {
       notifier(c).addStitch(const BackStitch(
           x1: 0.0, y1: 0.0, x2: 1.0, y2: 0.0, threadId: '310'));
       notifier(c).refreshCompositeCache();
-      final before = editorState(c).compositeResult;
+      final before = editorState(c).compositeLayer;
       notifier(c).removeBackstitchAt(0.0, 0.0, 1.0, 0.0);
-      expect(identical(editorState(c).compositeResult, before), isFalse);
+      expect(identical(editorState(c).compositeLayer, before), isFalse);
     });
   });
 
@@ -496,13 +502,13 @@ void main() {
       expect(editorState(c).pattern.stitches, hasLength(1)); // original unchanged
     });
 
-    test('floodFill refreshes compositeResult (not left stale)', () {
+    test('floodFill refreshes compositeLayer (not left stale)', () {
       notifier(c).setMode(AppMode.edit);
       notifier(c).setSelectedThread('310');
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
-      final before = editorState(c).compositeResult;
+      final before = editorState(c).compositeLayer;
       notifier(c).floodFill(0, 0, erase: true);
-      expect(identical(editorState(c).compositeResult, before), isFalse);
+      expect(identical(editorState(c).compositeLayer, before), isFalse);
     });
   });
 
