@@ -150,16 +150,16 @@ class PageLayout {
     // Build snap-colour map from the canonical composite view — same thread
     // per cell that the stitcher sees on the canvas (visible layers, blending
     // resolved, topmost layer wins for overlapping FullStitches).
-    final composite = StitchCompositor.compute(pattern);
+    final composite = StitchCompositor.computeLayer(pattern);
     final threadIndex = <String, int>{
       for (int i = 0; i < pattern.threads.length; i++)
         pattern.threads[i].dmcCode: i,
     };
 
-    // compositeThreads is keyed 'x,y' → Thread.
+    // fullStitches is keyed 'x,y' → CompositeStitch; resolvedThread is the winner.
     final Map<int, int?> snapColor = {
-      for (final entry in composite.compositeThreads.entries)
-        _parseXY(entry.key): threadIndex[entry.value.dmcCode],
+      for (final entry in composite.fullStitches.entries)
+        _parseXY(entry.key): threadIndex[entry.value.resolvedThread.dmcCode],
     };
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];

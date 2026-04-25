@@ -33,7 +33,7 @@ void main() {
         'fuzzyAmount=${config.fuzzyAmount} enabled=${config.enabled}');
 
     // ── Build snap-colour map via StitchCompositor (mirrors PageLayout.compute)
-    final composite = StitchCompositor.compute(pattern);
+    final composite = StitchCompositor.computeLayer(pattern);
     final threadIndex = <String, int>{
       for (int i = 0; i < pattern.threads.length; i++)
         pattern.threads[i].dmcCode: i,
@@ -43,11 +43,11 @@ void main() {
         i: pattern.threads[i].symbol,
     };
     final snapColor = <int, int?>{};
-    for (final entry in composite.compositeThreads.entries) {
+    for (final entry in composite.fullStitches.entries) {
       final parts = entry.key.split(',');
       final col = int.parse(parts[0]);
       final row = int.parse(parts[1]);
-      snapColor[(col << 16) | row] = threadIndex[entry.value.dmcCode];
+      snapColor[(col << 16) | row] = threadIndex[entry.value.resolvedThread.dmcCode];
     }
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];

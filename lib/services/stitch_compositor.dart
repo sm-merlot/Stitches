@@ -6,50 +6,6 @@ import '../models/stitch.dart';
 import '../models/thread.dart';
 import 'sprite_importer.dart';
 
-/// The flattened, stitcher-facing view of a [CrossStitchPattern].
-///
-/// Layers are a design-time concept. After calling [StitchCompositor.compute],
-/// this object represents what the stitcher actually needs to stitch once all
-/// layer blending has been resolved.
-///
-/// Prefer [CompositeLayer] for new code — [CompositeResult] is retained for
-/// backwards compatibility while callers migrate incrementally.
-class CompositeResult {
-  /// Final thread per occupied cell, keyed by `'x,y'`.
-  /// Single-layer cells use their source thread; multi-layer cells use the
-  /// DMC-snapped blended thread.
-  final Map<String, Thread> compositeThreads;
-
-  /// Raw blended [Color] for cells where ≥2 visible layers overlap.
-  /// Not present for single-layer cells.
-  final Map<String, Color> blendedColors;
-
-  /// One stitch per FullStitch cell (symbol-winner rule applied), plus all
-  /// non-back non-full stitches from all visible layers verbatim.
-  /// This is the canonical stitch list for the stitcher.
-  final List<Stitch> dedupedNonBack;
-
-  /// All [BackStitch] instances from all visible layers.
-  final List<BackStitch> backstitches;
-
-  /// Cross-stitch equivalents per dmcCode.
-  /// FullStitches → 1.0 against the composite thread's dmcCode.
-  /// Non-full non-back types → fractional (0.5 half, 0.25 quarter) against source threadId.
-  final Map<String, double> crossStitchEquiv;
-
-  /// Backstitch Euclidean cell-unit length per threadId.
-  final Map<String, double> backStitchEquiv;
-
-  const CompositeResult({
-    required this.compositeThreads,
-    required this.blendedColors,
-    required this.dedupedNonBack,
-    required this.backstitches,
-    required this.crossStitchEquiv,
-    required this.backStitchEquiv,
-  });
-}
-
 // ─── CompositeStitch ──────────────────────────────────────────────────────────
 
 /// A single stitch with its layer-blended display colour and resolved thread.
@@ -114,29 +70,6 @@ class CompositeLayer {
     required this.backStitchEquiv,
   });
 
-  /// Convert to [CompositeResult] for callers that have not yet migrated to
-  /// the [CompositeLayer] API.
-  CompositeResult toCompositeResult() {
-    final compositeThreads = <String, Thread>{
-      for (final e in fullStitches.entries) e.key: e.value.resolvedThread,
-    };
-    final blendedColors = <String, Color>{
-      for (final e in fullStitches.entries)
-        if (e.value.isBlended) e.key: e.value.blendedColor,
-    };
-    final dedupedNonBack = <Stitch>[
-      ...fullStitches.values.map((c) => c.stitch),
-      ...otherStitches.map((c) => c.stitch),
-    ];
-    return CompositeResult(
-      compositeThreads: compositeThreads,
-      blendedColors: blendedColors,
-      dedupedNonBack: dedupedNonBack,
-      backstitches: backstitches,
-      crossStitchEquiv: crossStitchEquiv,
-      backStitchEquiv: backStitchEquiv,
-    );
-  }
 }
 
 // ─── StitchCompositor ─────────────────────────────────────────────────────────
@@ -159,11 +92,10 @@ class CompositeLayer {
 ///
 /// ## Static convenience
 ///
-/// For one-shot use (services, tests, PDF export) the static helpers remain:
+/// For one-shot use (services, tests, PDF export):
 ///
 /// ```dart
-/// final result = StitchCompositor.compute(pattern);       // CompositeResult
-/// final layer  = StitchCompositor.computeLayer(pattern);  // CompositeLayer
+/// final layer = StitchCompositor.computeLayer(pattern);  // CompositeLayer
 /// ```
 class StitchCompositor {
   final CrossStitchPattern _pattern;
@@ -174,9 +106,6 @@ class StitchCompositor {
   /// The current [CompositeLayer]. Lazily built on first access; invalidated
   /// by the update methods below.
   CompositeLayer get compositeLayer => _cached ??= _buildLayer(_pattern);
-
-  /// Backwards-compatible [CompositeResult] derived from [compositeLayer].
-  CompositeResult get compositeResult => compositeLayer.toCompositeResult();
 
   // ─── Incremental invalidation API ────────────────────────────────────────
   // Currently all methods invalidate the full cache; [compositeLayer] is
@@ -206,13 +135,6 @@ class StitchCompositor {
   void rebuild() => _cached = null;
 
   // ─── Static convenience ───────────────────────────────────────────────────
-
-  /// Compute the composite for [pattern] and return a [CompositeResult].
-  ///
-  /// Retained for backwards compatibility. Prefer [computeLayer] or the
-  /// stateful instance API for new code.
-  static CompositeResult compute(CrossStitchPattern pattern) =>
-      _buildLayer(pattern).toCompositeResult();
 
   /// Compute the composite for [pattern] and return a [CompositeLayer].
   static CompositeLayer computeLayer(CrossStitchPattern pattern) =>
