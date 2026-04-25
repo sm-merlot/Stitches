@@ -4,7 +4,6 @@ import '../models/page_layout.dart';
 import '../models/pattern_progress.dart';
 import '../models/stitch.dart';
 import '../models/stitch_geometry.dart';
-import '../models/thread.dart';
 import 'stitch_compositor.dart';
 
 // ─── RenderViewConfig ─────────────────────────────────────────────────────────
@@ -73,13 +72,13 @@ class RenderViewConfig {
 ///
 /// ```dart
 /// // Full rebuild after pattern or thread changes:
-/// _renderCache.rebuild(compositeResult, threadMap, config, cellSize);
+/// _renderCache.rebuild(compositeLayer, config, cellSize);
 ///
 /// // View-config-only change (mode/focus/palette):
-/// _renderCache.rebuildViewConfig(compositeResult, threadMap, config, cellSize);
+/// _renderCache.rebuildViewConfig(compositeLayer, config, cellSize);
 ///
 /// // Single-cell update after one stitch is drawn:
-/// _renderCache.updateCells({'3,7'}, compositeResult, threadMap, config, cellSize);
+/// _renderCache.updateCells({'3,7'}, compositeLayer, config, cellSize);
 ///
 /// // In painter:
 /// for (final colorEntry in renderCache.store.entries) {
@@ -111,15 +110,14 @@ class RenderCache {
   ///
   /// Call when stitch content, thread colours, or layer structure changes.
   void rebuild(
-    CompositeResult? compositeResult,
-    Map<String, Thread> threadMap,
+    CompositeLayer? compositeLayer,
     RenderViewConfig config,
     double cellSize,
   ) {
     store.clear();
     _cellColors.clear();
-    if (compositeResult != null) {
-      _rebuildFrom(compositeResult, threadMap, config, cellSize);
+    if (compositeLayer != null) {
+      _rebuildFrom(compositeLayer, config, cellSize);
     }
     _version++;
   }
@@ -129,12 +127,11 @@ class RenderCache {
   /// Call on focus/mode/palette changes. Semantically equivalent to [rebuild]
   /// today; separated so future optimisation can skip geometry recomputation.
   void rebuildViewConfig(
-    CompositeResult? compositeResult,
-    Map<String, Thread> threadMap,
+    CompositeLayer? compositeLayer,
     RenderViewConfig config,
     double cellSize,
   ) =>
-      rebuild(compositeResult, threadMap, config, cellSize);
+      rebuild(compositeLayer, config, cellSize);
 
   /// Incremental update for a set of changed cells.
   ///
@@ -142,22 +139,26 @@ class RenderCache {
   /// new composite, and re-inserts. Version is bumped once for the whole batch.
   void updateCells(
     Set<String> keys,
-    CompositeResult? compositeResult,
-    Map<String, Thread> threadMap,
+    CompositeLayer? compositeLayer,
     RenderViewConfig config,
     double cellSize,
   ) {
     for (final key in keys) {
       _removeCell(key);
     }
-    if (compositeResult != null) {
-      // Re-add stitches whose cellKey is in the dirty set.
-      for (final stitch in compositeResult.dedupedNonBack) {
-        final coords = stitch.cellCoords;
+    if (compositeLayer != null) {
+      // Re-add full stitches in the dirty set — O(1) lookup per key.
+      for (final key in keys) {
+        final cs = compositeLayer.fullStitches[key];
+        if (cs != null) _addCompositeStitch(key, cs, config, cellSize);
+      }
+      // Re-add other stitches (half/quarter) whose cellKey is in the dirty set.
+      for (final cs in compositeLayer.otherStitches) {
+        final coords = cs.stitch.cellCoords;
         if (coords == null) continue;
         final key = '${coords.$1},${coords.$2}';
         if (!keys.contains(key)) continue;
-        _addStitch(key, stitch, compositeResult, threadMap, config, cellSize);
+        _addCompositeStitch(key, cs, config, cellSize);
       }
     }
     _version++;
@@ -166,58 +167,45 @@ class RenderCache {
   // ─── Private ─────────────────────────────────────────────────────────────
 
   void _rebuildFrom(
-    CompositeResult compositeResult,
-    Map<String, Thread> threadMap,
+    CompositeLayer compositeLayer,
     RenderViewConfig config,
     double cellSize,
   ) {
-    for (final stitch in compositeResult.dedupedNonBack) {
-      final coords = stitch.cellCoords;
+    for (final entry in compositeLayer.fullStitches.entries) {
+      _addCompositeStitch(entry.key, entry.value, config, cellSize);
+    }
+    for (final cs in compositeLayer.otherStitches) {
+      final coords = cs.stitch.cellCoords;
       if (coords == null) continue;
       final key = '${coords.$1},${coords.$2}';
-      _addStitch(key, stitch, compositeResult, threadMap, config, cellSize);
+      _addCompositeStitch(key, cs, config, cellSize);
     }
   }
 
-
-  void _addStitch(
+  void _addCompositeStitch(
     String key,
-    Stitch stitch,
-    CompositeResult compositeResult,
-    Map<String, Thread> threadMap,
+    CompositeStitch cs,
     RenderViewConfig config,
     double cellSize,
   ) {
     // Page filter.
-    if (!_stitchOnPage(stitch, config)) return;
+    if (!_stitchOnPage(cs.stitch, config)) return;
 
-    // Resolve colour: blended (multi-layer) takes precedence over source thread.
-    final blendedColor = stitch is FullStitch
-        ? compositeResult.blendedColors['${stitch.x},${stitch.y}']
-        : null;
-    final sourceColor =
-        (config.paletteOverride?[stitch.threadId] ??
-            threadMap[stitch.threadId]?.color);
-    if (sourceColor == null) return;
-    final baseColor = blendedColor ?? sourceColor;
-
-    // Focus: blended cells use the composite thread; others use source thread.
-    final compositeThread = stitch is FullStitch
-        ? compositeResult.compositeThreads['${stitch.x},${stitch.y}']
-        : null;
-    final effectiveDmcCode =
-        compositeThread?.dmcCode ?? stitch.threadId;
+    // Resolve colour: blended (multi-layer) takes precedence over palette override.
+    final baseColor = cs.isBlended
+        ? cs.blendedColor
+        : (config.paletteOverride?[cs.stitch.threadId] ?? cs.blendedColor);
 
     final color = _resolveColor(
       baseColor: baseColor,
-      effectiveDmcCode: effectiveDmcCode,
-      stitch: stitch,
+      effectiveDmcCode: cs.resolvedThread.dmcCode,
+      stitch: cs.stitch,
       config: config,
     );
     if (color == null) return;
 
     // Compute block rect.
-    final block = stitch.blockCells;
+    final block = cs.stitch.blockCells;
     if (block == null) return;
     final (bl, bt, bw, bh) = block;
     final rect = Rect.fromLTWH(

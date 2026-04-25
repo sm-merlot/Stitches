@@ -27,7 +27,6 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   @override final double scale;
   @override final Color aidaColor;
   final bool stitchMode;
-  final bool colourMode;
   final bool stitchCrossMode;
   final bool stitchBackMode;
   final String? stitchFocusThreadId;
@@ -39,9 +38,9 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   /// Built and maintained by [PatternCanvas]; painter just draws.
   final RenderCache renderCache;
 
-  /// Composite result — used for symbol rendering and focus-region outline.
+  /// Flat composite view — used for symbol rendering and focus-region outline.
   /// Block rendering is fully handled by [renderCache].
-  final CompositeResult? compositeResult;
+  final CompositeLayer? compositeLayer;
 
   /// Page layout for page mode. When non-null (and config.enabled), only
   /// stitches belonging to [currentPage] are rendered.
@@ -68,14 +67,13 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     required this.aidaColor,
     required this.renderCache,
     this.stitchMode = false,
-    this.colourMode = false,
     this.stitchCrossMode = false,
     this.stitchBackMode = false,
     this.stitchFocusThreadId,
     this.referenceImage,
     this.referenceOpacity = 0.5,
     this.referenceVisible = true,
-    this.compositeResult,
+    this.compositeLayer,
     this.pageLayout,
     this.currentPage = 0,
     this.progress = PatternProgress.empty,
@@ -149,75 +147,65 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           majorOnly: effectivePx < kMajorOnly);
     }
 
-    // ── Backstitches (all visible layers) ────────────────────────────────────
+    // ── Backstitches (all visible layers, pre-resolved by compositor) ────────
     if (effectivePx >= kNoBackstitch) {
-      for (final layer in pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is! BackStitch) continue;
-          if (!stitch.isInViewport(minCX, minCY, maxCX, maxCY)) continue;
-          final thread = _threadMap[stitch.threadId];
-          if (thread == null) continue;
-          var c = _resolveBackstitchColor(stitch.threadId, thread.color);
-          if (c == null) continue;
-          final isDone = stitchMode && progress.isBackstitchDone(
-              stitch.x1, stitch.y1, stitch.x2, stitch.y2);
-          if (stitchMode) {
-            if (!isDone) {
-              c = _bwGreyscale(c);
-            } else if (stitchFocusThreadId != null &&
-                stitchFocusThreadId != stitch.threadId) {
-              c = _muteColor(c);
-            }
+      final backstitches = compositeLayer?.backstitches ?? const [];
+      for (final stitch in backstitches) {
+        if (!stitch.isInViewport(minCX, minCY, maxCX, maxCY)) continue;
+        final thread = _threadMap[stitch.threadId];
+        if (thread == null) continue;
+        var c = _resolveBackstitchColor(stitch.threadId, thread.color);
+        if (c == null) continue;
+        final isDone = stitchMode && progress.isBackstitchDone(
+            stitch.x1, stitch.y1, stitch.x2, stitch.y2);
+        if (stitchMode) {
+          if (!isDone) {
+            c = _bwGreyscale(c);
+          } else if (stitchFocusThreadId != null &&
+              stitchFocusThreadId != stitch.threadId) {
+            c = _muteColor(c);
           }
-          if (_isBWStitchMode && _isBackstitchFocused(stitch)) {
-            _drawBackstitchOutline(canvas, stitch);
-          }
-          _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
         }
+        if (_isBWStitchMode && _isBackstitchFocused(stitch)) {
+          _drawBackstitchOutline(canvas, stitch);
+        }
+        _drawBackstitch(canvas, stitch.x1, stitch.y1, stitch.x2, stitch.y2, c);
       }
     }
 
     // ── Stitch symbols (B&W stitch mode only, zoomed in enough) ─────────────
-    // Uses compositeResult.dedupedNonBack for the symbol-winner per cell —
-    // no occlusion bookkeeping required because dedupedNonBack already
-    // applies the symbol-winner rule across layers.
+    // Uses compositeLayer for the symbol-winner per cell — already deduped
+    // and resolved by the compositor (one CompositeStitch per cell).
     if (effectivePx >= 8 && _isBWStitchMode) {
-      final nonBack = compositeResult?.dedupedNonBack ?? const [];
-      for (final stitch in nonBack) {
-        if (!stitch.isInViewport(minCX, minCY, maxCX, maxCY)) continue;
+      final layer = compositeLayer;
+      if (layer != null) {
+        for (final cs in [...layer.fullStitches.values, ...layer.otherStitches]) {
+          final stitch = cs.stitch;
+          if (!stitch.isInViewport(minCX, minCY, maxCX, maxCY)) continue;
 
-        final sCoords = stitch.cellCoords;
-        if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
+          final sCoords = stitch.cellCoords;
+          if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
 
-        // Skip done cells in B&W mode.
-        if (sCoords != null && progress.completedStitches.contains(sCoords)) continue;
+          // Skip done cells in B&W mode.
+          if (sCoords != null && progress.completedStitches.contains(sCoords)) continue;
 
-        // Resolve display thread (composite thread for blended cells).
-        Thread? thread;
-        if (stitch is FullStitch) {
-          final cellKey = '${stitch.x},${stitch.y}';
-          thread = compositeResult?.compositeThreads[cellKey]
-              ?? _threadMap[stitch.threadId];
-        } else {
-          thread = _threadMap[stitch.threadId];
+          final thread = cs.resolvedThread;
+          if (!symbolIsVisible(thread.symbol)) continue;
+
+          final hasFocus = stitchFocusThreadId != null;
+          final isFocused = hasFocus && thread.dmcCode == stitchFocusThreadId;
+          final symbolColor = hasFocus && !isFocused
+              ? const Color(0xFF999999)
+              : const Color(0xFF000000);
+          _drawStitchSymbolBW(canvas, stitch, thread.symbol, symbolColor);
         }
-        if (thread == null || !symbolIsVisible(thread.symbol)) continue;
-
-        final hasFocus = stitchFocusThreadId != null;
-        final isFocused = hasFocus && stitch.threadId == stitchFocusThreadId;
-        final symbolColor = hasFocus && !isFocused
-            ? const Color(0xFF999999)
-            : const Color(0xFF000000);
-        _drawStitchSymbolBW(canvas, stitch, thread.symbol, symbolColor);
       }
     }
 
     // ── Focus region outline ────────────────────────────────────────────────
     if (stitchFocusThreadId != null ||
         (_isBWStitchMode && (stitchBackMode || stitchCrossMode))) {
-      final blendedColors = compositeResult?.blendedColors ?? const {};
-      _drawFocusedRegionBorderIfNeeded(canvas, blendedColors);
+      _drawFocusedRegionBorderIfNeeded(canvas);
     }
 
     // ── Pattern border ──────────────────────────────────────────────────────
@@ -288,8 +276,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   static const Color _unfocusedGreyOpaque = Color(0xFFB8B8B8);
 
-  void _drawFocusedRegionBorderIfNeeded(
-      Canvas canvas, Map<String, Color> blendMap) {
+  void _drawFocusedRegionBorderIfNeeded(Canvas canvas) {
     final focusId = stitchFocusThreadId;
 
     if (!_isBWStitchMode) {
@@ -303,32 +290,14 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     }
 
     final focusedKeys = <int>{};
-    for (final layer in pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        if (stitchBackMode) continue;
-        final (cx, cy) = switch (stitch) {
-          FullStitch(:final x, :final y)        => (x, y),
-          HalfStitch(:final x, :final y)        => (x, y),
-          QuarterStitch(:final x, :final y)     => (x, y),
-          HalfCrossStitch(:final x, :final y)   => (x, y),
-          QuarterCrossStitch(:final x, :final y) => (x, y),
-          BackStitch()                           => (-1, -1),
-        };
-        if (cx < 0) continue;
+    final layer = compositeLayer;
+    if (layer != null && !stitchBackMode) {
+      for (final cs in [...layer.fullStitches.values, ...layer.otherStitches]) {
+        final coords = cs.stitch.cellCoords;
+        if (coords == null) continue;
+        final (cx, cy) = coords;
         final intKey = (cx << 16) | cy;
-
-        if (focusId != null) {
-          final strKey = '$cx,$cy';
-          if (blendMap.containsKey(strKey)) {
-            if (compositeResult?.compositeThreads[strKey]?.dmcCode == focusId) {
-              focusedKeys.add(intKey);
-            }
-          } else if (stitch.threadId == focusId) {
-            focusedKeys.add(intKey);
-          }
-        } else {
+        if (focusId == null || cs.resolvedThread.dmcCode == focusId) {
           focusedKeys.add(intKey);
         }
       }
@@ -539,14 +508,13 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       old.scale != scale ||
       old.aidaColor != aidaColor ||
       old.stitchMode != stitchMode ||
-      old.colourMode != colourMode ||
       old.stitchCrossMode != stitchCrossMode ||
       old.stitchBackMode != stitchBackMode ||
       old.stitchFocusThreadId != stitchFocusThreadId ||
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||
       old.referenceVisible != referenceVisible ||
-      old.compositeResult != compositeResult ||
+      !identical(old.compositeLayer, compositeLayer) ||
       old.pageLayout != pageLayout ||
       old.currentPage != currentPage ||
       old.progress != progress;

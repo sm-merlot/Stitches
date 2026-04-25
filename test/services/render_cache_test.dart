@@ -29,11 +29,8 @@ CrossStitchPattern _pattern({
   );
 }
 
-CompositeResult _composite(CrossStitchPattern pattern) =>
-    StitchCompositor.compute(pattern);
-
-Map<String, Thread> _threadMap(CrossStitchPattern pattern) =>
-    {for (final t in pattern.threads) t.dmcCode: t};
+CompositeLayer _composite(CrossStitchPattern pattern) =>
+    StitchCompositor.computeLayer(pattern);
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -45,7 +42,7 @@ void main() {
 
   test('rebuild: empty composite → empty store', () {
     final cache = RenderCache();
-    cache.rebuild(null, {}, cfg, cellSize);
+    cache.rebuild(null, cfg, cellSize);
     expect(cache.store, isEmpty);
   });
 
@@ -55,9 +52,8 @@ void main() {
       threads: [t],
       stitches: [FullStitch(x: 0, y: 0, threadId: '310')],
     );
-    final composite = _composite(p);
     final cache = RenderCache();
-    cache.rebuild(composite, _threadMap(p), cfg, cellSize);
+    cache.rebuild(_composite(p), cfg, cellSize);
 
     expect(cache.store, hasLength(1));
     final bucket = cache.store[const Color(0xFF000000)];
@@ -72,7 +68,7 @@ void main() {
       stitches: [FullStitch(x: 2, y: 3, threadId: '310')],
     );
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), cfg, cellSize);
+    cache.rebuild(_composite(p), cfg, cellSize);
 
     final rects = cache.store.values
         .expand((b) => b.values)
@@ -89,7 +85,7 @@ void main() {
       stitches: [HalfStitch(x: 1, y: 1, threadId: '310', isForward: true)],
     );
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), cfg, cellSize);
+    cache.rebuild(_composite(p), cfg, cellSize);
 
     final rects = cache.store.values
         .expand((b) => b.values)
@@ -107,7 +103,7 @@ void main() {
       stitches: [BackStitch(x1: 0, y1: 0, x2: 1, y2: 0, threadId: '310')],
     );
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), cfg, cellSize);
+    cache.rebuild(_composite(p), cfg, cellSize);
     expect(cache.store, isEmpty);
   });
 
@@ -116,17 +112,17 @@ void main() {
   test('version increments on rebuild', () {
     final cache = RenderCache();
     final v0 = cache.version;
-    cache.rebuild(null, {}, cfg, cellSize);
+    cache.rebuild(null, cfg, cellSize);
     expect(cache.version, equals(v0 + 1));
-    cache.rebuild(null, {}, cfg, cellSize);
+    cache.rebuild(null, cfg, cellSize);
     expect(cache.version, equals(v0 + 2));
   });
 
   test('version increments on updateCells', () {
     final cache = RenderCache();
-    cache.rebuild(null, {}, cfg, cellSize);
+    cache.rebuild(null, cfg, cellSize);
     final v = cache.version;
-    cache.updateCells({'0,0'}, null, {}, cfg, cellSize);
+    cache.updateCells({'0,0'}, null, cfg, cellSize);
     expect(cache.version, equals(v + 1));
   });
 
@@ -142,12 +138,12 @@ void main() {
       ],
     );
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), cfg, cellSize);
+    cache.rebuild(_composite(p), cfg, cellSize);
     expect(cache.store.values.expand((b) => b.values).expand((r) => r).length, 2);
 
     // Remove (0,0) by updating with a composite that has no stitch there.
     final emptyComposite = _composite(_pattern(threads: [t], stitches: []));
-    cache.updateCells({'0,0'}, emptyComposite, _threadMap(p), cfg, cellSize);
+    cache.updateCells({'0,0'}, emptyComposite, cfg, cellSize);
 
     final remaining = cache.store.values.expand((b) => b.values).expand((r) => r).toList();
     expect(remaining, hasLength(1)); // only (1,1) remains
@@ -161,7 +157,7 @@ void main() {
       stitches: [FullStitch(x: 0, y: 0, threadId: '321')],
     );
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), cfg, cellSize);
+    cache.rebuild(_composite(p), cfg, cellSize);
     expect(cache.store.containsKey(const Color(0xFFFF0000)), isTrue);
 
     // Update cell (0,0) to use blue thread.
@@ -169,7 +165,7 @@ void main() {
       threads: [red, blue],
       stitches: [FullStitch(x: 0, y: 0, threadId: '311')],
     );
-    cache.updateCells({'0,0'}, _composite(p2), _threadMap(p2), cfg, cellSize);
+    cache.updateCells({'0,0'}, _composite(p2), cfg, cellSize);
 
     // Red bucket gone (or empty), blue bucket present.
     final redBucket = cache.store[const Color(0xFFFF0000)];
@@ -192,7 +188,7 @@ void main() {
     // Focus on red (321); black (310) should be greyed.
     const focusCfg = RenderViewConfig(focusThreadId: '321');
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), focusCfg, cellSize);
+    cache.rebuild(_composite(p), focusCfg, cellSize);
 
     // Red cell: full colour
     expect(cache.store.containsKey(const Color(0xFFFF0000)), isTrue);
@@ -213,7 +209,7 @@ void main() {
     );
     const bwCfg = RenderViewConfig(stitchMode: true);
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), bwCfg, cellSize);
+    cache.rebuild(_composite(p), bwCfg, cellSize);
 
     // Original red not present — should be a greyscale colour.
     expect(cache.store.containsKey(const Color(0xFFFF0000)), isFalse);
@@ -234,7 +230,7 @@ void main() {
     );
     final bwCfg = RenderViewConfig(stitchMode: true, progress: progress);
     final cache = RenderCache();
-    cache.rebuild(_composite(p), _threadMap(p), bwCfg, cellSize);
+    cache.rebuild(_composite(p), bwCfg, cellSize);
 
     // Done stitch → full red, not greyscale.
     expect(cache.store.containsKey(const Color(0xFFFF0000)), isTrue);
@@ -244,9 +240,9 @@ void main() {
 
   test('rebuildViewConfig: bumps version', () {
     final cache = RenderCache();
-    cache.rebuild(null, {}, cfg, cellSize);
+    cache.rebuild(null, cfg, cellSize);
     final v = cache.version;
-    cache.rebuildViewConfig(null, {}, cfg, cellSize);
+    cache.rebuildViewConfig(null, cfg, cellSize);
     expect(cache.version, greaterThan(v));
   });
 

@@ -396,7 +396,7 @@ void main() {
       expect(s(c).pendingCanvasWarning, isNotNull);
     });
 
-    test('commitPaste clears and refreshes compositeResult', () async {
+    test('commitPaste clears and refreshes compositeLayer', () async {
       final snippet = _makeSnippet();
       final p = s(c).pattern.copyWith(snippets: [snippet]);
       n(c).loadPattern(p,
@@ -404,9 +404,9 @@ void main() {
       n(c).setMode(AppMode.edit);
       await n(c).loadSnippetToClipboard(snippet);
       n(c).refreshCompositeCache();
-      final before = s(c).compositeResult;
+      final before = s(c).compositeLayer;
       n(c).commitPaste(0, 0);
-      expect(identical(s(c).compositeResult, before), isFalse);
+      expect(identical(s(c).compositeLayer, before), isFalse);
     });
   });
 
@@ -485,22 +485,22 @@ void main() {
       expect(stitch.y, equals(3)); // 1 + 2
     });
 
-    test('deleteSelection clears and refreshes compositeResult', () {
+    test('deleteSelection clears and refreshes compositeLayer', () {
       n(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
       n(c).refreshCompositeCache();
-      final before = s(c).compositeResult;
+      final before = s(c).compositeLayer;
       n(c).setSelectionRect(const Rect.fromLTWH(0, 0, 3, 3));
       n(c).deleteSelection();
-      expect(identical(s(c).compositeResult, before), isFalse);
+      expect(identical(s(c).compositeLayer, before), isFalse);
     });
 
-    test('moveSelection clears and refreshes compositeResult', () {
+    test('moveSelection clears and refreshes compositeLayer', () {
       n(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       n(c).refreshCompositeCache();
-      final before = s(c).compositeResult;
+      final before = s(c).compositeLayer;
       n(c).setSelectionRect(const Rect.fromLTWH(0, 0, 2, 2));
       n(c).moveSelection(1, 1);
-      expect(identical(s(c).compositeResult, before), isFalse);
+      expect(identical(s(c).compositeLayer, before), isFalse);
     });
   });
 }

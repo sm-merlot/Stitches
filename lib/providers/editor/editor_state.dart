@@ -22,7 +22,7 @@ class EditorState {
   final bool clipboardFromSnippet;
   final String activeLayerId;
   final bool showCompositeThreads;
-  final CompositeResult? compositeResult;
+  final CompositeLayer? compositeLayer;
   final AppMode mode;
   final bool colourMode;
   final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
@@ -106,7 +106,7 @@ class EditorState {
     this.clipboardFromSnippet = false,
     this.activeLayerId = '',
     this.showCompositeThreads = true,
-    this.compositeResult,
+    this.compositeLayer,
     this.mode = AppMode.view,
     this.colourMode = false,
     this.stitchCrossMode = false,
@@ -179,11 +179,12 @@ class EditorState {
       // Mirror the compositor-based logic in copySelection: use the deduplicated
       // visible stitch list so the selection count and copy both reflect what
       // is actually rendered on the canvas.
-      final composite = compositeResult;
-      if (composite != null) {
+      final layer = compositeLayer;
+      if (layer != null) {
         return [
-          ...composite.dedupedNonBack.where((s) => isStitchInRect(s, rect)),
-          ...composite.backstitches.where((s) => isStitchInRect(s, rect)),
+          ...layer.fullStitches.values.map((cs) => cs.stitch).where((s) => isStitchInRect(s, rect)),
+          ...layer.otherStitches.map((cs) => cs.stitch).where((s) => isStitchInRect(s, rect)),
+          ...layer.backstitches.where((s) => isStitchInRect(s, rect)),
         ];
       }
       return pattern.layers
@@ -260,7 +261,7 @@ class EditorState {
     bool? clipboardFromSnippet,
     String? activeLayerId,
     bool? showCompositeThreads,
-    Object? compositeResult = _sentinel,
+    Object? compositeLayer = _sentinel,
     AppMode? mode,
     bool? colourMode,
     bool? stitchCrossMode,
@@ -312,9 +313,9 @@ class EditorState {
       clipboardFromSnippet: clipboardFromSnippet ?? this.clipboardFromSnippet,
       activeLayerId: activeLayerId ?? this.activeLayerId,
       showCompositeThreads: showCompositeThreads ?? this.showCompositeThreads,
-      compositeResult: compositeResult == _sentinel
-          ? this.compositeResult
-          : compositeResult as CompositeResult?,
+      compositeLayer: compositeLayer == _sentinel
+          ? this.compositeLayer
+          : compositeLayer as CompositeLayer?,
       mode: mode ?? this.mode,
       colourMode: colourMode ?? this.colourMode,
       stitchCrossMode: stitchCrossMode ?? this.stitchCrossMode,

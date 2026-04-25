@@ -315,7 +315,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Track the last values used to build the cache so we only rebuild when
   // something relevant actually changed (not on every pan/zoom setState).
   CrossStitchPattern? _lastCachedPattern;
-  CompositeResult? _lastCachedComposite;
+  CompositeLayer? _lastCachedComposite;
   RenderViewConfig? _lastCachedViewConfig;
 
   RenderViewConfig _buildViewConfig(EditorState state) => RenderViewConfig(
@@ -330,13 +330,10 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       );
 
   void _rebuildRenderCache(EditorState state) {
-    final threadMap = {
-      for (final t in state.pattern.threads) t.dmcCode: t,
-    };
     final config = _buildViewConfig(state);
-    _renderCache.rebuild(state.compositeResult, threadMap, config, _cellSize);
+    _renderCache.rebuild(state.compositeLayer, config, _cellSize);
     _lastCachedPattern = state.pattern;
-    _lastCachedComposite = state.compositeResult;
+    _lastCachedComposite = state.compositeLayer;
     _lastCachedViewConfig = config;
   }
 
@@ -345,24 +342,20 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   void _syncRenderCache(EditorState state) {
     final config = _buildViewConfig(state);
     final patternChanged = !identical(_lastCachedPattern, state.pattern);
-    final compositeChanged = !identical(_lastCachedComposite, state.compositeResult);
+    final compositeChanged = !identical(_lastCachedComposite, state.compositeLayer);
     final configChanged = config != _lastCachedViewConfig;
 
     if (!patternChanged && !compositeChanged && !configChanged) return;
 
-    final threadMap = {
-      for (final t in state.pattern.threads) t.dmcCode: t,
-    };
-
     if (configChanged && !patternChanged && !compositeChanged) {
       // View config only (focus/mode/palette changed) — recolour without
       // recomputing geometry.
-      _renderCache.rebuildViewConfig(state.compositeResult, threadMap, config, _cellSize);
+      _renderCache.rebuildViewConfig(state.compositeLayer, config, _cellSize);
     } else {
-      _renderCache.rebuild(state.compositeResult, threadMap, config, _cellSize);
+      _renderCache.rebuild(state.compositeLayer, config, _cellSize);
     }
     _lastCachedPattern = state.pattern;
-    _lastCachedComposite = state.compositeResult;
+    _lastCachedComposite = state.compositeLayer;
     _lastCachedViewConfig = config;
   }
 
@@ -1529,14 +1522,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                   aidaColor: state.pattern.aidaColor,
                   renderCache: _renderCache,
                   stitchMode: state.stitchMode,
-                  colourMode: state.colourMode,
                   stitchCrossMode: state.stitchCrossMode,
                   stitchBackMode: state.stitchBackMode,
                   stitchFocusThreadId: state.stitchFocusThreadId,
                   referenceImage: state.referenceImage,
                   referenceOpacity: state.referenceOpacity,
                   referenceVisible: state.referenceVisible,
-                  compositeResult: state.compositeResult,
+                  compositeLayer: state.compositeLayer,
                   // Pages are a stitch-mode concept — don't filter in edit/view.
                   pageLayout: state.stitchMode ? state.pageLayout : null,
                   currentPage: state.currentPage,

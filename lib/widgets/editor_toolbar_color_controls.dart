@@ -93,10 +93,10 @@ class _QuickSwatches extends ConsumerWidget {
             int total = 0;
             int done = 0;
             // FullStitches via composite cache (deduplicated).
-            final cache = state.compositeResult?.compositeThreads;
-            if (cache != null && cache.isNotEmpty) {
-              for (final entry in cache.entries) {
-                if (entry.value.dmcCode != id) continue;
+            final layer = state.compositeLayer;
+            if (layer != null && layer.fullStitches.isNotEmpty) {
+              for (final entry in layer.fullStitches.entries) {
+                if (entry.value.resolvedThread.dmcCode != id) continue;
                 total++;
                 final parts = entry.key.split(',');
                 if (parts.length == 2) {

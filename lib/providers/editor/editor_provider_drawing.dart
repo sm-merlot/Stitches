@@ -294,7 +294,7 @@ mixin DrawingMixin on Notifier<EditorState> {
         .toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(threads: threads),
-      compositeResult: null,
+      compositeLayer: null,
       isDirty: true,
     );
     // Rebuild immediately so composite panel doesn't fall back to layer threads.
@@ -387,12 +387,12 @@ mixin DrawingMixin on Notifier<EditorState> {
     // Compute a lightweight composite immediately so compositeResult is never
     // null — RenderCache can always use it, no raw-layer fallback needed.
     // Symbol registry management is still debounced (cheap, imperceptible delay).
-    final quickComposite = StitchCompositor.compute(newPattern);
+    final quickComposite = StitchCompositor.computeLayer(newPattern);
     state = state.copyWith(
       pattern: newPattern,
       snippetPalettes: snippetPalettes,
       undoStack: _buildUndoStack(),
-      compositeResult: quickComposite,
+      compositeLayer: quickComposite,
       isDirty: true,
       redoStack: [],
     );
@@ -413,7 +413,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeResult: StitchCompositor.compute(newPattern),
+      compositeLayer: StitchCompositor.computeLayer(newPattern),
       isDirty: true,
       redoStack: [],
     );
@@ -447,7 +447,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeResult: StitchCompositor.compute(newPattern),
+      compositeLayer: StitchCompositor.computeLayer(newPattern),
       isDirty: true,
       redoStack: [],
     );
@@ -541,7 +541,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeLayer: null,
       isDirty: true,
       redoStack: [],
     );
@@ -559,7 +559,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeResult: null,
+      compositeLayer: null,
       isDirty: true,
       redoStack: [],
     );
