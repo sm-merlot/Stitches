@@ -12,7 +12,8 @@ import 'stitch_compositor.dart';
 /// coloured. Passed to [RenderCache] at build/update time.
 ///
 /// A change to any field here triggers [RenderCache.rebuildViewConfig]; stitch
-/// content changes trigger [RenderCache.rebuild] or [RenderCache.updateCells].
+/// content changes trigger [RenderCache.rebuild], [RenderCache.updateCells],
+/// or [RenderCache.clearCells].
 @immutable
 class RenderViewConfig {
   final String? focusThreadId;
@@ -71,11 +72,17 @@ class RenderViewConfig {
 /// ## Usage
 ///
 /// ```dart
+/// // No composite yet (empty pattern):
+/// _renderCache.clear();
+///
 /// // Full rebuild after pattern or thread changes:
 /// _renderCache.rebuild(compositeLayer, config, cellSize);
 ///
 /// // View-config-only change (mode/focus/palette):
 /// _renderCache.rebuildViewConfig(compositeLayer, config, cellSize);
+///
+/// // Cells erased (no stitches remain there):
+/// _renderCache.clearCells({'3,7'});
 ///
 /// // Single-cell update after one stitch is drawn:
 /// _renderCache.updateCells({'3,7'}, compositeLayer, config, cellSize);
@@ -99,26 +106,31 @@ class RenderCache {
 
   int _version = 0;
 
-  /// Monotonically increasing counter. Bumped on every [rebuild], [rebuildViewConfig],
-  /// or [updateCells] call. [CanvasStaticPainter.shouldRepaint] checks this
-  /// instead of comparing full pattern objects.
+  /// Monotonically increasing counter. Bumped on every mutating call.
+  /// [CanvasStaticPainter.shouldRepaint] checks this instead of comparing
+  /// full pattern objects.
   int get version => _version;
 
   // ─── Public API ───────────────────────────────────────────────────────────
+
+  /// Clears the entire cache. Use when the pattern has no visible stitches.
+  void clear() {
+    store.clear();
+    _cellColors.clear();
+    _version++;
+  }
 
   /// Full rebuild from the current composite + view config.
   ///
   /// Call when stitch content, thread colours, or layer structure changes.
   void rebuild(
-    CompositeLayer? compositeLayer,
+    CompositeLayer compositeLayer,
     RenderViewConfig config,
     double cellSize,
   ) {
     store.clear();
     _cellColors.clear();
-    if (compositeLayer != null) {
-      _rebuildFrom(compositeLayer, config, cellSize);
-    }
+    _rebuildFrom(compositeLayer, config, cellSize);
     _version++;
   }
 
@@ -127,11 +139,20 @@ class RenderCache {
   /// Call on focus/mode/palette changes. Semantically equivalent to [rebuild]
   /// today; separated so future optimisation can skip geometry recomputation.
   void rebuildViewConfig(
-    CompositeLayer? compositeLayer,
+    CompositeLayer compositeLayer,
     RenderViewConfig config,
     double cellSize,
   ) =>
       rebuild(compositeLayer, config, cellSize);
+
+  /// Removes [keys] from the cache without re-inserting. Use when cells are
+  /// known to be empty in the new composite (e.g. stitch erased).
+  void clearCells(Set<String> keys) {
+    for (final key in keys) {
+      _removeCell(key);
+    }
+    _version++;
+  }
 
   /// Incremental update for a set of changed cells.
   ///
@@ -139,27 +160,25 @@ class RenderCache {
   /// new composite, and re-inserts. Version is bumped once for the whole batch.
   void updateCells(
     Set<String> keys,
-    CompositeLayer? compositeLayer,
+    CompositeLayer compositeLayer,
     RenderViewConfig config,
     double cellSize,
   ) {
     for (final key in keys) {
       _removeCell(key);
     }
-    if (compositeLayer != null) {
-      // Re-add full stitches in the dirty set — O(1) lookup per key.
-      for (final key in keys) {
-        final cs = compositeLayer.fullStitches[key];
-        if (cs != null) _addCompositeStitch(key, cs, config, cellSize);
-      }
-      // Re-add other stitches (half/quarter) whose cellKey is in the dirty set.
-      for (final cs in compositeLayer.otherStitches) {
-        final coords = cs.stitch.cellCoords;
-        if (coords == null) continue;
-        final key = '${coords.$1},${coords.$2}';
-        if (!keys.contains(key)) continue;
-        _addCompositeStitch(key, cs, config, cellSize);
-      }
+    // Re-add full stitches in the dirty set — O(1) lookup per key.
+    for (final key in keys) {
+      final cs = compositeLayer.fullStitches[key];
+      if (cs != null) _addCompositeStitch(key, cs, config, cellSize);
+    }
+    // Re-add other stitches (half/quarter) whose cellKey is in the dirty set.
+    for (final cs in compositeLayer.otherStitches) {
+      final coords = cs.stitch.cellCoords;
+      if (coords == null) continue;
+      final key = '${coords.$1},${coords.$2}';
+      if (!keys.contains(key)) continue;
+      _addCompositeStitch(key, cs, config, cellSize);
     }
     _version++;
   }

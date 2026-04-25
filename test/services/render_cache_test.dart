@@ -40,9 +40,9 @@ void main() {
 
   // ── Basic rebuild ──────────────────────────────────────────────────────────
 
-  test('rebuild: empty composite → empty store', () {
+  test('clear: empty store after clear', () {
     final cache = RenderCache();
-    cache.rebuild(null, cfg, cellSize);
+    cache.clear();
     expect(cache.store, isEmpty);
   });
 
@@ -110,19 +110,38 @@ void main() {
   // ── Version counter ────────────────────────────────────────────────────────
 
   test('version increments on rebuild', () {
+    final t = _thread('310', const Color(0xFF000000));
+    final composite = _composite(_pattern(threads: [t], stitches: []));
     final cache = RenderCache();
     final v0 = cache.version;
-    cache.rebuild(null, cfg, cellSize);
+    cache.rebuild(composite, cfg, cellSize);
     expect(cache.version, equals(v0 + 1));
-    cache.rebuild(null, cfg, cellSize);
+    cache.rebuild(composite, cfg, cellSize);
     expect(cache.version, equals(v0 + 2));
   });
 
-  test('version increments on updateCells', () {
+  test('version increments on clear', () {
     final cache = RenderCache();
-    cache.rebuild(null, cfg, cellSize);
+    final v0 = cache.version;
+    cache.clear();
+    expect(cache.version, equals(v0 + 1));
+  });
+
+  test('version increments on clearCells', () {
+    final cache = RenderCache();
+    cache.clear();
     final v = cache.version;
-    cache.updateCells({'0,0'}, null, cfg, cellSize);
+    cache.clearCells({'0,0'});
+    expect(cache.version, equals(v + 1));
+  });
+
+  test('version increments on updateCells', () {
+    final t = _thread('310', const Color(0xFF000000));
+    final composite = _composite(_pattern(threads: [t], stitches: []));
+    final cache = RenderCache();
+    cache.clear();
+    final v = cache.version;
+    cache.updateCells({'0,0'}, composite, cfg, cellSize);
     expect(cache.version, equals(v + 1));
   });
 
@@ -239,10 +258,12 @@ void main() {
   // ── rebuildViewConfig ──────────────────────────────────────────────────────
 
   test('rebuildViewConfig: bumps version', () {
+    final t = _thread('310', const Color(0xFF000000));
+    final composite = _composite(_pattern(threads: [t], stitches: []));
     final cache = RenderCache();
-    cache.rebuild(null, cfg, cellSize);
+    cache.rebuild(composite, cfg, cellSize);
     final v = cache.version;
-    cache.rebuildViewConfig(null, cfg, cellSize);
+    cache.rebuildViewConfig(composite, cfg, cellSize);
     expect(cache.version, greaterThan(v));
   });
 

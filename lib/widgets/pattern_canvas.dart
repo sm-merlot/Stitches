@@ -331,7 +331,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   void _rebuildRenderCache(EditorState state) {
     final config = _buildViewConfig(state);
-    _renderCache.rebuild(state.compositeLayer, config, _cellSize);
+    final layer = state.compositeLayer;
+    if (layer == null) {
+      _renderCache.clear();
+    } else {
+      _renderCache.rebuild(layer, config, _cellSize);
+    }
     _lastCachedPattern = state.pattern;
     _lastCachedComposite = state.compositeLayer;
     _lastCachedViewConfig = config;
@@ -347,12 +352,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     if (!patternChanged && !compositeChanged && !configChanged) return;
 
-    if (configChanged && !patternChanged && !compositeChanged) {
+    final layer = state.compositeLayer;
+    if (layer == null) {
+      _renderCache.clear();
+    } else if (configChanged && !patternChanged && !compositeChanged) {
       // View config only (focus/mode/palette changed) — recolour without
       // recomputing geometry.
-      _renderCache.rebuildViewConfig(state.compositeLayer, config, _cellSize);
+      _renderCache.rebuildViewConfig(layer, config, _cellSize);
     } else {
-      _renderCache.rebuild(state.compositeLayer, config, _cellSize);
+      _renderCache.rebuild(layer, config, _cellSize);
     }
     _lastCachedPattern = state.pattern;
     _lastCachedComposite = state.compositeLayer;
