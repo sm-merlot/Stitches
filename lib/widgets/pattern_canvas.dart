@@ -17,6 +17,7 @@ import '../services/render_cache.dart';
 import '../services/stitch_compositor.dart';
 import 'canvas_painter.dart';
 import 'canvas_viewport.dart';
+import 'zoom_pan_handler.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {
   const PatternCanvas({super.key});
@@ -28,8 +29,14 @@ class PatternCanvas extends ConsumerStatefulWidget {
 class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   static const double _baseCellSize = 20.0;
 
-  double _scale = 1.0;
-  Offset _panOffset = const Offset(20, 20);
+  // ── ZoomPanHandler ──────────────────────────────────────────────────────────
+  // Owns _scale, _panOffset, and all gesture tracking state. Initialised in
+  // initState once callbacks are available.
+  late final ZoomPanHandler _zoomPan;
+
+  // Getters so the rest of this class can read scale/panOffset unchanged.
+  double get _scale => _zoomPan.scale;
+  Offset get _panOffset => _zoomPan.panOffset;
 
   // ── RenderCache ─────────────────────────────────────────────────────────────
   // Owned here (not in Riverpod state) — UI concern, not business logic.
@@ -38,20 +45,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   // Touch pinch-to-zoom tracking
   final Map<int, Offset> _activePointers = {};
-  double _gestureStartScale = 1.0;
-  Offset _gestureStartOffset = Offset.zero;
-  double _pinchStartDistance = 0.0;
-  Offset _pinchStartCenter = Offset.zero;
   // True while any gesture sequence that included ≥2 fingers is still active
   // (i.e. at least one finger from the pinch is still down).  Single-finger
   // draw/select/paste actions are suppressed during this window so that the
   // residual finger from a pinch never accidentally adds stitches.
   // Reset to false only when _activePointers becomes empty (all fingers up).
   bool _hadMultiTouch = false;
-
-  // Trackpad pinch-to-zoom (macOS PointerPanZoom events)
-  double _trackpadStartScale = 1.0;
-  Offset _trackpadStartPanOffset = Offset.zero;
 
   // Double-tap / double-click detection
   DateTime? _lastTouchUpTime;
@@ -162,10 +161,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final newPanX = padding + (availW - pagePixelW) / 2 - rect.left * _cellSize * newScale;
     final newPanY = padding + (availH - pagePixelH) / 2 - rect.top * _cellSize * newScale;
 
-    setState(() {
-      _scale = newScale;
-      _panOffset = Offset(newPanX, newPanY);
-    });
+    _zoomPan.setViewport(newScale, Offset(newPanX, newPanY));
+    setState(() {});
     ref.read(editorProvider.notifier).updateViewPosition(newPanX, newPanY, newScale);
   }
 
@@ -188,14 +185,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   @override
   void initState() {
     super.initState();
-    GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
-    HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Restore saved view position from the loaded pattern (if any).
     final editorState = ref.read(editorProvider);
-    if (editorState.viewScale > 0) {
-      _scale = editorState.viewScale;
-      _panOffset = Offset(editorState.viewPanX, editorState.viewPanY);
-    }
+    final savedScale = editorState.viewScale > 0 ? editorState.viewScale : 1.0;
+    final savedPan = editorState.viewScale > 0
+        ? Offset(editorState.viewPanX, editorState.viewPanY)
+        : const Offset(20, 20);
+    _zoomPan = ZoomPanHandler(
+      initialScale: savedScale,
+      initialPanOffset: savedPan,
+      cellSize: _cellSize,
+      scheduleRebuild: _scheduleRebuild,
+      save: _saveViewPosition,
+      debouncedSave: _debouncedSaveViewPosition,
+    );
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Seed the render cache with the initial editor state.
     _rebuildRenderCache(editorState);
   }
@@ -441,17 +446,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         c.dx < p.width * _cellSize && c.dy < p.height * _cellSize;
   }
 
-  void _pan(Offset delta) {
-    _panOffset += delta;
-    _scheduleRebuild();
-  }
-
-  void _zoomAround(Offset focalPoint, double factor) {
-    final next = _viewport.zoomedAround(focalPoint, factor);
-    _panOffset = next.panOffset;
-    _scale = next.scale;
-    _scheduleRebuild();
-  }
+  void _pan(Offset delta) => _zoomPan.pan(delta);
 
   void _handleDrawAt(Offset screenPos) {
     final state = ref.read(editorProvider);
@@ -1013,9 +1008,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     }
 
     // Touch — set up pan/pinch start state
-    if (_activePointers.length == 1) {
-      _gestureStartOffset = _panOffset;
-    } else if (_activePointers.length == 2) {
+    if (_activePointers.length == 2) {
       _hadMultiTouch = true;
       // Cancel any stitch-mode progress anchor set by the first finger so
       // a pan/pinch doesn't accidentally mark cells on pointer-up.
@@ -1025,10 +1018,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       _hasDraggedProgress = false;
       _progressDragRect = null;
       final pts = _activePointers.values.toList();
-      _pinchStartDistance = (pts[0] - pts[1]).distance;
-      _pinchStartCenter = (pts[0] + pts[1]) / 2;
-      _gestureStartScale = _scale;
-      _gestureStartOffset = _panOffset;
+      _zoomPan.beginPinch(pts[0], pts[1]);
     }
   }
 
@@ -1123,20 +1113,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
       // Pinch to zoom + two-finger pan
       final pts = _activePointers.values.toList();
-      final currentDist = (pts[0] - pts[1]).distance;
-      final currentCenter = (pts[0] + pts[1]) / 2;
-
-      if (_pinchStartDistance > 0) {
-        final newScale =
-            (_gestureStartScale * currentDist / _pinchStartDistance)
-                .clamp(0.1, 20.0);
-        final scaleFactor = newScale / _gestureStartScale;
-        _scale = newScale;
-        _panOffset = _pinchStartCenter -
-            (_pinchStartCenter - _gestureStartOffset) * scaleFactor +
-            (currentCenter - _pinchStartCenter);
-        _scheduleRebuild();
-      }
+      _zoomPan.updatePinch(pts[0], pts[1]);
     } else if (_activePointers.length == 1) {
       if (_hadMultiTouch) {
         // Residual finger from a pinch — pan only, never draw.
@@ -1338,28 +1315,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
     _activePointers.remove(event.pointer);
     if (_activePointers.isEmpty) {
-      _pinchStartDistance = 0;
+      _zoomPan.resetPinch();
       _hadMultiTouch = false; // all fingers up — next touch starts fresh
-      _saveViewPosition();
     }
   }
 
   // ─── Trackpad pinch-to-zoom (macOS) ──────────────────────────────────────
 
-  void _onPointerPanZoomStart(PointerPanZoomStartEvent event) {
-    _trackpadStartScale = _scale;
-    _trackpadStartPanOffset = _panOffset;
-  }
+  void _onPointerPanZoomStart(PointerPanZoomStartEvent event) =>
+      _zoomPan.onPointerPanZoomStart(event);
 
-  void _onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
-    final newScale = (_trackpadStartScale * event.scale).clamp(0.1, 20.0);
-    _panOffset = event.localPosition -
-        (event.localPosition - _trackpadStartPanOffset) *
-            (newScale / _trackpadStartScale) +
-        event.pan;
-    _scale = newScale;
-    _scheduleRebuild();
-  }
+  void _onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) =>
+      _zoomPan.onPointerPanZoomUpdate(event);
 
   void _onPointerHover(PointerHoverEvent event) {
     _mouseScreenPos = event.localPosition;
@@ -1400,27 +1367,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   // ─── Scroll wheel: zoom + shift-scroll pan ────────────────────────────────
 
-  void _onPointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) return;
-    final dx = event.scrollDelta.dx;
-    final dy = event.scrollDelta.dy;
+  void _onPointerSignal(PointerSignalEvent event) =>
+      _zoomPan.onPointerSignal(event);
 
-    // Pinch-to-zoom on trackpad sends very small deltas; scroll wheel sends ±120.
-    // Use shift+scroll (or horizontal scroll) for panning, vertical for zoom.
-    if (event.kind == PointerDeviceKind.mouse && dx == 0) {
-      // Scroll wheel or two-finger vertical swipe on trackpad → zoom
-      _zoomAround(event.localPosition, dy > 0 ? 0.9 : 1.1);
-    } else {
-      // Trackpad two-finger pan (horizontal or mixed)
-      _pan(Offset(-dx, -dy));
-    }
-    // No discrete end event for scroll; debounce the save.
-    _debouncedSaveViewPosition();
-  }
-
-  void _onPointerPanZoomEnd(PointerPanZoomEndEvent event) {
-    _saveViewPosition();
-  }
+  void _onPointerPanZoomEnd(PointerPanZoomEndEvent event) =>
+      _zoomPan.onPointerPanZoomEnd(event);
 
   // ─── Build ────────────────────────────────────────────────────────────────
 
@@ -1441,15 +1392,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       }
       // When the file changes, restore the saved view position for the new file.
       if (next.filePath != prev?.filePath && next.isFileOpen) {
-        setState(() {
-          if (next.viewScale > 0) {
-            _scale = next.viewScale;
-            _panOffset = Offset(next.viewPanX, next.viewPanY);
-          } else {
-            _scale = 1.0;
-            _panOffset = const Offset(20, 20);
-          }
-        });
+        if (next.viewScale > 0) {
+          _zoomPan.setViewport(next.viewScale, Offset(next.viewPanX, next.viewPanY));
+        } else {
+          _zoomPan.setViewport(1.0, const Offset(20, 20));
+        }
+        setState(() {});
       }
       // Fit canvas to page when page mode navigates.
       if (next.pendingFitPage != null &&
