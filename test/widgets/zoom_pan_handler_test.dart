@@ -1,4 +1,3 @@
-import 'dart:ui' show Offset;
 import 'package:flutter/gestures.dart'
     show
         PointerDeviceKind,
