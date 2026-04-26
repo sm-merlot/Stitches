@@ -1,4 +1,3 @@
-import 'package:flutter/widgets.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/stitch.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';

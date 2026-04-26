@@ -1,5 +1,4 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
-import 'package:flutter/widgets.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/widgets/hover_handler.dart';
 import 'test_helpers.dart';
