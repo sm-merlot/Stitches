@@ -9,6 +9,8 @@ import '../models/snippet.dart';
 import '../models/snippet_palette.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
+import '../utils/edit_controller.dart';
+import '../utils/shortcut_router.dart';
 import '../widgets/dialogs/dmc_picker_dialog.dart';
 import '../widgets/editor_toolbar.dart';
 import '../widgets/pattern_canvas.dart';
@@ -78,6 +80,7 @@ class _SnippetEditorBody extends ConsumerStatefulWidget {
 
 class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   late final TextEditingController _nameController;
+  late final EditController _editController;
   final FocusNode _nameFocusNode = FocusNode();
   // null = custom size chosen via dialog
   int? _selectedPresetIndex = 1; // default 16×16
@@ -95,6 +98,14 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   @override
   void initState() {
     super.initState();
+    _editController = EditController(
+      notifier: ref.read(editorProvider.notifier),
+      getState: () => ref.read(editorProvider),
+      onFlipCanvasH: () => ref.read(editorProvider.notifier).flipCanvasH(),
+      onFlipCanvasV: () => ref.read(editorProvider.notifier).flipCanvasV(),
+      onRotateCanvasCW: () => ref.read(editorProvider.notifier).rotateCanvasCW(),
+    );
+    ShortcutRouter.instance.push(_editController);
     final s = widget.snippet;
     _nameController = TextEditingController(text: s?.name ?? 'New snippet');
     // Rebuild on name changes so the title field can shrink/grow to fit the
@@ -183,6 +194,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
 
   @override
   void dispose() {
+    ShortcutRouter.instance.pop(_editController);
     _nameController.dispose();
     _nameFocusNode.dispose();
     super.dispose();
@@ -286,129 +298,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       _canvasH = h;
     });
     _loadEmptyPattern();
-  }
-
-  KeyEventResult _handleKeys(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    final notifier = ref.read(editorProvider.notifier);
-    final state = ref.read(editorProvider);
-    final keys = HardwareKeyboard.instance.logicalKeysPressed;
-    final meta = keys.contains(LogicalKeyboardKey.metaLeft) ||
-        keys.contains(LogicalKeyboardKey.metaRight);
-    final ctrl = keys.contains(LogicalKeyboardKey.controlLeft) ||
-        keys.contains(LogicalKeyboardKey.controlRight);
-    final shift = keys.contains(LogicalKeyboardKey.shiftLeft) ||
-        keys.contains(LogicalKeyboardKey.shiftRight);
-    final key = event.logicalKey;
-
-    if (meta || ctrl) {
-      if (key == LogicalKeyboardKey.keyZ && !shift) {
-        notifier.undo();
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.keyZ && shift) {
-        notifier.redo();
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.keyY) {
-        notifier.redo();
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.keyA) {
-        notifier.selectAll();
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.keyC) {
-        notifier.copySelection();
-        return KeyEventResult.handled;
-      }
-      if (!shift && key == LogicalKeyboardKey.keyV) {
-        notifier.enterPasteMode();
-        return KeyEventResult.handled;
-      }
-      if (shift && key == LogicalKeyboardKey.keyH) {
-        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-          notifier.flipSelectionH();
-        } else if (state.drawingMode == DrawingMode.paste) {
-          notifier.flipClipboardH();
-        } else {
-          notifier.flipCanvasH();
-        }
-        return KeyEventResult.handled;
-      }
-      if (shift && key == LogicalKeyboardKey.keyV) {
-        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-          notifier.flipSelectionV();
-        } else if (state.drawingMode == DrawingMode.paste) {
-          notifier.flipClipboardV();
-        } else {
-          notifier.flipCanvasV();
-        }
-        return KeyEventResult.handled;
-      }
-      if (shift && key == LogicalKeyboardKey.bracketRight) {
-        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-          notifier.rotateSelectionCW();
-        } else if (state.drawingMode == DrawingMode.paste) {
-          notifier.rotateClipboardCW();
-        } else {
-          notifier.rotateCanvasCW();
-        }
-        return KeyEventResult.handled;
-      }
-      if (shift && key == LogicalKeyboardKey.bracketLeft) {
-        if (state.drawingMode == DrawingMode.select && state.selectionRect != null) {
-          notifier.rotateSelectionCW(); notifier.rotateSelectionCW(); notifier.rotateSelectionCW();
-        } else if (state.drawingMode == DrawingMode.paste) {
-          notifier.rotateClipboardCW(); notifier.rotateClipboardCW(); notifier.rotateClipboardCW();
-        } else {
-          notifier.rotateCanvasCW(); notifier.rotateCanvasCW(); notifier.rotateCanvasCW();
-        }
-        return KeyEventResult.handled;
-      }
-    }
-
-    switch (key) {
-      case LogicalKeyboardKey.keyD:
-        notifier.setDrawingMode(DrawingMode.draw);
-      case LogicalKeyboardKey.keyE:
-        notifier.setDrawingMode(DrawingMode.erase);
-      case LogicalKeyboardKey.space:
-        notifier.setDrawingMode(DrawingMode.pan);
-      case LogicalKeyboardKey.keyS:
-        notifier.setDrawingMode(DrawingMode.select);
-      case LogicalKeyboardKey.keyC:
-        notifier.setDrawingMode(DrawingMode.colorPicker);
-      case LogicalKeyboardKey.digit1:
-        notifier.setTool(DrawingTool.fullStitch);
-      case LogicalKeyboardKey.digit2:
-        notifier.setTool(DrawingTool.halfForward);
-      case LogicalKeyboardKey.digit3:
-        notifier.setTool(DrawingTool.halfBackward);
-      case LogicalKeyboardKey.digit4:
-        notifier.setTool(DrawingTool.halfCross);
-      case LogicalKeyboardKey.digit5:
-        notifier.setTool(DrawingTool.quarterDiag);
-      case LogicalKeyboardKey.digit6:
-        notifier.setTool(DrawingTool.quarterCross);
-      case LogicalKeyboardKey.digit7:
-        notifier.setTool(DrawingTool.backstitch);
-      case LogicalKeyboardKey.digit8:
-        notifier.setTool(DrawingTool.fill);
-      case LogicalKeyboardKey.digit9:
-        notifier.setDrawingMode(DrawingMode.erase);
-        if (!state.fillEraseActive) notifier.toggleFillErase();
-      case LogicalKeyboardKey.escape:
-        notifier.cancelSelection();
-      case LogicalKeyboardKey.delete:
-      case LogicalKeyboardKey.backspace:
-        notifier.deleteSelection();
-      default:
-        return KeyEventResult.ignored;
-    }
-    return KeyEventResult.handled;
   }
 
   Future<void> _showResizeDialog(BuildContext context) async {
@@ -590,10 +479,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Focus(
-        autofocus: true,
-        onKeyEvent: _handleKeys,
-        child: Row(
+      body: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
@@ -617,7 +503,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
                 sidebarContext: RightSidebarContext.snippetEditor),
           ],
         ),
-      ),
       ),
     );
   }
