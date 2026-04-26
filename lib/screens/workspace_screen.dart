@@ -738,7 +738,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, EditorState editorState) {
     if (editorState.isNativeFormat) {
-      return const EditorCanvasArea();
+      return EditorCanvasArea(
+        editController: _editController,
+        stitchController: _stitchController,
+      );
     }
     final filePath = editorState.filePath!;
     final lastDot = filePath.lastIndexOf('.');
@@ -746,6 +749,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final nativePath = '$withoutExt.stitches';
     final nativeExists = File(nativePath).existsSync();
     return EditorCanvasArea(
+      editController: _editController,
+      stitchController: _stitchController,
       importFilePath: filePath,
       onConvert: nativeExists ? null : () => _convertToNative(context),
       onOpenNative: nativeExists ? () => _openNativeFile(context, nativePath) : null,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
+import '../utils/edit_controller.dart';
+import '../utils/stitch_controller.dart';
 import 'editor_shared_widgets.dart';
 import 'editor_toolbar.dart';
 import 'pattern_canvas.dart';
@@ -10,6 +12,9 @@ import 'pattern_canvas.dart';
 ///
 /// Callers are responsible for only rendering this widget when a file is open.
 class EditorCanvasArea extends ConsumerWidget {
+  final EditController editController;
+  final StitchController stitchController;
+
   /// When non-null, shows the import-format banner for this non-native file.
   final String? importFilePath;
 
@@ -23,6 +28,8 @@ class EditorCanvasArea extends ConsumerWidget {
 
   const EditorCanvasArea({
     super.key,
+    required this.editController,
+    required this.stitchController,
     this.importFilePath,
     this.onConvert,
     this.onOpenNative,
@@ -41,7 +48,12 @@ class EditorCanvasArea extends ConsumerWidget {
             onConvert: onConvert,
             onOpenNative: onOpenNative,
           ),
-        const Expanded(child: PatternCanvas()),
+        Expanded(
+          child: PatternCanvas(
+            editController: editController,
+            stitchController: stitchController,
+          ),
+        ),
         const ProgressInfoBar(),
         const SafeArea(top: false, child: EditorToolbar()),
       ],

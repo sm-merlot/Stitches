@@ -1,21 +1,29 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart' hide UndoManager;
 import '../providers/editor/editor_provider.dart';
+import '../widgets/canvas_viewport.dart';
+import '../widgets/hover_handler.dart';
+import '../widgets/page_nav_handler.dart';
+import '../widgets/progress_handler.dart';
+import 'canvas_callbacks.dart';
 import 'shortcut_router.dart';
 import 'undo_manager.dart';
 
-/// Keyboard handler for stitch mode.
+/// Controller for stitch mode.
 ///
-/// Handles progress undo/redo, mode-switch keys (S, Space), page navigation
-/// arrow keys, and Escape.  Does NOT handle Copy, Paste, Delete, or tool
-/// selection — those are edit-mode-only intents owned by [EditController].
+/// Owns the keyboard shortcut handler (via [ShortcutHandler]) and the
+/// canvas pointer-event handlers ([ProgressHandler], [PageNavHandler],
+/// [HoverHandler]).
 ///
-/// Only fires when [EditorState.stitchMode] is true.
+/// **Lifecycle:**
+/// - Push to [ShortcutRouter] in the owning screen's `initState`.
+/// - Call [attachCanvas] when [PatternCanvas] mounts.
+/// - Call [detachCanvas] in [PatternCanvas.dispose].
+/// - Pop from [ShortcutRouter] in the owning screen's `dispose`.
 ///
-/// Implements [ShortcutHandler] to integrate with [ShortcutRouter]:
-/// push in the owning widget's `initState`, pop in `dispose`.
-///
-/// Owns an [UndoManager] scoped to progress marks only, separate from the
-/// pattern-edit undo stack in [EditController].
+/// Only fires keyboard shortcuts when [EditorState.stitchMode] is true.
+/// Pattern mutation is structurally impossible: this controller composes no
+/// [DrawHandler] or [PasteHandler].
 class StitchController implements ShortcutHandler {
   StitchController({
     required EditorNotifier notifier,
@@ -32,6 +40,136 @@ class StitchController implements ShortcutHandler {
 
   /// Undo stack scoped to progress marks only.
   final UndoManager undoManager = UndoManager();
+
+  // ── Canvas pointer handlers ────────────────────────────────────────────────
+
+  HoverHandler? _hover;
+  ProgressHandler? _progress;
+  static const _pageNav = PageNavHandler();
+
+  /// Read by [PatternCanvas] overlay painter.
+  HoverHandler? get hover => _hover;
+  ProgressHandler? get progress => _progress;
+
+  /// Wire up pointer handlers with view-level callbacks.
+  void attachCanvas(CanvasCallbacks cb) {
+    final n = _notifier;
+    _hover = HoverHandler(scheduleRebuild: cb.scheduleRebuild);
+    _progress = ProgressHandler(
+      onToggleStitchDone: n.toggleStitchDone,
+      onToggleBackstitchDone: n.toggleBackstitchDone,
+      onFloodFillDone: n.floodFillDone,
+      onSetProgressRegion: n.setProgressRegion,
+      scheduleRebuild: cb.scheduleRebuild,
+    );
+  }
+
+  /// Release pointer handlers. Called by [PatternCanvas.dispose].
+  void detachCanvas() {
+    _hover = null;
+    _progress = null;
+  }
+
+  // ── Pointer event dispatch ─────────────────────────────────────────────────
+
+  void onPointerDown(
+    Offset localPos,
+    PointerDeviceKind kind,
+    CanvasViewport vp,
+    EditorState state, {
+    required bool isOnCanvas,
+    required bool isNavZone,
+  }) {
+    if (_progress == null) return;
+    final p = state.pattern;
+
+    if (state.drawingMode == DrawingMode.select) {
+      if (state.progressRegion != null) {
+        _notifier.setProgressRegion(null);
+        return;
+      }
+      if (isOnCanvas && !isNavZone) {
+        _progress!.onPointerDown(localPos, vp, p.width, p.height, state);
+      }
+      return;
+    }
+
+    if (!isNavZone) {
+      _progress!.onPointerDown(localPos, vp, p.width, p.height, state);
+    }
+  }
+
+  void onPointerMove(
+    Offset localPos,
+    PointerDeviceKind kind,
+    CanvasViewport vp,
+    EditorState state,
+  ) {
+    if (_progress == null) return;
+    final p = state.pattern;
+    _hover!.onPointerMove(localPos, vp, p.width, p.height);
+
+    if (_progress!.isActive) {
+      if (kind == PointerDeviceKind.touch) {
+        _progress!.onTouchMove(localPos, vp, p.width, p.height);
+      } else {
+        _progress!.onPointerMove(localPos, vp, p.width, p.height);
+      }
+    }
+  }
+
+  void onPointerUp(
+    Offset localPos,
+    CanvasViewport vp,
+    EditorState state,
+  ) {
+    if (_progress == null) return;
+    if (_progress!.isActive) {
+      _progress!.onPointerUp(
+          localPos, vp, state.pattern.width, state.pattern.height, state);
+    }
+  }
+
+  void onPointerHover(
+    Offset localPos,
+    PointerDeviceKind kind,
+    CanvasViewport vp,
+    EditorState state,
+  ) {
+    if (_hover == null) return;
+    final p = state.pattern;
+    _hover!.onPointerHover(localPos, kind, vp, p.width, p.height);
+  }
+
+  void onStylusAdded(Offset localPos, CanvasViewport vp, int patW, int patH) {
+    _hover?.onStylusAdded(localPos, vp, patW, patH);
+  }
+
+  void onStylusRemoved() => _hover?.onStylusRemoved();
+
+  void onHoverExit() => _hover?.onExit();
+
+  /// Cancel any active progress gesture (e.g. when multi-touch starts).
+  void cancelActiveGestures() {
+    _progress?.cancel();
+  }
+
+  /// Returns true if [screenPos] falls in a page-navigation zone.
+  bool isNavZone(
+    Offset screenPos,
+    double canvasWidth,
+    double canvasHeight,
+    EditorState state,
+  ) =>
+      _pageNav.isNavZone(
+        screenPos,
+        Size(canvasWidth, canvasHeight),
+        stitchMode: true,
+        pageEnabled: state.pattern.pageConfig.enabled,
+        hasPageLayout: state.pageLayout != null,
+      );
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
 
   @override
   bool handle(KeyEvent event) {
@@ -68,7 +206,7 @@ class StitchController implements ShortcutHandler {
       return false;
     }
 
-    // ── Single-key shortcuts ──────────────────────────────────────────────────
+    // ── Single-key shortcuts ────────────────────────────────────────────────
     if (key == LogicalKeyboardKey.keyS) {
       _notifier.setDrawingMode(DrawingMode.select);
       return true;

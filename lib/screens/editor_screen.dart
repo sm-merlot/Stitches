@@ -361,7 +361,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, WidgetRef ref, EditorState state) {
     if (state.isNativeFormat) {
-      return const EditorCanvasArea();
+      return EditorCanvasArea(
+        editController: _editController,
+        stitchController: _stitchController,
+      );
     }
     final filePath = state.filePath!;
     final lastDot = filePath.lastIndexOf('.');
@@ -369,6 +372,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final nativePath = '$withoutExt.stitches';
     final nativeExists = File(nativePath).existsSync();
     return EditorCanvasArea(
+      editController: _editController,
+      stitchController: _stitchController,
       importFilePath: filePath,
       onConvert: nativeExists ? null : () => _convertToNative(context, ref),
       onOpenNative: nativeExists ? () => _openNativeFile(context, ref, nativePath) : null,
