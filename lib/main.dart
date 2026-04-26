@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'app.dart';
 import 'services/file_service.dart';
+import 'utils/shortcut_router.dart';
 import 'services/incoming_file_service.dart';
 import 'services/pdf_pattern_keeper_parser.dart';
 import 'services/pdf_service.dart';
@@ -73,6 +74,7 @@ void main(List<String> args) async {
     HttpOverrides.global = _WindowsHttpOverrides();
   }
   WidgetsFlutterBinding.ensureInitialized();
+  ShortcutRouter.instance.init();
   IncomingFileService.listen();
   runApp(
     const ProviderScope(

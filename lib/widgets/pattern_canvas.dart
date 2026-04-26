@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
+import '../utils/shortcut_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
@@ -31,7 +32,8 @@ class PatternCanvas extends ConsumerStatefulWidget {
   ConsumerState<PatternCanvas> createState() => _PatternCanvasState();
 }
 
-class _PatternCanvasState extends ConsumerState<PatternCanvas> {
+class _PatternCanvasState extends ConsumerState<PatternCanvas>
+    implements ShortcutHandler {
   static const double _baseCellSize = 20.0;
 
   // ── ZoomPanHandler ──────────────────────────────────────────────────────────
@@ -192,7 +194,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       scheduleRebuild: _scheduleRebuild,
     );
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
-    HardwareKeyboard.instance.addHandler(_onHardwareKey);
+    ShortcutRouter.instance.push(this);
     // Seed the render cache with the initial editor state.
     _rebuildRenderCache(editorState);
   }
@@ -202,7 +204,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     _warningTimer?.cancel();
     _viewSaveTimer?.cancel();
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointerEvent);
-    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
+    ShortcutRouter.instance.pop(this);
     super.dispose();
   }
 
@@ -222,11 +224,12 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     });
   }
 
-  bool _onHardwareKey(KeyEvent event) {
+  @override
+  bool handle(KeyEvent event) {
     final ctrl = HardwareKeyboard.instance.isControlPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;
     _paste.updateModifiers(ctrl: ctrl, shift: shift);
-    return false; // don't consume the event
+    return false; // modifier tracking only — do not consume
   }
 
   void _onGlobalPointerEvent(PointerEvent event) {
