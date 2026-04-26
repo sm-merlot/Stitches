@@ -1,0 +1,90 @@
+import 'package:flutter/material.dart' show Colors;
+import 'package:flutter/widgets.dart' show Offset;
+import 'package:stitches/models/layer.dart';
+import 'package:stitches/models/layer_item.dart';
+import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/stitch.dart';
+import 'package:stitches/providers/editor/editor_provider.dart';
+import 'package:stitches/widgets/canvas_viewport.dart';
+
+// ─── Shared viewport + pattern dimensions ────────────────────────────────────
+
+const cellSize = 20.0;
+const vp = CanvasViewport(cellSize: cellSize, panOffset: Offset.zero, scale: 1.0);
+const patW = 50;
+const patH = 50;
+
+// ─── Fixed test layer ID ──────────────────────────────────────────────────────
+
+const kLayerId = 'layer1';
+
+// ─── Pattern / layer builders ─────────────────────────────────────────────────
+
+Layer fakeLayer({
+  String id = kLayerId,
+  List<Stitch> stitches = const [],
+  bool visible = true,
+  double opacity = 1.0,
+}) =>
+    Layer(
+      id: id,
+      name: 'Layer 1',
+      visible: visible,
+      opacity: opacity,
+      stitches: stitches,
+    );
+
+CrossStitchPattern fakePattern({
+  int width = 20,
+  int height = 20,
+  List<Layer>? layers,
+}) {
+  final ls = layers ?? [fakeLayer()];
+  return CrossStitchPattern(
+    name: 'test',
+    width: width,
+    height: height,
+    aidaColor: Colors.white,
+    threads: const [],
+    layerItems: ls.map((l) => LayerLeaf(layer: l)).toList(),
+  );
+}
+
+// ─── EditorState builders ─────────────────────────────────────────────────────
+
+EditorState fakeEditState({
+  CrossStitchPattern? pattern,
+  DrawingMode drawingMode = DrawingMode.draw,
+  DrawingTool currentTool = DrawingTool.fullStitch,
+  String? selectedThreadId = 'DMC310',
+  bool fillEraseActive = false,
+  int eraserSize = 1,
+  bool backstitchChainMode = false,
+  Offset? backstitchStartPoint,
+}) =>
+    EditorState(
+      pattern: pattern ?? fakePattern(),
+      mode: AppMode.edit,
+      drawingMode: drawingMode,
+      currentTool: currentTool,
+      selectedThreadId: selectedThreadId,
+      fillEraseActive: fillEraseActive,
+      eraserSize: eraserSize,
+      backstitchChainMode: backstitchChainMode,
+      backstitchStartPoint: backstitchStartPoint,
+      activeLayerId: kLayerId,
+    );
+
+EditorState fakeStitchState({
+  CrossStitchPattern? pattern,
+  bool stitchCrossMode = false,
+  String? stitchFocusThreadId,
+}) =>
+    EditorState(
+      pattern: pattern ?? fakePattern(),
+      mode: AppMode.stitch,
+      drawingMode: DrawingMode.select,
+      activeLayerId: kLayerId,
+      stitchCrossMode: stitchCrossMode,
+      stitchFocusThreadId: stitchFocusThreadId,
+    );
