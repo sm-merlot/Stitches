@@ -63,13 +63,6 @@ KeyDownEvent _key(LogicalKeyboardKey key) => KeyDownEvent(
       timeStamp: Duration.zero,
     );
 
-KeyDownEvent _keyMeta(LogicalKeyboardKey key) {
-  // The controller checks HardwareKeyboard.instance — we can't inject modifier
-  // state without a real binding, so modifier tests rely on the key-only path
-  // for single-key shortcuts. Modifier-combo tests are integration-level.
-  return _key(key);
-}
-
 // EditController.handle reads HardwareKeyboard.instance → binding needed.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
