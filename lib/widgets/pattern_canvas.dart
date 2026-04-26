@@ -10,13 +10,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
-import '../models/stitch_geometry.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/render_cache.dart';
 import '../services/stitch_compositor.dart';
 import 'canvas_painter.dart';
 import 'canvas_viewport.dart';
+import 'draw_handler.dart';
+import 'hover_handler.dart';
+import 'page_nav_handler.dart';
+import 'paste_handler.dart';
+import 'progress_handler.dart';
+import 'select_handler.dart';
 import 'zoom_pan_handler.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {
@@ -38,6 +43,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   double get _scale => _zoomPan.scale;
   Offset get _panOffset => _zoomPan.panOffset;
 
+  // ── Extracted input handlers ─────────────────────────────────────────────────
+  // Each owns its own mutable state and communicates via injected callbacks.
+  late final HoverHandler _hover;
+  late final DrawHandler _draw;
+  late final SelectHandler _select;
+  late final PasteHandler _paste;
+  late final ProgressHandler _progress;
+  static const _pageNav = PageNavHandler();
+
   // ── RenderCache ─────────────────────────────────────────────────────────────
   // Owned here (not in Riverpod state) — UI concern, not business logic.
   // Rebuilt when pattern/composite/mode changes; NOT rebuilt on pan/zoom.
@@ -52,51 +66,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   // Reset to false only when _activePointers becomes empty (all fingers up).
   bool _hadMultiTouch = false;
 
-  // Double-tap / double-click detection
+  // Double-tap / double-click detection (edit mode undo)
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
-  // Progress double-click/double-tap flood fill detection (stitch mode).
-  // Detected at pointer-DOWN time (DOWN-to-DOWN): if the second DOWN arrives
-  // within _kDoubleClickMs of the previous DOWN at a nearby screen position,
-  // set _pendingDoubleClick so that pointer-UP does a flood fill instead of
-  // a single toggle.
-  DateTime?    _lastProgressDownTime;
-  (int, int)?  _lastProgressDownCell;
-  bool         _pendingDoubleClick = false;
-  bool?        _wasProgressCellDone; // state of the cell BEFORE the last single-click toggle
-  static const int _kDoubleClickMs = 500;
-
-  // Cursor/hover tracking
-  Offset? _backstitchHoverPoint;
-  Offset? _mouseScreenPos;
-  (int, int)? _stylusHoverCell;
-
-  // Selection / move state
-  Offset? _selectionAnchor;      // grid cell where rubber-band drag started
-  bool _isMovingSelection = false;
-  bool _hasDraggedSelection = false; // true once pointer moves during a rubber-band
-  Offset? _moveDragStartCell;
-  Offset _moveDelta = Offset.zero;
-  // Live rubber-band rect during drag — only committed to provider on pointer up.
-  Rect? _dragSelectionRect;
-
-  // Paste preview origin (grid cell coords, top-left of where clipboard will land)
-  Offset? _pasteOrigin;
-
-  // Progress tracking — stitch mode tap/drag state
-  Offset? _progressAnchor;           // cell coords where drag/tap started
-  Offset? _progressAnchorScreen;     // screen pixels where drag started (for jitter threshold)
-  bool _hasDraggedProgress = false;  // true once pointer moved > _kProgressDragThreshold px
-  Rect? _progressDragRect;           // live region during drag (reuses selection overlay)
-  BackStitch? _progressBackstitch;   // backstitch hit at pointer-down; tapped if no drag
-  static const double _kProgressDragThreshold = 10.0; // screen-pixel minimum drag distance
-  static const double _kBackstitchHitRadius = 0.3;    // cell units
-
-  // Whether Ctrl is currently held — switches paste from single-stamp to multi-stamp.
-  bool _ctrlHeld = false;
-
-  // Whether Shift is currently held — enables edge snapping in paste mode.
-  bool _shiftHeld = false;
 
   // ── Palette override cache ──────────────────────────────────────────────────
   // Rebuilt only when snippetPalettes identity or active index actually changes,
@@ -105,21 +77,11 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
   int _lastPaletteIdx = -1;
   Map<String, Color>? _paletteOverride;
 
-  // Guard to fire flood fill only once per tap (not repeatedly on drag).
-  bool _fillFired = false;
-
   // ── Layer visibility warning ───────────────────────────────────────────────
   String? _warningMessage;
   Timer? _warningTimer;
   // Suppresses repeat warnings within a single pointer-down → up gesture.
   bool _warnedThisGesture = false;
-
-  // ── Ghost stitch cache ────────────────────────────────────────────────────
-  // Avoids re-allocating the offset stitch list on every build when the paste
-  // offset and clipboard haven't changed.
-  List<Stitch>? _cachedGhostStitches;
-  (int, int)? _lastGhostDxDy;
-  List<Stitch>? _lastGhostClipboard;
 
   // ── View position persistence ──────────────────────────────────────────────
   // Debounce timer used only for scroll-wheel zoom (no discrete end event).
@@ -199,6 +161,36 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       save: _saveViewPosition,
       debouncedSave: _debouncedSaveViewPosition,
     );
+    final n = ref.read(editorProvider.notifier);
+    _hover = HoverHandler(scheduleRebuild: _scheduleRebuild);
+    _draw = DrawHandler(
+      onAddStitch: n.addStitch,
+      onRemoveAt: n.removeStitchesAt,
+      onRemoveBox: n.removeStitchesInBox,
+      onFloodFill: n.floodFill,
+      onPickColor: n.pickColorAtCell,
+      onSetBackstitchStart: n.setBackstitchStart,
+      onLayerWarning: _showWarning,
+      getCtrlHeld: () => _paste.ctrlHeld,
+    );
+    _select = SelectHandler(
+      onSetSelectionRect: n.setSelectionRect,
+      onMoveSelection: n.moveSelection,
+      onWarning: _showWarningBanner,
+      scheduleRebuild: _scheduleRebuild,
+    );
+    _paste = PasteHandler(
+      onCommitPaste: n.commitPaste,
+      onCancelSelection: n.cancelSelection,
+      scheduleRebuild: _scheduleRebuild,
+    );
+    _progress = ProgressHandler(
+      onToggleStitchDone: n.toggleStitchDone,
+      onToggleBackstitchDone: n.toggleBackstitchDone,
+      onFloodFillDone: n.floodFillDone,
+      onSetProgressRegion: n.setProgressRegion,
+      scheduleRebuild: _scheduleRebuild,
+    );
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
     // Seed the render cache with the initial editor state.
@@ -230,86 +222,29 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     });
   }
 
-  /// Shows a bottom sheet letting the user confirm marking a dragged region done.
-  /// Returns true if stitch [s] occupies cell (x, y).
-  /// Uses EditorState.cellCoords for non-backstitch types; skips backstitches.
-  bool _stitchAtCell(Stitch s, int x, int y) {
-    final coords = EditorState.cellCoords(s);
-    return coords != null && coords.$1 == x && coords.$2 == y;
-  }
-
-  /// Checks whether the current draw/erase at (cellX, cellY) would be invisible
-  /// due to layer visibility issues. Shows a warning and returns if so.
-  void _checkLayerWarning(EditorState state, int cellX, int cellY) {
-    final activeLayer = state.activeLayer;
-    final layers = state.pattern.layers;
-
-    if (state.drawingMode == DrawingMode.erase) {
-      // Warn if active layer has no stitch at this cell but other layers do.
-      final activeHasStitch = activeLayer.stitches.any((s) => _stitchAtCell(s, cellX, cellY));
-      if (!activeHasStitch) {
-        final othersHaveStitch = layers.any((l) =>
-            l.id != activeLayer.id &&
-            l.visible &&
-            l.stitches.any((s) => _stitchAtCell(s, cellX, cellY)));
-        if (othersHaveStitch) {
-          _showWarning('Nothing to erase on active layer here — check other layers');
-        }
-      }
-    } else if (state.drawingMode == DrawingMode.draw) {
-      if (!activeLayer.visible) {
-        _showWarning('Active layer is hidden — drawing won\'t be visible');
-        return;
-      }
-      // Warn if a fully-opaque layer above covers this cell with a full stitch.
-      final activeIdx = layers.indexWhere((l) => l.id == activeLayer.id);
-      if (activeIdx >= 0) {
-        for (var i = activeIdx + 1; i < layers.length; i++) {
-          final above = layers[i];
-          if (!above.visible || above.opacity < 1.0) continue;
-          final covered = above.stitches.any((s) => s is FullStitch && _stitchAtCell(s, cellX, cellY));
-          if (covered) {
-            _showWarning('"${above.name}" covers this cell — drawing won\'t be visible');
-            return;
-          }
-        }
-      }
-    }
-  }
-
   bool _onHardwareKey(KeyEvent event) {
     final ctrl = HardwareKeyboard.instance.isControlPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;
-    if (ctrl != _ctrlHeld || shift != _shiftHeld) {
-      setState(() {
-        _ctrlHeld = ctrl;
-        _shiftHeld = shift;
-      });
-    }
+    _paste.updateModifiers(ctrl: ctrl, shift: shift);
     return false; // don't consume the event
   }
 
   void _onGlobalPointerEvent(PointerEvent event) {
     if (!mounted) return;
     if (event.kind != PointerDeviceKind.stylus &&
-        event.kind != PointerDeviceKind.invertedStylus) { return; }
+        event.kind != PointerDeviceKind.invertedStylus) {
+      return;
+    }
 
     if (event is PointerAddedEvent) {
-      // Pencil entered hover range — try to update hover cell from global position.
+      // Pencil entered hover range — update hover cell from global position.
       final box = context.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) return;
       final local = box.globalToLocal(event.position);
-      final c = _screenToCanvas(local);
-      final cell = _canvasToCell(c);
       final p = ref.read(editorProvider).pattern;
-      if (cell.$1 >= 0 && cell.$1 < p.width && cell.$2 >= 0 && cell.$2 < p.height) {
-        _stylusHoverCell = cell;
-        _scheduleRebuild();
-      }
+      _hover.onStylusAdded(local, _viewport, p.width, p.height);
     } else if (event is PointerRemovedEvent) {
-      // Pencil left hover range — clear cell.
-      _stylusHoverCell = null;
-      _scheduleRebuild();
+      _hover.onStylusRemoved();
     }
   }
 
@@ -411,33 +346,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
 
   Offset _screenToCanvas(Offset screen) => _viewport.screenToCanvas(screen);
 
-  Offset _canvasToGridPoint(Offset canvas) =>
-      _viewport.canvasToGridPoint(canvas);
-
-  (int, int) _canvasToCell(Offset canvas) => _viewport.canvasToCell(canvas);
-
-  (double, double) _subCellPos(Offset canvas, int cellX, int cellY) =>
-      _viewport.subCellPos(canvas, cellX, cellY);
-
-  QuadrantPosition _detectQuadrant(double subX, double subY) {
-    if (subX < 0.5 && subY < 0.5) return QuadrantPosition.topLeft;
-    if (subX >= 0.5 && subY < 0.5) return QuadrantPosition.topRight;
-    if (subX < 0.5 && subY >= 0.5) return QuadrantPosition.bottomLeft;
-    return QuadrantPosition.bottomRight;
-  }
-
-  HalfOrientation _detectHalf(double subX, double subY) {
-    if ((subX - 0.5).abs() > (subY - 0.5).abs()) {
-      return subX < 0.5 ? HalfOrientation.left : HalfOrientation.right;
-    } else {
-      return subY < 0.5 ? HalfOrientation.top : HalfOrientation.bottom;
-    }
-  }
-
-  bool _inBounds(int cellX, int cellY) {
-    final p = ref.read(editorProvider).pattern;
-    return cellX >= 0 && cellX < p.width && cellY >= 0 && cellY < p.height;
-  }
+  void _pan(Offset delta) => _zoomPan.pan(delta);
 
   bool _screenOnCanvas(Offset screenPos) {
     final c = _screenToCanvas(screenPos);
@@ -446,354 +355,26 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         c.dx < p.width * _cellSize && c.dy < p.height * _cellSize;
   }
 
-  void _pan(Offset delta) => _zoomPan.pan(delta);
-
-  void _handleDrawAt(Offset screenPos) {
-    final state = ref.read(editorProvider);
-    if (!state.editMode) return;
-    final notifier = ref.read(editorProvider.notifier);
-    final canvas = _screenToCanvas(screenPos);
-
-    if (state.drawingMode == DrawingMode.colorPicker) {
-      final (cellX, cellY) = _canvasToCell(canvas);
-      if (!_inBounds(cellX, cellY)) return;
-      notifier.pickColorAtCell(cellX, cellY);
-      return;
-    }
-
-    // Erase mode is handled uniformly regardless of the current drawing tool.
-    if (state.drawingMode == DrawingMode.erase) {
-      final (cellX, cellY) = _canvasToCell(canvas);
-      if (_inBounds(cellX, cellY)) _checkLayerWarning(state, cellX, cellY);
-      if (state.fillEraseActive) {
-        if (!_inBounds(cellX, cellY)) return;
-        if (_fillFired) return;
-        _fillFired = true;
-        notifier.floodFill(cellX, cellY, erase: true);
-      } else if (state.eraserSize > 1) {
-        notifier.removeStitchesInBox(cellX, cellY, state.eraserSize);
-      } else {
-        if (_inBounds(cellX, cellY)) notifier.removeStitchesAt(cellX, cellY);
-      }
-      return;
-    }
-
-    if (state.currentTool == DrawingTool.fill) {
-      final (cellX, cellY) = _canvasToCell(canvas);
-      if (!_inBounds(cellX, cellY)) return;
-      // Flood fill is triggered once per tap, not on drag — guard with a flag.
-      if (_fillFired) return;
-      _fillFired = true;
-      notifier.floodFill(cellX, cellY, erase: false);
-      return;
-    }
-
-    if (state.currentTool == DrawingTool.backstitch) {
-      final gridPt = _canvasToGridPoint(canvas);
-      final p = state.pattern;
-      final gx = gridPt.dx;
-      final gy = gridPt.dy;
-
-      if (gx < 0 || gx > p.width || gy < 0 || gy > p.height) return;
-
-      if (state.backstitchStartPoint == null) {
-        notifier.setBackstitchStart(gridPt);
-        // Clear stale hover so preview doesn't flash to the old end point.
-        _backstitchHoverPoint = null;
-      } else {
-        final start = state.backstitchStartPoint!;
-        final sx = start.dx;
-        final sy = start.dy;
-        if (sx == gx && sy == gy) {
-          notifier.setBackstitchStart(null);
-          _backstitchHoverPoint = null;
-        } else if (state.selectedThreadId != null) {
-          notifier.addStitch(BackStitch(
-            x1: sx,
-            y1: sy,
-            x2: gx,
-            y2: gy,
-            threadId: state.selectedThreadId!,
-          ));
-          // Chain mode: end point becomes new start for next backstitch.
-          // Activated by holding Ctrl (desktop) or chain toggle (touch).
-          final chain = _ctrlHeld || state.backstitchChainMode;
-          notifier.setBackstitchStart(chain ? gridPt : null);
-          if (!chain) _backstitchHoverPoint = null;
-        }
-      }
-      return;
-    }
-
-    final (cellX, cellY) = _canvasToCell(canvas);
-    if (!_inBounds(cellX, cellY)) return;
-
-    if (state.selectedThreadId == null) return;
-
-    _checkLayerWarning(state, cellX, cellY);
-
-    final (subX, subY) = _subCellPos(canvas, cellX, cellY);
-    final stitch = _buildStitch(
-        state.currentTool, cellX, cellY, state.selectedThreadId!, subX, subY);
-    if (stitch != null) notifier.addStitch(stitch);
-  }
-
-  Stitch? _buildStitch(DrawingTool tool, int x, int y, String threadId,
-      double subX, double subY) {
-    return switch (tool) {
-      DrawingTool.fullStitch => FullStitch(x: x, y: y, threadId: threadId),
-      DrawingTool.halfForward =>
-        HalfStitch(x: x, y: y, isForward: true, threadId: threadId),
-      DrawingTool.halfBackward =>
-        HalfStitch(x: x, y: y, isForward: false, threadId: threadId),
-      DrawingTool.halfCross => HalfCrossStitch(
-          x: x, y: y, half: _detectHalf(subX, subY), threadId: threadId),
-      DrawingTool.quarterDiag => QuarterStitch(
-          x: x,
-          y: y,
-          quadrant: _detectQuadrant(subX, subY),
-          threadId: threadId),
-      DrawingTool.quarterCross => QuarterCrossStitch(
-          x: x,
-          y: y,
-          quadrant: _detectQuadrant(subX, subY),
-          threadId: threadId),
-      DrawingTool.backstitch => null,
-      DrawingTool.fill => null,
-      DrawingTool.fillErase => null,
-    };
-  }
-
-  // ─── Paste centering ─────────────────────────────────────────────────────
-
-  /// Computes the (dx, dy) offset so the clipboard is centered on [cursorCell].
-  (int, int) _centeredPasteOffset(Offset cursorCell, List<Stitch> clips) {
-    if (clips.isEmpty) return (cursorCell.dx.toInt(), cursorCell.dy.toInt());
-    var minX = double.infinity, maxX = double.negativeInfinity;
-    var minY = double.infinity, maxY = double.negativeInfinity;
-    for (final s in clips) {
-      final b = s.bounds;
-      if (b.minX < minX) minX = b.minX;
-      if (b.maxX > maxX) maxX = b.maxX;
-      if (b.minY < minY) minY = b.minY;
-      if (b.maxY > maxY) maxY = b.maxY;
-    }
-    final centerX = (minX + maxX) / 2;
-    final centerY = (minY + maxY) / 2;
-    return (
-      (cursorCell.dx + 0.5 - centerX).round(),
-      (cursorCell.dy + 0.5 - centerY).round(),
-    );
-  }
-
-  /// Like [_centeredPasteOffset] but, when Shift is held, snaps clipboard edges
-  /// to canvas boundaries and same-colour stitches. X and Y are snapped
-  /// independently so corner placement always works correctly.
-  ///
-  /// Canvas-edge snapping triggers based on **cursor proximity** to the canvas
-  /// edge (not clipboard-edge distance) so it works regardless of clipboard size.
-  (int, int) _pasteOffset(Offset cursorCell, List<Stitch> clips) {
-    final (cx, cy) = _centeredPasteOffset(cursorCell, clips);
-    if (!_shiftHeld || clips.isEmpty) return (cx, cy);
-
-    // Clipboard bounding box in stitch coords.
-    var clipMinX = double.infinity, clipMaxX = double.negativeInfinity;
-    var clipMinY = double.infinity, clipMaxY = double.negativeInfinity;
-    for (final s in clips) {
-      final b = s.bounds;
-      if (b.minX < clipMinX) clipMinX = b.minX;
-      if (b.maxX > clipMaxX) clipMaxX = b.maxX;
-      if (b.minY < clipMinY) clipMinY = b.minY;
-      if (b.maxY > clipMaxY) clipMaxY = b.maxY;
-    }
-
-    final state = ref.read(editorProvider);
-    final w = state.pattern.width.toDouble();
-    final h = state.pattern.height.toDouble();
-    const edgeThreshold = 3.0;
-
-    // Canvas-edge snapping: trigger when the clipboard EDGE would land within
-    // edgeThreshold cells of the canvas edge/centre (natural centered placement,
-    // before snapping).  This is more intuitive than cursor-proximity — the user
-    // just drags the snippet close to the edge and it locks on.  When both left
-    // and right (or top and bottom) are equidistant, left/top wins.
-    final cxd = cx.toDouble();
-    final cyd = cy.toDouble();
-    final leftDist    = (clipMinX + cxd).abs();
-    final rightDist   = (w - clipMaxX - cxd).abs();
-    final topDist     = (clipMinY + cyd).abs();
-    final bottomDist  = (h - clipMaxY - cyd).abs();
-    final centreXDist = ((clipMinX + clipMaxX) / 2 + cxd - w / 2).abs();
-    final centreYDist = ((clipMinY + clipMaxY) / 2 + cyd - h / 2).abs();
-
-    double? snapDx, snapDy;
-    if (leftDist <= edgeThreshold && leftDist <= rightDist) {
-      snapDx = -clipMinX;                              // clipboard left → canvas left
-    } else if (rightDist <= edgeThreshold) {
-      snapDx = w - clipMaxX;                           // clipboard right → canvas right
-    } else if (centreXDist <= edgeThreshold) {
-      snapDx = w / 2 - (clipMinX + clipMaxX) / 2;     // clipboard centre → canvas centre
-    }
-    if (topDist <= edgeThreshold && topDist <= bottomDist) {
-      snapDy = -clipMinY;                              // clipboard top → canvas top
-    } else if (bottomDist <= edgeThreshold) {
-      snapDy = h - clipMaxY;                           // clipboard bottom → canvas bottom
-    } else if (centreYDist <= edgeThreshold) {
-      snapDy = h / 2 - (clipMinY + clipMaxY) / 2;     // clipboard centre → canvas centre
-    }
-
-    // Same-colour stitch snapping: butt clipboard edge flush against the nearest
-    // canvas stitch sharing a thread colour.  Only runs on axes not already
-    // locked to a canvas edge, and uses a distance-from-placed-edge threshold.
-    const stitchThreshold = 3.0;
-    final clipThreadIds = clips.map((s) => s.threadId).toSet();
-    if (snapDx == null || snapDy == null) {
-      final xCandidates = <double>[];
-      final yCandidates = <double>[];
-      for (final cs in state.pattern.stitches) {
-        if (!clipThreadIds.contains(cs.threadId)) continue;
-        final b = cs.bounds;
-        if (snapDx == null) {
-          xCandidates.add(b.maxX - clipMinX); // clipboard left butts canvas stitch right
-          xCandidates.add(b.minX - clipMaxX); // clipboard right butts canvas stitch left
-        }
-        if (snapDy == null) {
-          yCandidates.add(b.maxY - clipMinY); // clipboard top butts canvas stitch bottom
-          yCandidates.add(b.minY - clipMaxY); // clipboard bottom butts canvas stitch top
-        }
-      }
-      double? pickNearest(List<double> candidates, double current) {
-        double? best;
-        double bestDist = stitchThreshold;
-        for (final c in candidates) {
-          final d = (c - current).abs();
-          if (d <= bestDist) { bestDist = d; best = c; }
-        }
-        return best;
-      }
-      snapDx ??= pickNearest(xCandidates, cx.toDouble());
-      snapDy ??= pickNearest(yCandidates, cy.toDouble());
-    }
-
-    return (
-      (snapDx ?? cx.toDouble()).round(),
-      (snapDy ?? cy.toDouble()).round(),
-    );
-  }
-
-  // ─── Progress double-click helper ─────────────────────────────────────────
-
-  /// Call on every pointer-DOWN that would start a progress tap.
-  /// Sets [_pendingDoubleClick] if this DOWN is on the same cell as the
-  /// previous DOWN and within the double-click time threshold.
-  void _checkProgressDoubleClick(Offset screenPos) {
-    final now = DateTime.now();
-    final last = _lastProgressDownTime;
-    final lastCell = _lastProgressDownCell;
-    final c = _screenToCanvas(screenPos);
-    final (cx, cy) = _canvasToCell(c);
-    if (last != null &&
-        lastCell != null &&
-        now.difference(last).inMilliseconds < _kDoubleClickMs &&
-        lastCell.$1 == cx && lastCell.$2 == cy) {
-      _pendingDoubleClick = true;
-      // Reset so a triple-click doesn't fire a second flood fill.
-      _lastProgressDownTime = null;
-      _lastProgressDownCell = null;
-    } else {
-      _pendingDoubleClick = false;
-      _lastProgressDownTime = now;
-      _lastProgressDownCell = (cx, cy);
-    }
-  }
-
-  /// Returns the topmost visible BackStitch within [_kBackstitchHitRadius] cell
-  /// units of [screenPos], respecting focus mode. Null if none hit.
-  BackStitch? _getBackstitchHit(Offset screenPos) {
-    final s = ref.read(editorProvider);
-    // Cross-stitch focus mode: backstitch hits are ignored so cross-stitch taps work normally.
-    if (s.stitchCrossMode) return null;
-    final focusId = s.stitchFocusThreadId;
-    final canvas = _screenToCanvas(screenPos);
-    final px = canvas.dx / _cellSize;
-    final py = canvas.dy / _cellSize;
-    BackStitch? result;
-    for (final layer in s.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is! BackStitch) continue;
-        if (focusId != null && stitch.threadId != focusId) continue;
-        // Point-to-segment distance in cell space.
-        final dx = stitch.x2 - stitch.x1, dy = stitch.y2 - stitch.y1;
-        final lenSq = dx * dx + dy * dy;
-        double dist;
-        if (lenSq == 0) {
-          final ex = px - stitch.x1, ey = py - stitch.y1;
-          dist = math.sqrt(ex * ex + ey * ey);
-        } else {
-          final t = ((px - stitch.x1) * dx + (py - stitch.y1) * dy) / lenSq;
-          final tc = t.clamp(0.0, 1.0);
-          final nx = stitch.x1 + tc * dx - px;
-          final ny = stitch.y1 + tc * dy - py;
-          dist = math.sqrt(nx * nx + ny * ny);
-        }
-        if (dist < _kBackstitchHitRadius) result = stitch; // last = topmost layer
-      }
-    }
-    return result;
-  }
-
-  // ─── Selection helpers ────────────────────────────────────────────────────
-
-  Rect _buildSelRect(Offset a, Offset b) {
-    return Rect.fromLTRB(
-      math.min(a.dx, b.dx),
-      math.min(a.dy, b.dy),
-      math.max(a.dx, b.dx) + 1,
-      math.max(a.dy, b.dy) + 1,
-    );
-  }
-
-  bool _cellInSelRect(int cellX, int cellY, Rect rect) =>
-      cellX >= rect.left && cellX < rect.right &&
-      cellY >= rect.top && cellY < rect.bottom;
-
-  Offset _screenToSelCell(Offset screenPos) {
-    final c = _screenToCanvas(screenPos);
-    final (x, y) = _canvasToCell(c);
-    final p = ref.read(editorProvider).pattern;
-    return Offset(x.clamp(0, p.width - 1).toDouble(), y.clamp(0, p.height - 1).toDouble());
-  }
-
   // ─── Pointer event handling ───────────────────────────────────────────────
-
-  /// Returns true when [screenPos] is inside a nav-button hit area.
-  /// Used to suppress accidental stitch operations when the user taps a nav
-  /// button (which is a child of the Listener, so raw events reach us too).
-  bool _isNavZone(Offset screenPos) {
-    final s = ref.read(editorProvider);
-    if (!s.stitchMode || !s.pattern.pageConfig.enabled || s.pageLayout == null) {
-      return false;
-    }
-    // Nav buttons: left/right arrows (36 px wide + 4 margin each side = ~44 px)
-    // up/down arrows (36 px tall + margins).  Page indicator at very bottom.
-    const double edgeG = 56.0;
-    const double bottomG = 100.0;
-    return screenPos.dx < edgeG ||
-        screenPos.dx > _canvasSize.width - edgeG ||
-        screenPos.dy < edgeG ||
-        screenPos.dy > _canvasSize.height - bottomG;
-  }
 
   bool get _isPanMode =>
       ref.read(editorProvider).drawingMode == DrawingMode.pan;
 
+  bool _isNavZone(Offset screenPos) {
+    final s = ref.read(editorProvider);
+    return _pageNav.isNavZone(
+      screenPos,
+      _canvasSize,
+      stitchMode: s.stitchMode,
+      pageEnabled: s.pattern.pageConfig.enabled,
+      hasPageLayout: s.pageLayout != null,
+    );
+  }
+
   void _onPointerDown(PointerDownEvent event) {
-    // Reclaim keyboard focus so shortcuts keep working after AppBar buttons,
-    // dialogs, or bottom sheets have taken it away.
     Focus.maybeOf(context)?.requestFocus();
     _activePointers[event.pointer] = event.localPosition;
-    _mouseScreenPos = event.localPosition;
+    _hover.onPointerDown(event.localPosition);
     _warnedThisGesture = false;
     _scheduleRebuild();
 
@@ -802,16 +383,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         event.buttons == kSecondaryStylusButton) {
       final state = ref.read(editorProvider);
       if (state.drawingMode == DrawingMode.paste) {
-        // In paste mode, pencil button commits paste (same as a tap/screen button)
-        final origin = _pasteOrigin;
-        final clips = state.clipboard;
-        if (origin != null && clips != null) {
-          final (dx, dy) = _pasteOffset(origin, clips);
-          ref.read(editorProvider.notifier).commitPaste(dx, dy);
-          if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
-        }
+        _paste.commit(state.pattern, state.clipboard);
       } else if (!state.stitchMode) {
-        // Outside paste mode: toggle erase/draw
         ref.read(editorProvider.notifier).toggleDrawingMode();
       }
       return;
@@ -823,200 +396,109 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       if (event.buttons == kMiddleMouseButton) return; // pan on move
       if (_isPanMode) return;
 
-      final mode = ref.read(editorProvider).drawingMode;
+      final state = ref.read(editorProvider);
+      final mode = state.drawingMode;
+      final vp = _viewport;
+      final p = state.pattern;
 
       if (mode == DrawingMode.select) {
-        final editorState = ref.read(editorProvider);
-        final cell = _screenToSelCell(event.localPosition);
-        final sel = editorState.selectionRect;
-        final inStitchMode = editorState.stitchMode;
-        // In stitch mode, select-drag marks a region done instead of selecting.
-        if (inStitchMode) {
-          // If a progress region is active, clear it on tap without toggling
-          // the cell underneath.
-          if (editorState.progressRegion != null) {
+        if (state.stitchMode) {
+          // Select-drag in stitch mode marks a region done.
+          if (state.progressRegion != null) {
             ref.read(editorProvider.notifier).setProgressRegion(null);
             return;
           }
           if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
-            final bs = _getBackstitchHit(event.localPosition);
-            if (bs == null) _checkProgressDoubleClick(event.localPosition);
-            setState(() {
-              _progressAnchor = cell;
-              _progressAnchorScreen = event.localPosition;
-              _progressBackstitch = bs;
-              _hasDraggedProgress = false;
-              _progressDragRect = null;
-            });
+            _progress.onPointerDown(event.localPosition, vp, p.width, p.height, state);
           }
           return;
         }
-        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
-          if (editorState.selectedStitches.isEmpty) {
-            _showWarningBanner(kWarnNothingToMove +
-                (editorState.canvasSelectionMode ? '' : kLayerHint));
-          } else {
-            setState(() {
-              _isMovingSelection = true;
-              _moveDragStartCell = cell;
-              _moveDelta = Offset.zero;
-            });
-          }
-        } else {
-          ref.read(editorProvider.notifier).setSelectionRect(null);
-          if (_screenOnCanvas(event.localPosition)) {
-            setState(() {
-              _selectionAnchor = cell;
-              _isMovingSelection = false;
-              _hasDraggedSelection = false;
-            });
-          }
-        }
+        _select.onPointerDown(
+          event.localPosition, vp, p.width, p.height,
+          currentSelectionRect: state.selectionRect,
+          hasSelectedStitches: state.selectedStitches.isNotEmpty,
+          canvasSelectionMode: state.canvasSelectionMode,
+          isOnCanvas: _screenOnCanvas(event.localPosition),
+        );
         return;
       }
 
       if (mode == DrawingMode.paste) {
-        final pencilConfirm =
-            ref.read(settingsProvider).pencilPasteConfirm;
+        final pencilConfirm = ref.read(settingsProvider).pencilPasteConfirm;
         if (pencilConfirm) {
-          // Pencil-confirm mode: stylus tap positions ghost, finger confirms.
-          final c = _screenToCanvas(event.localPosition);
-          final (cx, cy) = _canvasToCell(c);
-          setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
+          _paste.setOrigin(event.localPosition, vp);
         } else {
-          final origin = _pasteOrigin;
-          final clips = ref.read(editorProvider).clipboard;
-          if (origin != null && clips != null) {
-            final (dx, dy) = _pasteOffset(origin, clips);
-            ref.read(editorProvider.notifier).commitPaste(dx, dy);
-            if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
-          }
+          _paste.commit(state.pattern, state.clipboard);
         }
         return;
       }
 
-      // In stitch mode, start a progress anchor instead of drawing.
-      if (ref.read(editorProvider).stitchMode) {
+      if (state.stitchMode) {
         if (!_isNavZone(event.localPosition)) {
-          final cell = _screenToSelCell(event.localPosition);
-          final bs = _getBackstitchHit(event.localPosition);
-          if (bs == null) _checkProgressDoubleClick(event.localPosition);
-          setState(() {
-            _progressAnchor = cell;
-            _progressAnchorScreen = event.localPosition; // needed for drag threshold
-            _progressBackstitch = bs;
-            _hasDraggedProgress = false;
-            _progressDragRect = null;
-          });
+          _progress.onPointerDown(event.localPosition, vp, p.width, p.height, state);
         }
         return;
       }
 
-      _handleDrawAt(event.localPosition);
+      _draw.handleDrawAt(event.localPosition, state, vp);
       return;
     }
 
     // Touch — handle special modes before pan/pinch setup.
-    // Skip drawing/select/paste setup if this finger is the residual from a
-    // pinch — it should only pan until all fingers are lifted.
+    // Skip if this finger is the residual from a pinch.
     if (_activePointers.length == 1 && !_hadMultiTouch) {
-      final mode = ref.read(editorProvider).drawingMode;
+      final state = ref.read(editorProvider);
+      final mode = state.drawingMode;
+      final vp = _viewport;
+      final p = state.pattern;
+
       if (mode == DrawingMode.select) {
-        final editorState = ref.read(editorProvider);
-        final cell = _screenToSelCell(event.localPosition);
-        final sel = editorState.selectionRect;
-        final inStitchMode = editorState.stitchMode;
-        // In stitch mode, select-drag marks a region done instead of selecting.
-        if (inStitchMode) {
-          // If a progress region is active, clear it on tap without toggling
-          // the cell underneath.
-          if (editorState.progressRegion != null) {
+        if (state.stitchMode) {
+          if (state.progressRegion != null) {
             ref.read(editorProvider.notifier).setProgressRegion(null);
             return;
           }
           if (_screenOnCanvas(event.localPosition) && !_isNavZone(event.localPosition)) {
-            final bs = _getBackstitchHit(event.localPosition);
-            if (bs == null) _checkProgressDoubleClick(event.localPosition);
-            setState(() {
-              _progressAnchor = cell;
-              _progressAnchorScreen = event.localPosition;
-              _progressBackstitch = bs;
-              _hasDraggedProgress = false;
-              _progressDragRect = null;
-            });
+            _progress.onPointerDown(event.localPosition, vp, p.width, p.height, state);
           }
           return;
         }
-        if (sel != null && _cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
-          if (editorState.selectedStitches.isEmpty) {
-            _showWarningBanner(kWarnNothingToMove +
-                (editorState.canvasSelectionMode ? '' : kLayerHint));
-          } else {
-            setState(() {
-              _isMovingSelection = true;
-              _moveDragStartCell = cell;
-              _moveDelta = Offset.zero;
-            });
-          }
-        } else {
-          ref.read(editorProvider.notifier).setSelectionRect(null);
-          if (_screenOnCanvas(event.localPosition)) {
-            setState(() {
-              _selectionAnchor = cell;
-              _isMovingSelection = false;
-              _hasDraggedSelection = false;
-            });
-          }
-        }
+        _select.onPointerDown(
+          event.localPosition, vp, p.width, p.height,
+          currentSelectionRect: state.selectionRect,
+          hasSelectedStitches: state.selectedStitches.isNotEmpty,
+          canvasSelectionMode: state.canvasSelectionMode,
+          isOnCanvas: _screenOnCanvas(event.localPosition),
+        );
         return;
       }
 
       if (mode == DrawingMode.paste) {
-        final pencilConfirm =
-            ref.read(settingsProvider).pencilPasteConfirm;
+        final pencilConfirm = ref.read(settingsProvider).pencilPasteConfirm;
         if (pencilConfirm) {
           // Pencil-confirm mode: finger tap commits at current ghost position.
-          final origin = _pasteOrigin;
-          final clips = ref.read(editorProvider).clipboard;
-          if (origin != null && clips != null) {
-            final (dx, dy) = _pasteOffset(origin, clips);
-            ref.read(editorProvider.notifier).commitPaste(dx, dy);
-            if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
-          }
+          _paste.commit(state.pattern, state.clipboard);
         } else {
-          final c = _screenToCanvas(event.localPosition);
-          final (cx, cy) = _canvasToCell(c);
-          setState(() => _pasteOrigin = Offset(cx.toDouble(), cy.toDouble()));
-          // Commit on pointer up to avoid double-tap undo collision
+          _paste.setOrigin(event.localPosition, vp);
+          // Commit on pointer up to avoid double-tap undo collision.
         }
         return;
       }
 
-      // In stitch mode, start a progress anchor instead of drawing.
-      if (ref.read(editorProvider).stitchMode) {
+      if (state.stitchMode) {
         if (!_isNavZone(event.localPosition)) {
-          final cell = _screenToSelCell(event.localPosition);
-          _checkProgressDoubleClick(event.localPosition);
-          setState(() {
-            _progressAnchor = cell;
-            _hasDraggedProgress = false;
-            _progressDragRect = null;
-          });
+          _progress.onPointerDown(event.localPosition, vp, p.width, p.height, state);
         }
         return;
       }
     }
 
-    // Touch — set up pan/pinch start state
+    // Touch — set up pan/pinch start state.
     if (_activePointers.length == 2) {
       _hadMultiTouch = true;
-      // Cancel any stitch-mode progress anchor set by the first finger so
-      // a pan/pinch doesn't accidentally mark cells on pointer-up.
-      _progressAnchor = null;
-      _progressAnchorScreen = null;
-      _progressBackstitch = null;
-      _hasDraggedProgress = false;
-      _progressDragRect = null;
+      // Cancel any progress anchor set by the first finger.
+      _progress.cancel();
+      _select.cancel();
       final pts = _activePointers.values.toList();
       _zoomPan.beginPinch(pts[0], pts[1]);
     }
@@ -1028,75 +510,43 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (event.kind == PointerDeviceKind.stylus ||
         event.kind == PointerDeviceKind.invertedStylus ||
         event.kind == PointerDeviceKind.mouse) {
-      _mouseScreenPos = event.localPosition;
-
-      // Keep hover cell updated during active strokes.
-      final c = _screenToCanvas(event.localPosition);
-      final cell = _canvasToCell(c);
-      final p = ref.read(editorProvider).pattern;
-      _stylusHoverCell = (cell.$1 >= 0 && cell.$1 < p.width &&
-              cell.$2 >= 0 && cell.$2 < p.height)
-          ? cell
-          : null;
-      _scheduleRebuild();
+      final state = ref.read(editorProvider);
+      final vp = _viewport;
+      final p = state.pattern;
+      _hover.onPointerMove(event.localPosition, vp, p.width, p.height);
 
       if (_isPanMode || event.buttons == kMiddleMouseButton) {
         _pan(event.delta);
         return;
       }
 
-      final mode = ref.read(editorProvider).drawingMode;
+      final mode = state.drawingMode;
 
-      if (mode == DrawingMode.select && !ref.read(editorProvider).stitchMode) {
-        final cell = _screenToSelCell(event.localPosition);
-        if (_isMovingSelection && _moveDragStartCell != null) {
-          _moveDelta = cell - _moveDragStartCell!;
-          _scheduleRebuild();
-        } else if (_selectionAnchor != null) {
-          _hasDraggedSelection = true;
-          _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
-          _scheduleRebuild();
-        }
+      if (mode == DrawingMode.select && !state.stitchMode) {
+        _select.onPointerMove(event.localPosition, vp, p.width, p.height);
         return;
       }
 
       if (mode == DrawingMode.paste) {
-        final c = _screenToCanvas(event.localPosition);
-        final (cx, cy) = _canvasToCell(c);
-        final newOrigin = Offset(cx.toDouble(), cy.toDouble());
-        if (newOrigin == _pasteOrigin) return; // same cell — nothing to repaint
-        _pasteOrigin = newOrigin;
-        _scheduleRebuild();
+        _paste.updateOrigin(event.localPosition, vp);
         return;
       }
 
       if (mode == DrawingMode.colorPicker) return;
 
-      // In stitch mode, update progress drag region instead of drawing.
-      if (ref.read(editorProvider).stitchMode && _progressAnchor != null) {
-        final cell = _screenToSelCell(event.localPosition);
-        final newRect = _buildSelRect(_progressAnchor!, cell);
-        // Only count as a real drag once the pointer has moved enough screen
-        // pixels from the anchor — this prevents mouse jitter from triggering
-        // the drag path on what is really just a click.
-        if (!_hasDraggedProgress && _progressAnchorScreen != null &&
-            (event.localPosition - _progressAnchorScreen!).distance > _kProgressDragThreshold) {
-          _hasDraggedProgress = true;
-        }
-        if (newRect != _progressDragRect) {
-          _progressDragRect = newRect;
-          _scheduleRebuild();
-        }
+      if (state.stitchMode && _progress.isActive) {
+        _progress.onPointerMove(event.localPosition, vp, p.width, p.height);
         return;
       }
 
-      // Backstitch is click-to-click, not drag-to-draw — only update hover.
-      if (ref.read(editorProvider).currentTool == DrawingTool.backstitch) {
-        final canvas = _screenToCanvas(event.localPosition);
-        _backstitchHoverPoint = _canvasToGridPoint(canvas);
+      // Backstitch is click-to-click — only update hover preview.
+      if (state.currentTool == DrawingTool.backstitch) {
+        if (state.backstitchStartPoint != null) {
+          _draw.updateBackstitchHover(event.localPosition, vp);
+        }
         _scheduleRebuild();
       } else {
-        _handleDrawAt(event.localPosition);
+        _draw.handleDrawAt(event.localPosition, state, vp);
       }
       return;
     }
@@ -1105,191 +555,82 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     if (_activePointers.length >= 2) {
       if (!_hadMultiTouch) {
         _hadMultiTouch = true;
-        _progressAnchor = null;
-        _progressAnchorScreen = null;
-        _progressBackstitch = null;
-        _hasDraggedProgress = false;
-        _progressDragRect = null;
+        _progress.cancel();
+        _select.cancel();
       }
-      // Pinch to zoom + two-finger pan
       final pts = _activePointers.values.toList();
       _zoomPan.updatePinch(pts[0], pts[1]);
     } else if (_activePointers.length == 1) {
       if (_hadMultiTouch) {
-        // Residual finger from a pinch — pan only, never draw.
         _pan(event.delta);
         return;
       }
-      final mode = ref.read(editorProvider).drawingMode;
-      if (mode == DrawingMode.select && !ref.read(editorProvider).stitchMode) {
-        final cell = _screenToSelCell(event.localPosition);
-        if (_isMovingSelection && _moveDragStartCell != null) {
-          _moveDelta = cell - _moveDragStartCell!;
-          _scheduleRebuild();
-        } else if (_selectionAnchor != null) {
-          _hasDraggedSelection = true;
-          _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
-          _scheduleRebuild();
-        }
+      final state = ref.read(editorProvider);
+      final vp = _viewport;
+      final p = state.pattern;
+      final mode = state.drawingMode;
+
+      if (mode == DrawingMode.select && !state.stitchMode) {
+        _select.onPointerMove(event.localPosition, vp, p.width, p.height);
       } else if (mode == DrawingMode.paste) {
-        final c = _screenToCanvas(event.localPosition);
-        final (cx, cy) = _canvasToCell(c);
-        _pasteOrigin = Offset(cx.toDouble(), cy.toDouble());
-        _scheduleRebuild();
+        _paste.updateOrigin(event.localPosition, vp);
       } else if (_isPanMode) {
         _pan(event.delta);
-      } else if (ref.read(editorProvider).stitchMode && _progressAnchor != null) {
-        // Stitch mode: update progress drag region.
-        final cell = _screenToSelCell(event.localPosition);
-        final newRect = _buildSelRect(_progressAnchor!, cell);
-        if (newRect != _progressDragRect) {
-          if (newRect.width > 1 || newRect.height > 1) _hasDraggedProgress = true;
-          _progressDragRect = newRect;
-          _scheduleRebuild();
-        }
-      } else if (ref.read(editorProvider).currentTool != DrawingTool.backstitch) {
-        // Backstitch is click-to-click, not drag-to-draw.
-        _handleDrawAt(event.localPosition);
+      } else if (state.stitchMode && _progress.isActive) {
+        _progress.onTouchMove(event.localPosition, vp, p.width, p.height);
+      } else if (state.currentTool != DrawingTool.backstitch) {
+        _draw.handleDrawAt(event.localPosition, state, vp);
       }
     }
 
     // ── Kind-agnostic fallback ───────────────────────────────────────────────
     // Apple Pencil can emit PointerMoveEvents with kind == unknown on some
-    // iPadOS versions, bypassing both the stylus and touch branches above.
-    // If an anchor is set but hasn't been serviced yet, update drag state here.
-    if (_selectionAnchor != null) {
-      final cell = _screenToSelCell(event.localPosition);
-      _hasDraggedSelection = true;
-      _dragSelectionRect = _buildSelRect(_selectionAnchor!, cell);
-      _scheduleRebuild();
-    } else if (_progressAnchor != null && ref.read(editorProvider).stitchMode) {
-      final cell = _screenToSelCell(event.localPosition);
-      final newRect = _buildSelRect(_progressAnchor!, cell);
-      if (!_hasDraggedProgress) {
-        if (_progressAnchorScreen != null) {
-          if ((event.localPosition - _progressAnchorScreen!).distance > _kProgressDragThreshold) {
-            _hasDraggedProgress = true;
-          }
-        } else if (newRect.width > 1 || newRect.height > 1) {
-          _hasDraggedProgress = true;
-        }
-      }
-      if (newRect != _progressDragRect) {
-        _progressDragRect = newRect;
-        _scheduleRebuild();
-      }
+    // iPadOS versions.  Update whichever handler is active.
+    if (_select.isActive) {
+      final state = ref.read(editorProvider);
+      _select.onPointerMove(event.localPosition, _viewport, state.pattern.width, state.pattern.height);
+    } else if (_progress.isActive && ref.read(editorProvider).stitchMode) {
+      final state = ref.read(editorProvider);
+      _progress.onPointerMove(event.localPosition, _viewport, state.pattern.width, state.pattern.height);
     }
   }
 
   void _onPointerUp(PointerUpEvent event) {
-    _fillFired = false;
+    _draw.onPointerUp();
     final pos = event.localPosition;
     final now = DateTime.now();
     final wasSinglePointer = _activePointers.length == 1;
 
-    // Non-touch pointer lifted — clear hover cell
-    if (event.kind != PointerDeviceKind.touch) {
-      _stylusHoverCell = null;
-      _scheduleRebuild();
-    }
+    _hover.onPointerUp(event.kind);
 
-    // Touch paste — commit at current origin (set in _onPointerDown / _onPointerMove)
+    // Touch paste — commit at current origin.
     if (event.kind == PointerDeviceKind.touch &&
         ref.read(editorProvider).drawingMode == DrawingMode.paste &&
-        _pasteOrigin != null) {
-      final clips = ref.read(editorProvider).clipboard;
-      if (clips != null) {
-        final (dx, dy) = _pasteOffset(_pasteOrigin!, clips);
-        ref.read(editorProvider.notifier).commitPaste(dx, dy);
-        if (!_ctrlHeld) ref.read(editorProvider.notifier).cancelSelection();
-      }
-      _pasteOrigin = null;
-      _scheduleRebuild();
+        _paste.pasteOrigin != null) {
+      final state = ref.read(editorProvider);
+      _paste.commit(state.pattern, state.clipboard);
+      _paste.clearOrigin();
       _activePointers.remove(event.pointer);
       return;
     }
 
-    // Commit move drag
-    if (_isMovingSelection) {
-      final dx = _moveDelta.dx.round();
-      final dy = _moveDelta.dy.round();
-      if (dx != 0 || dy != 0) {
-        ref.read(editorProvider.notifier).moveSelection(dx, dy);
-      } else {
-        // Single click inside selection with no movement → deselect
-        ref.read(editorProvider.notifier).setSelectionRect(null);
-      }
-      _isMovingSelection = false;
-      _moveDragStartCell = null;
-      _moveDelta = Offset.zero;
-      _scheduleRebuild();
+    // Commit selection move or finalize rubber-band.
+    if (_select.isActive) {
+      final state = ref.read(editorProvider);
+      _select.onPointerUp(pos, _viewport, state.pattern.width, state.pattern.height);
       _activePointers.remove(event.pointer);
       return;
     }
 
-    // Finalize rubber-band selection
-    if (_selectionAnchor != null) {
-      final cell = _screenToSelCell(pos);
-      final rect = _dragSelectionRect ?? _buildSelRect(_selectionAnchor!, cell);
-      // Only keep selection if the user actually dragged; a bare click deselects
-      ref.read(editorProvider.notifier).setSelectionRect(
-          _hasDraggedSelection && rect.width >= 1 && rect.height >= 1 ? rect : null);
-      _selectionAnchor = null;
-      _hasDraggedSelection = false;
-      _dragSelectionRect = null;
-      _scheduleRebuild();
-      _activePointers.remove(event.pointer);
-      return;
-    }
-
-    // Finalize progress anchor (stitch mode tap / drag-to-mark)
-    if (_progressAnchor != null) {
-      final cell = _screenToSelCell(pos);
-      if (_hasDraggedProgress) {
-        // Drag ended: commit region to provider (shows sidebar Mark Done button).
-        final rect = _progressDragRect ?? _buildSelRect(_progressAnchor!, cell);
-        if (rect.width > 1 || rect.height > 1) {
-          ref.read(editorProvider.notifier).setProgressRegion(rect);
-        }
-      } else {
-        // Tap: toggle the tapped stitch/backstitch done/not-done,
-        // or flood fill on double-click (cross-stitches only).
-        final bs = _progressBackstitch;
-        if (bs != null) {
-          // Backstitch tap — always a single toggle, no flood fill.
-          ref.read(editorProvider.notifier)
-              .toggleBackstitchDone(bs.x1, bs.y1, bs.x2, bs.y2);
-        } else {
-          final cx = _progressAnchor!.dx.toInt();
-          final cy = _progressAnchor!.dy.toInt();
-          if (_pendingDoubleClick) {
-            ref.read(editorProvider.notifier).floodFillDone(cx, cy,
-                originalStartIsDone: _wasProgressCellDone,
-                afterSingleTap: true);
-            _pendingDoubleClick = false;
-            _wasProgressCellDone = null;
-          } else {
-            _wasProgressCellDone = ref.read(editorProvider)
-                .pattern.progress.completedStitches.contains((cx, cy));
-            ref.read(editorProvider.notifier).toggleStitchDone(cx, cy);
-          }
-        }
-        // Clear any committed progress region on a tap
-        ref.read(editorProvider.notifier).setProgressRegion(null);
-      }
-      _progressAnchor = null;
-      _progressAnchorScreen = null;
-      _progressBackstitch = null;
-      _hasDraggedProgress = false;
-      _progressDragRect = null;
-      _scheduleRebuild();
+    // Finalize progress anchor (stitch mode tap / drag-to-mark).
+    if (_progress.isActive) {
+      final state = ref.read(editorProvider);
+      _progress.onPointerUp(pos, _viewport, state.pattern.width, state.pattern.height, state);
       _activePointers.remove(event.pointer);
       return;
     }
 
     // Double-tap (touch, edit mode only) → undo.
-    // Stitch mode double-click/tap is detected in _onPointerDown via timing.
-    // Skip if this finger was part of a multi-touch gesture.
     if (event.kind == PointerDeviceKind.touch && wasSinglePointer &&
         !_hadMultiTouch && !ref.read(editorProvider).stitchMode) {
       final timeSinceLast = _lastTouchUpTime != null
@@ -1310,13 +651,16 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       _lastTouchUpTime = now;
       _lastTouchUpPos = pos;
 
-      if (!_isPanMode) _handleDrawAt(pos);
+      if (!_isPanMode) {
+        final state = ref.read(editorProvider);
+        _draw.handleDrawAt(pos, state, _viewport);
+      }
     }
 
     _activePointers.remove(event.pointer);
     if (_activePointers.isEmpty) {
       _zoomPan.resetPinch();
-      _hadMultiTouch = false; // all fingers up — next touch starts fresh
+      _hadMultiTouch = false;
     }
   }
 
@@ -1329,37 +673,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       _zoomPan.onPointerPanZoomUpdate(event);
 
   void _onPointerHover(PointerHoverEvent event) {
-    _mouseScreenPos = event.localPosition;
-
     final state = ref.read(editorProvider);
+    final vp = _viewport;
+    final p = state.pattern;
 
-    // Highlight the cell under any hovering pointer (stylus, mouse, or unknown).
     // We don't guard by kind because Apple Pencil hover events on iPadOS may not
     // always arrive as PointerDeviceKind.stylus through this path.
-    if (event.kind != PointerDeviceKind.touch) {
-      final c = _screenToCanvas(event.localPosition);
-      final cell = _canvasToCell(c);
-      final p = state.pattern;
-      _stylusHoverCell = (cell.$1 >= 0 && cell.$1 < p.width &&
-              cell.$2 >= 0 && cell.$2 < p.height)
-          ? cell
-          : null;
-    }
+    _hover.onPointerHover(event.localPosition, event.kind, vp, p.width, p.height);
 
     if (state.drawingMode == DrawingMode.paste) {
-      final c = _screenToCanvas(event.localPosition);
-      final (cx, cy) = _canvasToCell(c);
-      final newOrigin = Offset(cx.toDouble(), cy.toDouble());
-      if (newOrigin == _pasteOrigin) return; // same cell — nothing to repaint
-      _pasteOrigin = newOrigin;
-      _scheduleRebuild();
+      _paste.updateOrigin(event.localPosition, vp);
       return;
     }
 
     if (state.currentTool == DrawingTool.backstitch &&
         state.backstitchStartPoint != null) {
-      final canvas = _screenToCanvas(event.localPosition);
-      _backstitchHoverPoint = _canvasToGridPoint(canvas);
+      _draw.updateBackstitchHover(event.localPosition, vp);
     }
 
     _scheduleRebuild();
@@ -1418,26 +747,18 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
     final isDrawCursor = state.drawingMode == DrawingMode.draw;
     final isColorPickerCursor = state.drawingMode == DrawingMode.colorPicker;
 
-    // Compute ghost stitches for paste preview or move drag
+    // Compute ghost stitches for paste preview or move drag.
     List<Stitch>? ghostStitches;
     if (state.drawingMode == DrawingMode.paste && state.clipboard != null) {
       // Fall back to canvas centre so the ghost is visible even before the
       // user has moved the cursor (e.g. right after a flip/rotate).
-      final origin = _pasteOrigin ??
+      final origin = _paste.pasteOrigin ??
           Offset(state.pattern.width / 2.0, state.pattern.height / 2.0);
-      final (dx, dy) = _pasteOffset(origin, state.clipboard!);
-      // Only rebuild the offset list when the placement or clipboard changes.
-      if (_lastGhostDxDy != (dx, dy) ||
-          !identical(_lastGhostClipboard, state.clipboard)) {
-        _lastGhostDxDy = (dx, dy);
-        _lastGhostClipboard = state.clipboard;
-        _cachedGhostStitches =
-            state.clipboard!.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
-      }
-      ghostStitches = _cachedGhostStitches;
-    } else if (_isMovingSelection && state.selectionRect != null) {
-      final dx = _moveDelta.dx.round();
-      final dy = _moveDelta.dy.round();
+      final (dx, dy) = _paste.effectiveOffset(origin, state.clipboard!, state.pattern);
+      ghostStitches = _paste.buildGhostStitches(dx, dy, state.clipboard!, EditorState.offsetStitch);
+    } else if (_select.isMoving && state.selectionRect != null) {
+      final dx = _select.moveDelta.dx.round();
+      final dy = _select.moveDelta.dy.round();
       ghostStitches =
           state.selectedStitches.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
     }
@@ -1451,7 +772,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
         _canvasSize = constraints.biggest;
         return MouseRegion(
         cursor: _cursor(state),
-        onExit: (_) { _mouseScreenPos = null; _stylusHoverCell = null; _scheduleRebuild(); },
+        onExit: (_) => _hover.onExit(),
         child: Stack(children: [
         Listener(
         onPointerDown: _onPointerDown,
@@ -1524,16 +845,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 ),
               ),
             // Drag selection tooltip — shows size and from/to coords while dragging.
-            if ((_dragSelectionRect != null && _selectionAnchor != null) ||
-                (_progressDragRect != null && _progressAnchor != null && _hasDraggedProgress))
+            if ((_select.dragRect != null && _select.anchor != null) ||
+                (_progress.dragRect != null && _progress.anchor != null && _progress.hasDragged))
               () {
-                final rect = _dragSelectionRect ?? _progressDragRect!;
-                final anchor = _selectionAnchor ?? _progressAnchor!;
-                // Determine drag direction by comparing mouse screen pos to anchor screen pos.
+                final rect = _select.dragRect ?? _progress.dragRect!;
+                final anchor = _select.anchor ?? _progress.anchor!;
                 final anchorScreen = _viewport.canvasToScreen(
                   Offset(anchor.dx * _cellSize, anchor.dy * _cellSize),
                 );
-                final mp = _mouseScreenPos;
+                final mp = _hover.mouseScreenPos;
                 final dragRight = mp == null || mp.dx >= anchorScreen.dx;
                 final dragDown  = mp == null || mp.dy >= anchorScreen.dy;
                 return _SelectionTooltipOverlay(
@@ -1555,7 +875,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 aidaColor: state.pattern.aidaColor,
                 patternThreads: state.pattern.threads,
                 backstitchStartPoint: state.backstitchStartPoint,
-                backstitchCurrentPoint: _backstitchHoverPoint,
+                backstitchCurrentPoint: _draw.backstitchHoverPoint,
                 isErasing: isErasing,
                 eraserSize: state.eraserSize,
                 fillEraseActive: state.fillEraseActive,
@@ -1563,8 +883,8 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 isColorPickerCursor: isColorPickerCursor,
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                     ? null
-                    : _mouseScreenPos,
-                selectionRect: _progressDragRect ?? state.progressRegion ?? _dragSelectionRect ?? state.selectionRect,
+                    : _hover.mouseScreenPos,
+                selectionRect: _progress.dragRect ?? state.progressRegion ?? _select.dragRect ?? state.selectionRect,
                 ghostStitches: ghostStitches,
                 ghostThreads: state.drawingMode == DrawingMode.paste
                     ? state.clipboardThreads
@@ -1572,7 +892,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
                 ghostOpacity: state.drawingMode == DrawingMode.paste
                     ? 0.55
                     : 1.0,
-                stylusHoverCell: _stylusHoverCell,
+                stylusHoverCell: _hover.hoverCell,
                 stylusHoverColor: state.selectedThread?.color,
                 stitchMode: state.stitchMode,
               ),
@@ -1611,9 +931,9 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas> {
       DrawingMode.colorPicker => SystemMouseCursors.none,
       DrawingMode.draw => SystemMouseCursors.none,
       DrawingMode.select => SystemMouseCursors.precise,
-      DrawingMode.paste => _ctrlHeld
+      DrawingMode.paste => _paste.ctrlHeld
           ? SystemMouseCursors.copy
-          : _shiftHeld
+          : _paste.shiftHeld
               ? SystemMouseCursors.move
               : SystemMouseCursors.cell,
     };
