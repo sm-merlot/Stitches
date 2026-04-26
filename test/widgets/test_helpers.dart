@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart' show Colors;
+import 'package:flutter/material.dart' show Colors, Rect;
 import 'package:flutter/widgets.dart' show Offset;
 import 'package:stitches/models/layer.dart';
 import 'package:stitches/models/layer_item.dart';
+import 'package:stitches/models/page_config.dart';
+import 'package:stitches/models/page_layout.dart';
 import 'package:stitches/models/pattern.dart';
 import 'package:stitches/models/stitch.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
@@ -79,12 +81,30 @@ EditorState fakeStitchState({
   CrossStitchPattern? pattern,
   bool stitchCrossMode = false,
   String? stitchFocusThreadId,
-}) =>
-    EditorState(
-      pattern: pattern ?? fakePattern(),
-      mode: AppMode.stitch,
-      drawingMode: DrawingMode.select,
-      activeLayerId: kLayerId,
-      stitchCrossMode: stitchCrossMode,
-      stitchFocusThreadId: stitchFocusThreadId,
+  bool hasSelection = false,
+  bool pagesEnabled = false,
+}) {
+  final pat = pattern ?? fakePattern();
+  PageLayout? pageLayout;
+  CrossStitchPattern finalPat = pat;
+  if (pagesEnabled) {
+    const config = PageConfig(
+      enabled: true,
+      pageWidth: 10,
+      pageHeight: 10,
+      fuzzyAmount: 0,
     );
+    finalPat = pat.copyWith(pageConfig: config);
+    pageLayout = PageLayout.compute(config, finalPat);
+  }
+  return EditorState(
+    pattern: finalPat,
+    mode: AppMode.stitch,
+    drawingMode: DrawingMode.select,
+    activeLayerId: kLayerId,
+    stitchCrossMode: stitchCrossMode,
+    stitchFocusThreadId: stitchFocusThreadId,
+    selectionRect: hasSelection ? const Rect.fromLTWH(0, 0, 2, 2) : null,
+    pageLayout: pageLayout,
+  );
+}

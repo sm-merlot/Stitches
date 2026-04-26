@@ -27,7 +27,9 @@ import '../services/thumbnail_cache.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
-import '../utils/editor_key_handler.dart';
+import '../utils/edit_controller.dart';
+import '../utils/shortcut_router.dart';
+import '../utils/stitch_controller.dart';
 import '../providers/recent_items_provider.dart';
 import '../utils/snackbars.dart';
 import '../widgets/editor_shared_widgets.dart';
@@ -72,6 +74,8 @@ class WorkspaceScreen extends ConsumerStatefulWidget {
 class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Timer? _autoSaveTimer;
   final _pdfPanelKey = GlobalKey<PdfViewerPanelState>();
+  late final EditController _editController;
+  late final StitchController _stitchController;
 
   // Phone-only: right sidebar starts collapsed; coordinates with folder sidebar.
   bool _rightSidebarCollapsed = true;
@@ -84,6 +88,23 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   @override
   void initState() {
     super.initState();
+    final n = ref.read(editorProvider.notifier);
+    _editController = EditController(
+      notifier: n,
+      getState: () => ref.read(editorProvider),
+      onShowShortcuts: () => showDialog(
+        context: context,
+        builder: (_) => const _ShortcutsDialog(),
+      ),
+      onPdfZoomIn: () => _pdfPanelKey.currentState?.zoomIn(),
+      onPdfZoomOut: () => _pdfPanelKey.currentState?.zoomOut(),
+    );
+    _stitchController = StitchController(
+      notifier: n,
+      getState: () => ref.read(editorProvider),
+    );
+    ShortcutRouter.instance.push(_editController);
+    ShortcutRouter.instance.push(_stitchController);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ws = ref.read(workspaceProvider).workspace;
       if (ws is LocalFolder) {
@@ -296,6 +317,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   @override
   void dispose() {
+    ShortcutRouter.instance.pop(_stitchController);
+    ShortcutRouter.instance.pop(_editController);
     // If a pending auto-save timer was cancelled without firing, flush it now.
     if (_autoSaveTimer != null) {
       _autoSaveTimer!.cancel();
@@ -1302,25 +1325,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       });
     }
 
-    // ── Keyboard handler ──────────────────────────────────────────────────
-    KeyEventResult handleKeys(FocusNode node, KeyEvent event) {
-      return handleEditorKeys(
-        event,
-        editorState,
-        ref.read(editorProvider.notifier),
-        // No onSave — workspace uses auto-save.
-        onShowShortcuts: () => showDialog(
-          context: context,
-          builder: (_) => const _ShortcutsDialog(),
-        ),
-        onPdfZoomIn:
-            openPdf != null ? () => _pdfPanelKey.currentState?.zoomIn() : null,
-        onPdfZoomOut: openPdf != null
-            ? () => _pdfPanelKey.currentState?.zoomOut()
-            : null,
-      );
-    }
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -1587,23 +1591,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 // Editor, PDF viewer, image viewer, or empty state
                 Expanded(
                   child: openPdf != null
-                      ? Focus(
-                          autofocus: true,
-                          onKeyEvent: handleKeys,
-                          child: PdfViewerPanel(key: _pdfPanelKey, path: openPdf.localPath),
-                        )
+                      ? PdfViewerPanel(key: _pdfPanelKey, path: openPdf.localPath)
                       : openImage != null
-                          ? Focus(
-                              autofocus: true,
-                              onKeyEvent: handleKeys,
-                              child: ImageViewerPanel(path: openImage.localPath),
-                            )
+                          ? ImageViewerPanel(path: openImage.localPath)
                           : editorState.isFileOpen
-                              ? Focus(
-                                  autofocus: true,
-                                  onKeyEvent: handleKeys,
-                                  child: _buildCanvasArea(context, editorState),
-                                )
+                              ? _buildCanvasArea(context, editorState)
                               : _EmptyState(
                                   workspace: wsState.workspace,
                                   onNewFile: () => _newFileInWorkspace(

@@ -17,7 +17,9 @@ import '../services/file_service.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
-import '../utils/editor_key_handler.dart';
+import '../utils/edit_controller.dart';
+import '../utils/shortcut_router.dart';
+import '../utils/stitch_controller.dart';
 import '../utils/snackbars.dart';
 import '../widgets/editor_canvas_area.dart';
 import '../widgets/editor_shared_widgets.dart';
@@ -34,8 +36,41 @@ import 'stitch_ops_screen.dart';
 
 // No overflow menu — all actions are direct app bar buttons.
 
-class EditorScreen extends ConsumerWidget {
+class EditorScreen extends ConsumerStatefulWidget {
   const EditorScreen({super.key});
+
+  @override
+  ConsumerState<EditorScreen> createState() => _EditorScreenState();
+}
+
+class _EditorScreenState extends ConsumerState<EditorScreen> {
+  late final EditController _editController;
+  late final StitchController _stitchController;
+
+  @override
+  void initState() {
+    super.initState();
+    final n = ref.read(editorProvider.notifier);
+    _editController = EditController(
+      notifier: n,
+      getState: () => ref.read(editorProvider),
+      onSave: () => _save(context, ref),
+    );
+    _stitchController = StitchController(
+      notifier: n,
+      getState: () => ref.read(editorProvider),
+      onSave: () => _save(context, ref),
+    );
+    ShortcutRouter.instance.push(_editController);
+    ShortcutRouter.instance.push(_stitchController);
+  }
+
+  @override
+  void dispose() {
+    ShortcutRouter.instance.pop(_stitchController);
+    ShortcutRouter.instance.pop(_editController);
+    super.dispose();
+  }
 
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
@@ -475,19 +510,9 @@ class EditorScreen extends ConsumerWidget {
   String _title(EditorState state) => state.pattern.name;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
     final driveState = ref.watch(googleDriveProvider);
-
-    // All keyboard shortcuts handled here — single Focus, no competing nodes.
-    KeyEventResult handleKeys(FocusNode node, KeyEvent event) {
-      return handleEditorKeys(
-        event,
-        state,
-        ref.read(editorProvider.notifier),
-        onSave: () => _save(context, ref),
-      );
-    }
 
     return PopScope(
       canPop: false,
@@ -702,18 +727,14 @@ class EditorScreen extends ConsumerWidget {
             ],
           ],
         ),
-        body: Focus(
-          autofocus: true,
-          onKeyEvent: handleKeys,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: _buildCanvasArea(context, ref, state),
-              ),
-              const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
-            ],
-          ),
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _buildCanvasArea(context, ref, state),
+            ),
+            const RightSidebar(sidebarContext: RightSidebarContext.mainEditor),
+          ],
         ),
       ),
     );
