@@ -1,0 +1,39 @@
+.changeset/controller-input-handlers.md
+  a5751ec59e9bd78b 1-13
+lib/widgets/pattern_canvas.dart
+  a5751ec59e9bd78b 9-10,12,26-38,54-57,163-164,166-167,169-171,181-182,206-212,221,227-232,234-238,354-356,361,365-369,372,376,378,380,382-392,400-410,412,415,418-419,428-432,434,436,441-442,444,446,450,454-455,464,466-469,473-477,482-484,487,489-497,518,520-525,585-586,588-589,591-595,609-615,688-691,693-698,702,724,732-738,746-748,787,789
+lib/screens/workspace_screen.dart
+  a5751ec59e9bd78b 741-744,752-753
+lib/utils/canvas_callbacks.dart
+  a5751ec59e9bd78b 1-20
+lib/screens/snippet_editor_screen.dart
+  a5751ec59e9bd78b 488-493
+lib/widgets/editor_canvas_area.dart
+  a5751ec59e9bd78b 5-6,15-17,31-32,51-56
+lib/utils/stitch_controller.dart
+  a5751ec59e9bd78b 1,4-8,12,14-16,18-22,24-26,44-173,209
+lib/utils/edit_controller.dart
+  a5751ec59e9bd78b 1,4-9,13,15-17,19-24,26,66,69-353,369-372,384,467
+lib/screens/editor_screen.dart
+  a5751ec59e9bd78b 364-367,375-376
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "817f866826e6222dc10dd16448a4d02421f427fa",
+  "prompts": {
+    "a5751ec59e9bd78b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "262ba7ad-648f-4787-8484-d1f18e9af4f3",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 712,
+      "total_deletions": 371,
+      "accepted_lines": 695,
+      "overriden_lines": 0
+    }
+  }
+}
