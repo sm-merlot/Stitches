@@ -3,7 +3,6 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/widgets.dart' show Offset, Rect, Size;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/thread.dart';
 import 'package:stitches/widgets/canvas_viewport.dart';
 import 'package:stitches/widgets/hover_handler.dart';
 import 'package:stitches/widgets/page_nav_handler.dart';
