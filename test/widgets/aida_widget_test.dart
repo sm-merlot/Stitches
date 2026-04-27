@@ -12,7 +12,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:stitches/models/pattern.dart';
 import 'package:stitches/models/pattern_progress.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';
@@ -267,19 +266,22 @@ void main() {
     // Shared pattern so identity checks don't trigger spurious repaints.
     final sharedPattern = fakePattern();
 
-    CanvasStaticPainter _painter({
+    CanvasStaticPainter painter({
       RenderCache? renderCache,
+      int? cacheVersion,
       Offset panOffset = Offset.zero,
       double scale = 1.0,
       bool stitchMode = false,
     }) {
+      final cache = renderCache ?? RenderCache();
       return CanvasStaticPainter(
         pattern: sharedPattern,
         cellSize: 20.0,
         panOffset: panOffset,
         scale: scale,
         aidaColor: Colors.white,
-        renderCache: renderCache ?? RenderCache(),
+        renderCache: cache,
+        cacheVersion: cacheVersion ?? cache.version,
         stitchMode: stitchMode,
         stitchCrossMode: false,
         stitchBackMode: false,
@@ -294,24 +296,19 @@ void main() {
       );
     }
 
-    test('no repaint when all fields identical', () {
+    test('no repaint when cacheVersion, panOffset, scale all identical', () {
       final cache = RenderCache();
-      final p1 = _painter(renderCache: cache);
-      final p2 = _painter(renderCache: cache);
+      final p1 = painter(renderCache: cache);
+      final p2 = painter(renderCache: cache);
       expect(p2.shouldRepaint(p1), isFalse);
     });
 
-    test('repaints when two separate caches have different versions', () {
-      // In production, AidaWidget owns a single RenderCache instance shared
-      // across builds — so old.renderCache and new.renderCache are the same
-      // object and the version check is always false. Other fields (pattern,
-      // panOffset, scale) drive actual repaints in practice.
-      //
-      // This test verifies the comparison logic is correct when caches ARE
-      // separate objects (e.g. if the cache is ever replaced).
-      final cacheOld = RenderCache();
-      final cacheNew = RenderCache();
-      cacheNew.rebuild(
+    test('repaints when cacheVersion differs (data changed)', () {
+      // AidaWidget snapshots renderCache.version at build time so old and new
+      // painters carry different int values after a rebuild.
+      final cache = RenderCache();
+      final p1 = painter(renderCache: cache, cacheVersion: 0);
+      cache.rebuild(
         const CompositeLayer(
           fullStitches: {},
           otherStitches: [],
@@ -322,48 +319,50 @@ void main() {
         const RenderViewConfig(),
         20.0,
       );
-      final p1 = _painter(renderCache: cacheOld); // version 0
-      final p2 = _painter(renderCache: cacheNew); // version 1
+      final p2 = painter(renderCache: cache, cacheVersion: cache.version);
       expect(p2.shouldRepaint(p1), isTrue);
     });
 
-    test('no repaint when two separate caches have the same version', () {
-      final p1 = _painter(renderCache: RenderCache()); // version 0
-      final p2 = _painter(renderCache: RenderCache()); // version 0
+    test('no repaint when cacheVersion unchanged despite same-object cache', () {
+      // Simulates back-to-back builds where nothing data-relevant changed
+      // (e.g. an unrelated provider updated). Version stays 0 on both painters.
+      final cache = RenderCache();
+      final p1 = painter(renderCache: cache, cacheVersion: cache.version);
+      final p2 = painter(renderCache: cache, cacheVersion: cache.version);
       expect(p2.shouldRepaint(p1), isFalse);
     });
 
     test('repaints when panOffset changes', () {
       final cache = RenderCache();
-      final p1 = _painter(renderCache: cache, panOffset: Offset.zero);
-      final p2 = _painter(renderCache: cache, panOffset: const Offset(10, 0));
+      final p1 = painter(renderCache: cache, panOffset: Offset.zero);
+      final p2 = painter(renderCache: cache, panOffset: const Offset(10, 0));
       expect(p2.shouldRepaint(p1), isTrue);
     });
 
     test('repaints when scale changes', () {
       final cache = RenderCache();
-      final p1 = _painter(renderCache: cache, scale: 1.0);
-      final p2 = _painter(renderCache: cache, scale: 1.5);
+      final p1 = painter(renderCache: cache, scale: 1.0);
+      final p2 = painter(renderCache: cache, scale: 1.5);
       expect(p2.shouldRepaint(p1), isTrue);
     });
 
-    test('repaints when stitchMode toggles', () {
+    test('repaints when cacheVersion bumps due to stitchMode change', () {
+      // stitchMode is in RenderViewConfig → rebuildViewConfig → version bumps.
+      // shouldRepaint detects this via cacheVersion, not a stitchMode field.
       final cache = RenderCache();
-      final p1 = _painter(renderCache: cache, stitchMode: false);
-      final p2 = _painter(renderCache: cache, stitchMode: true);
-      expect(p2.shouldRepaint(p1), isTrue);
-    });
-
-    test('no repaint on pan-only change to a different painter with same cache version', () {
-      // Simulate the common case: pan changes panOffset but renderCache is
-      // unchanged. The RepaintBoundary wrapping the static layer should NOT
-      // invalidate because the dynamic overlay handles cursor/hover updates.
-      // This test verifies the shouldRepaint check catches pan changes
-      // (RepaintBoundary is bypassed) — the static painter DOES need to
-      // repaint on pan so grid/stitches shift correctly.
-      final cache = RenderCache();
-      final p1 = _painter(renderCache: cache, panOffset: const Offset(0, 0));
-      final p2 = _painter(renderCache: cache, panOffset: const Offset(5, 5));
+      final p1 = painter(renderCache: cache, cacheVersion: 0);
+      cache.rebuildViewConfig(
+        const CompositeLayer(
+          fullStitches: {},
+          otherStitches: [],
+          backstitches: [],
+          crossStitchEquiv: {},
+          backStitchEquiv: {},
+        ),
+        const RenderViewConfig(stitchMode: true),
+        20.0,
+      );
+      final p2 = painter(renderCache: cache, cacheVersion: cache.version);
       expect(p2.shouldRepaint(p1), isTrue);
     });
   });

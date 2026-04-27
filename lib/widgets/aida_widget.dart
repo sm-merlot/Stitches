@@ -704,6 +704,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
                         scale: _scale,
                         aidaColor: state.pattern.aidaColor,
                         renderCache: _renderCache,
+                        cacheVersion: _renderCache.version,
                         stitchMode: state.stitchMode,
                         stitchCrossMode: state.stitchCrossMode,
                         stitchBackMode: state.stitchBackMode,
