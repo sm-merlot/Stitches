@@ -12,7 +12,7 @@ import 'canvas_viewport.dart';
 /// no direct [EditorNotifier] access, so this handler is unit-testable
 /// without Riverpod.
 ///
-/// [PatternCanvas] calls the appropriate method on pointer events and reads
+/// [AidaWidget] calls the appropriate method on pointer events and reads
 /// [dragRect] / [isActive] to drive the overlay painter.
 class ProgressHandler {
   // ── Gesture state ─────────────────────────────────────────────────────────────

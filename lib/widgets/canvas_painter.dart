@@ -35,7 +35,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   final bool referenceVisible;
 
   /// Pre-resolved stitch block rects, grouped by colour.
-  /// Built and maintained by [PatternCanvas]; painter just draws.
+  /// Built and maintained by [AidaWidget]; painter just draws.
   final RenderCache renderCache;
 
   /// Flat composite view — used for symbol rendering and focus-region outline.

@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-/// Immutable view of the pan/zoom state used by [PatternCanvas] and
+/// Immutable view of the pan/zoom state used by [AidaWidget] and
 /// [CanvasStaticPainter].
 ///
 /// Holds the cell size, pan offset, scale, and (during paint) the screen

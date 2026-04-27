@@ -81,7 +81,7 @@ Future<void> refreshDrivePatternInBackground(
         );
 
     // loadPattern sets pendingFitPage=0 whenever page mode is enabled, which
-    // would snap the canvas to page 0 via the PatternCanvas listener.  We've
+    // would snap the canvas to page 0 via the AidaWidget listener.  We've
     // already captured the correct viewport in liveSession, so suppress the
     // snap by clearing the pending fit immediately.
     ref.read(editorProvider.notifier).clearPendingFitPage();

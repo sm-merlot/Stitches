@@ -7,7 +7,7 @@ import 'canvas_viewport.dart';
 /// Handles paste-mode ghost positioning, Shift edge-snapping, and commit.
 ///
 /// Owns paste-origin state, ghost-stitch cache, and Ctrl/Shift modifier-key
-/// state.  [PatternCanvas] forwards events; after each call it reads
+/// state.  [AidaWidget] forwards events; after each call it reads
 /// [pasteOrigin], [ctrlHeld], [shiftHeld], and [buildGhostStitches] to drive
 /// the overlay painter and cursor.
 ///

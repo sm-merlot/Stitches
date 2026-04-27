@@ -13,7 +13,7 @@ import '../utils/edit_controller.dart';
 import '../utils/shortcut_router.dart';
 import '../widgets/dialogs/dmc_picker_dialog.dart';
 import '../widgets/editor_toolbar.dart';
-import '../widgets/pattern_canvas.dart';
+import '../widgets/aida_widget.dart';
 import '../widgets/right_sidebar.dart';
 import '../widgets/snippet_thumbnail.dart';
 
@@ -49,7 +49,7 @@ class SnippetEditorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Override editorProvider with a fresh scope so the reused
-    // PatternCanvas and EditorToolbar operate on the snippet canvas.
+    // AidaWidget and EditorToolbar operate on the snippet canvas.
     return ProviderScope(
       overrides: [editorProvider.overrideWith(EditorNotifier.new)],
       child: _SnippetEditorBody(
@@ -486,7 +486,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
               child: Column(
                 children: [
                   Expanded(
-                    child: PatternCanvas(
+                    child: AidaWidget(
                       editController: _editController,
                       viewModeController: null,
                       stitchController: null,

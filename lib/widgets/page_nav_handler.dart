@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart' show Offset, Size;
 /// Stateless helper that determines whether a pointer position falls inside
 /// a page-navigation button hit zone.
 ///
-/// Extracted from [PatternCanvas] so the geometry is named, documented, and
+/// Extracted from [AidaWidget] so the geometry is named, documented, and
 /// unit-testable without a widget tree.
 class PageNavHandler {
   /// Width of the left/right arrow hit zones in screen pixels.

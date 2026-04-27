@@ -49,14 +49,14 @@ class EditorState {
   final bool backstitchChainMode;
 
   /// Last-known canvas view position — written on pointer-up, read on file open.
-  /// Scale == 0 means no saved position (use PatternCanvas default).
+  /// Scale == 0 means no saved position (use AidaWidget default).
   final double viewPanX;
   final double viewPanY;
   final double viewScale;
   /// When true, selection operations act on all visible layers instead of just the active layer.
   final bool canvasSelectionMode;
-  /// Non-null when the notifier wants PatternCanvas to show a one-shot warning banner.
-  /// PatternCanvas clears this immediately after showing it.
+  /// Non-null when the notifier wants AidaWidget to show a one-shot warning banner.
+  /// AidaWidget clears this immediately after showing it.
   final String? pendingCanvasWarning;
 
   /// Whether to gzip-compress this file when saving.
@@ -70,7 +70,7 @@ class EditorState {
   /// Precomputed page layout. Non-null when page mode is enabled.
   final PageLayout? pageLayout;
 
-  /// When non-null, PatternCanvas should animate to fit this page index then
+  /// When non-null, AidaWidget should animate to fit this page index then
   /// clear the value via [clearPendingFitPage].
   final int? pendingFitPage;
 

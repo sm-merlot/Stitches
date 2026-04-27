@@ -13,7 +13,7 @@ import 'canvas_viewport.dart';
 /// touch two-finger pinch, and programmatic pan/zoom.
 ///
 /// Owns the viewport state ([scale], [panOffset]) and all gesture-tracking
-/// intermediaries. [PatternCanvas] forwards the relevant events; after each
+/// intermediaries. [AidaWidget] forwards the relevant events; after each
 /// call it reads [scale] / [panOffset] to drive its build.
 ///
 /// Callbacks ([scheduleRebuild], [save], [debouncedSave]) are injected so the

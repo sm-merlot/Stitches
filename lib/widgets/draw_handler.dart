@@ -11,7 +11,7 @@ import 'canvas_viewport.dart';
 /// Writes back via injected callbacks — no direct [EditorNotifier] access,
 /// so this handler is unit-testable without Riverpod.
 ///
-/// [PatternCanvas] calls [handleDrawAt] on pointer down and move;
+/// [AidaWidget] calls [handleDrawAt] on pointer down and move;
 /// it reads [backstitchHoverPoint] to drive the backstitch preview line.
 class DrawHandler {
   bool _fillFired = false;
