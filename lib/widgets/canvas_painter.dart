@@ -35,8 +35,17 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   final bool referenceVisible;
 
   /// Pre-resolved stitch block rects, grouped by colour.
-  /// Built and maintained by [PatternCanvas]; painter just draws.
+  /// Built and maintained by [AidaWidget]; painter just draws.
   final RenderCache renderCache;
+
+  /// Snapshot of [renderCache.version] taken at build time.
+  ///
+  /// [RenderCache] is a mutable object shared across builds, so comparing the
+  /// live [renderCache.version] in [shouldRepaint] would always yield equal
+  /// values (old and new painter reference the same object). Snapshotting the
+  /// version as a plain [int] at construction time gives [shouldRepaint] the
+  /// before/after values it needs to detect data changes.
+  final int cacheVersion;
 
   /// Flat composite view — used for symbol rendering and focus-region outline.
   /// Block rendering is fully handled by [renderCache].
@@ -66,6 +75,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     required this.scale,
     required this.aidaColor,
     required this.renderCache,
+    required this.cacheVersion,
     this.stitchMode = false,
     this.stitchCrossMode = false,
     this.stitchBackMode = false,
@@ -501,21 +511,15 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
   @override
   bool shouldRepaint(CanvasStaticPainter old) =>
-      old.renderCache.version != renderCache.version ||
-      old.pattern != pattern ||
-      old.cellSize != cellSize ||
+      // cacheVersion captures all stitch-data changes: pattern, composite,
+      // mode, focus, palette, progress, page layout/index.
+      old.cacheVersion != cacheVersion ||
+      // Viewport changes are not routed through RenderCache.
       old.panOffset != panOffset ||
       old.scale != scale ||
-      old.aidaColor != aidaColor ||
-      old.stitchMode != stitchMode ||
-      old.stitchCrossMode != stitchCrossMode ||
-      old.stitchBackMode != stitchBackMode ||
-      old.stitchFocusThreadId != stitchFocusThreadId ||
+      // Reference image is drawn directly by the painter and is not tracked
+      // in RenderViewConfig, so version does not bump when it changes.
       old.referenceImage != referenceImage ||
       old.referenceOpacity != referenceOpacity ||
-      old.referenceVisible != referenceVisible ||
-      !identical(old.compositeLayer, compositeLayer) ||
-      old.pageLayout != pageLayout ||
-      old.currentPage != currentPage ||
-      old.progress != progress;
+      old.referenceVisible != referenceVisible;
 }

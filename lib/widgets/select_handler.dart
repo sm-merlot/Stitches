@@ -9,7 +9,7 @@ import 'canvas_viewport.dart';
 /// Writes back to [EditorNotifier] via injected callbacks so this handler is
 /// unit-testable without Riverpod.
 ///
-/// [PatternCanvas] calls the appropriate method on pointer events and reads
+/// [AidaWidget] calls the appropriate method on pointer events and reads
 /// [dragRect], [moveDelta], and [isMoving] to drive the overlay painter.
 class SelectHandler {
   Offset? _anchor;

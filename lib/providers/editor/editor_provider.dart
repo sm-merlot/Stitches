@@ -255,7 +255,7 @@ class EditorNotifier extends Notifier<EditorState>
     }
   }
 
-  /// Called by PatternCanvas on gesture end to persist the current view
+  /// Called by AidaWidget on gesture end to persist the current view
   /// position. Does NOT mark the file dirty — view state is session-only.
   void updateViewPosition(double panX, double panY, double scale) {
     state = state.copyWith(viewPanX: panX, viewPanY: panY, viewScale: scale);

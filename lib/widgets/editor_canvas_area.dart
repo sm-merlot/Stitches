@@ -6,8 +6,8 @@ import '../utils/edit_controller.dart';
 import '../utils/stitch_controller.dart';
 import '../utils/view_mode_controller.dart';
 import 'editor_shared_widgets.dart';
+import 'aida_widget.dart';
 import 'editor_toolbar.dart';
-import 'pattern_canvas.dart';
 
 /// The core editor layout: optional import-format banner → canvas → toolbar.
 ///
@@ -52,7 +52,7 @@ class EditorCanvasArea extends ConsumerWidget {
             onOpenNative: onOpenNative,
           ),
         Expanded(
-          child: PatternCanvas(
+          child: AidaWidget(
             editController: editController,
             viewModeController: viewModeController,
             stitchController: stitchController,

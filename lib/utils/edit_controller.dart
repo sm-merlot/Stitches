@@ -18,9 +18,9 @@ import 'undo_manager.dart';
 ///
 /// **Lifecycle:**
 /// - Push to [ShortcutRouter] in the owning screen's `initState`.
-/// - Call [attachCanvas] when [PatternCanvas] mounts so pointer handlers
+/// - Call [attachCanvas] when [AidaWidget] mounts so pointer handlers
 ///   receive the view-level callbacks they need.
-/// - Call [detachCanvas] in [PatternCanvas.dispose].
+/// - Call [detachCanvas] in [AidaWidget.dispose].
 /// - Pop from [ShortcutRouter] in the owning screen's `dispose`.
 ///
 /// Only fires keyboard shortcuts when [EditorState.stitchMode] is false.
@@ -74,7 +74,7 @@ class EditController implements ShortcutHandler {
   SelectHandler? _select;
   PasteHandler? _paste;
 
-  /// Read by [PatternCanvas] overlay painter.
+  /// Read by [AidaWidget] overlay painter.
   HoverHandler? get hover => _hover;
   DrawHandler? get draw => _draw;
   SelectHandler? get select => _select;
@@ -85,7 +85,7 @@ class EditController implements ShortcutHandler {
   Offset? _lastTouchUpPos;
 
   /// Wire up pointer handlers with view-level callbacks.
-  /// Called by [PatternCanvas.initState] after the widget is mounted.
+  /// Called by [AidaWidget.initState] after the widget is mounted.
   void attachCanvas(CanvasCallbacks cb) {
     final n = _notifier;
     _hover = HoverHandler(scheduleRebuild: cb.scheduleRebuild);
@@ -112,7 +112,7 @@ class EditController implements ShortcutHandler {
     );
   }
 
-  /// Release pointer handlers. Called by [PatternCanvas.dispose].
+  /// Release pointer handlers. Called by [AidaWidget.dispose].
   void detachCanvas() {
     _hover = null;
     _draw = null;
@@ -125,7 +125,7 @@ class EditController implements ShortcutHandler {
   // ── Pointer event dispatch ─────────────────────────────────────────────────
 
   /// Update paste/modifier state. Called unconditionally on each key event
-  /// from [PatternCanvas]'s [ShortcutHandler.handle] (returns false — modifier
+  /// from [AidaWidget]'s [ShortcutHandler.handle] (returns false — modifier
   /// tracking only, not a consumed shortcut).
   void updateModifiers({required bool ctrl, required bool shift}) {
     _paste?.updateModifiers(ctrl: ctrl, shift: shift);
@@ -252,7 +252,7 @@ class EditController implements ShortcutHandler {
     } else if (mode == DrawingMode.paste) {
       _paste!.updateOrigin(localPos, vp);
     } else if (mode == DrawingMode.pan) {
-      // pan handled by ZoomPanHandler in PatternCanvas
+      // pan handled by ZoomPanHandler in [AidaWidget]
     } else if (state.currentTool != DrawingTool.backstitch) {
       _draw!.handleDrawAt(localPos, state, vp);
     }

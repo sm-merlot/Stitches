@@ -4,7 +4,7 @@ import 'canvas_viewport.dart';
 
 /// Tracks mouse/stylus screen position and hover cell.
 ///
-/// [PatternCanvas] forwards the relevant pointer events; after each call it
+/// [AidaWidget] forwards the relevant pointer events; after each call it
 /// reads [mouseScreenPos] and [hoverCell] to drive the overlay painter.
 ///
 /// No domain logic lives here — this handler is a pure coordinate tracker.

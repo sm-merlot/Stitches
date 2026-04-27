@@ -13,8 +13,8 @@ import 'shortcut_router.dart';
 ///
 /// **Lifecycle:**
 /// - Push to [ShortcutRouter] in the owning screen's `initState`.
-/// - Call [attachCanvas] when [PatternCanvas] mounts.
-/// - Call [detachCanvas] in [PatternCanvas.dispose].
+/// - Call [attachCanvas] when [AidaWidget] mounts.
+/// - Call [detachCanvas] in [AidaWidget.dispose].
 /// - Pop from [ShortcutRouter] in the owning screen's `dispose`.
 class ViewModeController implements ShortcutHandler {
   ViewModeController({

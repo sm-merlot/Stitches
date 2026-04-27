@@ -17,8 +17,8 @@ import 'undo_manager.dart';
 ///
 /// **Lifecycle:**
 /// - Push to [ShortcutRouter] in the owning screen's `initState`.
-/// - Call [attachCanvas] when [PatternCanvas] mounts.
-/// - Call [detachCanvas] in [PatternCanvas.dispose].
+/// - Call [attachCanvas] when [AidaWidget] mounts.
+/// - Call [detachCanvas] in [AidaWidget.dispose].
 /// - Pop from [ShortcutRouter] in the owning screen's `dispose`.
 ///
 /// Only fires keyboard shortcuts when [EditorState.stitchMode] is true.
@@ -47,7 +47,7 @@ class StitchController implements ShortcutHandler {
   ProgressHandler? _progress;
   static const _pageNav = PageNavHandler();
 
-  /// Read by [PatternCanvas] overlay painter.
+  /// Read by [AidaWidget] overlay painter.
   HoverHandler? get hover => _hover;
   ProgressHandler? get progress => _progress;
 
@@ -64,7 +64,7 @@ class StitchController implements ShortcutHandler {
     );
   }
 
-  /// Release pointer handlers. Called by [PatternCanvas.dispose].
+  /// Release pointer handlers. Called by [AidaWidget.dispose].
   void detachCanvas() {
     _hover = null;
     _progress = null;
