@@ -20,6 +20,7 @@ import '../services/png_export_service.dart';
 import '../utils/edit_controller.dart';
 import '../utils/shortcut_router.dart';
 import '../utils/stitch_controller.dart';
+import '../utils/view_mode_controller.dart';
 import '../utils/snackbars.dart';
 import '../widgets/editor_canvas_area.dart';
 import '../widgets/editor_shared_widgets.dart';
@@ -45,6 +46,7 @@ class EditorScreen extends ConsumerStatefulWidget {
 
 class _EditorScreenState extends ConsumerState<EditorScreen> {
   late final EditController _editController;
+  late final ViewModeController _viewModeController;
   late final StitchController _stitchController;
 
   @override
@@ -56,18 +58,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       getState: () => ref.read(editorProvider),
       onSave: () => _save(context, ref),
     );
+    _viewModeController = ViewModeController(
+      getState: () => ref.read(editorProvider),
+    );
     _stitchController = StitchController(
       notifier: n,
       getState: () => ref.read(editorProvider),
       onSave: () => _save(context, ref),
     );
     ShortcutRouter.instance.push(_editController);
+    ShortcutRouter.instance.push(_viewModeController);
     ShortcutRouter.instance.push(_stitchController);
   }
 
   @override
   void dispose() {
     ShortcutRouter.instance.pop(_stitchController);
+    ShortcutRouter.instance.pop(_viewModeController);
     ShortcutRouter.instance.pop(_editController);
     super.dispose();
   }
@@ -361,7 +368,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, WidgetRef ref, EditorState state) {
     if (state.isNativeFormat) {
-      return const EditorCanvasArea();
+      return EditorCanvasArea(
+        editController: _editController,
+        viewModeController: _viewModeController,
+        stitchController: _stitchController,
+      );
     }
     final filePath = state.filePath!;
     final lastDot = filePath.lastIndexOf('.');
@@ -369,6 +380,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final nativePath = '$withoutExt.stitches';
     final nativeExists = File(nativePath).existsSync();
     return EditorCanvasArea(
+      editController: _editController,
+      viewModeController: _viewModeController,
+      stitchController: _stitchController,
       importFilePath: filePath,
       onConvert: nativeExists ? null : () => _convertToNative(context, ref),
       onOpenNative: nativeExists ? () => _openNativeFile(context, ref, nativePath) : null,

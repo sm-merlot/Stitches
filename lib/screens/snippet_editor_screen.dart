@@ -485,7 +485,13 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             Expanded(
               child: Column(
                 children: [
-                  const Expanded(child: PatternCanvas()),
+                  Expanded(
+                    child: PatternCanvas(
+                      editController: _editController,
+                      viewModeController: null,
+                      stitchController: null,
+                    ),
+                  ),
                   EditorToolbar(
                     showSnippetsButton: false,
                     showSaveAsSnippetButton: false,

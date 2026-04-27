@@ -77,6 +77,16 @@ EditorState fakeEditState({
       activeLayerId: kLayerId,
     );
 
+EditorState fakeViewState({
+  CrossStitchPattern? pattern,
+}) =>
+    EditorState(
+      pattern: pattern ?? fakePattern(),
+      mode: AppMode.view,
+      drawingMode: DrawingMode.pan,
+      activeLayerId: kLayerId,
+    );
+
 EditorState fakeStitchState({
   CrossStitchPattern? pattern,
   bool stitchCrossMode = false,
