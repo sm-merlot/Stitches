@@ -1,0 +1,39 @@
+lib/widgets/snippet_edit_view.dart
+  596e98645802cae3 1-69
+.changeset/view-widgets.md
+  596e98645802cae3 1-5
+lib/widgets/aida_widget.dart
+  596e98645802cae3 32-37,40,42-44,46-47,51,56-58,77,84,197,210,238,262,271,408,421,442,461,487,500,516,524-525,543,579,644-645,673,785,845,847
+lib/widgets/editor_shared_widgets.dart
+  596e98645802cae3 5-6,68-200
+lib/widgets/edit_view.dart
+  596e98645802cae3 1-111
+lib/screens/editor_screen.dart
+  596e98645802cae3 21,23,333-335,337,344-345
+lib/widgets/stitch_view.dart
+  596e98645802cae3 1-61
+lib/screens/workspace_screen.dart
+  596e98645802cae3 32,35,717-719,721-727,735-741
+lib/screens/snippet_editor_screen.dart
+  596e98645802cae3 14,473-476
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "427c5fa42e70f727f0408ce68c00b8ec3caa5f50",
+  "prompts": {
+    "596e98645802cae3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "772458f3-3cad-4d78-af35-f6b78f05f41c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 463,
+      "total_deletions": 176,
+      "accepted_lines": 453,
+      "overriden_lines": 0
+    }
+  }
+}
