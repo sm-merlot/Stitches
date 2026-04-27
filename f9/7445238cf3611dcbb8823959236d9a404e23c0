@@ -1,0 +1,59 @@
+lib/widgets/hover_handler.dart
+  596e98645802cae3 7
+lib/widgets/editor_canvas_area.dart
+  596e98645802cae3 9,55
+lib/utils/view_mode_controller.dart
+  596e98645802cae3 16-17
+lib/screens/snippet_editor_screen.dart
+  596e98645802cae3 16,52,489
+lib/providers/editor/editor_provider.dart
+  596e98645802cae3 258
+lib/widgets/canvas_viewport.dart
+  596e98645802cae3 3
+lib/widgets/zoom_pan_handler.dart
+  596e98645802cae3 16
+lib/widgets/progress_handler.dart
+  596e98645802cae3 15
+lib/widgets/select_handler.dart
+  596e98645802cae3 12
+lib/widgets/canvas_painter.dart
+  596e98645802cae3 38
+lib/widgets/paste_handler.dart
+  596e98645802cae3 10
+lib/utils/edit_controller.dart
+  596e98645802cae3 21,23,77,88,115,128,255
+lib/services/drive_pattern_refresh.dart
+  596e98645802cae3 84
+lib/providers/editor/editor_state.dart
+  596e98645802cae3 52,58-59,73
+lib/widgets/draw_handler.dart
+  596e98645802cae3 14
+lib/utils/stitch_controller.dart
+  596e98645802cae3 20-21,50,67
+lib/widgets/page_nav_handler.dart
+  596e98645802cae3 6
+lib/widgets/aida_widget.dart
+  596e98645802cae3 1-1212
+lib/widgets/pattern_canvas.dart
+  596e98645802cae3 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "f97445238cf3611dcbb8823959236d9a404e23c0",
+  "prompts": {
+    "596e98645802cae3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "772458f3-3cad-4d78-af35-f6b78f05f41c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 1253,
+      "total_deletions": 1230,
+      "accepted_lines": 1253,
+      "overriden_lines": 0
+    }
+  }
+}
