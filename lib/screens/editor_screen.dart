@@ -17,13 +17,10 @@ import '../services/file_service.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
-import '../utils/edit_controller.dart';
-import '../utils/shortcut_router.dart';
-import '../utils/stitch_controller.dart';
-import '../utils/view_mode_controller.dart';
 import '../utils/snackbars.dart';
-import '../widgets/editor_canvas_area.dart';
+import '../widgets/edit_view.dart';
 import '../widgets/editor_shared_widgets.dart';
+import '../widgets/stitch_view.dart';
 import '../widgets/share_format_picker.dart';
 import 'drive_folder_picker_dialog.dart';
 import '../widgets/right_sidebar.dart';
@@ -45,40 +42,6 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorScreenState extends ConsumerState<EditorScreen> {
-  late final EditController _editController;
-  late final ViewModeController _viewModeController;
-  late final StitchController _stitchController;
-
-  @override
-  void initState() {
-    super.initState();
-    final n = ref.read(editorProvider.notifier);
-    _editController = EditController(
-      notifier: n,
-      getState: () => ref.read(editorProvider),
-      onSave: () => _save(context, ref),
-    );
-    _viewModeController = ViewModeController(
-      getState: () => ref.read(editorProvider),
-    );
-    _stitchController = StitchController(
-      notifier: n,
-      getState: () => ref.read(editorProvider),
-      onSave: () => _save(context, ref),
-    );
-    ShortcutRouter.instance.push(_editController);
-    ShortcutRouter.instance.push(_viewModeController);
-    ShortcutRouter.instance.push(_stitchController);
-  }
-
-  @override
-  void dispose() {
-    ShortcutRouter.instance.pop(_stitchController);
-    ShortcutRouter.instance.pop(_viewModeController);
-    ShortcutRouter.instance.pop(_editController);
-    super.dispose();
-  }
-
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     try {
@@ -367,22 +330,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, WidgetRef ref, EditorState state) {
+    if (state.stitchMode) {
+      return StitchView(onSave: () => _save(context, ref));
+    }
     if (state.isNativeFormat) {
-      return EditorCanvasArea(
-        editController: _editController,
-        viewModeController: _viewModeController,
-        stitchController: _stitchController,
-      );
+      return EditView(onSave: () => _save(context, ref));
     }
     final filePath = state.filePath!;
     final lastDot = filePath.lastIndexOf('.');
     final withoutExt = lastDot > 0 ? filePath.substring(0, lastDot) : filePath;
     final nativePath = '$withoutExt.stitches';
     final nativeExists = File(nativePath).existsSync();
-    return EditorCanvasArea(
-      editController: _editController,
-      viewModeController: _viewModeController,
-      stitchController: _stitchController,
+    return EditView(
+      onSave: () => _save(context, ref),
       importFilePath: filePath,
       onConvert: nativeExists ? null : () => _convertToNative(context, ref),
       onOpenNative: nativeExists ? () => _openNativeFile(context, ref, nativePath) : null,
