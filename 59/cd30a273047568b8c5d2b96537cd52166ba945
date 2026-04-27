@@ -1,0 +1,23 @@
+.changeset/aida-widget.md
+  596e98645802cae3 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "59cd30a273047568b8c5d2b96537cd52166ba945",
+  "prompts": {
+    "596e98645802cae3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "772458f3-3cad-4d78-af35-f6b78f05f41c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 0,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
