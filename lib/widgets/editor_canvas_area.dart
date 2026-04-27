@@ -4,6 +4,7 @@ import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
 import '../utils/edit_controller.dart';
 import '../utils/stitch_controller.dart';
+import '../utils/view_mode_controller.dart';
 import 'editor_shared_widgets.dart';
 import 'editor_toolbar.dart';
 import 'pattern_canvas.dart';
@@ -13,6 +14,7 @@ import 'pattern_canvas.dart';
 /// Callers are responsible for only rendering this widget when a file is open.
 class EditorCanvasArea extends ConsumerWidget {
   final EditController editController;
+  final ViewModeController viewModeController;
   final StitchController stitchController;
 
   /// When non-null, shows the import-format banner for this non-native file.
@@ -29,6 +31,7 @@ class EditorCanvasArea extends ConsumerWidget {
   const EditorCanvasArea({
     super.key,
     required this.editController,
+    required this.viewModeController,
     required this.stitchController,
     this.importFilePath,
     this.onConvert,
@@ -51,6 +54,7 @@ class EditorCanvasArea extends ConsumerWidget {
         Expanded(
           child: PatternCanvas(
             editController: editController,
+            viewModeController: viewModeController,
             stitchController: stitchController,
           ),
         ),

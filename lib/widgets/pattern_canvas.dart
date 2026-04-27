@@ -10,6 +10,7 @@ import '../utils/canvas_callbacks.dart';
 import '../utils/edit_controller.dart';
 import '../utils/shortcut_router.dart';
 import '../utils/stitch_controller.dart';
+import '../utils/view_mode_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
@@ -20,12 +21,17 @@ import '../services/render_cache.dart';
 import '../services/stitch_compositor.dart';
 import 'canvas_painter.dart';
 import 'canvas_viewport.dart';
+import 'hover_handler.dart';
 import 'zoom_pan_handler.dart';
 
 class PatternCanvas extends ConsumerStatefulWidget {
-  /// Controller for edit/view mode. Owns [DrawHandler], [SelectHandler],
-  /// [PasteHandler], and [HoverHandler]. Must not be null.
+  /// Controller for edit mode. Owns [DrawHandler], [SelectHandler],
+  /// [PasteHandler], and [HoverHandler].
   final EditController editController;
+
+  /// Controller for view mode (read-only). Owns [HoverHandler] only.
+  /// May be null when view mode is unavailable (e.g. snippet editor).
+  final ViewModeController? viewModeController;
 
   /// Controller for stitch mode. Owns [ProgressHandler] and [HoverHandler].
   /// May be null when stitch mode is unavailable (e.g. snippet editor).
@@ -34,6 +40,7 @@ class PatternCanvas extends ConsumerStatefulWidget {
   const PatternCanvas({
     super.key,
     required this.editController,
+    required this.viewModeController,
     required this.stitchController,
   });
 
@@ -54,7 +61,15 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
   // ── Active controller shortcuts ───────────────────────────────────────────
   // Resolved from widget.editController / widget.stitchController by mode.
   EditController get _edit => widget.editController;
+  ViewModeController? get _view => widget.viewModeController;
   StitchController? get _stitch => widget.stitchController;
+
+  /// Returns the hover handler for the currently active mode.
+  HoverHandler? _activeHover(AppMode mode) => switch (mode) {
+    AppMode.view  => _view?.hover,
+    AppMode.edit  => _edit.hover,
+    AppMode.stitch => _stitch?.hover,
+  };
 
   // ── RenderCache ─────────────────────────────────────────────────────────────
   // Owned here (not in Riverpod state) — UI concern, not business logic.
@@ -167,6 +182,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
       getPencilPasteConfirm: () => ref.read(settingsProvider).pencilPasteConfirm,
     );
     widget.editController.attachCanvas(cb);
+    widget.viewModeController?.attachCanvas(cb);
     widget.stitchController?.attachCanvas(cb);
 
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
@@ -179,6 +195,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
     _warningTimer?.cancel();
     _viewSaveTimer?.cancel();
     widget.editController.detachCanvas();
+    widget.viewModeController?.detachCanvas();
     widget.stitchController?.detachCanvas();
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointerEvent);
     ShortcutRouter.instance.pop(this);
@@ -225,16 +242,22 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
       if (box == null || !box.attached) return;
       final local = box.globalToLocal(event.position);
       final p = state.pattern;
-      if (state.stitchMode) {
-        _stitch?.onStylusAdded(local, _viewport, p.width, p.height);
-      } else {
-        _edit.onStylusAdded(local, _viewport, p.width, p.height);
+      switch (state.mode) {
+        case AppMode.view:
+          _view?.onStylusAdded(local, _viewport, p.width, p.height);
+        case AppMode.edit:
+          _edit.onStylusAdded(local, _viewport, p.width, p.height);
+        case AppMode.stitch:
+          _stitch?.onStylusAdded(local, _viewport, p.width, p.height);
       }
     } else if (event is PointerRemovedEvent) {
-      if (state.stitchMode) {
-        _stitch?.onStylusRemoved();
-      } else {
-        _edit.onStylusRemoved();
+      switch (state.mode) {
+        case AppMode.view:
+          _view?.onStylusRemoved();
+        case AppMode.edit:
+          _edit.onStylusRemoved();
+        case AppMode.stitch:
+          _stitch?.onStylusRemoved();
       }
     }
   }
@@ -358,18 +381,19 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
   void _onPointerDown(PointerDownEvent event) {
     Focus.maybeOf(context)?.requestFocus();
     _activePointers[event.pointer] = event.localPosition;
-    _edit.hover?.onPointerDown(event.localPosition);
     _warnedThisGesture = false;
     _scheduleRebuild();
 
     final state = ref.read(editorProvider);
+    _activeHover(state.mode)?.onPointerDown(event.localPosition);
+
     final vp = _viewport;
     final localPos = event.localPosition;
 
-    // Apple Pencil secondary-button (double-tap).
+    // Apple Pencil secondary-button (double-tap) — edit mode only.
     if (event.kind == PointerDeviceKind.stylus &&
         event.buttons == kSecondaryStylusButton) {
-      if (!state.stitchMode) _edit.onPencilDoubleTap(state);
+      if (state.editMode) _edit.onPencilDoubleTap(state);
       return;
     }
 
@@ -378,36 +402,42 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
         event.kind == PointerDeviceKind.mouse;
 
     if (isStylusMouse) {
-      if (state.stitchMode) {
-        _stitch?.onPointerDown(
-          localPos, event.kind, vp, state,
-          isOnCanvas: _screenOnCanvas(localPos),
-          isNavZone: _isNavZone(localPos, state),
-        );
-      } else {
-        _edit.onPointerDown(
-          localPos, event.kind, event.buttons, vp, state,
-          isOnCanvas: _screenOnCanvas(localPos),
-          pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
-        );
+      switch (state.mode) {
+        case AppMode.view:
+          break; // pan handled by ZoomPanHandler
+        case AppMode.edit:
+          _edit.onPointerDown(
+            localPos, event.kind, event.buttons, vp, state,
+            isOnCanvas: _screenOnCanvas(localPos),
+            pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
+          );
+        case AppMode.stitch:
+          _stitch?.onPointerDown(
+            localPos, event.kind, vp, state,
+            isOnCanvas: _screenOnCanvas(localPos),
+            isNavZone: _isNavZone(localPos, state),
+          );
       }
       return;
     }
 
     // Touch — handle special modes before pan/pinch setup.
     if (_activePointers.length == 1 && !_hadMultiTouch) {
-      if (state.stitchMode) {
-        _stitch?.onPointerDown(
-          localPos, event.kind, vp, state,
-          isOnCanvas: _screenOnCanvas(localPos),
-          isNavZone: _isNavZone(localPos, state),
-        );
-      } else {
-        _edit.onPointerDown(
-          localPos, event.kind, event.buttons, vp, state,
-          isOnCanvas: _screenOnCanvas(localPos),
-          pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
-        );
+      switch (state.mode) {
+        case AppMode.view:
+          break; // pan handled by ZoomPanHandler
+        case AppMode.edit:
+          _edit.onPointerDown(
+            localPos, event.kind, event.buttons, vp, state,
+            isOnCanvas: _screenOnCanvas(localPos),
+            pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
+          );
+        case AppMode.stitch:
+          _stitch?.onPointerDown(
+            localPos, event.kind, vp, state,
+            isOnCanvas: _screenOnCanvas(localPos),
+            isNavZone: _isNavZone(localPos, state),
+          );
       }
       return;
     }
@@ -438,10 +468,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
         _pan(event.delta);
         return;
       }
-      if (state.stitchMode) {
-        _stitch?.onPointerMove(localPos, event.kind, vp, state);
-      } else {
-        _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+      switch (state.mode) {
+        case AppMode.view:
+          break;
+        case AppMode.edit:
+          _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+        case AppMode.stitch:
+          _stitch?.onPointerMove(localPos, event.kind, vp, state);
       }
       _scheduleRebuild();
       return;
@@ -463,15 +496,20 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
       }
       if (_isPanMode) {
         _pan(event.delta);
-      } else if (state.stitchMode) {
-        _stitch?.onPointerMove(localPos, event.kind, vp, state);
       } else {
-        _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+        switch (state.mode) {
+          case AppMode.view:
+            break;
+          case AppMode.edit:
+            _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+          case AppMode.stitch:
+            _stitch?.onPointerMove(localPos, event.kind, vp, state);
+        }
       }
     }
 
     // ── Kind-agnostic fallback (iPadOS Pencil unknown-kind events) ───────────
-    if (_edit.select?.isActive == true && !state.stitchMode) {
+    if (_edit.select?.isActive == true && state.editMode) {
       _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
     } else if (_stitch?.progress?.isActive == true && state.stitchMode) {
       _stitch!.onPointerMove(localPos, event.kind, vp, state);
@@ -484,17 +522,20 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
     final localPos = event.localPosition;
     final wasSinglePointer = _activePointers.length == 1;
 
-    _edit.hover?.onPointerUp(event.kind);
+    _activeHover(state.mode)?.onPointerUp(event.kind);
 
-    if (state.stitchMode) {
-      _stitch?.onPointerUp(localPos, vp, state);
-    } else {
-      _edit.onPointerUp(
-        localPos, event.kind, vp, state,
-        wasSinglePointer: wasSinglePointer,
-        hadMultiTouch: _hadMultiTouch,
-        isPanMode: _isPanMode,
-      );
+    switch (state.mode) {
+      case AppMode.view:
+        break;
+      case AppMode.edit:
+        _edit.onPointerUp(
+          localPos, event.kind, vp, state,
+          wasSinglePointer: wasSinglePointer,
+          hadMultiTouch: _hadMultiTouch,
+          isPanMode: _isPanMode,
+        );
+      case AppMode.stitch:
+        _stitch?.onPointerUp(localPos, vp, state);
     }
 
     _activePointers.remove(event.pointer);
@@ -519,10 +560,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
 
     // We don't guard by kind because Apple Pencil hover events on iPadOS may
     // not always arrive as PointerDeviceKind.stylus through this path.
-    if (state.stitchMode) {
-      _stitch?.onPointerHover(localPos, event.kind, vp, state);
-    } else {
-      _edit.onPointerHover(localPos, event.kind, vp, state);
+    switch (state.mode) {
+      case AppMode.view:
+        _view?.onPointerHover(localPos, event.kind, vp, state);
+      case AppMode.edit:
+        _edit.onPointerHover(localPos, event.kind, vp, state);
+      case AppMode.stitch:
+        _stitch?.onPointerHover(localPos, event.kind, vp, state);
     }
 
     _scheduleRebuild();
@@ -607,10 +651,13 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
         return MouseRegion(
         cursor: _cursor(state),
         onExit: (_) {
-          if (state.stitchMode) {
-            _stitch?.onHoverExit();
-          } else {
-            _edit.onHoverExit();
+          switch (state.mode) {
+            case AppMode.view:
+              _view?.onHoverExit();
+            case AppMode.edit:
+              _edit.onHoverExit();
+            case AppMode.stitch:
+              _stitch?.onHoverExit();
           }
         },
         child: Stack(children: [
@@ -691,9 +738,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
                     _stitch?.progress?.hasDragged == true))
               () {
                 final progress = _stitch?.progress;
-                final activeHover = state.stitchMode
-                    ? _stitch?.hover
-                    : _edit.hover;
+                final activeHover = _activeHover(state.mode);
                 final rect = select?.dragRect ?? progress!.dragRect!;
                 final anchor = select?.anchor ?? progress!.anchor!;
                 final anchorScreen = _viewport.canvasToScreen(
@@ -729,9 +774,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
                 isColorPickerCursor: isColorPickerCursor,
                 cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                     ? null
-                    : (state.stitchMode
-                        ? _stitch?.hover?.mouseScreenPos
-                        : _edit.hover?.mouseScreenPos),
+                    : _activeHover(state.mode)?.mouseScreenPos,
                 selectionRect: _stitch?.progress?.dragRect ??
                     state.progressRegion ??
                     select?.dragRect ??
@@ -743,9 +786,7 @@ class _PatternCanvasState extends ConsumerState<PatternCanvas>
                 ghostOpacity: state.drawingMode == DrawingMode.paste
                     ? 0.55
                     : 1.0,
-                stylusHoverCell: state.stitchMode
-                    ? _stitch?.hover?.hoverCell
-                    : _edit.hover?.hoverCell,
+                stylusHoverCell: _activeHover(state.mode)?.hoverCell,
                 stylusHoverColor: state.selectedThread?.color,
                 stitchMode: state.stitchMode,
               ),

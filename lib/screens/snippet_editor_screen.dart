@@ -488,6 +488,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
                   Expanded(
                     child: PatternCanvas(
                       editController: _editController,
+                      viewModeController: null,
                       stitchController: null,
                     ),
                   ),

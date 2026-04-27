@@ -28,6 +28,7 @@ import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
 import '../utils/edit_controller.dart';
+import '../utils/view_mode_controller.dart';
 import '../utils/shortcut_router.dart';
 import '../utils/stitch_controller.dart';
 import '../providers/recent_items_provider.dart';
@@ -75,6 +76,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Timer? _autoSaveTimer;
   final _pdfPanelKey = GlobalKey<PdfViewerPanelState>();
   late final EditController _editController;
+  late final ViewModeController _viewModeController;
   late final StitchController _stitchController;
 
   // Phone-only: right sidebar starts collapsed; coordinates with folder sidebar.
@@ -99,11 +101,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       onPdfZoomIn: () => _pdfPanelKey.currentState?.zoomIn(),
       onPdfZoomOut: () => _pdfPanelKey.currentState?.zoomOut(),
     );
+    _viewModeController = ViewModeController(
+      getState: () => ref.read(editorProvider),
+    );
     _stitchController = StitchController(
       notifier: n,
       getState: () => ref.read(editorProvider),
     );
     ShortcutRouter.instance.push(_editController);
+    ShortcutRouter.instance.push(_viewModeController);
     ShortcutRouter.instance.push(_stitchController);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ws = ref.read(workspaceProvider).workspace;
@@ -318,6 +324,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   @override
   void dispose() {
     ShortcutRouter.instance.pop(_stitchController);
+    ShortcutRouter.instance.pop(_viewModeController);
     ShortcutRouter.instance.pop(_editController);
     // If a pending auto-save timer was cancelled without firing, flush it now.
     if (_autoSaveTimer != null) {
@@ -740,6 +747,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (editorState.isNativeFormat) {
       return EditorCanvasArea(
         editController: _editController,
+        viewModeController: _viewModeController,
         stitchController: _stitchController,
       );
     }
@@ -750,6 +758,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final nativeExists = File(nativePath).existsSync();
     return EditorCanvasArea(
       editController: _editController,
+      viewModeController: _viewModeController,
       stitchController: _stitchController,
       importFilePath: filePath,
       onConvert: nativeExists ? null : () => _convertToNative(context),
