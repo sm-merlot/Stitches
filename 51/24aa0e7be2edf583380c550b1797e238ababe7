@@ -1,0 +1,27 @@
+lib/widgets/aida_widget.dart
+  596e98645802cae3 707
+test/widgets/aida_widget_test.dart
+  596e98645802cae3 269,271,276,283-284,299,301-302,306-311,322,326-331,337-338,344-345,349-351,353-365
+lib/widgets/canvas_painter.dart
+  596e98645802cae3 41-49,78,514-517,520-521,524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "5124aa0e7be2edf583380c550b1797e238ababe7",
+  "prompts": {
+    "596e98645802cae3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "772458f3-3cad-4d78-af35-f6b78f05f41c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 65,
+      "total_deletions": 61,
+      "accepted_lines": 62,
+      "overriden_lines": 0
+    }
+  }
+}
