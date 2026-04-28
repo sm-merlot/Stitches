@@ -9,12 +9,9 @@ import '../models/snippet.dart';
 import '../models/snippet_palette.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
-import '../utils/edit_controller.dart';
-import '../utils/shortcut_router.dart';
 import '../widgets/dialogs/dmc_picker_dialog.dart';
-import '../widgets/editor_toolbar.dart';
-import '../widgets/aida_widget.dart';
 import '../widgets/right_sidebar.dart';
+import '../widgets/snippet_edit_view.dart';
 import '../widgets/snippet_thumbnail.dart';
 
 part 'snippet_editor_screen_dialogs.dart';
@@ -80,7 +77,6 @@ class _SnippetEditorBody extends ConsumerStatefulWidget {
 
 class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   late final TextEditingController _nameController;
-  late final EditController _editController;
   final FocusNode _nameFocusNode = FocusNode();
   // null = custom size chosen via dialog
   int? _selectedPresetIndex = 1; // default 16×16
@@ -98,14 +94,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
   @override
   void initState() {
     super.initState();
-    _editController = EditController(
-      notifier: ref.read(editorProvider.notifier),
-      getState: () => ref.read(editorProvider),
-      onFlipCanvasH: () => ref.read(editorProvider.notifier).flipCanvasH(),
-      onFlipCanvasV: () => ref.read(editorProvider.notifier).flipCanvasV(),
-      onRotateCanvasCW: () => ref.read(editorProvider.notifier).rotateCanvasCW(),
-    );
-    ShortcutRouter.instance.push(_editController);
     final s = widget.snippet;
     _nameController = TextEditingController(text: s?.name ?? 'New snippet');
     // Rebuild on name changes so the title field can shrink/grow to fit the
@@ -194,7 +182,6 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
 
   @override
   void dispose() {
-    ShortcutRouter.instance.pop(_editController);
     _nameController.dispose();
     _nameFocusNode.dispose();
     super.dispose();
@@ -483,26 +470,10 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: AidaWidget(
-                      editController: _editController,
-                      viewModeController: null,
-                      stitchController: null,
-                    ),
-                  ),
-                  EditorToolbar(
-                    showSnippetsButton: false,
-                    showSaveAsSnippetButton: false,
-                    showSpriteSheetButton: false,
-                    showWholeCanvasTransforms: true,
-                    showAidaButton: false,
-                    onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
-                        ? () => _showSnippetPicker(context)
-                        : null,
-                  ),
-                ],
+              child: SnippetEditView(
+                onPasteFromSnippet: widget.siblingSnippets.isNotEmpty
+                    ? () => _showSnippetPicker(context)
+                    : null,
               ),
             ),
             const RightSidebar(

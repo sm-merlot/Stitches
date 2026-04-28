@@ -426,12 +426,20 @@ class EditorNotifier extends Notifier<EditorState>
     final redoStack = [...state._redoStack];
     final (prevPattern, prevPalettes) = undoStack.removeLast();
     redoStack.add((state.pattern, state.snippetPalettes));
+    // Preserve current layer UI state so undo only reverts stitch/thread data,
+    // not layer visibility or lock the user toggled independently.
+    final restored = _applyLayerUiState(prevPattern, state.pattern);
     state = state.copyWith(
-      pattern: prevPattern,
+      pattern: restored,
       snippetPalettes: prevPalettes,
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
+      // Recompute composite so _syncRenderCache sees a changed identity and
+      // rebuilds the render cache from the restored pattern. Without this,
+      // the old composite is kept (sentinel pass-through) and the canvas
+      // shows the pre-undo stitches until something else forces a refresh.
+      compositeLayer: StitchCompositor.computeLayer(restored),
     );
   }
 
@@ -441,13 +449,31 @@ class EditorNotifier extends Notifier<EditorState>
     final redoStack = [...state._redoStack];
     final (nextPattern, nextPalettes) = redoStack.removeLast();
     undoStack.add((state.pattern, state.snippetPalettes));
+    final restored = _applyLayerUiState(nextPattern, state.pattern);
     state = state.copyWith(
-      pattern: nextPattern,
+      pattern: restored,
       snippetPalettes: nextPalettes,
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
+      compositeLayer: StitchCompositor.computeLayer(restored),
     );
+  }
+
+  /// Returns [target] with each layer's [visible] and [locked] overridden by
+  /// the matching layer from [source] (matched by layer id). Layers present in
+  /// [target] but absent in [source] keep their own UI state. This lets
+  /// undo/redo restore stitch data while preserving any visibility/lock changes
+  /// the user made independently of the undo-able operation.
+  CrossStitchPattern _applyLayerUiState(
+      CrossStitchPattern target, CrossStitchPattern source) {
+    final sourceById = {for (final l in source.layers) l.id: l};
+    return target.mapLayers((l) {
+      final s = sourceById[l.id];
+      if (s == null) return l;
+      if (s.visible == l.visible && s.locked == l.locked) return l;
+      return l.copyWith(visible: s.visible, locked: s.locked);
+    });
   }
 
   void clearCanvasWarning() {

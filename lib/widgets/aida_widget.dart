@@ -29,34 +29,33 @@ import 'zoom_pan_handler.dart';
 /// Exactly one mode controller is active at any time, determined by
 /// [EditorState.mode]. Mode switches preserve viewport state.
 ///
-/// **Controller lifecycle (caller's responsibility):**
-/// 1. Construct each controller in the owning screen's `initState`.
+/// Each view widget ([EditView], [StitchView], [SnippetEditView]) owns the
+/// controller(s) relevant to its mode and passes them here. Callers only
+/// supply the controllers they own — pass `null` for unused modes.
+///
+/// **Controller lifecycle (view widget's responsibility):**
+/// 1. Construct controllers in `initState`.
 /// 2. Push to [ShortcutRouter] before the first frame.
 /// 3. [AidaWidget] calls [attachCanvas] / [detachCanvas] on mount/unmount.
-/// 4. Pop from [ShortcutRouter] in the screen's `dispose`.
-///
-/// Step 9 will wrap this widget in `EditView`, `StitchView`, and
-/// `SnippetEditView` — each owning a single controller — so callers no longer
-/// need to manage three controllers directly.
+/// 4. Pop from [ShortcutRouter] in the view widget's `dispose`.
 class AidaWidget extends ConsumerStatefulWidget {
-  /// Controller for edit mode. Owns [DrawHandler], [SelectHandler],
-  /// [PasteHandler], and [HoverHandler]. Required — edit mode is always
-  /// available when [AidaWidget] is used.
-  final EditController editController;
+  /// Controller for edit / view mode. Owns [DrawHandler], [SelectHandler],
+  /// [PasteHandler], and [HoverHandler]. Null in [StitchView].
+  final EditController? editController;
 
-  /// Controller for view mode (read-only). Owns [HoverHandler] only.
-  /// Null when view mode is unavailable (e.g. snippet editor).
+  /// Controller for read-only view mode. Owns [HoverHandler] only.
+  /// Null in [StitchView] and [SnippetEditView].
   final ViewModeController? viewModeController;
 
   /// Controller for stitch mode. Owns [ProgressHandler] and [HoverHandler].
-  /// Null when stitch mode is unavailable (e.g. snippet editor).
+  /// Null in [EditView] and [SnippetEditView].
   final StitchController? stitchController;
 
   const AidaWidget({
     super.key,
-    required this.editController,
-    required this.viewModeController,
-    required this.stitchController,
+    this.editController,
+    this.viewModeController,
+    this.stitchController,
   });
 
   @override
@@ -75,17 +74,14 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   Offset get _panOffset => _zoomPan.panOffset;
 
   // ── Active controller accessors ───────────────────────────────────────────
-  // Three controllers cover all modes. Exactly one is active per mode.
-  // Step 9 (view widgets) will push this selection up to the caller so
-  // AidaWidget receives a single already-active controller.
-  EditController get _edit => widget.editController;
+  EditController? get _edit => widget.editController;
   ViewModeController? get _view => widget.viewModeController;
   StitchController? get _stitch => widget.stitchController;
 
   /// The hover handler for the currently active mode.
   HoverHandler? _activeHover(AppMode mode) => switch (mode) {
     AppMode.view   => _view?.hover,
-    AppMode.edit   => _edit.hover,
+    AppMode.edit   => _edit?.hover,
     AppMode.stitch => _stitch?.hover,
   };
 
@@ -198,7 +194,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
       onWarning: _showWarning,
       getPencilPasteConfirm: () => ref.read(settingsProvider).pencilPasteConfirm,
     );
-    widget.editController.attachCanvas(cb);
+    widget.editController?.attachCanvas(cb);
     widget.viewModeController?.attachCanvas(cb);
     widget.stitchController?.attachCanvas(cb);
 
@@ -211,7 +207,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   void dispose() {
     _warningTimer?.cancel();
     _viewSaveTimer?.cancel();
-    widget.editController.detachCanvas();
+    widget.editController?.detachCanvas();
     widget.viewModeController?.detachCanvas();
     widget.stitchController?.detachCanvas();
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointerEvent);
@@ -239,7 +235,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   bool handle(KeyEvent event) {
     // Pass modifier state to the edit controller's paste handler.
     // Returns false — modifier tracking only, not a consumed shortcut.
-    _edit.updateModifiers(
+    _edit?.updateModifiers(
       ctrl: HardwareKeyboard.instance.isControlPressed,
       shift: HardwareKeyboard.instance.isShiftPressed,
     );
@@ -263,7 +259,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         case AppMode.view:
           _view?.onStylusAdded(local, _viewport, p.width, p.height);
         case AppMode.edit:
-          _edit.onStylusAdded(local, _viewport, p.width, p.height);
+          _edit?.onStylusAdded(local, _viewport, p.width, p.height);
         case AppMode.stitch:
           _stitch?.onStylusAdded(local, _viewport, p.width, p.height);
       }
@@ -272,7 +268,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         case AppMode.view:
           _view?.onStylusRemoved();
         case AppMode.edit:
-          _edit.onStylusRemoved();
+          _edit?.onStylusRemoved();
         case AppMode.stitch:
           _stitch?.onStylusRemoved();
       }
@@ -315,6 +311,12 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
 
   /// Rebuilds the render cache only when stitch data, composite, or view config
   /// has changed since the last call. Pan/zoom changes are ignored here.
+  ///
+  /// When [EditorState.dirtyCellKeys] is non-null and only the composite
+  /// changed (no view config change), calls [RenderCache.updateCells] —
+  /// O(dirty cells) instead of O(total stitches) for the common single-stitch
+  /// draw case. Multiple pointer events in one frame are already accumulated
+  /// into [dirtyCellKeys] by the drawing notifier.
   void _syncRenderCache(EditorState state) {
     final config = _buildViewConfig(state);
     final patternChanged = !identical(_lastCachedPattern, state.pattern);
@@ -326,10 +328,16 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     final layer = state.compositeLayer;
     if (layer == null) {
       _renderCache.clear();
-    } else if (configChanged && !patternChanged && !compositeChanged) {
+    } else if (configChanged && !compositeChanged) {
       // View config only (focus/mode/palette changed) — recolour without
       // recomputing geometry.
       _renderCache.rebuildViewConfig(layer, config, _cellSize);
+    } else if (compositeChanged && !configChanged &&
+        state.dirtyCellKeys != null) {
+      // Incremental: composite was patched; only recompute dirty cells.
+      // Skipped when config also changed (e.g. focus thread changed while
+      // drawing) — full rebuild is correct there.
+      _renderCache.updateCells(state.dirtyCellKeys!, layer, config, _cellSize);
     } else {
       _renderCache.rebuild(layer, config, _cellSize);
     }
@@ -409,7 +417,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     // Apple Pencil secondary-button (double-tap) — edit mode only.
     if (event.kind == PointerDeviceKind.stylus &&
         event.buttons == kSecondaryStylusButton) {
-      if (state.editMode) _edit.onPencilDoubleTap(state);
+      if (state.editMode) _edit?.onPencilDoubleTap(state);
       return;
     }
 
@@ -422,7 +430,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         case AppMode.view:
           break; // pan handled by ZoomPanHandler
         case AppMode.edit:
-          _edit.onPointerDown(
+          _edit?.onPointerDown(
             localPos, event.kind, event.buttons, vp, state,
             isOnCanvas: _screenOnCanvas(localPos),
             pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
@@ -443,7 +451,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         case AppMode.view:
           break; // pan handled by ZoomPanHandler
         case AppMode.edit:
-          _edit.onPointerDown(
+          _edit?.onPointerDown(
             localPos, event.kind, event.buttons, vp, state,
             isOnCanvas: _screenOnCanvas(localPos),
             pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
@@ -462,7 +470,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     if (_activePointers.length == 2) {
       _hadMultiTouch = true;
       _stitch?.cancelActiveGestures();
-      _edit.cancelActiveGestures();
+      _edit?.cancelActiveGestures();
       final pts = _activePointers.values.toList();
       _zoomPan.beginPinch(pts[0], pts[1]);
     }
@@ -488,7 +496,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         case AppMode.view:
           break;
         case AppMode.edit:
-          _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+          _edit?.onPointerMove(localPos, event.kind, event.buttons, vp, state);
         case AppMode.stitch:
           _stitch?.onPointerMove(localPos, event.kind, vp, state);
       }
@@ -501,7 +509,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
       if (!_hadMultiTouch) {
         _hadMultiTouch = true;
         _stitch?.cancelActiveGestures();
-        _edit.cancelActiveGestures();
+        _edit?.cancelActiveGestures();
       }
       final pts = _activePointers.values.toList();
       _zoomPan.updatePinch(pts[0], pts[1]);
@@ -517,7 +525,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
           case AppMode.view:
             break;
           case AppMode.edit:
-            _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+            _edit?.onPointerMove(localPos, event.kind, event.buttons, vp, state);
           case AppMode.stitch:
             _stitch?.onPointerMove(localPos, event.kind, vp, state);
         }
@@ -525,8 +533,8 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     }
 
     // ── Kind-agnostic fallback (iPadOS Pencil unknown-kind events) ───────────
-    if (_edit.select?.isActive == true && state.editMode) {
-      _edit.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+    if (_edit?.select?.isActive == true && state.editMode) {
+      _edit?.onPointerMove(localPos, event.kind, event.buttons, vp, state);
     } else if (_stitch?.progress?.isActive == true && state.stitchMode) {
       _stitch!.onPointerMove(localPos, event.kind, vp, state);
     }
@@ -544,7 +552,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
       case AppMode.view:
         break;
       case AppMode.edit:
-        _edit.onPointerUp(
+        _edit?.onPointerUp(
           localPos, event.kind, vp, state,
           wasSinglePointer: wasSinglePointer,
           hadMultiTouch: _hadMultiTouch,
@@ -580,7 +588,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
       case AppMode.view:
         _view?.onPointerHover(localPos, event.kind, vp, state);
       case AppMode.edit:
-        _edit.onPointerHover(localPos, event.kind, vp, state);
+        _edit?.onPointerHover(localPos, event.kind, vp, state);
       case AppMode.stitch:
         _stitch?.onPointerHover(localPos, event.kind, vp, state);
     }
@@ -645,8 +653,8 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     // Resolve ghost stitches (paste preview or move drag) before passing to
     // the overlay painter. Ghost thread colors are read from state so the
     // painter receives pre-resolved (Stitch, Color) data.
-    final paste = _edit.paste;
-    final select = _edit.select;
+    final paste = _edit?.paste;
+    final select = _edit?.select;
     List<Stitch>? ghostStitches;
     if (state.drawingMode == DrawingMode.paste && state.clipboard != null && paste != null) {
       final origin = paste.pasteOrigin ??
@@ -674,7 +682,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
               case AppMode.view:
                 _view?.onHoverExit();
               case AppMode.edit:
-                _edit.onHoverExit();
+                _edit?.onHoverExit();
               case AppMode.stitch:
                 _stitch?.onHoverExit();
             }
@@ -786,7 +794,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
                       aidaColor: state.pattern.aidaColor,
                       patternThreads: state.pattern.threads,
                       backstitchStartPoint: state.backstitchStartPoint,
-                      backstitchCurrentPoint: _edit.draw?.backstitchHoverPoint,
+                      backstitchCurrentPoint: _edit?.draw?.backstitchHoverPoint,
                       isErasing: isErasing,
                       eraserSize: state.eraserSize,
                       fillEraseActive: state.fillEraseActive,
@@ -846,9 +854,9 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
       DrawingMode.colorPicker => SystemMouseCursors.none,
       DrawingMode.draw        => SystemMouseCursors.none,
       DrawingMode.select      => SystemMouseCursors.precise,
-      DrawingMode.paste       => _edit.paste?.ctrlHeld == true
+      DrawingMode.paste       => _edit?.paste?.ctrlHeld == true
           ? SystemMouseCursors.copy
-          : _edit.paste?.shiftHeld == true
+          : _edit?.paste?.shiftHeld == true
               ? SystemMouseCursors.move
               : SystemMouseCursors.cell,
     };

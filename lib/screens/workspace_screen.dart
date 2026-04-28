@@ -27,14 +27,12 @@ import '../services/thumbnail_cache.dart';
 import '../services/format_service.dart';
 import '../services/pdf_service.dart';
 import '../services/png_export_service.dart';
-import '../utils/edit_controller.dart';
-import '../utils/view_mode_controller.dart';
-import '../utils/shortcut_router.dart';
-import '../utils/stitch_controller.dart';
 import '../providers/recent_items_provider.dart';
 import '../utils/snackbars.dart';
+import '../widgets/edit_view.dart';
 import '../widgets/editor_shared_widgets.dart';
 import '../widgets/share_format_picker.dart';
+import '../widgets/stitch_view.dart';
 import 'drive_folder_picker_dialog.dart';
 import 'materials_list_screen.dart';
 import '../services/grid_detector.dart';
@@ -42,7 +40,6 @@ import '../services/grid_symbol_matcher.dart';
 import '../services/pdf_pattern_keeper_parser.dart';
 import '../services/pdf_scanner.dart';
 import 'pattern_scan_symbol_screen.dart';
-import '../widgets/editor_canvas_area.dart';
 import '../widgets/file_sidebar.dart';
 import '../widgets/right_sidebar.dart';
 import '../widgets/pdf_page_picker.dart';
@@ -75,9 +72,6 @@ class WorkspaceScreen extends ConsumerStatefulWidget {
 class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Timer? _autoSaveTimer;
   final _pdfPanelKey = GlobalKey<PdfViewerPanelState>();
-  late final EditController _editController;
-  late final ViewModeController _viewModeController;
-  late final StitchController _stitchController;
 
   // Phone-only: right sidebar starts collapsed; coordinates with folder sidebar.
   bool _rightSidebarCollapsed = true;
@@ -90,27 +84,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   @override
   void initState() {
     super.initState();
-    final n = ref.read(editorProvider.notifier);
-    _editController = EditController(
-      notifier: n,
-      getState: () => ref.read(editorProvider),
-      onShowShortcuts: () => showDialog(
-        context: context,
-        builder: (_) => const _ShortcutsDialog(),
-      ),
-      onPdfZoomIn: () => _pdfPanelKey.currentState?.zoomIn(),
-      onPdfZoomOut: () => _pdfPanelKey.currentState?.zoomOut(),
-    );
-    _viewModeController = ViewModeController(
-      getState: () => ref.read(editorProvider),
-    );
-    _stitchController = StitchController(
-      notifier: n,
-      getState: () => ref.read(editorProvider),
-    );
-    ShortcutRouter.instance.push(_editController);
-    ShortcutRouter.instance.push(_viewModeController);
-    ShortcutRouter.instance.push(_stitchController);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ws = ref.read(workspaceProvider).workspace;
       if (ws is LocalFolder) {
@@ -323,9 +296,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   @override
   void dispose() {
-    ShortcutRouter.instance.pop(_stitchController);
-    ShortcutRouter.instance.pop(_viewModeController);
-    ShortcutRouter.instance.pop(_editController);
     // If a pending auto-save timer was cancelled without firing, flush it now.
     if (_autoSaveTimer != null) {
       _autoSaveTimer!.cancel();
@@ -744,11 +714,17 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, EditorState editorState) {
+    if (editorState.stitchMode) {
+      return const StitchView();
+    }
     if (editorState.isNativeFormat) {
-      return EditorCanvasArea(
-        editController: _editController,
-        viewModeController: _viewModeController,
-        stitchController: _stitchController,
+      return EditView(
+        onShowShortcuts: () => showDialog(
+          context: context,
+          builder: (_) => const _ShortcutsDialog(),
+        ),
+        onPdfZoomIn: () => _pdfPanelKey.currentState?.zoomIn(),
+        onPdfZoomOut: () => _pdfPanelKey.currentState?.zoomOut(),
       );
     }
     final filePath = editorState.filePath!;
@@ -756,10 +732,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final withoutExt = lastDot > 0 ? filePath.substring(0, lastDot) : filePath;
     final nativePath = '$withoutExt.stitches';
     final nativeExists = File(nativePath).existsSync();
-    return EditorCanvasArea(
-      editController: _editController,
-      viewModeController: _viewModeController,
-      stitchController: _stitchController,
+    return EditView(
+      onShowShortcuts: () => showDialog(
+        context: context,
+        builder: (_) => const _ShortcutsDialog(),
+      ),
+      onPdfZoomIn: () => _pdfPanelKey.currentState?.zoomIn(),
+      onPdfZoomOut: () => _pdfPanelKey.currentState?.zoomOut(),
       importFilePath: filePath,
       onConvert: nativeExists ? null : () => _convertToNative(context),
       onOpenNative: nativeExists ? () => _openNativeFile(context, nativePath) : null,
