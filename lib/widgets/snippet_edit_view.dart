@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/editor/editor_provider.dart';
-import '../utils/edit_controller.dart';
+import '../utils/snippet_edit_controller.dart';
 import '../utils/shortcut_router.dart';
 import 'aida_widget.dart';
 import 'editor_toolbar.dart';
@@ -26,13 +26,13 @@ class SnippetEditView extends ConsumerStatefulWidget {
 }
 
 class _SnippetEditViewState extends ConsumerState<SnippetEditView> {
-  late final EditController _editController;
+  late final SnippetEditController _editController;
 
   @override
   void initState() {
     super.initState();
     final n = ref.read(editorProvider.notifier);
-    _editController = EditController(
+    _editController = SnippetEditController(
       notifier: n,
       getState: () => ref.read(editorProvider),
       onFlipCanvasH: () => ref.read(editorProvider.notifier).flipCanvasH(),

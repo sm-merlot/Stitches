@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HardwareKeyboard, KeyEvent;
 import '../utils/canvas_callbacks.dart';
-import '../utils/edit_controller.dart';
+import '../utils/canvas_edit_controller.dart';
 import '../utils/shortcut_router.dart';
 import '../utils/stitch_controller.dart';
 import '../utils/view_mode_controller.dart';
@@ -41,7 +41,7 @@ import 'zoom_pan_handler.dart';
 class AidaWidget extends ConsumerStatefulWidget {
   /// Controller for edit / view mode. Owns [DrawHandler], [SelectHandler],
   /// [PasteHandler], and [HoverHandler]. Null in [StitchView].
-  final EditController? editController;
+  final CanvasEditController? editController;
 
   /// Controller for read-only view mode. Owns [HoverHandler] only.
   /// Null in [StitchView] and [SnippetEditView].
@@ -74,7 +74,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   Offset get _panOffset => _zoomPan.panOffset;
 
   // ── Active controller accessors ───────────────────────────────────────────
-  EditController? get _edit => widget.editController;
+  CanvasEditController? get _edit => widget.editController;
   ViewModeController? get _view => widget.viewModeController;
   StitchController? get _stitch => widget.stitchController;
 
