@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' show Color;
 import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
+import '../models/stitch_geometry.dart';
 import '../models/thread.dart';
 import 'sprite_importer.dart';
 
@@ -139,6 +140,144 @@ class StitchCompositor {
   /// Compute the composite for [pattern] and return a [CompositeLayer].
   static CompositeLayer computeLayer(CrossStitchPattern pattern) =>
       _buildLayer(pattern);
+
+  /// Incrementally patches [old] by recomputing only the cell at ([x], [y]).
+  ///
+  /// Scans all visible-layer stitches to find contributions at ([x], [y]) only,
+  /// then copies [old.fullStitches] and updates just that key. All other cells
+  /// are carried over unchanged — O(total_stitches) for the scan but avoids the
+  /// O(total_cells) map-rebuild of [computeLayer].
+  ///
+  /// Pass [backstitchesChanged] = true when a [BackStitch] touching cell ([x],[y])
+  /// was added or removed; triggers a full backstitch list rescan. For ordinary
+  /// cross/half/quarter stitch draws this is always false.
+  ///
+  /// Stitch-count equivalents ([CompositeLayer.crossStitchEquiv],
+  /// [CompositeLayer.backStitchEquiv]) are carried from [old] — they will be
+  /// corrected by the next debounced [refreshCompositeCache] call (80 ms).
+  static CompositeLayer patchLayer(
+    CompositeLayer old,
+    CrossStitchPattern newPattern,
+    int x,
+    int y, {
+    bool backstitchesChanged = false,
+  }) {
+    final key = '$x,$y';
+    final threadMap = <String, Thread>{
+      for (final t in newPattern.threads) t.dmcCode: t,
+    };
+
+    // Collect full-stitch stack and other-stitch contributions at (x, y).
+    final cellStack = <({
+      FullStitch stitch,
+      Color color,
+      double opacity,
+      LayerBlendMode blendMode,
+    })>[];
+    final newOtherAtCell = <CompositeStitch>[];
+
+    for (final layer in newPattern.layers) {
+      if (!layer.visible) continue;
+      for (final s in layer.stitches) {
+        if (s is FullStitch && s.x == x && s.y == y) {
+          final t = threadMap[s.threadId];
+          if (t == null) continue;
+          cellStack.add((
+            stitch: s,
+            color: t.color,
+            opacity: layer.opacity,
+            blendMode: layer.blendMode,
+          ));
+        } else if (s is! BackStitch) {
+          final coords = s.cellCoords;
+          if (coords != null && coords.$1 == x && coords.$2 == y) {
+            final t = threadMap[s.threadId];
+            if (t != null) {
+              newOtherAtCell.add(CompositeStitch(
+                stitch: s,
+                blendedColor: t.color,
+                resolvedThread: t,
+                isBlended: false,
+              ));
+            }
+          }
+        }
+      }
+    }
+
+    // Patch fullStitches: copy the map, update only key.
+    final newFullStitches = Map<String, CompositeStitch>.from(old.fullStitches);
+    if (cellStack.isEmpty) {
+      newFullStitches.remove(key);
+    } else {
+      final top = cellStack.last;
+      final symbolStitch =
+          (top.blendMode == LayerBlendMode.normal && top.opacity >= 0.99)
+              ? top.stitch
+              : cellStack.first.stitch;
+      if (cellStack.length == 1) {
+        final t = threadMap[cellStack.first.stitch.threadId]!;
+        newFullStitches[key] = CompositeStitch(
+          stitch: symbolStitch,
+          blendedColor: t.color,
+          resolvedThread: t,
+          isBlended: false,
+        );
+      } else {
+        // Multi-layer blend — mirrors _buildLayer logic exactly.
+        var blended = cellStack.first.color;
+        for (int i = 1; i < cellStack.length; i++) {
+          blended = cellStack[i].blendMode.apply(
+              blended, cellStack[i].color, cellStack[i].opacity);
+        }
+        final r = (blended.r * 255).round();
+        final g = (blended.g * 255).round();
+        final b = (blended.b * 255).round();
+        final dmc = SpriteImporter.matchPixel(r, g, b, 255);
+        final resolvedThread = dmc == null
+            ? threadMap[cellStack.first.stitch.threadId]
+            : (threadMap[dmc.code] ??
+                Thread(dmcCode: dmc.code, color: dmc.color, name: dmc.name));
+        if (resolvedThread == null) {
+          newFullStitches.remove(key);
+        } else {
+          newFullStitches[key] = CompositeStitch(
+            stitch: symbolStitch,
+            blendedColor: blended,
+            resolvedThread: resolvedThread,
+            isBlended: true,
+          );
+        }
+      }
+    }
+
+    // Patch otherStitches: drop old entries at (x, y), append new ones.
+    final newOtherStitches = <CompositeStitch>[
+      ...old.otherStitches.where((cs) {
+        final coords = cs.stitch.cellCoords;
+        return coords == null || coords.$1 != x || coords.$2 != y;
+      }),
+      ...newOtherAtCell,
+    ];
+
+    // Rebuild backstitches only when one was added or removed.
+    final newBackstitches = backstitchesChanged
+        ? <BackStitch>[
+            for (final layer in newPattern.layers)
+              if (layer.visible)
+                for (final s in layer.stitches)
+                  if (s is BackStitch) s,
+          ]
+        : old.backstitches;
+
+    return CompositeLayer(
+      fullStitches: newFullStitches,
+      otherStitches: newOtherStitches,
+      backstitches: newBackstitches,
+      crossStitchEquiv: old.crossStitchEquiv,
+      backStitchEquiv: old.backStitchEquiv,
+    );
+  }
 
   // ─── Core build logic ─────────────────────────────────────────────────────
 

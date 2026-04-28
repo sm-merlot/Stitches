@@ -384,15 +384,30 @@ mixin DrawingMixin on Notifier<EditorState> {
     final rawPattern = _patternWithActiveLayerStitches(pattern, newStitches);
     // Prune threads whose last stitch was painted over by a different colour.
     final newPattern = _pruneUnusedThreads(rawPattern);
-    // Compute a lightweight composite immediately so compositeResult is never
-    // null — RenderCache can always use it, no raw-layer fallback needed.
-    // Symbol registry management is still debounced (cheap, imperceptible delay).
-    final quickComposite = StitchCompositor.computeLayer(newPattern);
+
+    // Incremental composite: patch only the affected cell when possible.
+    // Falls back to computeLayer for backstitches (no cell coords) or when
+    // no prior composite exists.
+    final coords = stitch.cellCoords;
+    final oldComposite = state.compositeLayer;
+    final quickComposite = (oldComposite != null && coords != null)
+        ? StitchCompositor.patchLayer(
+            oldComposite, newPattern, coords.$1, coords.$2)
+        : StitchCompositor.computeLayer(newPattern);
+
+    // Accumulate dirty keys across successive draw events within the same frame
+    // so a single updateCells() call covers all pointer-move events per render.
+    final prevDirty = state.dirtyCellKeys;
+    final mergedDirty = coords != null
+        ? <String>{...?prevDirty, '${coords.$1},${coords.$2}'}
+        : null; // backstitch → force full rebuild next sync
+
     state = state.copyWith(
       pattern: newPattern,
       snippetPalettes: snippetPalettes,
       undoStack: _buildUndoStack(),
       compositeLayer: quickComposite,
+      dirtyCellKeys: mergedDirty,
       isDirty: true,
       redoStack: [],
     );
@@ -407,13 +422,26 @@ mixin DrawingMixin on Notifier<EditorState> {
     bool hit(Stitch s) => _stitchAtCell(s, x, y) || _backstitchInCell(s, x, y);
     if (!state.activeLayer.stitches.any(hit)) return;
 
+    final removedAnyBackstitch =
+        state.activeLayer.stitches.any((s) => hit(s) && s is BackStitch);
     final newStitches = state.activeLayer.stitches.where((s) => !hit(s)).toList();
     final newPattern = _pruneUnusedThreads(
         _patternWithActiveLayerStitches(state.pattern, newStitches));
+
+    final oldComposite = state.compositeLayer;
+    final quickComposite = oldComposite != null
+        ? StitchCompositor.patchLayer(oldComposite, newPattern, x, y,
+            backstitchesChanged: removedAnyBackstitch)
+        : StitchCompositor.computeLayer(newPattern);
+
+    final prevDirty = state.dirtyCellKeys;
+    final mergedDirty = <String>{...?prevDirty, '$x,$y'};
+
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeLayer: StitchCompositor.computeLayer(newPattern),
+      compositeLayer: quickComposite,
+      dirtyCellKeys: mergedDirty,
       isDirty: true,
       redoStack: [],
     );
@@ -444,10 +472,22 @@ mixin DrawingMixin on Notifier<EditorState> {
     final newStitches = state.activeLayer.stitches.where((s) => !hit(s)).toList();
     final newPattern = _pruneUnusedThreads(
         _patternWithActiveLayerStitches(state.pattern, newStitches));
+
+    // Box erase may affect multiple cells — use computeLayer for correctness,
+    // but pass dirtyCellKeys so _syncRenderCache calls updateCells() (O(box))
+    // instead of rebuild() (O(total_stitches)).
+    final dirtyKeys = <String>{
+      for (var xx = x0; xx <= x1; xx++)
+        for (var yy = y0; yy <= y1; yy++) '$xx,$yy',
+    };
+    final prevDirty = state.dirtyCellKeys;
+    final mergedDirty = <String>{...?prevDirty, ...dirtyKeys};
+
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
       compositeLayer: StitchCompositor.computeLayer(newPattern),
+      dirtyCellKeys: mergedDirty,
       isDirty: true,
       redoStack: [],
     );

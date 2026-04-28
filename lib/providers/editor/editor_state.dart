@@ -80,6 +80,20 @@ class EditorState {
   /// Cleared when leaving stitch mode or starting a new drag.
   final Rect? progressRegion;
 
+  /// Cell keys (`'x,y'`) whose [RenderCache] entries need incremental update.
+  ///
+  /// Non-null when [compositeLayer] was patched incrementally (e.g. a single
+  /// stitch drawn or erased). [AidaWidget._syncRenderCache] calls
+  /// [RenderCache.updateCells] instead of [RenderCache.rebuild] when this is
+  /// set — O(changed cells) instead of O(total stitches).
+  ///
+  /// Null when the composite was fully rebuilt; forces a full cache rebuild.
+  /// Accumulated across successive draw events within the same frame so that
+  /// multiple pointer-move events are batched into one [updateCells] call.
+  /// Always null in [copyWith] unless explicitly passed — any operation that
+  /// replaces the composite without knowing dirty cells must clear it.
+  final Set<String>? dirtyCellKeys;
+
   /// True when the current file is in the native .stitches format (or unsaved).
   bool get isNativeFormat {
     final path = filePath;
@@ -134,6 +148,7 @@ class EditorState {
     this.pageLayout,
     this.pendingFitPage,
     this.progressRegion,
+    this.dirtyCellKeys,
   })  : _undoStack = undoStack,
         _redoStack = redoStack,
         _progressUndoStack = progressUndoStack,
@@ -289,6 +304,7 @@ class EditorState {
     Object? pageLayout = _sentinel,
     Object? pendingFitPage = _sentinel,
     Object? progressRegion = _sentinel,
+    Set<String>? dirtyCellKeys,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
@@ -353,6 +369,7 @@ class EditorState {
       pageLayout: pageLayout == _sentinel ? this.pageLayout : pageLayout as PageLayout?,
       pendingFitPage: pendingFitPage == _sentinel ? this.pendingFitPage : pendingFitPage as int?,
       progressRegion: progressRegion == _sentinel ? this.progressRegion : progressRegion as Rect?,
+      dirtyCellKeys: dirtyCellKeys,
     );
   }
 

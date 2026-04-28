@@ -311,6 +311,12 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
 
   /// Rebuilds the render cache only when stitch data, composite, or view config
   /// has changed since the last call. Pan/zoom changes are ignored here.
+  ///
+  /// When [EditorState.dirtyCellKeys] is non-null and only the composite
+  /// changed (no view config change), calls [RenderCache.updateCells] —
+  /// O(dirty cells) instead of O(total stitches) for the common single-stitch
+  /// draw case. Multiple pointer events in one frame are already accumulated
+  /// into [dirtyCellKeys] by the drawing notifier.
   void _syncRenderCache(EditorState state) {
     final config = _buildViewConfig(state);
     final patternChanged = !identical(_lastCachedPattern, state.pattern);
@@ -322,10 +328,16 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     final layer = state.compositeLayer;
     if (layer == null) {
       _renderCache.clear();
-    } else if (configChanged && !patternChanged && !compositeChanged) {
+    } else if (configChanged && !compositeChanged) {
       // View config only (focus/mode/palette changed) — recolour without
       // recomputing geometry.
       _renderCache.rebuildViewConfig(layer, config, _cellSize);
+    } else if (compositeChanged && !configChanged &&
+        state.dirtyCellKeys != null) {
+      // Incremental: composite was patched; only recompute dirty cells.
+      // Skipped when config also changed (e.g. focus thread changed while
+      // drawing) — full rebuild is correct there.
+      _renderCache.updateCells(state.dirtyCellKeys!, layer, config, _cellSize);
     } else {
       _renderCache.rebuild(layer, config, _cellSize);
     }
