@@ -1,0 +1,37 @@
+lib/providers/editor/editor_provider_drawing.dart
+  82cd65c740b6fe59 499-663
+test/utils/command_test.dart
+  82cd65c740b6fe59 1-335
+lib/providers/editor/editor_state.dart
+  82cd65c740b6fe59 67-73,154-155,166-167,312-313,379-380
+lib/utils/command.dart
+  82cd65c740b6fe59 1-3,9-10,20-106
+lib/utils/snippet_edit_controller.dart
+  82cd65c740b6fe59 3-4,13,74-104,115-142,155-161,166
+lib/utils/edit_controller.dart
+  82cd65c740b6fe59 3-4,13,95-125,138-165,178-184,190
+lib/providers/editor/editor_provider.dart
+  82cd65c740b6fe59 423-470,472-479,502-509
+.changeset/command-based-undo.md
+  82cd65c740b6fe59 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "3ca47b98b1177f8254f62dc0a783f1a72552ca67",
+  "prompts": {
+    "82cd65c740b6fe59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10904026-e426-4552-8a39-2aa00f3bef5a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 858,
+      "total_deletions": 46,
+      "accepted_lines": 824,
+      "overriden_lines": 0
+    }
+  }
+}
