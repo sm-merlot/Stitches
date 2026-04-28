@@ -1,5 +1,7 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind, kMiddleMouseButton;
 import 'package:flutter/services.dart' hide UndoManager;
+import '../models/stitch.dart';
+import '../models/stitch_geometry.dart';
 import '../providers/editor/editor_provider.dart';
 import '../widgets/canvas_viewport.dart';
 import '../widgets/draw_handler.dart';
@@ -8,6 +10,7 @@ import '../widgets/paste_handler.dart';
 import '../widgets/select_handler.dart';
 import 'canvas_callbacks.dart';
 import 'canvas_edit_controller.dart';
+import 'command.dart';
 import 'shortcut_router.dart';
 import 'undo_manager.dart';
 
@@ -68,6 +71,37 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
 
+  // ── Cell-hit helpers ───────────────────────────────────────────────────────
+
+  static bool _hitCell(Stitch s, int x, int y) {
+    final coords = s.cellCoords;
+    if (coords != null) return coords.$1 == x && coords.$2 == y;
+    if (s is BackStitch) {
+      bool inside(double gx, double gy) =>
+          gx >= x && gx <= x + 1 && gy >= y && gy <= y + 1;
+      return inside(s.x1, s.y1) || inside(s.x2, s.y2);
+    }
+    return false;
+  }
+
+  static bool _hitBox(Stitch s, int cx, int cy, int size) {
+    final half = (size - 1) ~/ 2;
+    final x0 = cx - half;
+    final x1 = cx + (size - 1 - half);
+    final y0 = cy - half;
+    final y1 = cy + (size - 1 - half);
+    for (var x = x0; x <= x1; x++) {
+      for (var y = y0; y <= y1; y++) {
+        if (_hitCell(s, x, y)) return true;
+      }
+    }
+    return false;
+  }
+
+  // ── Delegate sync ──────────────────────────────────────────────────────────
+
+  void _syncUndoState() => _notifier.updateControllerUndoState();
+
   @override
   void attachCanvas(CanvasCallbacks cb) {
     final n = _notifier;
@@ -78,9 +112,34 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
       scheduleRebuild: cb.scheduleRebuild,
     );
     _draw = DrawHandler(
-      onAddStitch: n.addStitch,
-      onRemoveAt: n.removeStitchesAt,
-      onRemoveBox: n.removeStitchesInBox,
+      onAddStitch: (stitch) {
+        final state = _getState();
+        final overwritten =
+            state.activeLayer.stitches.where((s) => s == stitch).toList();
+        undoManager.execute(
+            AddStitchCommand(notifier: n, stitch: stitch, overwritten: overwritten));
+        _syncUndoState();
+      },
+      onRemoveAt: (x, y) {
+        final state = _getState();
+        final removed = state.activeLayer.stitches
+            .where((s) => _hitCell(s, x, y))
+            .toList();
+        if (removed.isEmpty) return;
+        undoManager.execute(
+            RemoveStitchesAtCommand(notifier: n, x: x, y: y, removed: removed));
+        _syncUndoState();
+      },
+      onRemoveBox: (cx, cy, size) {
+        final state = _getState();
+        final removed = state.activeLayer.stitches
+            .where((s) => _hitBox(s, cx, cy, size))
+            .toList();
+        if (removed.isEmpty) return;
+        undoManager.execute(RemoveStitchesInBoxCommand(
+            notifier: n, cx: cx, cy: cy, size: size, removed: removed));
+        _syncUndoState();
+      },
       onFloodFill: n.floodFill,
       onPickColor: n.pickColorAtCell,
       onSetBackstitchStart: n.setBackstitchStart,
@@ -93,10 +152,18 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
       onWarning: cb.onWarning,
       scheduleRebuild: cb.scheduleRebuild,
     );
+    // Register as undo delegate so notifier.undo() routes here first.
+    n.registerUndoDelegate(
+      canUndo: () => undoManager.canUndo,
+      canRedo: () => undoManager.canRedo,
+      undo: undoManager.undo,
+      redo: undoManager.redo,
+    );
   }
 
   @override
   void detachCanvas() {
+    _notifier.unregisterUndoDelegate();
     _hover = null;
     _draw = null;
     _select = null;

@@ -64,6 +64,13 @@ class EditorState {
   /// setting for new patterns. Toggled per-file via the overflow menu.
   final bool compressOnSave;
 
+  /// Whether the active mode controller's [UndoManager] has undo entries.
+  /// Set by [EditorNotifier.updateControllerUndoState].
+  final bool controllerCanUndo;
+
+  /// Whether the active mode controller's [UndoManager] has redo entries.
+  final bool controllerCanRedo;
+
   /// Current page index (0-based) in page mode. Session-only, not persisted.
   final int currentPage;
 
@@ -144,6 +151,8 @@ class EditorState {
     this.canvasSelectionMode = false,
     this.pendingCanvasWarning,
     this.compressOnSave = true,
+    this.controllerCanUndo = false,
+    this.controllerCanRedo = false,
     this.currentPage = 0,
     this.pageLayout,
     this.pendingFitPage,
@@ -154,8 +163,8 @@ class EditorState {
         _progressUndoStack = progressUndoStack,
         _progressRedoStack = progressRedoStack;
 
-  bool get canUndo => _undoStack.isNotEmpty;
-  bool get canRedo => _redoStack.isNotEmpty;
+  bool get canUndo => _undoStack.isNotEmpty || controllerCanUndo;
+  bool get canRedo => _redoStack.isNotEmpty || controllerCanRedo;
   bool get canUndoProgress => _progressUndoStack.isNotEmpty;
   bool get canRedoProgress => _progressRedoStack.isNotEmpty;
 
@@ -300,6 +309,8 @@ class EditorState {
     bool? canvasSelectionMode,
     Object? pendingCanvasWarning = _sentinel,
     bool? compressOnSave,
+    bool? controllerCanUndo,
+    bool? controllerCanRedo,
     int? currentPage,
     Object? pageLayout = _sentinel,
     Object? pendingFitPage = _sentinel,
@@ -365,6 +376,8 @@ class EditorState {
           ? this.pendingCanvasWarning
           : pendingCanvasWarning as String?,
       compressOnSave: compressOnSave ?? this.compressOnSave,
+      controllerCanUndo: controllerCanUndo ?? this.controllerCanUndo,
+      controllerCanRedo: controllerCanRedo ?? this.controllerCanRedo,
       currentPage: currentPage ?? this.currentPage,
       pageLayout: pageLayout == _sentinel ? this.pageLayout : pageLayout as PageLayout?,
       pendingFitPage: pendingFitPage == _sentinel ? this.pendingFitPage : pendingFitPage as int?,
