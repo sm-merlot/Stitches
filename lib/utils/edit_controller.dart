@@ -76,9 +76,13 @@ class EditController implements CanvasEditController, ShortcutHandler {
   PasteHandler? _paste;
 
   /// Read by [AidaWidget] overlay painter.
+  @override
   HoverHandler? get hover => _hover;
+  @override
   DrawHandler? get draw => _draw;
+  @override
   SelectHandler? get select => _select;
+  @override
   PasteHandler? get paste => _paste;
 
   // ── Touch double-tap undo tracking ─────────────────────────────────────────
@@ -87,6 +91,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
   /// Wire up pointer handlers with view-level callbacks.
   /// Called by [AidaWidget.initState] after the widget is mounted.
+  @override
   void attachCanvas(CanvasCallbacks cb) {
     final n = _notifier;
     _hover = HoverHandler(scheduleRebuild: cb.scheduleRebuild);
@@ -114,6 +119,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
   }
 
   /// Release pointer handlers. Called by [AidaWidget.dispose].
+  @override
   void detachCanvas() {
     _hover = null;
     _draw = null;
@@ -128,11 +134,13 @@ class EditController implements CanvasEditController, ShortcutHandler {
   /// Update paste/modifier state. Called unconditionally on each key event
   /// from [AidaWidget]'s [ShortcutHandler.handle] (returns false — modifier
   /// tracking only, not a consumed shortcut).
+  @override
   void updateModifiers({required bool ctrl, required bool shift}) {
     _paste?.updateModifiers(ctrl: ctrl, shift: shift);
   }
 
   /// Apple Pencil secondary-button (double-tap) in edit/paste mode.
+  @override
   void onPencilDoubleTap(EditorState state) {
     if (state.drawingMode == DrawingMode.paste) {
       _paste?.commit(state.pattern, state.clipboard);
@@ -141,6 +149,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     }
   }
 
+  @override
   void onPointerDown(
     Offset localPos,
     PointerDeviceKind kind,
@@ -208,6 +217,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     }
   }
 
+  @override
   void onPointerMove(
     Offset localPos,
     PointerDeviceKind kind,
@@ -259,6 +269,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     }
   }
 
+  @override
   void onPointerUp(
     Offset localPos,
     PointerDeviceKind kind,
@@ -315,6 +326,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     }
   }
 
+  @override
   void onPointerHover(
     Offset localPos,
     PointerDeviceKind kind,
@@ -337,15 +349,19 @@ class EditController implements CanvasEditController, ShortcutHandler {
     }
   }
 
+  @override
   void onStylusAdded(Offset localPos, CanvasViewport vp, int patW, int patH) {
     _hover?.onStylusAdded(localPos, vp, patW, patH);
   }
 
+  @override
   void onStylusRemoved() => _hover?.onStylusRemoved();
 
+  @override
   void onHoverExit() => _hover?.onExit();
 
   /// Cancel any active select/paste gestures (e.g. when multi-touch starts).
+  @override
   void cancelActiveGestures() {
     _select?.cancel();
   }

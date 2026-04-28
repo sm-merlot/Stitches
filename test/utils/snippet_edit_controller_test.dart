@@ -1,6 +1,5 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/utils/edit_controller.dart';
