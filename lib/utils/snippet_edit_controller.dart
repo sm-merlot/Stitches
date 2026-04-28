@@ -11,28 +11,22 @@ import 'canvas_edit_controller.dart';
 import 'shortcut_router.dart';
 import 'undo_manager.dart';
 
-/// Controller for edit (and view) mode.
+/// Controller for snippet editing.
 ///
-/// Owns the keyboard shortcut handler (via [ShortcutHandler]) and the
-/// canvas pointer-event handlers ([DrawHandler], [SelectHandler],
-/// [PasteHandler], [HoverHandler]).
+/// Structurally identical to [EditController] but scoped to a snippet canvas:
+/// - No save, PDF zoom, or shortcuts-dialog callbacks (not applicable in snippet editor).
+/// - Canvas-transform callbacks (flip/rotate) are snippet-specific.
+/// - Stitch mode is unavailable; [handle] always processes shortcuts.
 ///
 /// **Lifecycle:**
-/// - Push to [ShortcutRouter] in the owning screen's `initState`.
-/// - Call [attachCanvas] when [AidaWidget] mounts so pointer handlers
-///   receive the view-level callbacks they need.
+/// - Push to [ShortcutRouter] in [SnippetEditView.initState].
+/// - Call [attachCanvas] when [AidaWidget] mounts.
 /// - Call [detachCanvas] in [AidaWidget.dispose].
-/// - Pop from [ShortcutRouter] in the owning screen's `dispose`.
-///
-/// Only fires keyboard shortcuts when [EditorState.stitchMode] is false.
-class EditController implements CanvasEditController, ShortcutHandler {
-  EditController({
+/// - Pop from [ShortcutRouter] in [SnippetEditView.dispose].
+class SnippetEditController implements CanvasEditController, ShortcutHandler {
+  SnippetEditController({
     required EditorNotifier notifier,
     required EditorState Function() getState,
-    this.onSave,
-    this.onShowShortcuts,
-    this.onPdfZoomIn,
-    this.onPdfZoomOut,
     this.onFlipCanvasH,
     this.onFlipCanvasV,
     this.onRotateCanvasCW,
@@ -42,20 +36,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
   final EditorNotifier _notifier;
   final EditorState Function() _getState;
 
-  /// Called for Cmd/Ctrl+S.  Omit in screens that use auto-save.
-  final VoidCallback? onSave;
-
-  /// Called for Shift+? to show the shortcuts reference dialog.
-  final VoidCallback? onShowShortcuts;
-
-  /// PDF panel zoom-in (Cmd/Ctrl+=).  Null if no PDF panel is active.
-  final VoidCallback? onPdfZoomIn;
-
-  /// PDF panel zoom-out (Cmd/Ctrl+-).  Null if no PDF panel is active.
-  final VoidCallback? onPdfZoomOut;
-
   /// Canvas-level horizontal flip (Ctrl+Shift+H with no selection/paste).
-  /// Provided by the snippet editor; null in the main editor.
   final VoidCallback? onFlipCanvasH;
 
   /// Canvas-level vertical flip.
@@ -64,18 +45,16 @@ class EditController implements CanvasEditController, ShortcutHandler {
   /// Canvas-level 90° clockwise rotation.
   final VoidCallback? onRotateCanvasCW;
 
-  /// Per-context undo stack.
+  /// Per-snippet undo stack (isolated from parent pattern undo stack).
   final UndoManager undoManager = UndoManager();
 
   // ── Canvas pointer handlers ────────────────────────────────────────────────
-  // Null until [attachCanvas] is called.
 
   HoverHandler? _hover;
   DrawHandler? _draw;
   SelectHandler? _select;
   PasteHandler? _paste;
 
-  /// Read by [AidaWidget] overlay painter.
   HoverHandler? get hover => _hover;
   DrawHandler? get draw => _draw;
   SelectHandler? get select => _select;
@@ -85,8 +64,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
 
-  /// Wire up pointer handlers with view-level callbacks.
-  /// Called by [AidaWidget.initState] after the widget is mounted.
   void attachCanvas(CanvasCallbacks cb) {
     final n = _notifier;
     _hover = HoverHandler(scheduleRebuild: cb.scheduleRebuild);
@@ -113,7 +90,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
     );
   }
 
-  /// Release pointer handlers. Called by [AidaWidget.dispose].
   void detachCanvas() {
     _hover = null;
     _draw = null;
@@ -125,14 +101,10 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
   // ── Pointer event dispatch ─────────────────────────────────────────────────
 
-  /// Update paste/modifier state. Called unconditionally on each key event
-  /// from [AidaWidget]'s [ShortcutHandler.handle] (returns false — modifier
-  /// tracking only, not a consumed shortcut).
   void updateModifiers({required bool ctrl, required bool shift}) {
     _paste?.updateModifiers(ctrl: ctrl, shift: shift);
   }
 
-  /// Apple Pencil secondary-button (double-tap) in edit/paste mode.
   void onPencilDoubleTap(EditorState state) {
     if (state.drawingMode == DrawingMode.paste) {
       _paste?.commit(state.pattern, state.clipboard);
@@ -287,7 +259,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
       return;
     }
 
-    // Double-tap (touch, edit mode only) → undo.
+    // Double-tap (touch) → undo.
     if (kind == PointerDeviceKind.touch &&
         wasSinglePointer &&
         !hadMultiTouch) {
@@ -345,7 +317,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
   void onHoverExit() => _hover?.onExit();
 
-  /// Cancel any active select/paste gestures (e.g. when multi-touch starts).
   void cancelActiveGestures() {
     _select?.cancel();
   }
@@ -355,9 +326,8 @@ class EditController implements CanvasEditController, ShortcutHandler {
   @override
   bool handle(KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
-    final state = _getState();
-    if (state.stitchMode) return false;
 
+    final state = _getState();
     final keys = HardwareKeyboard.instance.logicalKeysPressed;
     final meta = keys.contains(LogicalKeyboardKey.metaLeft) ||
         keys.contains(LogicalKeyboardKey.metaRight);
@@ -367,20 +337,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
         keys.contains(LogicalKeyboardKey.shiftRight);
     final key = event.logicalKey;
 
-    // Update paste modifier state on every key event.
     updateModifiers(ctrl: ctrl || meta, shift: shift);
-
-    // ── PDF zoom ────────────────────────────────────────────────────────────
-    if ((meta || ctrl) && onPdfZoomIn != null) {
-      if (key == LogicalKeyboardKey.equal) {
-        onPdfZoomIn!();
-        return true;
-      }
-      if (key == LogicalKeyboardKey.minus && onPdfZoomOut != null) {
-        onPdfZoomOut!();
-        return true;
-      }
-    }
 
     // ── Modifier shortcuts ──────────────────────────────────────────────────
     if (meta || ctrl) {
@@ -394,10 +351,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
       }
       if (key == LogicalKeyboardKey.keyY) {
         _notifier.redo();
-        return true;
-      }
-      if (onSave != null && key == LogicalKeyboardKey.keyS) {
-        onSave!();
         return true;
       }
       if (key == LogicalKeyboardKey.keyA) {
@@ -501,12 +454,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
       case LogicalKeyboardKey.delete:
       case LogicalKeyboardKey.backspace:
         _notifier.deleteSelection();
-      case LogicalKeyboardKey.slash:
-        if (shift && onShowShortcuts != null) {
-          onShowShortcuts!();
-        } else {
-          return false;
-        }
       default:
         return false;
     }
