@@ -54,8 +54,6 @@ enum DrawingMode { draw, erase, pan, colorPicker, select, paste }
 
 enum SnippetResizeMode { clip, scale, expand }
 
-enum SnippetTransform { flipH, flipV, rotateCW }
-
 /// The three top-level application modes.
 ///
 /// - [view] — read-only overview; the default when opening a file.
@@ -652,6 +650,22 @@ class EditorNotifier extends Notifier<EditorState>
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch newStitch) {
     final filtered = existing.where((s) => s != newStitch).toList();
     return [...filtered, newStitch];
+  }
+
+  /// Removes [threadId] from [pattern.threads] only if no stitch in any layer
+  /// still references it.  Short-circuits on first hit — O(1) when the thread
+  /// is still in use (the common case).
+  @override
+  CrossStitchPattern _pruneSpecificThread(
+      CrossStitchPattern pattern, String threadId) {
+    if (!pattern.threads.containsKey(threadId)) return pattern;
+    for (final layer in pattern.layers) {
+      for (final s in layer.stitches) {
+        if (s.threadId == threadId) return pattern; // still used
+      }
+    }
+    final pruned = Map<String, Thread>.from(pattern.threads)..remove(threadId);
+    return pattern.copyWith(threads: pruned);
   }
 
   @override
