@@ -94,6 +94,13 @@ class PageLayout {
     return excluded == null || !excluded.contains(_encodeCell(col, row));
   }
 
+  /// Like [cellOnPage] but skips the corner-connectivity exclusion pass.
+  ///
+  /// Used for progress marking so that edge cells which pass the raw fuzzy
+  /// boundary check (and appear on-page visually) can always be marked.
+  bool rawCellOnPage(int col, int row, int pageCol, int pageRow) =>
+      _boundaryCheck(col, row, pageCol, pageRow);
+
   bool _boundaryCheck(int col, int row, int pageCol, int pageRow) {
     if (col < 0 || col >= patternWidth || row < 0 || row >= patternHeight) {
       return false;

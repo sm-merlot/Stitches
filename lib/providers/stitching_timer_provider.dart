@@ -98,17 +98,20 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     });
   }
 
-  /// Stop the timer and persist elapsed minutes to today's progress log.
+  /// Stop the timer and persist elapsed minutes to the progress log.
   ///
-  /// Returns the number of whole minutes recorded (may be 0 for very short
-  /// sessions — those seconds are silently discarded).
+  /// If the session started on a different calendar day, minutes are split
+  /// at midnight and attributed to the correct dates.
+  ///
+  /// Returns the total number of whole minutes recorded.
   int stop() {
     if (!state.isRunning) return 0;
     _ticker?.cancel();
     _ticker = null;
 
-    final elapsed = state.elapsed;
-    final minutes = elapsed.inMinutes;
+    final sessionStart = state.sessionStart!;
+    final now = DateTime.now();
+    final totalMinutes = now.difference(sessionStart).inMinutes;
 
     state = state.copyWith(
       isRunning: false,
@@ -120,10 +123,30 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     SharedPreferences.getInstance()
         .then((p) => p.remove(_kSessionStartKey));
 
-    if (minutes > 0) {
-      ref.read(editorProvider.notifier).addTimeToLog(minutes);
+    if (totalMinutes <= 0) return 0;
+
+    final notifier = ref.read(editorProvider.notifier);
+    final startDate = DateTime(sessionStart.year, sessionStart.month, sessionStart.day);
+    final today = DateTime(now.year, now.month, now.day);
+
+    if (startDate == today) {
+      // Same calendar day — attribute all minutes to today.
+      notifier.addTimeToLog(totalMinutes);
+    } else {
+      // Session crossed midnight — split at the day boundary.
+      final midnight = today; // midnight = start of today
+      final minutesPrevDay = midnight.difference(sessionStart).inMinutes;
+      final minutesToday = now.difference(midnight).inMinutes;
+      final prevDayIso =
+          '${sessionStart.year}-${sessionStart.month.toString().padLeft(2, '0')}-${sessionStart.day.toString().padLeft(2, '0')}';
+      if (minutesPrevDay > 0) {
+        notifier.addTimeToLog(minutesPrevDay, isoDate: prevDayIso);
+      }
+      if (minutesToday > 0) {
+        notifier.addTimeToLog(minutesToday);
+      }
     }
-    return minutes;
+    return totalMinutes;
   }
 
   /// Toggle between running and stopped.

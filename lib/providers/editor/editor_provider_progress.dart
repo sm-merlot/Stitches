@@ -56,12 +56,14 @@ mixin ProgressMixin on Notifier<EditorState> {
         existing.backstitchCount == newBackCount) {
       return state.pattern.progressLog; // no change
     }
+    final existingMinutes = existing?.minutesSpent ?? 0;
     return [
       ...state.pattern.progressLog.where((e) => e.isoDate != today),
       ProgressLogEntry(
         isoDate: today,
         stitchCount: newCount,
         backstitchCount: newBackCount,
+        minutesSpent: existingMinutes,
       ),
     ];
   }
@@ -90,7 +92,7 @@ mixin ProgressMixin on Notifier<EditorState> {
       final layout = state.pageLayout;
       if (layout != null) {
         final (pageCol, pageRow) = layout.pageCoords(state.currentPage);
-        if (!layout.cellOnPage(x, y, pageCol, pageRow)) return;
+        if (!layout.rawCellOnPage(x, y, pageCol, pageRow)) return;
       }
       next = {...current, cell};
     }
@@ -115,7 +117,7 @@ mixin ProgressMixin on Notifier<EditorState> {
     if (layout != null) {
       final mid = ((x1 + x2) / 2, (y1 + y2) / 2);
       final (pageCol, pageRow) = layout.pageCoords(state.currentPage);
-      if (!layout.cellOnPage(mid.$1.floor(), mid.$2.floor(), pageCol, pageRow)) return;
+      if (!layout.rawCellOnPage(mid.$1.floor(), mid.$2.floor(), pageCol, pageRow)) return;
     }
     final prog = state.pattern.progress;
     final key = PatternProgress.normBackstitch(x1, y1, x2, y2);
@@ -137,17 +139,28 @@ mixin ProgressMixin on Notifier<EditorState> {
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
     final focusId = state.stitchFocusThreadId;
     if (!state.stitchBackMode) {
+    // Build topmost-thread map so focus mode matches single-tap behaviour.
+    final topThread = <(int, int), String>{};
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
-        if (focusId != null && stitch.threadId != focusId) continue;
+        final coords = _crossStitchXY(stitch);
+        if (coords != null) topThread[coords] = stitch.threadId;
+      }
+    }
+    for (final layer in state.pattern.layers) {
+      if (!layer.visible) continue;
+      for (final stitch in layer.stitches) {
+        if (stitch is BackStitch) continue;
         final coords = _crossStitchXY(stitch);
         if (coords == null) continue;
         final (sx, sy) = coords;
+        // In focus mode, only mark cells where the focused thread is on top.
+        if (focusId != null && topThread[(sx, sy)] != focusId) continue;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
-          if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+          if (layout != null && !layout.rawCellOnPage(sx, sy, pageCol, pageRow)) continue;
           current.add((sx, sy));
           affectedThreads.add(stitch.threadId);
         }
@@ -168,7 +181,7 @@ mixin ProgressMixin on Notifier<EditorState> {
         if (midX >= region.left && midX < region.right &&
             midY >= region.top && midY < region.bottom) {
           if (layout != null &&
-              !layout.cellOnPage(
+              !layout.rawCellOnPage(
                   midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
           backCurrent.add(PatternProgress.normBackstitch(
               stitch.x1, stitch.y1, stitch.x2, stitch.y2));
@@ -291,7 +304,7 @@ mixin ProgressMixin on Notifier<EditorState> {
         final (sx, sy) = coords;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
-          if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+          if (layout != null && !layout.rawCellOnPage(sx, sy, pageCol, pageRow)) continue;
           if (current.remove((sx, sy))) { removed++; }
         }
       }
@@ -311,7 +324,7 @@ mixin ProgressMixin on Notifier<EditorState> {
         if (midX >= region.left && midX < region.right &&
             midY >= region.top && midY < region.bottom) {
           if (layout != null &&
-              !layout.cellOnPage(
+              !layout.rawCellOnPage(
                   midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
           if (backCurrent.remove(PatternProgress.normBackstitch(
               stitch.x1, stitch.y1, stitch.x2, stitch.y2))) { removed++; }
@@ -338,13 +351,13 @@ mixin ProgressMixin on Notifier<EditorState> {
     _applyProgress(prog.copyWith(completedPages: pages), pushUndo: false);
   }
 
-  /// Adds [minutes] to today's progress log entry's [minutesSpent].
+  /// Adds [minutes] to the progress log entry for [isoDate] (defaults to today).
   ///
-  /// Called when the user stops the stitching timer.  Creates today's entry
+  /// Called when the user stops the stitching timer.  Creates the entry
   /// if one doesn't exist yet, otherwise accumulates into the existing one.
-  void addTimeToLog(int minutes) {
+  void addTimeToLog(int minutes, {String? isoDate}) {
     if (minutes <= 0) return;
-    final today = todayIsoDate();
+    final today = isoDate ?? todayIsoDate();
     final existing = state.pattern.progressLog
         .where((e) => e.isoDate == today)
         .firstOrNull;
