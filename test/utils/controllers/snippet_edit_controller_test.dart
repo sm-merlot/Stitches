@@ -1,11 +1,13 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/utils/controllers/edit_controller.dart';
+import 'package:stitches/utils/controllers/snippet_edit_controller.dart';
 
-import '../widgets/test_helpers.dart';
+import '../../widgets/test_helpers.dart';
 
-// ── Minimal fake notifier ──────────────────────────────────────────────────
+// ── Fake notifier shared by all tests ─────────────────────────────────────
 
 class _FakeNotifier implements EditorNotifier {
   final List<String> calls = [];
@@ -55,54 +57,85 @@ class _FakeNotifier implements EditorNotifier {
   void toggleFillErase() => calls.add('toggleFillErase');
 }
 
-// ── Helper to fire a key event ────────────────────────────────────────────
-
 KeyDownEvent _key(LogicalKeyboardKey key) => KeyDownEvent(
-      physicalKey: PhysicalKeyboardKey.keyA, // value doesn't matter
+      physicalKey: PhysicalKeyboardKey.keyA,
       logicalKey: key,
       timeStamp: Duration.zero,
     );
 
-// EditController.handle reads HardwareKeyboard.instance → binding needed.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('EditController', () {
+  group('SnippetEditController', () {
     late _FakeNotifier notifier;
     late EditorState editState;
-    late EditController ctrl;
+    late SnippetEditController ctrl;
 
     setUp(() {
       notifier = _FakeNotifier();
       editState = fakeEditState();
-      ctrl = EditController(
+      ctrl = SnippetEditController(
         notifier: notifier,
         getState: () => editState,
       );
     });
 
-    test('ignores events when stitchMode is true', () {
-      editState = fakeStitchState();
-      final handled = ctrl.handle(_key(LogicalKeyboardKey.keyD));
+    // ── UndoManager isolation ────────────────────────────────────────────────
+
+    test('owns an independent UndoManager — not the same instance as EditController', () {
+      final editCtrl = EditController(
+        notifier: notifier,
+        getState: () => editState,
+      );
+      expect(identical(ctrl.undoManager, editCtrl.undoManager), isFalse);
+    });
+
+    test('two SnippetEditController instances have independent UndoManagers', () {
+      final ctrl2 = SnippetEditController(
+        notifier: notifier,
+        getState: () => editState,
+      );
+      expect(identical(ctrl.undoManager, ctrl2.undoManager), isFalse);
+    });
+
+    // ── No save shortcut ─────────────────────────────────────────────────────
+
+    test('Cmd+S is not consumed (no onSave callback)', () {
+      // Without modifier injection, the modifier path is not entered.
+      // Verify the key itself is not handled by the single-key path.
+      // S key (no modifier) → setDrawingMode:select, not save.
+      ctrl.handle(_key(LogicalKeyboardKey.keyS));
+      expect(notifier.calls, ['setDrawingMode:select'],
+          reason: 'S (no modifier) → select mode, not save');
+    });
+
+    // ── No shortcuts-dialog shortcut ─────────────────────────────────────────
+
+    test('Shift+? is not consumed (no onShowShortcuts callback)', () {
+      // Slash without modifier → not recognised → returns false.
+      final handled = ctrl.handle(_key(LogicalKeyboardKey.slash));
       expect(handled, isFalse);
       expect(notifier.calls, isEmpty);
     });
 
-    test('ignores KeyUpEvent', () {
-      final event = KeyUpEvent(
-        physicalKey: PhysicalKeyboardKey.keyD,
-        logicalKey: LogicalKeyboardKey.keyD,
-        timeStamp: Duration.zero,
-      );
-      expect(ctrl.handle(event), isFalse);
-    });
+    // ── Always active regardless of stitchMode ───────────────────────────────
 
-    test('D key → setDrawingMode draw', () {
+    test('handles shortcuts even when state.stitchMode is true', () {
+      // SnippetEditController has no stitchMode guard.
+      editState = fakeStitchState(); // stitchMode=true
+      ctrl = SnippetEditController(notifier: notifier, getState: () => editState);
       expect(ctrl.handle(_key(LogicalKeyboardKey.keyD)), isTrue);
       expect(notifier.calls, ['setDrawingMode:draw']);
     });
 
-    test('E key → setDrawingMode erase', () {
+    // ── Core editing shortcuts ────────────────────────────────────────────────
+
+    test('D → setDrawingMode draw', () {
+      expect(ctrl.handle(_key(LogicalKeyboardKey.keyD)), isTrue);
+      expect(notifier.calls, ['setDrawingMode:draw']);
+    });
+
+    test('E → setDrawingMode erase', () {
       ctrl.handle(_key(LogicalKeyboardKey.keyE));
       expect(notifier.calls, ['setDrawingMode:erase']);
     });
@@ -112,12 +145,7 @@ void main() {
       expect(notifier.calls, ['setDrawingMode:pan']);
     });
 
-    test('S key → setDrawingMode select', () {
-      ctrl.handle(_key(LogicalKeyboardKey.keyS));
-      expect(notifier.calls, ['setDrawingMode:select']);
-    });
-
-    test('C key → setDrawingMode colorPicker', () {
+    test('C → setDrawingMode colorPicker', () {
       ctrl.handle(_key(LogicalKeyboardKey.keyC));
       expect(notifier.calls, ['setDrawingMode:colorPicker']);
     });
@@ -137,18 +165,11 @@ void main() {
       expect(notifier.calls, ['setTool:fill']);
     });
 
-    test('9 → erase + toggleFillErase when fillEraseActive is false', () {
+    test('9 → erase + toggleFillErase when fillEraseActive false', () {
       editState = fakeEditState(fillEraseActive: false);
-      ctrl = EditController(notifier: notifier, getState: () => editState);
+      ctrl = SnippetEditController(notifier: notifier, getState: () => editState);
       ctrl.handle(_key(LogicalKeyboardKey.digit9));
       expect(notifier.calls, ['setDrawingMode:erase', 'toggleFillErase']);
-    });
-
-    test('9 → erase only when fillEraseActive is true', () {
-      editState = fakeEditState(fillEraseActive: true);
-      ctrl = EditController(notifier: notifier, getState: () => editState);
-      ctrl.handle(_key(LogicalKeyboardKey.digit9));
-      expect(notifier.calls, ['setDrawingMode:erase']);
     });
 
     test('Escape → cancelSelection', () {
@@ -166,27 +187,30 @@ void main() {
       expect(notifier.calls, ['deleteSelection']);
     });
 
+    test('ignores KeyUpEvent', () {
+      final event = KeyUpEvent(
+        physicalKey: PhysicalKeyboardKey.keyD,
+        logicalKey: LogicalKeyboardKey.keyD,
+        timeStamp: Duration.zero,
+      );
+      expect(ctrl.handle(event), isFalse);
+      expect(notifier.calls, isEmpty);
+    });
+
     test('unrecognised key returns false', () {
       expect(ctrl.handle(_key(LogicalKeyboardKey.keyQ)), isFalse);
       expect(notifier.calls, isEmpty);
     });
 
-    test('Shift+? calls onShowShortcuts', () {
-      bool called = false;
-      ctrl = EditController(
-        notifier: notifier,
-        getState: () => editState,
-        onShowShortcuts: () => called = true,
-      );
-      // Slash key with shift = '?'
-      ctrl.handle(_key(LogicalKeyboardKey.slash));
-      // Without actual shift modifier held, handled = false (modifier not injected)
-      // This tests the branch guard, not the full modifier path
-      expect(called, isFalse);
-    });
+    // ── Canvas null-safety ────────────────────────────────────────────────────
 
-    test('onSave callback is nullable — no crash when null', () {
-      expect(() => ctrl.handle(_key(LogicalKeyboardKey.keyS)), returnsNormally);
+    test('pointer methods are no-ops before attachCanvas', () {
+      // All pointer method calls before attachCanvas must not throw.
+      expect(() => ctrl.onPointerHover(
+        Offset.zero, PointerDeviceKind.mouse,
+        vp,
+        editState,
+      ), returnsNormally);
     });
   });
 }

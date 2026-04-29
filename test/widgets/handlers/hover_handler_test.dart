@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/widgets/handlers/hover_handler.dart';
-import 'test_helpers.dart';
+import '../test_helpers.dart';
 
 void main() {
   group('HoverHandler', () {

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/utils/controllers/stitch_controller.dart';
 
-import '../widgets/test_helpers.dart';
+import '../../widgets/test_helpers.dart';
 
 // ── Minimal fake notifier ─────────────────────────────────────────────────
 

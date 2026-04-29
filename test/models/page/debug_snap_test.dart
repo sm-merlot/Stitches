@@ -14,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/page/page_layout.dart';
 import 'package:stitches/services/file_service.dart';
 import 'package:stitches/services/stitch_compositor.dart';
-import 'test_fixtures.dart';
+import '../../test_fixtures.dart';
 
 void main() {
   final filePath = testFixturePath('sm_test.stitches');

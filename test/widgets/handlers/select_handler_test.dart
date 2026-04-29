@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart' show Offset, Rect;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/widgets/handlers/select_handler.dart';
-import 'test_helpers.dart';
+import '../test_helpers.dart';
 
 void main() {
   group('SelectHandler', () {

@@ -4,7 +4,7 @@ import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/progress/pattern_progress.dart';
 import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/widgets/handlers/progress_handler.dart';
-import 'test_helpers.dart';
+import '../test_helpers.dart';
 
 void main() {
   group('ProgressHandler', () {

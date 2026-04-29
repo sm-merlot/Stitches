@@ -25,7 +25,7 @@ import 'package:stitches/utils/controllers/view_mode_controller.dart';
 import 'package:stitches/widgets/canvas/aida_widget.dart';
 import 'package:stitches/widgets/canvas/canvas_painter.dart';
 
-import 'test_helpers.dart';
+import '../test_helpers.dart';
 
 // ─── Provider stubs ───────────────────────────────────────────────────────────
 
