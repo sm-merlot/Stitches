@@ -1,0 +1,23 @@
+run
+  8251f86add84f6b1 23-24,138-142,170-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "776291c8b636f252a5744c7076ae55bc5d460c87",
+  "prompts": {
+    "8251f86add84f6b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fba34846-5533-47b0-b01f-e2867f93e162",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 25,
+      "total_deletions": 6,
+      "accepted_lines": 25,
+      "overriden_lines": 0
+    }
+  }
+}
