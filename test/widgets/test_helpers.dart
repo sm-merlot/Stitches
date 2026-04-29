@@ -47,7 +47,7 @@ CrossStitchPattern fakePattern({
     width: width,
     height: height,
     aidaColor: Colors.white,
-    threads: const [],
+    threads: const {},
     layerItems: ls.map((l) => LayerLeaf(layer: l)).toList(),
   );
 }

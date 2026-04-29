@@ -10,7 +10,7 @@ void _drawTitlePage(
   required List<Stitch> nonBack,
   required List<BackStitch> backstitches,
   required Map<String, Thread> threadMap,
-  required Map<String, Color> blendedColors,
+  required Map<Cell, Color> blendedColors,
   required double margin,
   required double footerH,
   required int pageNum,

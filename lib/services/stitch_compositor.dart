@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart' show Color;
+import '../models/cell.dart';
 import '../models/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
@@ -43,12 +44,12 @@ class CompositeStitch {
 /// Produced by [StitchCompositor]. All layer blending is resolved; rendering
 /// code has no need to know about layers.
 ///
-/// - [fullStitches] maps `'x,y'` → [CompositeStitch] (one per occupied cell).
+/// - [fullStitches] maps [Cell] → [CompositeStitch] (one per occupied cell).
 /// - [otherStitches] contains half/quarter stitches verbatim.
 /// - [backstitches] contains all visible backstitches.
 class CompositeLayer {
-  /// FullStitch cells keyed by `'x,y'`. One entry per cell; symbol-winner rule applied.
-  final Map<String, CompositeStitch> fullStitches;
+  /// FullStitch cells keyed by [Cell]. One entry per cell; symbol-winner rule applied.
+  final Map<Cell, CompositeStitch> fullStitches;
 
   /// Non-back, non-full stitches (half, quarter, etc.) — one per stitch verbatim.
   final List<CompositeStitch> otherStitches;
@@ -162,10 +163,8 @@ class StitchCompositor {
     int y, {
     bool backstitchesChanged = false,
   }) {
-    final key = '$x,$y';
-    final threadMap = <String, Thread>{
-      for (final t in newPattern.threads) t.dmcCode: t,
-    };
+    final key = Cell(x, y);
+    final threadMap = newPattern.threads;
 
     // Collect full-stitch stack and other-stitch contributions at (x, y).
     final cellStack = <({
@@ -190,7 +189,7 @@ class StitchCompositor {
           ));
         } else if (s is! BackStitch) {
           final coords = s.cellCoords;
-          if (coords != null && coords.$1 == x && coords.$2 == y) {
+          if (coords != null && coords.x == x && coords.y == y) {
             final t = threadMap[s.threadId];
             if (t != null) {
               newOtherAtCell.add(CompositeStitch(
@@ -206,7 +205,7 @@ class StitchCompositor {
     }
 
     // Patch fullStitches: copy the map, update only key.
-    final newFullStitches = Map<String, CompositeStitch>.from(old.fullStitches);
+    final newFullStitches = Map<Cell, CompositeStitch>.from(old.fullStitches);
     if (cellStack.isEmpty) {
       newFullStitches.remove(key);
     } else {
@@ -255,7 +254,7 @@ class StitchCompositor {
     final newOtherStitches = <CompositeStitch>[
       ...old.otherStitches.where((cs) {
         final coords = cs.stitch.cellCoords;
-        return coords == null || coords.$1 != x || coords.$2 != y;
+        return coords == null || coords.x != x || coords.y != y;
       }),
       ...newOtherAtCell,
     ];
@@ -283,12 +282,10 @@ class StitchCompositor {
 
   /// Single-pass composite build. O(total visible stitches).
   static CompositeLayer _buildLayer(CrossStitchPattern pattern) {
-    final threadMap = <String, Thread>{
-      for (final t in pattern.threads) t.dmcCode: t,
-    };
+    final threadMap = pattern.threads;
 
     // ── Pass 1: bucket FullStitches per cell; collect everything else ────────
-    final cellStack = <String,
+    final cellStack = <Cell,
         List<({
           FullStitch stitch,
           Color color,
@@ -306,7 +303,7 @@ class StitchCompositor {
         } else if (s is FullStitch) {
           final thread = threadMap[s.threadId];
           if (thread == null) continue;
-          (cellStack['${s.x},${s.y}'] ??= []).add((
+          (cellStack[Cell(s.x, s.y)] ??= []).add((
             stitch: s,
             color: thread.color,
             opacity: layer.opacity,
@@ -319,7 +316,7 @@ class StitchCompositor {
     }
 
     // ── Pass 2: resolve each cell → blended colour, thread, CompositeStitch ─
-    final fullStitches = <String, CompositeStitch>{};
+    final fullStitches = <Cell, CompositeStitch>{};
 
     for (final entry in cellStack.entries) {
       final key = entry.key;

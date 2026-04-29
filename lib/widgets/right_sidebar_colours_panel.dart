@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
+import '../models/cell.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
@@ -44,10 +45,9 @@ class _DesignColoursPanel extends ConsumerWidget {
         : state.activeLayer.stitches
             .map((s) => s.threadId)
             .toSet()
-            .map((id) => state.pattern.threads.firstWhere(
-                  (t) => t.dmcCode == id,
-                  orElse: () => state.pattern.threads.first,
-                ))
+            .map((id) =>
+                state.pattern.threads[id] ??
+                state.pattern.threads.values.first)
             .toList();
 
     final activeLayer = state.pattern.layers.firstWhere(
@@ -150,7 +150,7 @@ class _DesignColoursPanel extends ConsumerWidget {
                 ),
                 TextButton(
                   onPressed: () {
-                    _autoFixSymbols(notifier, state.pattern.threads);
+                    _autoFixSymbols(notifier, state.pattern.threads.values.toList());
                     // Rebuild composite cache so blended-thread symbols are
                     // also reassigned using the fixed pattern-thread symbols.
                     if (state.showCompositeThreads) {
@@ -200,13 +200,12 @@ class _DesignColoursPanel extends ConsumerWidget {
             stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
             onSwatchTap: (t) {
-              final isLayerThread = state.pattern.threads
-                  .any((pt) => pt.dmcCode == t.dmcCode);
+              final isLayerThread = state.pattern.threads.containsKey(t.dmcCode);
               if (isLayerThread) {
                 // Include composite symbols so the picker won't offer a symbol
                 // already assigned to a blended/composite thread.
                 final usedByOthers = <String>{
-                  ...state.pattern.threads
+                  ...state.pattern.threads.values
                       .where((pt) => pt.dmcCode != t.dmcCode)
                       .map((pt) => pt.symbol)
                       .where(symbolIsVisible),
@@ -221,7 +220,7 @@ class _DesignColoursPanel extends ConsumerWidget {
                 // Composite thread — use changeCompositeSymbol so the
                 // compositeSymbols registry (and PDF) is updated correctly.
                 final usedSymbols = <String>{
-                  ...state.pattern.threads
+                  ...state.pattern.threads.values
                       .map((pt) => pt.symbol)
                       .where(symbolIsVisible),
                   ...state.pattern.compositeSymbols.entries
@@ -248,7 +247,7 @@ class _DesignColoursPanel extends ConsumerWidget {
       }
       return unique.values.toList();
     }
-    return state.pattern.threads;
+    return state.pattern.threads.values.toList();
   }
 }
 
@@ -316,23 +315,20 @@ Map<String, int> _countDoneStitches(EditorState state) {
   final layer = state.compositeLayer;
   if (layer != null && layer.fullStitches.isNotEmpty) {
     for (final entry in layer.fullStitches.entries) {
-      final parts = entry.key.split(',');
-      if (parts.length != 2) continue;
-      final x = int.tryParse(parts[0]);
-      final y = int.tryParse(parts[1]);
-      if (x == null || y == null) continue;
-      if (progress.completedStitches.contains((x, y))) {
+      final x = entry.key.x;
+      final y = entry.key.y;
+      if (progress.completedStitches.contains(Cell(x, y))) {
         final id = entry.value.resolvedThread.dmcCode;
         counts[id] = (counts[id] ?? 0) + 1;
       }
     }
   } else {
     // No composite cache — fall back to raw iteration but deduplicate by cell.
-    final seen = <(int, int)>{};
+    final seen = <Cell>{};
     for (final layer in state.pattern.layers) {
       for (final stitch in layer.stitches) {
         if (stitch is! FullStitch) continue;
-        final cell = (stitch.x, stitch.y);
+        final cell = Cell(stitch.x, stitch.y);
         if (!seen.add(cell)) continue; // already counted from earlier layer
         if (progress.completedStitches.contains(cell)) {
           counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
@@ -432,11 +428,8 @@ class _StitchColoursPanel extends ConsumerWidget {
       final layer = state.compositeLayer;
       if (layer != null && layer.fullStitches.isNotEmpty) {
         for (final entry in layer.fullStitches.entries) {
-          final parts = entry.key.split(',');
-          if (parts.length != 2) continue;
-          final sx = int.tryParse(parts[0]);
-          final sy = int.tryParse(parts[1]);
-          if (sx == null || sy == null) continue;
+          final sx = entry.key.x;
+          final sy = entry.key.y;
           if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) {
             final id = entry.value.resolvedThread.dmcCode;
             pageCounts[id] = (pageCounts[id] ?? 0) + 1;
@@ -468,7 +461,8 @@ class _StitchColoursPanel extends ConsumerWidget {
         } else {
           final coords = EditorState.cellCoords(s);
           if (coords == null) continue;
-          (sx, sy) = coords;
+          sx = coords.x;
+          sy = coords.y;
         }
         if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) {
           pageCounts[s.threadId] = (pageCounts[s.threadId] ?? 0) + 1;
@@ -615,7 +609,7 @@ class _StitchColoursPanel extends ConsumerWidget {
       }
       return unique.values.toList();
     }
-    return state.pattern.threads;
+    return state.pattern.threads.values.toList();
   }
 
 }
@@ -695,7 +689,8 @@ class StitchDemoButton extends StatelessWidget {
           if (stitch is BackStitch) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
-          final (sx, sy) = coords;
+          final sx = coords.x;
+          final sy = coords.y;
           if (sx >= region.left && sx < region.right &&
               sy >= region.top && sy < region.bottom) {
             if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
@@ -782,8 +777,9 @@ class StitchDemoButton extends StatelessWidget {
       thread = pattern.threadByCode(focusId);
     } else {
       final threadIds = fullStitches.map((s) => s.threadId).toSet();
-      final candidates =
-          pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
+      final candidates = pattern.threads.values
+          .where((t) => threadIds.contains(t.dmcCode))
+          .toList();
       if (candidates.isEmpty) return;
       if (candidates.length == 1) {
         thread = candidates.first;
@@ -836,7 +832,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
     final activeIdx = state.snippetActivePaletteIndex;
     final threads = (palettes.isNotEmpty && activeIdx < palettes.length)
         ? palettes[activeIdx].threads
-        : state.pattern.threads;
+        : state.pattern.threads.values.toList();
 
     // Stitches always reference primary-palette DMC codes. For a secondary
     // palette we remap counts slot-by-slot: secondary[i] inherits the count
@@ -862,7 +858,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
       onTap: (t) => notifier.setSelectedThread(t.dmcCode),
       onSwatchTap: (t) => _showSymbolPicker(
         context, notifier, t,
-        state.pattern.threads
+        state.pattern.threads.values
             .where((pt) => pt.dmcCode != t.dmcCode)
             .map((pt) => pt.symbol)
             .where(symbolIsVisible)
@@ -1504,7 +1500,8 @@ class MarkDoneButton extends ConsumerWidget {
           if (s.stitchBackMode) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
-          final (sx, sy) = coords;
+          final sx = coords.x;
+          final sy = coords.y;
           if (sx >= region.left && sx < region.right &&
               sy >= region.top && sy < region.bottom) {
             if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
@@ -1543,12 +1540,13 @@ class MarkDoneButton extends ConsumerWidget {
           if (s.stitchBackMode) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
-          final (sx, sy) = coords;
+          final sx = coords.x;
+          final sy = coords.y;
           if (sx >= region.left && sx < region.right &&
               sy >= region.top && sy < region.bottom) {
             if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
             hasAny = true;
-            if (!progress.completedStitches.contains((sx, sy))) return false;
+            if (!progress.completedStitches.contains(Cell(sx, sy))) return false;
           }
         }
       }

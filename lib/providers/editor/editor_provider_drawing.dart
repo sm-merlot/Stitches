@@ -27,7 +27,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
   bool _stitchAtCell(Stitch s, int cellX, int cellY) {
     final coords = EditorState.cellCoords(s);
-    return coords != null && coords.$1 == cellX && coords.$2 == cellY;
+    return coords != null && coords.x == cellX && coords.y == cellY;
   }
 
   /// A backstitch is "in" a cell if either endpoint lies within its bounds.
@@ -46,7 +46,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   Set<String> _allUsedSymbols([CrossStitchPattern? pattern]) {
     final p = pattern ?? state.pattern;
     return {
-      for (final t in p.threads) if (t.symbol.isNotEmpty) t.symbol,
+      for (final t in p.threads.values) if (t.symbol.isNotEmpty) t.symbol,
       ...p.compositeSymbols.values.where((s) => s.isNotEmpty),
     };
   }
@@ -72,9 +72,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   /// selects it, switching back to draw mode.
   void pickColorAtCell(int x, int y) {
     final s = state;
-    final threadMap = <String, Thread>{
-      for (final t in s.pattern.threads) t.dmcCode: t,
-    };
+    final threadMap = s.pattern.threads;
 
     String? stitchThreadId(Stitch stitch) => switch (stitch) {
           FullStitch(x: final sx, y: final sy, threadId: final t)
@@ -158,9 +156,9 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   void changeThreadSymbol(String dmcCode, String symbol) {
-    final newThreads = state.pattern.threads
-        .map((t) => t.dmcCode == dmcCode ? t.copyWith(symbol: symbol) : t)
-        .toList();
+    final existing = state.pattern.threads[dmcCode];
+    if (existing == null) return;
+    final newThreads = {...state.pattern.threads, dmcCode: existing.copyWith(symbol: symbol)};
     state = state.copyWith(
       pattern: state.pattern.copyWith(threads: newThreads),
       isDirty: true,
@@ -168,14 +166,13 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   void removeThread(String dmcCode) {
-    final newThreads =
-        state.pattern.threads.where((t) => t.dmcCode != dmcCode).toList();
+    final newThreads = Map<String, Thread>.from(state.pattern.threads)..remove(dmcCode);
     final newPattern = _patternWithAllLayersTransformed(
       state.pattern.copyWith(threads: newThreads),
       (stitches) => stitches.where((s) => s.threadId != dmcCode).toList(),
     );
     final newSelectedId = state.selectedThreadId == dmcCode
-        ? (newThreads.isNotEmpty ? newThreads.first.dmcCode : null)
+        ? (newThreads.isNotEmpty ? newThreads.values.first.dmcCode : null)
         : state.selectedThreadId;
     state = state.copyWith(
       pattern: newPattern,
@@ -189,21 +186,23 @@ mixin DrawingMixin on Notifier<EditorState> {
   void replaceThread(
       String oldDmcCode, String newDmcCode, Color newColor, String newName) {
     if (oldDmcCode == newDmcCode) return;
-    final oldThread = state.pattern.threads
-        .where((t) => t.dmcCode == oldDmcCode)
-        .firstOrNull;
+    final oldThread = state.pattern.threads[oldDmcCode];
     if (oldThread == null) return;
 
     final newThread = Thread(
         dmcCode: newDmcCode, color: newColor, name: newName, symbol: oldThread.symbol);
 
-    var threads = state.pattern.threads.toList();
-    final oldIdx = threads.indexWhere((t) => t.dmcCode == oldDmcCode);
-    final newExists = threads.any((t) => t.dmcCode == newDmcCode);
-    if (newExists) {
-      threads.removeAt(oldIdx);
+    // Replace in-place preserving insertion order; drop old key.
+    final Map<String, Thread> threads;
+    if (state.pattern.threads.containsKey(newDmcCode)) {
+      // Replacement already in palette — just remove the old one.
+      threads = Map.from(state.pattern.threads)..remove(oldDmcCode);
     } else {
-      threads[oldIdx] = newThread;
+      // Substitute old → new at the same position.
+      threads = {
+        for (final e in state.pattern.threads.entries)
+          if (e.key == oldDmcCode) newDmcCode: newThread else e.key: e.value,
+      };
     }
 
     final remappedPattern = _patternWithAllLayersTransformed(
@@ -253,8 +252,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   void replaceThreadInLayer(
       String layerId, String oldDmcCode, String newDmcCode, Color newColor, String newName) {
     if (oldDmcCode == newDmcCode) return;
-    final oldThread =
-        state.pattern.threads.where((t) => t.dmcCode == oldDmcCode).firstOrNull;
+    final oldThread = state.pattern.threads[oldDmcCode];
     if (oldThread == null) return;
 
     final mappedPattern = state.pattern.mapLayers((l) {
@@ -266,14 +264,16 @@ mixin DrawingMixin on Notifier<EditorState> {
       );
     });
 
-    var threads = mappedPattern.threads.toList();
-    if (!threads.any((t) => t.dmcCode == newDmcCode)) {
-      threads.add(Thread(
-          dmcCode: newDmcCode,
-          color: newColor,
-          name: newName,
-          symbol: oldThread.symbol));
-    }
+    final threads = mappedPattern.threads.containsKey(newDmcCode)
+        ? mappedPattern.threads
+        : {
+            ...mappedPattern.threads,
+            newDmcCode: Thread(
+                dmcCode: newDmcCode,
+                color: newColor,
+                name: newName,
+                symbol: oldThread.symbol),
+          };
 
     final pruned = _pruneUnusedThreads(mappedPattern.copyWith(threads: threads));
 
@@ -289,9 +289,9 @@ mixin DrawingMixin on Notifier<EditorState> {
   /// Clears the composite cache so the colours panel immediately reflects the
   /// updated symbol rather than serving stale Thread objects from the cache.
   void setThreadSymbol(String dmcCode, String symbol) {
-    final threads = state.pattern.threads
-        .map((t) => t.dmcCode == dmcCode ? t.copyWith(symbol: symbol) : t)
-        .toList();
+    final existing = state.pattern.threads[dmcCode];
+    if (existing == null) return;
+    final threads = {...state.pattern.threads, dmcCode: existing.copyWith(symbol: symbol)};
     state = state.copyWith(
       pattern: state.pattern.copyWith(threads: threads),
       compositeLayer: null,
@@ -359,7 +359,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     var pattern = state.pattern;
     final threadId = stitch.threadId;
     Thread? addedThread;
-    if (!pattern.threads.any((t) => t.dmcCode == threadId)) {
+    if (!pattern.threads.containsKey(threadId)) {
       final dmc = dmcColorByCode(threadId);
       if (dmc != null) {
         final usedSymbols = _allUsedSymbols(pattern);
@@ -369,7 +369,7 @@ mixin DrawingMixin on Notifier<EditorState> {
           name: dmc.name,
           symbol: _nextSymbol(usedSymbols),
         );
-        pattern = pattern.copyWith(threads: [...pattern.threads, addedThread]);
+        pattern = pattern.copyWith(threads: {...pattern.threads, addedThread.dmcCode: addedThread});
       }
     }
 
@@ -392,14 +392,14 @@ mixin DrawingMixin on Notifier<EditorState> {
     final oldComposite = state.compositeLayer;
     final quickComposite = (oldComposite != null && coords != null)
         ? StitchCompositor.patchLayer(
-            oldComposite, newPattern, coords.$1, coords.$2)
+            oldComposite, newPattern, coords.x, coords.y)
         : StitchCompositor.computeLayer(newPattern);
 
     // Accumulate dirty keys across successive draw events within the same frame
     // so a single updateCells() call covers all pointer-move events per render.
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
-        ? <String>{...?prevDirty, '${coords.$1},${coords.$2}'}
+        ? <Cell>{...?prevDirty, coords}
         : null; // backstitch → force full rebuild next sync
 
     state = state.copyWith(
@@ -435,7 +435,7 @@ mixin DrawingMixin on Notifier<EditorState> {
         : StitchCompositor.computeLayer(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, '$x,$y'};
+    final mergedDirty = <Cell>{...?prevDirty, Cell(x, y)};
 
     state = state.copyWith(
       pattern: newPattern,
@@ -476,12 +476,12 @@ mixin DrawingMixin on Notifier<EditorState> {
     // Box erase may affect multiple cells — use computeLayer for correctness,
     // but pass dirtyCellKeys so _syncRenderCache calls updateCells() (O(box))
     // instead of rebuild() (O(total_stitches)).
-    final dirtyKeys = <String>{
+    final dirtyKeys = <Cell>{
       for (var xx = x0; xx <= x1; xx++)
-        for (var yy = y0; yy <= y1; yy++) '$xx,$yy',
+        for (var yy = y0; yy <= y1; yy++) Cell(xx, yy),
     };
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, ...dirtyKeys};
+    final mergedDirty = <Cell>{...?prevDirty, ...dirtyKeys};
 
     state = state.copyWith(
       pattern: newPattern,
@@ -511,7 +511,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     var pattern = state.pattern;
     final threadId = stitch.threadId;
     Thread? addedThread;
-    if (!pattern.threads.any((t) => t.dmcCode == threadId)) {
+    if (!pattern.threads.containsKey(threadId)) {
       final dmc = dmcColorByCode(threadId);
       if (dmc != null) {
         final usedSymbols = _allUsedSymbols(pattern);
@@ -521,7 +521,7 @@ mixin DrawingMixin on Notifier<EditorState> {
           name: dmc.name,
           symbol: _nextSymbol(usedSymbols),
         );
-        pattern = pattern.copyWith(threads: [...pattern.threads, addedThread]);
+        pattern = pattern.copyWith(threads: {...pattern.threads, addedThread.dmcCode: addedThread});
       }
     }
 
@@ -539,12 +539,12 @@ mixin DrawingMixin on Notifier<EditorState> {
     final coords = stitch.cellCoords;
     final oldComposite = state.compositeLayer;
     final quickComposite = (oldComposite != null && coords != null)
-        ? StitchCompositor.patchLayer(oldComposite, newPattern, coords.$1, coords.$2)
+        ? StitchCompositor.patchLayer(oldComposite, newPattern, coords.x, coords.y)
         : StitchCompositor.computeLayer(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
-        ? <String>{...?prevDirty, '${coords.$1},${coords.$2}'}
+        ? <Cell>{...?prevDirty, coords}
         : null;
 
     state = state.copyWith(
@@ -570,13 +570,13 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     final oldComposite = state.compositeLayer;
     final quickComposite = (oldComposite != null && coords != null)
-        ? StitchCompositor.patchLayer(oldComposite, newPattern, coords.$1, coords.$2,
+        ? StitchCompositor.patchLayer(oldComposite, newPattern, coords.x, coords.y,
             backstitchesChanged: stitch is BackStitch)
         : StitchCompositor.computeLayer(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
-        ? <String>{...?prevDirty, '${coords.$1},${coords.$2}'}
+        ? <Cell>{...?prevDirty, coords}
         : null;
 
     state = state.copyWith(
@@ -608,7 +608,7 @@ mixin DrawingMixin on Notifier<EditorState> {
         : StitchCompositor.computeLayer(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, '$x,$y'};
+    final mergedDirty = <Cell>{...?prevDirty, Cell(x, y)};
 
     state = state.copyWith(
       pattern: newPattern,
@@ -643,12 +643,12 @@ mixin DrawingMixin on Notifier<EditorState> {
     final newPattern = _pruneUnusedThreads(
         _patternWithActiveLayerStitches(state.pattern, newStitches));
 
-    final dirtyKeys = <String>{
+    final dirtyKeys = <Cell>{
       for (var xx = x0; xx <= x1; xx++)
-        for (var yy = y0; yy <= y1; yy++) '$xx,$yy',
+        for (var yy = y0; yy <= y1; yy++) Cell(xx, yy),
     };
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, ...dirtyKeys};
+    final mergedDirty = <Cell>{...?prevDirty, ...dirtyKeys};
 
     state = state.copyWith(
       pattern: newPattern,
@@ -787,8 +787,8 @@ mixin DrawingMixin on Notifier<EditorState> {
     bool inBounds(Stitch s) {
       final coords = EditorState.cellCoords(s);
       if (coords != null) {
-        return coords.$1 >= 0 && coords.$1 < newWidth &&
-            coords.$2 >= 0 && coords.$2 < newHeight;
+        return coords.x >= 0 && coords.x < newWidth &&
+            coords.y >= 0 && coords.y < newHeight;
       }
       final bs = s as BackStitch;
       return bs.x1 >= 0 && bs.x1 <= newWidth && bs.y1 >= 0 && bs.y1 <= newHeight &&

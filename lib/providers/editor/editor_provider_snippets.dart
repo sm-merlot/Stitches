@@ -241,7 +241,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
           .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
           .toList();
       final threadIds = stitches.map((s) => s.threadId).toSet();
-      threads = state.pattern.threads
+      threads = state.pattern.threads.values
           .where((t) => threadIds.contains(t.dmcCode))
           .toList();
     }
@@ -252,8 +252,8 @@ mixin SnippetsMixin on Notifier<EditorState> {
     for (final s in stitches) {
       final coords = EditorState.cellCoords(s);
       if (coords != null) {
-        if (coords.$1 + 1 > maxX) maxX = coords.$1 + 1;
-        if (coords.$2 + 1 > maxY) maxY = coords.$2 + 1;
+        if (coords.x + 1 > maxX) maxX = coords.x + 1;
+        if (coords.y + 1 > maxY) maxY = coords.y + 1;
       }
     }
 

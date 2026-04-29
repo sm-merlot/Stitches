@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/cell.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
@@ -155,13 +156,13 @@ class _StitchOpsStats {
 }
 
 _StitchOpsStats _computeStats(CrossStitchPattern pattern,
-    {Map<String, Thread>? compositeCache}) {
+    {Map<Cell, Thread>? compositeCache}) {
   final progress = pattern.progress;
   final log = [...pattern.progressLog]
     ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
 
   // ── Total stitch counts ──────────────────────────────────────────────────
-  final cellSet = <(int, int)>{};
+  final cellSet = <Cell>{};
   int totalBackstitches = 0;
   for (final s in pattern.stitches) {
     if (s is BackStitch) {
@@ -181,28 +182,25 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
   final threadCounts = <String, int>{};
   final threadDoneCounts = <String, int>{};
   if (compositeCache != null && compositeCache.isNotEmpty) {
-    // Each cache entry is "x,y" → Thread (topmost visible layer for that cell).
+    // Each cache entry is Cell → Thread (topmost visible layer for that cell).
     for (final entry in compositeCache.entries) {
-      final parts = entry.key.split(',');
-      if (parts.length != 2) continue;
-      final x = int.tryParse(parts[0]);
-      final y = int.tryParse(parts[1]);
-      if (x == null || y == null) continue;
+      final x = entry.key.x;
+      final y = entry.key.y;
       final id = entry.value.dmcCode;
       threadCounts[id] = (threadCounts[id] ?? 0) + 1;
-      if (progress.completedStitches.contains((x, y))) {
+      if (progress.completedStitches.contains(Cell(x, y))) {
         threadDoneCounts[id] = (threadDoneCounts[id] ?? 0) + 1;
       }
     }
   } else {
     // No composite cache: build a cell→threadId map where the last (topmost)
     // visible layer claiming a cell wins — consistent with the composite renderer.
-    final cellThread = <(int, int), String>{};
+    final cellThread = <Cell, String>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final s in layer.stitches) {
         if (s is! FullStitch) continue;
-        cellThread[(s.x, s.y)] = s.threadId; // later layer overwrites → top wins
+        cellThread[Cell(s.x, s.y)] = s.threadId; // later layer overwrites → top wins
       }
     }
     for (final entry in cellThread.entries) {
@@ -223,7 +221,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
       threadDoneCounts[s.threadId] = (threadDoneCounts[s.threadId] ?? 0) + 1;
     }
   }
-  final threadStats = pattern.threads.map((t) {
+  final threadStats = pattern.threads.values.map((t) {
     final total = threadCounts[t.dmcCode] ?? 0;
     final done = threadDoneCounts[t.dmcCode] ?? 0;
     return _ThreadStats(thread: t, total: total, done: done);
@@ -316,7 +314,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
 
   // ── Colours & pages ──────────────────────────────────────────────────────
   final allStitches = pattern.stitches;
-  final doneColours = pattern.threads
+  final doneColours = pattern.threads.values
       .where((t) => progress.isColourDone(t.dmcCode, allStitches))
       .length;
   final totalColours = pattern.threads.length;

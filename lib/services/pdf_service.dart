@@ -11,6 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../data/aida_presets.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
+import '../models/cell.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
@@ -51,14 +52,14 @@ class PdfService {
 
     // ── Data prep ──────────────────────────────────────────────────────────────
 
-    final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
+    final threadMap = pattern.threads;
 
     // Single composite pass — matches the canvas view exactly.
     final compositeLayer = StitchCompositor.computeLayer(pattern);
 
     // For blended cells, derive display color and symbol from CompositeLayer.
-    final blendedCellColors = <String, Color>{};
-    final blendedCellSymbols = <String, String>{};
+    final blendedCellColors = <Cell, Color>{};
+    final blendedCellSymbols = <Cell, String>{};
     for (final entry in compositeLayer.fullStitches.entries) {
       if (!entry.value.isBlended) continue;
       final t = entry.value.resolvedThread;
@@ -115,7 +116,7 @@ class PdfService {
     // Source threads come from pattern.threads; blended composite threads come
     // from compositeLayer.fullStitches resolved threads.
     final allCompositeThreads = <String, Thread>{
-      for (final t in pattern.threads) t.dmcCode: t,
+      ...pattern.threads,
       for (final cs in compositeLayer.fullStitches.values) cs.resolvedThread.dmcCode: cs.resolvedThread,
     };
     final crossThreads = allCompositeThreads.values
@@ -143,7 +144,7 @@ class PdfService {
       if (!entry.value.isBlended) continue;
       if (blendedCellSymbols.containsKey(entry.key)) continue; // user composite symbol already set
       final sym = pdfSymbols[entry.value.resolvedThread.dmcCode] ?? '';
-      if (symbolIsVisible(sym)) blendedCellSymbols[entry.key] = sym;
+      if (symbolIsVisible(sym)) blendedCellSymbols[entry.key] = sym; // Cell key
     }
 
     // ── Page layout constants ───────────────────────────────────────────────

@@ -555,11 +555,9 @@ mixin LayersMixin on Notifier<EditorState> {
     final layer = StitchCompositor.computeLayer(state.pattern);
     final activeCodes = layer.fullStitches.values.map((cs) => cs.resolvedThread.dmcCode).toSet();
 
-    final patternMap = <String, Thread>{
-      for (final t in state.pattern.threads) t.dmcCode: t,
-    };
+    final patternMap = state.pattern.threads;
     final patternSymbols = {
-      for (final t in state.pattern.threads)
+      for (final t in state.pattern.threads.values)
         if (t.symbol.isNotEmpty) t.symbol,
     };
 
@@ -653,7 +651,7 @@ mixin LayersMixin on Notifier<EditorState> {
   /// Returns true if applied, false if the symbol is already taken.
   bool changeCompositeSymbol(String dmcCode, String symbol) {
     final usedByOthers = {
-      for (final t in state.pattern.threads)
+      for (final t in state.pattern.threads.values)
         if (t.symbol.isNotEmpty) t.symbol,
       for (final entry in state.pattern.compositeSymbols.entries)
         if (entry.key != dmcCode && entry.value.isNotEmpty) entry.value,

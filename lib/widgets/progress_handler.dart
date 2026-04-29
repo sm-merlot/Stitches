@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart' show Offset, Rect;
+import '../models/cell.dart';
 import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart' show EditorState;
 import 'canvas_viewport.dart';
@@ -253,7 +254,7 @@ class ProgressHandler {
           _wasProgressCellDone = null;
         } else {
           _wasProgressCellDone = state.pattern.progress.completedStitches
-              .contains((cx, cy));
+              .contains(Cell(cx, cy));
           onToggleStitchDone(cx, cy);
         }
       }

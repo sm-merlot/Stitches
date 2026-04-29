@@ -1,6 +1,7 @@
 import 'dart:ui' show Rect;
 import 'package:flutter/material.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/layer.dart';
 import 'package:stitches/models/layer_item.dart';
 import 'package:stitches/models/pattern.dart';
@@ -24,7 +25,7 @@ CrossStitchPattern _pattern({
     name: 'Test',
     width: 20,
     height: 20,
-    threads: threads,
+    threads: {for (final t in threads) t.dmcCode: t},
     layerItems: [LayerLeaf(layer: layer)],
   );
 }
@@ -131,7 +132,7 @@ void main() {
     final cache = RenderCache();
     cache.clear();
     final v = cache.version;
-    cache.clearCells({'0,0'});
+    cache.clearCells({const Cell(0, 0)});
     expect(cache.version, equals(v + 1));
   });
 
@@ -141,7 +142,7 @@ void main() {
     final cache = RenderCache();
     cache.clear();
     final v = cache.version;
-    cache.updateCells({'0,0'}, composite, cfg, cellSize);
+    cache.updateCells({const Cell(0, 0)}, composite, cfg, cellSize);
     expect(cache.version, equals(v + 1));
   });
 
@@ -162,7 +163,7 @@ void main() {
 
     // Remove (0,0) by updating with a composite that has no stitch there.
     final emptyComposite = _composite(_pattern(threads: [t], stitches: []));
-    cache.updateCells({'0,0'}, emptyComposite, cfg, cellSize);
+    cache.updateCells({const Cell(0, 0)}, emptyComposite, cfg, cellSize);
 
     final remaining = cache.store.values.expand((b) => b.values).expand((r) => r).toList();
     expect(remaining, hasLength(1)); // only (1,1) remains
@@ -184,7 +185,7 @@ void main() {
       threads: [red, blue],
       stitches: [FullStitch(x: 0, y: 0, threadId: '311')],
     );
-    cache.updateCells({'0,0'}, _composite(p2), cfg, cellSize);
+    cache.updateCells({const Cell(0, 0)}, _composite(p2), cfg, cellSize);
 
     // Red bucket gone (or empty), blue bucket present.
     final redBucket = cache.store[const Color(0xFFFF0000)];
@@ -245,7 +246,7 @@ void main() {
     );
     // Mark (0,0) as done.
     final progress = PatternProgress.empty.copyWith(
-      completedStitches: {(0, 0)},
+      completedStitches: {const Cell(0, 0)},
     );
     final bwCfg = RenderViewConfig(stitchMode: true, progress: progress);
     final cache = RenderCache();

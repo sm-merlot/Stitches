@@ -10,7 +10,15 @@ import 'command.dart';
 ///
 /// [execute] runs the command and pushes it onto the undo stack, clearing
 /// the redo stack (standard linear undo semantics).
+///
+/// Set [onChange] to a callback that is invoked after every [execute], [undo],
+/// or [redo]. Typically wired to the notifier's `updateControllerUndoState`
+/// so the toolbar reflects the live can-undo / can-redo state without the
+/// caller needing a separate notification call after each operation.
 class UndoManager {
+  /// Called after every state-changing operation ([execute], [undo], [redo]).
+  void Function()? onChange;
+
   final List<Command> _undoStack = [];
   final List<Command> _redoStack = [];
 
@@ -30,6 +38,7 @@ class UndoManager {
     cmd.execute();
     _undoStack.add(cmd);
     _redoStack.clear();
+    onChange?.call();
   }
 
   /// Undoes the most recently executed command.  No-op when [canUndo] is false.
@@ -38,6 +47,7 @@ class UndoManager {
     final cmd = _undoStack.removeLast();
     cmd.undo();
     _redoStack.add(cmd);
+    onChange?.call();
   }
 
   /// Re-executes the most recently undone command.  No-op when [canRedo] is false.
@@ -46,6 +56,7 @@ class UndoManager {
     final cmd = _redoStack.removeLast();
     cmd.execute();
     _undoStack.add(cmd);
+    onChange?.call();
   }
 
   /// Clears both stacks.  Call when the pattern is replaced (file open / new).

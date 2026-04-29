@@ -87,7 +87,7 @@ class EditorState {
   /// Cleared when leaving stitch mode or starting a new drag.
   final Rect? progressRegion;
 
-  /// Cell keys (`'x,y'`) whose [RenderCache] entries need incremental update.
+  /// [Cell] keys whose [RenderCache] entries need incremental update.
   ///
   /// Non-null when [compositeLayer] was patched incrementally (e.g. a single
   /// stitch drawn or erased). [AidaWidget._syncRenderCache] calls
@@ -99,7 +99,7 @@ class EditorState {
   /// multiple pointer-move events are batched into one [updateCells] call.
   /// Always null in [copyWith] unless explicitly passed — any operation that
   /// replaces the composite without knowing dirty cells must clear it.
-  final Set<String>? dirtyCellKeys;
+  final Set<Cell>? dirtyCellKeys;
 
   /// True when the current file is in the native .stitches format (or unsaved).
   bool get isNativeFormat {
@@ -220,13 +220,13 @@ class EditorState {
   }
 
   /// Prefer [Stitch.cellCoords] extension getter over this static method.
-  static (int, int)? cellCoords(Stitch s) => s.cellCoords;
+  static Cell? cellCoords(Stitch s) => s.cellCoords;
 
   static bool isStitchInRect(Stitch s, Rect rect) {
     final coords = cellCoords(s);
     if (coords != null) {
-      return coords.$1 >= rect.left && coords.$1 < rect.right &&
-          coords.$2 >= rect.top && coords.$2 < rect.bottom;
+      return coords.x >= rect.left && coords.x < rect.right &&
+          coords.y >= rect.top && coords.y < rect.bottom;
     }
     final bs = s as BackStitch;
     return bs.x1 >= rect.left && bs.x1 <= rect.right &&
@@ -315,7 +315,7 @@ class EditorState {
     Object? pageLayout = _sentinel,
     Object? pendingFitPage = _sentinel,
     Object? progressRegion = _sentinel,
-    Set<String>? dirtyCellKeys,
+    Set<Cell>? dirtyCellKeys,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,

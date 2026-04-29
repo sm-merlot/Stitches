@@ -259,7 +259,7 @@ void main() {
         name: 'p',
         width: 10,
         height: 10,
-        threads: const [],
+        threads: const {},
         layerItems: [LayerLeaf(layer: layer)],
       );
       expect(pattern.layers.single.locked, isTrue);
@@ -271,7 +271,7 @@ void main() {
         name: 'p',
         width: 10,
         height: 10,
-        threads: const [],
+        threads: const {},
         layerItems: [LayerLeaf(layer: layer)],
       );
       expect(pattern.layers.single.locked, isFalse);
@@ -294,7 +294,7 @@ void main() {
         name: 'p',
         width: 10,
         height: 10,
-        threads: const [],
+        threads: const {},
         layerItems: [group],
       );
       for (final l in pattern.layers) {
@@ -320,7 +320,7 @@ void main() {
         name: 'p',
         width: 10,
         height: 10,
-        threads: const [],
+        threads: const {},
         layerItems: [group],
       );
       expect(pattern.layers[0].locked, isTrue);
@@ -344,7 +344,7 @@ void main() {
         name: 'p',
         width: 10,
         height: 10,
-        threads: const [],
+        threads: const {},
         layerItems: [group],
       );
       for (final l in pattern.layers) {
@@ -366,7 +366,7 @@ void main() {
         name: 'p',
         width: 10,
         height: 10,
-        threads: const [],
+        threads: const {},
         layerItems: [group],
       );
       expect(pattern.layers.single.visible, isFalse);
@@ -568,44 +568,44 @@ void main() {
         );
 
     test('thread with valid visible symbol keeps it unchanged', () {
-      final result = notifier().assignSymbolsForTest([t('310', 'A')]);
-      expect(result.single.symbol, equals('A'));
+      final result = notifier().assignSymbolsForTest({'310': t('310', 'A')});
+      expect(result.values.single.symbol, equals('A'));
     });
 
     test('thread with empty symbol gets auto-assigned from kPatternSymbols', () {
-      final result = notifier().assignSymbolsForTest([t('310', '')]);
-      expect(result.single.symbol, isNotEmpty);
+      final result = notifier().assignSymbolsForTest({'310': t('310', '')});
+      expect(result.values.single.symbol, isNotEmpty);
     });
 
     test('thread with PDF-unsupported symbol gets reassigned', () {
-      final result = notifier().assignSymbolsForTest([t('310', '↑')]);
-      expect(result.single.symbol, isNot(equals('↑')));
-      expect(result.single.symbol, isNotEmpty);
+      final result = notifier().assignSymbolsForTest({'310': t('310', '↑')});
+      expect(result.values.single.symbol, isNot(equals('↑')));
+      expect(result.values.single.symbol, isNotEmpty);
     });
 
     test('two threads without symbols get distinct symbols', () {
-      final result = notifier().assignSymbolsForTest([t('310', ''), t('321', '')]);
-      expect(result[0].symbol, isNotEmpty);
-      expect(result[1].symbol, isNotEmpty);
-      expect(result[0].symbol, isNot(equals(result[1].symbol)));
+      final result = notifier().assignSymbolsForTest({'310': t('310', ''), '321': t('321', '')});
+      expect(result.values.elementAt(0).symbol, isNotEmpty);
+      expect(result.values.elementAt(1).symbol, isNotEmpty);
+      expect(result.values.elementAt(0).symbol, isNot(equals(result.values.elementAt(1).symbol)));
     });
 
     test('existingSymbols param blocks those symbols from assignment', () {
       // 'A' is the first symbol in kPatternSymbols — passing it as existing
       // means the first empty thread must receive something else.
       final result = notifier()
-          .assignSymbolsForTest([t('310', '')], existingSymbols: {'A'});
-      expect(result.single.symbol, isNot(equals('A')));
-      expect(result.single.symbol, isNotEmpty);
+          .assignSymbolsForTest({'310': t('310', '')}, existingSymbols: {'A'});
+      expect(result.values.single.symbol, isNot(equals('A')));
+      expect(result.values.single.symbol, isNotEmpty);
     });
 
     test('composite symbols in existingSymbols are not reused for layer threads', () {
       // Simulate a pattern where '■' is already used by a composite thread.
       // A regular thread with no symbol should not be assigned '■'.
       final result = notifier()
-          .assignSymbolsForTest([t('310', '')], existingSymbols: {'A', '■'});
-      expect(result.single.symbol, isNot(equals('A')));
-      expect(result.single.symbol, isNot(equals('■')));
+          .assignSymbolsForTest({'310': t('310', '')}, existingSymbols: {'A', '■'});
+      expect(result.values.single.symbol, isNot(equals('A')));
+      expect(result.values.single.symbol, isNot(equals('■')));
     });
   });
 }

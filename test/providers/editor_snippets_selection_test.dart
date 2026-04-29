@@ -385,7 +385,7 @@ void main() {
       await n(c).enterPasteMode();
       n(c).commitPaste(1, 1);
       expect(
-        s(c).pattern.threads.map((t) => t.dmcCode),
+        s(c).pattern.threads.keys,
         contains('666'),
       );
     });

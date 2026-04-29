@@ -257,7 +257,7 @@ class FormatService {
       width: width,
       height: height,
       aidaColor: aidaColor,
-      threads: threadMap.values.toList(),
+      threads: threadMap,
       layerItems: [
         LayerLeaf(
           layer: Layer(
@@ -275,8 +275,9 @@ class FormatService {
   static String _writeOxs(CrossStitchPattern pattern) {
     // Only include threads actually used by stitches.
     final usedIds = pattern.stitches.map((s) => s.threadId).toSet();
-    final usedThreads =
-        pattern.threads.where((t) => usedIds.contains(t.dmcCode)).toList();
+    final usedThreads = pattern.threads.values
+        .where((t) => usedIds.contains(t.dmcCode))
+        .toList();
 
     final palIdx = <String, int>{};
     for (var i = 0; i < usedThreads.length; i++) {

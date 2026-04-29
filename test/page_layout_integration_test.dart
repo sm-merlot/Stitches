@@ -41,19 +41,19 @@ void main() {
     // Mirror PageLayout.compute: use StitchCompositor for the canonical
     // visible-stitch view (same source of truth as the algo).
     final composite = StitchCompositor.computeLayer(pattern);
+    final threadList = pattern.threads.values.toList();
     final threadIndex = <String, int>{
-      for (int i = 0; i < pattern.threads.length; i++)
-        pattern.threads[i].dmcCode: i,
+      for (int i = 0; i < threadList.length; i++)
+        threadList[i].dmcCode: i,
     };
     indexToSym = {
-      for (int i = 0; i < pattern.threads.length; i++)
-        i: pattern.threads[i].symbol,
+      for (int i = 0; i < threadList.length; i++)
+        i: threadList[i].symbol,
     };
     snapColor = {};
     for (final entry in composite.fullStitches.entries) {
-      final parts = entry.key.split(',');
-      final col = int.parse(parts[0]);
-      final row = int.parse(parts[1]);
+      final col = entry.key.x;
+      final row = entry.key.y;
       final idx = threadIndex[entry.value.resolvedThread.dmcCode];
       if (idx != null) snapColor[(col << 16) | row] = idx;
     }

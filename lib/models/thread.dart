@@ -53,4 +53,15 @@ class Thread {
       symbol: symbol ?? this.symbol,
     );
   }
+
+  /// Parses a YAML list of thread maps into a [Map<String, Thread>] keyed by
+  /// [dmcCode]. Order is preserved (Dart's [LinkedHashMap] insertion order).
+  static Map<String, Thread> mapFromYaml(List<dynamic> yaml) {
+    final result = <String, Thread>{};
+    for (final raw in yaml) {
+      final thread = Thread.fromYaml(Map<String, dynamic>.from(raw as Map));
+      result[thread.dmcCode] = thread;
+    }
+    return result;
+  }
 }

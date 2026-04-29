@@ -1,11 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'cell.dart';
 import 'stitch.dart';
 import 'stitch_geometry.dart';
 
 @immutable
 class PatternProgress {
-  /// Cells the user has physically stitched. Stored as (x, y) pairs.
-  final Set<(int, int)> completedStitches;
+  /// Cells the user has physically stitched. Stored as [Cell] objects.
+  final Set<Cell> completedStitches;
 
   /// Backstitches the user has physically stitched.
   /// Stored as normalised (x1, y1, x2, y2) — the smaller endpoint is always first.
@@ -27,7 +28,7 @@ class PatternProgress {
       completedBackstitches.isEmpty &&
       completedPages.isEmpty;
 
-  bool isStitchDone(int x, int y) => completedStitches.contains((x, y));
+  bool isStitchDone(int x, int y) => completedStitches.contains(Cell(x, y));
   bool isPageDone(int pageIndex) => completedPages.contains(pageIndex);
 
   bool isBackstitchDone(double x1, double y1, double x2, double y2) =>
@@ -48,7 +49,7 @@ class PatternProgress {
   }
 
   PatternProgress copyWith({
-    Set<(int, int)>? completedStitches,
+    Set<Cell>? completedStitches,
     Set<(double, double, double, double)>? completedBackstitches,
     Set<int>? completedPages,
   }) =>
@@ -60,7 +61,7 @@ class PatternProgress {
       );
 
   factory PatternProgress.fromYaml(Map yaml) {
-    final stitches = <(int, int)>{};
+    final stitches = <Cell>{};
     final rawStitches = yaml['completedStitches'] as List?;
     if (rawStitches != null) {
       for (final s in rawStitches) {
@@ -69,7 +70,7 @@ class PatternProgress {
         if (comma > 0) {
           final x = int.tryParse(str.substring(0, comma));
           final y = int.tryParse(str.substring(comma + 1));
-          if (x != null && y != null) stitches.add((x, y));
+          if (x != null && y != null) stitches.add(Cell(x, y));
         }
       }
     }
@@ -106,7 +107,7 @@ class PatternProgress {
 
   Map<String, dynamic> toYaml() => {
         'completedStitches':
-            completedStitches.map((c) => '${c.$1},${c.$2}').toList(),
+            completedStitches.map((c) => '${c.x},${c.y}').toList(),
         if (completedBackstitches.isNotEmpty)
           'completedBackstitches': completedBackstitches
               .map((b) => '${_fmt(b.$1)},${_fmt(b.$2)},${_fmt(b.$3)},${_fmt(b.$4)}')
@@ -138,7 +139,7 @@ class PatternProgress {
   @override
   int get hashCode => Object.hash(
       Object.hashAllUnordered(
-          completedStitches.map((c) => Object.hash(c.$1, c.$2))),
+          completedStitches.map((c) => Object.hash(c.x, c.y))),
       Object.hashAllUnordered(completedBackstitches
           .map((b) => Object.hash(b.$1, b.$2, b.$3, b.$4))),
       Object.hashAllUnordered(completedPages));

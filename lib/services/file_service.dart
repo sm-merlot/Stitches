@@ -229,7 +229,7 @@ class FileService {
     }
 
     buf.writeln('  threads:');
-    for (final t in pattern.threads) {
+    for (final t in pattern.threads.values) {
       final m = t.toYaml();
       buf.writeln('    - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
       buf.writeln('      color: ${_yamlStr(m['color'] as String)}');
@@ -295,7 +295,7 @@ class FileService {
         if (prog.completedStitches.isNotEmpty) {
           buf.writeln('    completedStitches:');
           for (final c in prog.completedStitches) {
-            buf.writeln('      - ${c.$1},${c.$2}');
+            buf.writeln('      - ${c.x},${c.y}');
           }
         }
         if (prog.completedBackstitches.isNotEmpty) {

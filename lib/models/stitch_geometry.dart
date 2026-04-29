@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'cell.dart';
 import 'stitch.dart';
 
 /// Pure geometry helpers for [Stitch] objects.
@@ -10,20 +11,20 @@ import 'stitch.dart';
 /// Coordinate system: cell coords (x, y), screen-Y-down.  PDF rendering
 /// uses an inverted Y-axis and has its own helpers in `services/pdf_service.dart`.
 
-/// Returns the (x, y) cell coordinates of [stitch], or null for [BackStitch]
+/// Returns the [Cell] grid coordinate of [stitch], or null for [BackStitch]
 /// (which has no single cell — use `(x1, y1, x2, y2)` directly).
 ///
 /// Prefer [Stitch.cellCoords] extension getter over this free function.
-(int, int)? stitchXY(Stitch stitch) => stitch.cellCoords;
+Cell? stitchXY(Stitch stitch) => stitch.cellCoords;
 
 extension StitchGeometry on Stitch {
   /// Cell grid position. Null for [BackStitch] (which spans grid intersections).
-  (int, int)? get cellCoords => switch (this) {
-        FullStitch(:final x, :final y) => (x, y),
-        HalfStitch(:final x, :final y) => (x, y),
-        HalfCrossStitch(:final x, :final y) => (x, y),
-        QuarterStitch(:final x, :final y) => (x, y),
-        QuarterCrossStitch(:final x, :final y) => (x, y),
+  Cell? get cellCoords => switch (this) {
+        FullStitch(:final x, :final y) => Cell(x, y),
+        HalfStitch(:final x, :final y) => Cell(x, y),
+        HalfCrossStitch(:final x, :final y) => Cell(x, y),
+        QuarterStitch(:final x, :final y) => Cell(x, y),
+        QuarterCrossStitch(:final x, :final y) => Cell(x, y),
         BackStitch() => null,
       };
 

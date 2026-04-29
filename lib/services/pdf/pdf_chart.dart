@@ -9,9 +9,9 @@ void _drawChartPage(
   required List<Stitch> nonBack,
   required List<BackStitch> backstitches,
   required Map<String, Thread> threadMap,
-  required Map<String, Color> blendedColors,
-  required Map<String, Color> blendedCellColors,
-  required Map<String, String> blendedCellSymbols,
+  required Map<Cell, Color> blendedColors,
+  required Map<Cell, Color> blendedCellColors,
+  required Map<Cell, String> blendedCellSymbols,
   required Map<String, String> pdfSymbols,
   required double cellSize,
   required int startX,
@@ -88,7 +88,7 @@ void _drawChartPage(
     final gx = gridOriginX + (cx - startX) * cellSize;
     final gy = gridOriginY + (rows - (cy - startY) - 1) * cellSize;
 
-    final cellKey = '$cx,$cy';
+    final cellKey = Cell(cx, cy);
     final effectiveColor =
         blendedCellColors[cellKey] ?? blendedColors[cellKey] ?? thread.color;
 
@@ -113,7 +113,7 @@ void _drawChartPage(
     // symbolStitch threads in PK mode.
     final sym = patternKeeperMode
         ? pdfSymbols[thread.dmcCode] ?? ''
-        : blendedCellSymbols[cellKey] ?? pdfSymbols[thread.dmcCode] ?? '';
+        : blendedCellSymbols[Cell(cx, cy)] ?? pdfSymbols[thread.dmcCode] ?? '';
     if (symbolIsVisible(sym)) {
       final double subSize;
       final double sx, sy;

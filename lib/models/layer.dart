@@ -1,9 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'cell.dart';
 import 'layer_blend_mode.dart';
 import 'stitch.dart';
+import 'stitch_geometry.dart';
 
-@immutable
 class Layer {
   final String id;
   final String name;
@@ -13,7 +13,14 @@ class Layer {
   final LayerBlendMode blendMode;
   final List<Stitch> stitches;
 
-  const Layer({
+  // Lazily-built index for O(1) per-cell lookup.
+  // Safe as a mutable field on an otherwise-immutable value object because:
+  // - [stitches] is final; the index is always consistent with it.
+  // - [copyWith] creates a fresh [Layer], so the new instance starts with
+  //   [_cellIndex] == null and rebuilds on first access.
+  Map<Cell, List<Stitch>>? _cellIndex;
+
+  Layer({
     required this.id,
     required this.name,
     required this.visible,
@@ -53,6 +60,27 @@ class Layer {
     );
   }
 
+  /// Returns all stitches at cell ([x],[y]).
+  ///
+  /// Uses a lazily-built per-instance index so repeated lookups on the same
+  /// [Layer] are O(1) after the first call. BackStitch is excluded from the
+  /// index (it has no single cell coordinate) and is never returned here.
+  List<Stitch> stitchesAt(int x, int y) {
+    _cellIndex ??= _buildCellIndex();
+    return _cellIndex![Cell(x, y)] ?? const [];
+  }
+
+  Map<Cell, List<Stitch>> _buildCellIndex() {
+    final index = <Cell, List<Stitch>>{};
+    for (final s in stitches) {
+      final coords = s.cellCoords;
+      if (coords == null) continue; // BackStitch — skip
+      final key = coords;
+      (index[key] ??= []).add(s);
+    }
+    return index;
+  }
+
   Map<String, dynamic> toYaml() => {
         'id': id,
         'name': name,
@@ -71,10 +99,7 @@ class Layer {
       locked: yaml['locked'] as bool? ?? false,
       opacity: (yaml['opacity'] as num?)?.toDouble() ?? 1.0,
       blendMode: LayerBlendMode.fromYaml(yaml['blendMode'] as String?),
-      stitches: (yaml['stitches'] as List?)
-              ?.map((s) => Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
-              .toList() ??
-          [],
+      stitches: Stitch.listFromYaml(yaml['stitches'] as List? ?? const []),
     );
   }
 }

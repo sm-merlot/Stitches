@@ -46,21 +46,21 @@ void main() {
       final p = CrossStitchPattern.fromYaml(
           _baseYaml(threads: [_thread('971')]));
       expect(p.threads, hasLength(1));
-      expect(p.threads.first.dmcCode, '740');
+      expect(p.threads.values.first.dmcCode, '740');
     });
 
     test('replacement color and name come from DMC database', () {
       final p = CrossStitchPattern.fromYaml(
           _baseYaml(threads: [_thread('971')]));
       final dmc = dmcColorByCode('740')!;
-      expect(p.threads.first.color, dmc.color);
-      expect(p.threads.first.name, dmc.name);
+      expect(p.threads.values.first.color, dmc.color);
+      expect(p.threads.values.first.name, dmc.name);
     });
 
     test('user-assigned symbol is preserved through migration', () {
       final p = CrossStitchPattern.fromYaml(
           _baseYaml(threads: [_thread('971', symbol: 'P')]));
-      expect(p.threads.first.symbol, 'P');
+      expect(p.threads.values.first.symbol, 'P');
     });
 
     test('stitch threadId references are remapped in all layers', () {
@@ -83,7 +83,7 @@ void main() {
           threads: [_thread(entry.key)],
           stitches: [_fullStitch(0, 0, entry.key)],
         ));
-        expect(p.threads.first.dmcCode, entry.value,
+        expect(p.threads.values.first.dmcCode, entry.value,
             reason: '${entry.key} should become ${entry.value}');
         expect(p.stitches.first.threadId, entry.value);
       }
@@ -97,7 +97,7 @@ void main() {
       ));
       // 971 should be dropped; only 740 remains.
       expect(p.threads, hasLength(1));
-      expect(p.threads.first.dmcCode, '740');
+      expect(p.threads.values.first.dmcCode, '740');
       // Stitches from 971 are remapped to 740.
       expect(p.stitches.every((s) => s.threadId == '740'), isTrue);
     });
@@ -141,7 +141,7 @@ void main() {
         threads: [_thread('310'), _thread('740')],
         stitches: [_fullStitch(0, 0, '310'), _fullStitch(1, 0, '740')],
       ));
-      expect(p.threads.map((t) => t.dmcCode).toList(), ['310', '740']);
+      expect(p.threads.values.map((t) => t.dmcCode).toList(), ['310', '740']);
       expect(p.stitches[0].threadId, '310');
       expect(p.stitches[1].threadId, '740');
     });

@@ -29,11 +29,14 @@ class PatternScanPreviewScreen extends StatelessWidget {
   // ── Conversion ─────────────────────────────────────────────────────────────
 
   CrossStitchPattern _buildPattern() {
-    final threads = result.threads.map((t) {
-      final dmc = dmcColorByCode(t.dmcCode);
-      final color = dmc?.color ?? _hexColor(t.colorHex);
-      return Thread(dmcCode: t.dmcCode, name: t.name, color: color);
-    }).toList();
+    final threads = {
+      for (final t in result.threads)
+        t.dmcCode: Thread(
+          dmcCode: t.dmcCode,
+          name: t.name,
+          color: dmcColorByCode(t.dmcCode)?.color ?? _hexColor(t.colorHex),
+        ),
+    };
 
     final stitches = <Stitch>[];
     for (final s in result.stitches) {

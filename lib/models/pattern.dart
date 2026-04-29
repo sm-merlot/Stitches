@@ -14,7 +14,13 @@ class CrossStitchPattern {
   final String name;
   final int width;
   final int height;
-  final List<Thread> threads;
+
+  /// Pattern thread palette keyed by [Thread.dmcCode].
+  ///
+  /// Using a [Map] gives O(1) lookups by code and guarantees uniqueness.
+  /// Insertion order is preserved (Dart's [LinkedHashMap]) so the palette
+  /// renders in the order threads were added.
+  final Map<String, Thread> threads;
   final List<LayerItem> layerItems;
   final Color aidaColor;
 
@@ -162,9 +168,9 @@ class CrossStitchPattern {
       name: name,
       width: width,
       height: height,
-      threads: const [
-        Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black'),
-      ],
+      threads: const {
+        '310': Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black'),
+      },
       layerItems: [LayerLeaf(layer: defaultLayer)],
       editorSelectedThreadId: '310',
       editorActiveLayerId: defaultLayer.id,
@@ -176,7 +182,7 @@ class CrossStitchPattern {
     String? name,
     int? width,
     int? height,
-    List<Thread>? threads,
+    Map<String, Thread>? threads,
     List<LayerItem>? layerItems,
     Color? aidaColor,
     Object? editorSelectedThreadId = _sentinel,
@@ -244,9 +250,7 @@ class CrossStitchPattern {
 
   static const _sentinel = Object();
 
-  Thread? threadByCode(String dmcCode) {
-    return threads.where((t) => t.dmcCode == dmcCode).firstOrNull;
-  }
+  Thread? threadByCode(String dmcCode) => threads[dmcCode];
 
   /// Hex string representation of [aidaColor], e.g. `'#FFFFFF'`.
   String get aidaColorHex {
@@ -360,17 +364,9 @@ class CrossStitchPattern {
       referenceImagePath: yaml['overlay']?['imagePath'] as String?,
       referenceOpacity:
           (yaml['overlay']?['opacity'] as num?)?.toDouble() ?? 0.5,
-      threads: (yaml['threads'] as List?)
-              ?.map((t) =>
-                  Thread.fromYaml(Map<String, dynamic>.from(t as Map)))
-              .toList() ??
-          [],
+      threads: Thread.mapFromYaml(yaml['threads'] as List? ?? const []),
       layerItems: layerItems,
-      snippets: (yaml['snippets'] as List?)
-              ?.map((s) =>
-                  Snippet.fromYaml(Map<String, dynamic>.from(s as Map)))
-              .toList() ??
-          [],
+      snippets: Snippet.listFromYaml(yaml['snippets'] as List? ?? const []),
       compositeSymbols: () {
         final raw = yaml['compositeSymbols'];
         if (raw == null) return const <String, String>{};
@@ -418,7 +414,7 @@ class CrossStitchPattern {
       // Skip empty-string placeholders (replacement TBD — don't auto-migrate yet).
       if (newCode != null && newCode.isNotEmpty) remaps[code] = newCode;
     }
-    for (final t in p.threads) { checkCode(t.dmcCode); }
+    for (final t in p.threads.values) { checkCode(t.dmcCode); }
     for (final snippet in p.snippets) {
       for (final pal in snippet.palettes) {
         for (final t in pal.threads) { checkCode(t.dmcCode); }
@@ -436,23 +432,22 @@ class CrossStitchPattern {
         .toList();
 
     // Remap pattern-level threads; deduplicate if replacement already present.
-    final existingCodes = p.threads.map((t) => t.dmcCode).toSet();
-    final newThreads = <Thread>[];
-    for (final t in p.threads) {
+    final newThreads = <String, Thread>{};
+    for (final t in p.threads.values) {
       final newCode = remaps[t.dmcCode];
       if (newCode == null) {
-        newThreads.add(t);
-      } else if (existingCodes.contains(newCode)) {
+        newThreads[t.dmcCode] = t;
+      } else if (p.threads.containsKey(newCode)) {
         // Replacement already in palette — drop discontinued entry; stitches
         // will be remapped to the existing replacement thread below.
       } else {
         final dmcColor = dmcColorByCode(newCode);
-        newThreads.add(Thread(
+        newThreads[newCode] = Thread(
           dmcCode: newCode,
           color: dmcColor?.color ?? t.color,
           name: dmcColor?.name ?? t.name,
           symbol: t.symbol, // preserve user-assigned symbol
-        ));
+        );
       }
     }
 

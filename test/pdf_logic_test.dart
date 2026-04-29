@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/layer.dart';
 import 'package:stitches/models/layer_blend_mode.dart';
 import 'package:stitches/models/layer_item.dart';
@@ -32,7 +33,7 @@ CrossStitchPattern _pattern({
     name: 'Test',
     width: 10,
     height: 10,
-    threads: threads,
+    threads: {for (final t in threads) t.dmcCode: t},
     layerItems: layers.map((l) => LayerLeaf(layer: l)).toList(),
   );
 }
@@ -103,7 +104,7 @@ void main() {
       );
       final r = StitchCompositor.computeLayer(pattern);
       expect(r.fullStitches, hasLength(1));
-      expect(r.fullStitches['0,0']?.isBlended, false);
+      expect(r.fullStitches[const Cell(0, 0)]?.isBlended, false);
     });
 
     test('hidden layer is excluded', () {
@@ -137,8 +138,8 @@ void main() {
       );
       final r = StitchCompositor.computeLayer(pattern);
       expect(r.fullStitches, hasLength(1));
-      expect(r.fullStitches['2,3']?.isBlended, true);
-      final winner = r.fullStitches['2,3']?.stitch as FullStitch;
+      expect(r.fullStitches[const Cell(2, 3)]?.isBlended, true);
+      final winner = r.fullStitches[const Cell(2, 3)]?.stitch as FullStitch;
       expect(winner.threadId, '310');
     });
 
@@ -227,7 +228,7 @@ void main() {
         ],
       );
       final r = StitchCompositor.computeLayer(pattern);
-      final winner = r.fullStitches['0,0']?.stitch as FullStitch;
+      final winner = r.fullStitches[const Cell(0, 0)]?.stitch as FullStitch;
       expect(winner.threadId, '321');
     });
   });

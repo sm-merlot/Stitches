@@ -215,8 +215,8 @@ void main() {
           .where((s) {
             final coords = s.cellCoords;
             if (coords == null) return false;
-            return coords.$1 >= 1 && coords.$1 <= 3 &&
-                coords.$2 >= 1 && coords.$2 <= 3;
+            return coords.x >= 1 && coords.x <= 3 &&
+                coords.y >= 1 && coords.y <= 3;
           })
           .toList();
 

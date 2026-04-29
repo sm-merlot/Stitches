@@ -11,6 +11,7 @@ import 'package:stitches/models/layer_blend_mode.dart';
 import 'package:stitches/models/layer_item.dart';
 import 'package:stitches/models/page_config.dart';
 import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/pattern_progress.dart';
 import 'package:stitches/models/progress_log.dart';
 import 'package:stitches/models/snippet.dart';
@@ -39,7 +40,7 @@ void main() {
       expect(parsed.materialsSuggestions, equals(original.materialsSuggestions));
 
       expect(parsed.threads.length, equals(3));
-      expect(parsed.threads.map((t) => t.dmcCode), containsAll(['310', '666', '820']));
+      expect(parsed.threads.keys, containsAll(['310', '666', '820']));
 
       expect(parsed.layerItems, hasLength(2));
       final group = parsed.layerItems.first as LayerGroup;
@@ -77,7 +78,7 @@ void main() {
         parsed.progress,
         equals(
           PatternProgress(
-            completedStitches: {(1, 1), (2, 2)},
+            completedStitches: {const Cell(1, 1), const Cell(2, 2)},
             completedBackstitches: {(0.5, 0.5, 1.5, 1.5)},
             completedPages: {0, 3},
           ),
@@ -147,7 +148,7 @@ stitching:
       expect(parsed.width, equals(4));
       expect(parsed.height, equals(3));
       expect(parsed.description, equals('still parses'));
-      expect(parsed.threads.single.dmcCode, equals('310'));
+      expect(parsed.threads.values.single.dmcCode, equals('310'));
     });
 
     test('legacy v1-style fixture (flat stitches list) still loads', () async {
@@ -216,7 +217,7 @@ CrossStitchPattern _buildRichPattern() {
       (aidaCount: 14, strands: 2),
       (aidaCount: 18, strands: 3),
     ],
-    threads: const [black, red, blue],
+    threads: const {'310': black, '666': red, '820': blue},
     layerItems: [
       LayerGroup(
         id: 'group-1',
@@ -261,7 +262,7 @@ CrossStitchPattern _buildRichPattern() {
       fuzzyAmount: 1,
     ),
     progress: PatternProgress(
-      completedStitches: {(1, 1), (2, 2)},
+      completedStitches: {const Cell(1, 1), const Cell(2, 2)},
       completedBackstitches: {(0.5, 0.5, 1.5, 1.5)},
       completedPages: {0, 3},
     ),

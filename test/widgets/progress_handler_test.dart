@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart' show Offset, Rect;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/pattern_progress.dart';
 import 'package:stitches/models/stitch.dart';
 import 'package:stitches/widgets/progress_handler.dart';
@@ -193,7 +194,7 @@ void main() {
 
     test('wasProgressCellDone reflects cell state before toggle', () {
       final progress = PatternProgress(
-        completedStitches: {(1, 1)}, // cell (1,1) already done
+        completedStitches: {const Cell(1, 1)}, // cell (1,1) already done
       );
       final pat = fakePattern().copyWith(progress: progress);
       final state = fakeStitchState(pattern: pat);

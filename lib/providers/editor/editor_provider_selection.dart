@@ -96,8 +96,9 @@ mixin SelectionMixin on Notifier<EditorState> {
         .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
         .toList();
     final threadIds = clips.map((s) => s.threadId).toSet();
-    final threads =
-        state.pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
+    final threads = state.pattern.threads.values
+        .where((t) => threadIds.contains(t.dmcCode))
+        .toList();
     await Clipboard.setData(ClipboardData(text: _serializeClipboard(threads, clips)));
     state = state.copyWith(
       clipboard: clips,
@@ -140,10 +141,11 @@ mixin SelectionMixin on Notifier<EditorState> {
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
 
-    var threads = [...state.pattern.threads];
+    var threads = Map<String, Thread>.from(state.pattern.threads);
     for (final ct in state.clipboardThreads ?? <Thread>[]) {
-      if (!threads.any((t) => t.dmcCode == ct.dmcCode)) {
-        threads.add(_resolveThreadSymbol(ct, threads));
+      if (!threads.containsKey(ct.dmcCode)) {
+        final resolved = _resolveThreadSymbol(ct, threads.values.toList());
+        threads[resolved.dmcCode] = resolved;
       }
     }
 
@@ -548,7 +550,7 @@ mixin SelectionMixin on Notifier<EditorState> {
     if (clips == null || clips.isEmpty) return;
     final w = clips.fold(0, (m, s) {
       final c = EditorState.cellCoords(s);
-      return c != null ? (c.$1 + 1 > m ? c.$1 + 1 : m) : m;
+      return c != null ? (c.x + 1 > m ? c.x + 1 : m) : m;
     });
     final flipped = clips.map((s) => _flipStitchH(s, 0, 0, w)).toList();
     state = state.copyWith(clipboard: flipped);
@@ -559,7 +561,7 @@ mixin SelectionMixin on Notifier<EditorState> {
     if (clips == null || clips.isEmpty) return;
     final h = clips.fold(0, (m, s) {
       final c = EditorState.cellCoords(s);
-      return c != null ? (c.$2 + 1 > m ? c.$2 + 1 : m) : m;
+      return c != null ? (c.y + 1 > m ? c.y + 1 : m) : m;
     });
     final flipped = clips.map((s) => _flipStitchV(s, 0, 0, h)).toList();
     state = state.copyWith(clipboard: flipped);
@@ -572,8 +574,8 @@ mixin SelectionMixin on Notifier<EditorState> {
     for (final s in clips) {
       final c = EditorState.cellCoords(s);
       if (c != null) {
-        if (c.$1 + 1 > w) w = c.$1 + 1;
-        if (c.$2 + 1 > h) h = c.$2 + 1;
+        if (c.x + 1 > w) w = c.x + 1;
+        if (c.y + 1 > h) h = c.y + 1;
       }
     }
     final rotated = clips.map((s) => _rotateStitchCW(s, 0, 0, w, h)).toList();

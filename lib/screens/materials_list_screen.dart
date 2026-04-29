@@ -89,7 +89,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
       }
       return unique.values.toList();
     }
-    return widget.state.pattern.threads;
+    return widget.state.pattern.threads.values.toList();
   }
 
   /// Cross-stitch equivalents per dmcCode (FullStitch=1.0, Half=0.5, Quarter=0.25).

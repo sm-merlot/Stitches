@@ -20,13 +20,13 @@ part 'layers_panel_rows.dart';
 Future<void> _showLayerReplaceColour(
   BuildContext context,
   Layer layer,
-  List<Thread> patternThreads,
+  Map<String, Thread> patternThreads,
   EditorNotifier notifier,
 ) async {
   // Collect distinct thread codes used by this layer.
   final usedCodes = layer.stitches.map((s) => s.threadId).toSet();
   final layerThreads =
-      patternThreads.where((t) => usedCodes.contains(t.dmcCode)).toList();
+      patternThreads.values.where((t) => usedCodes.contains(t.dmcCode)).toList();
   if (layerThreads.isEmpty) return;
 
   // If only one colour in the layer, skip the pick-source step.

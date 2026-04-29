@@ -130,20 +130,6 @@ class PageLayout {
 
   static int _encodeCell(int col, int row) => (col << 16) | row;
 
-  /// Parse a `'x,y'` composite key into an encoded cell int.
-  static int _parseXY(String key) {
-    final comma = key.indexOf(',');
-    return (_parseInt(key, 0, comma) << 16) | _parseInt(key, comma + 1, key.length);
-  }
-
-  static int _parseInt(String s, int start, int end) {
-    var v = 0;
-    for (var i = start; i < end; i++) {
-      v = v * 10 + s.codeUnitAt(i) - 48;
-    }
-    return v;
-  }
-
   /// Build a [PageLayout] from [config] and the pattern's current stitch data.
   ///
   /// Fuzzy boundary offsets are computed once and cached in the returned
@@ -159,14 +145,13 @@ class PageLayout {
     // resolved, topmost layer wins for overlapping FullStitches).
     final composite = StitchCompositor.computeLayer(pattern);
     final threadIndex = <String, int>{
-      for (int i = 0; i < pattern.threads.length; i++)
-        pattern.threads[i].dmcCode: i,
+      for (final (i, dmcCode) in pattern.threads.keys.indexed) dmcCode: i,
     };
 
-    // fullStitches is keyed 'x,y' → CompositeStitch; resolvedThread is the winner.
+    // fullStitches is keyed Cell → CompositeStitch; resolvedThread is the winner.
     final Map<int, int?> snapColor = {
       for (final entry in composite.fullStitches.entries)
-        _parseXY(entry.key): threadIndex[entry.value.resolvedThread.dmcCode],
+        (entry.key.x << 16) | entry.key.y: threadIndex[entry.value.resolvedThread.dmcCode],
     };
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];

@@ -228,7 +228,7 @@ void _drawStitchPreview(
   required List<Stitch> nonBack,
   required List<BackStitch> backstitches,
   required Map<String, Thread> threadMap,
-  required Map<String, Color> blendedColors,
+  required Map<Cell, Color> blendedColors,
   required double cellSize,
   bool realistic = true,
 }) {
@@ -250,7 +250,7 @@ void _drawStitchPreview(
       final cy = _stitchY(s);
       final thread = threadMap[s.threadId];
       if (thread == null) continue;
-      final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+      final effectiveColor = blendedColors[Cell(cx, cy)] ?? thread.color;
       canvas.setFillColor(_pdfColor(effectiveColor));
       final gx = originX + cx * cellSize;
       final gy = originY + (rows - cy - 1) * cellSize;
@@ -263,7 +263,7 @@ void _drawStitchPreview(
       final cy = _stitchY(s);
       final thread = threadMap[s.threadId];
       if (thread == null) continue;
-      final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+      final effectiveColor = blendedColors[Cell(cx, cy)] ?? thread.color;
       canvas.setFillColor(_pdfColor(effectiveColor));
       final gx = originX + cx * cellSize;
       final gy = originY + (rows - cy - 1) * cellSize;

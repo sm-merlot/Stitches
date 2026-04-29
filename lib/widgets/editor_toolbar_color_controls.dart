@@ -98,21 +98,17 @@ class _QuickSwatches extends ConsumerWidget {
               for (final entry in layer.fullStitches.entries) {
                 if (entry.value.resolvedThread.dmcCode != id) continue;
                 total++;
-                final parts = entry.key.split(',');
-                if (parts.length == 2) {
-                  final x = int.tryParse(parts[0]);
-                  final y = int.tryParse(parts[1]);
-                  if (x != null && y != null &&
-                      progress.completedStitches.contains((x, y))) {
-                    done++;
-                  }
+                final x = entry.key.x;
+                final y = entry.key.y;
+                if (progress.completedStitches.contains(Cell(x, y))) {
+                  done++;
                 }
               }
             } else {
-              final seen = <(int, int)>{};
+              final seen = <Cell>{};
               for (final s in allStitches) {
                 if (s is! FullStitch || s.threadId != id) continue;
-                final cell = (s.x, s.y);
+                final cell = Cell(s.x, s.y);
                 if (!seen.add(cell)) continue;
                 total++;
                 if (progress.completedStitches.contains(cell)) done++;

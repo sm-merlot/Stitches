@@ -269,6 +269,6 @@ class DrawHandler {
 
   static bool _stitchAtCell(Stitch s, int x, int y) {
     final coords = s.cellCoords;
-    return coords != null && coords.$1 == x && coords.$2 == y;
+    return coords != null && coords.x == x && coords.y == y;
   }
 }
