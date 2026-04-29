@@ -155,32 +155,6 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
   }
 
-  void changeThreadSymbol(String dmcCode, String symbol) {
-    final existing = state.pattern.threads[dmcCode];
-    if (existing == null) return;
-    final newThreads = {...state.pattern.threads, dmcCode: existing.copyWith(symbol: symbol)};
-    state = state.copyWith(
-      pattern: state.pattern.copyWith(threads: newThreads),
-      isDirty: true,
-    );
-  }
-
-  void removeThread(String dmcCode) {
-    final newThreads = Map<String, Thread>.from(state.pattern.threads)..remove(dmcCode);
-    final newPattern = _patternWithAllLayersTransformed(
-      state.pattern.copyWith(threads: newThreads),
-      (stitches) => stitches.where((s) => s.threadId != dmcCode).toList(),
-    );
-    final newSelectedId = state.selectedThreadId == dmcCode
-        ? (newThreads.isNotEmpty ? newThreads.values.first.dmcCode : null)
-        : state.selectedThreadId;
-    state = state.copyWith(
-      pattern: newPattern,
-      selectedThreadId: newSelectedId,
-      isDirty: true,
-    );
-  }
-
   /// Replaces every stitch using [oldDmcCode] with [newDmcCode] and updates
   /// the thread palette. The old thread's symbol is preserved.
   void replaceThread(

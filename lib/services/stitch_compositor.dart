@@ -177,8 +177,9 @@ class StitchCompositor {
 
     for (final layer in newPattern.layers) {
       if (!layer.visible) continue;
-      for (final s in layer.stitches) {
-        if (s is FullStitch && s.x == x && s.y == y) {
+      // O(1) via Layer._cellIndex — BackStitch excluded from index (no cellCoords).
+      for (final s in layer.stitchesAt(x, y)) {
+        if (s is FullStitch) {
           final t = threadMap[s.threadId];
           if (t == null) continue;
           cellStack.add((
@@ -187,18 +188,15 @@ class StitchCompositor {
             opacity: layer.opacity,
             blendMode: layer.blendMode,
           ));
-        } else if (s is! BackStitch) {
-          final coords = s.cellCoords;
-          if (coords != null && coords.x == x && coords.y == y) {
-            final t = threadMap[s.threadId];
-            if (t != null) {
-              newOtherAtCell.add(CompositeStitch(
-                stitch: s,
-                blendedColor: t.color,
-                resolvedThread: t,
-                isBlended: false,
-              ));
-            }
+        } else {
+          final t = threadMap[s.threadId];
+          if (t != null) {
+            newOtherAtCell.add(CompositeStitch(
+              stitch: s,
+              blendedColor: t.color,
+              resolvedThread: t,
+              isBlended: false,
+            ));
           }
         }
       }

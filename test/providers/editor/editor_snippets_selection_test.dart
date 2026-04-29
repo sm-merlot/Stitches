@@ -141,92 +141,12 @@ void main() {
     });
   });
 
-  // ─── Snippet transform ────────────────────────────────────────────────────────
-
-  group('EditorNotifier — snippet transform', () {
-    late ProviderContainer c;
-    setUp(() { c = makeContainer(); loadEmpty(c); });
-    tearDown(() => c.dispose());
-
-    test('transformSnippet flipH mirrors x coordinate', () {
-      // 3-wide snippet; stitch at x=0 → after flipH should be at x=2
-      final snip = Snippet.create(
-        name: 'S',
-        width: 3,
-        height: 1,
-        threads: const [_black],
-        stitches: const [FullStitch(x: 0, y: 0, threadId: '310')],
-      );
-      n(c).addSnippet(snip);
-      n(c).transformSnippet(snip.id, SnippetTransform.flipH);
-      final flipped = s(c).pattern.snippets.single.stitches.whereType<FullStitch>().single;
-      expect(flipped.x, equals(2)); // 3-1-0 = 2
-    });
-
-    test('transformSnippet flipV mirrors y coordinate', () {
-      final snip = Snippet.create(
-        name: 'S',
-        width: 1,
-        height: 3,
-        threads: const [_black],
-        stitches: const [FullStitch(x: 0, y: 0, threadId: '310')],
-      );
-      n(c).addSnippet(snip);
-      n(c).transformSnippet(snip.id, SnippetTransform.flipV);
-      final flipped = s(c).pattern.snippets.single.stitches.whereType<FullStitch>().single;
-      expect(flipped.y, equals(2)); // 3-1-0 = 2
-    });
-
-    test('transformSnippet rotateCW swaps dimensions', () {
-      final snip = Snippet.create(
-        name: 'S',
-        width: 4,
-        height: 2,
-        threads: const [_black],
-        stitches: const [FullStitch(x: 0, y: 0, threadId: '310')],
-      );
-      n(c).addSnippet(snip);
-      n(c).transformSnippet(snip.id, SnippetTransform.rotateCW);
-      final rotated = s(c).pattern.snippets.single;
-      expect(rotated.width, equals(2));   // old height
-      expect(rotated.height, equals(4));  // old width
-    });
-  });
-
   // ─── Snippet palette management ───────────────────────────────────────────────
 
   group('EditorNotifier — snippet palettes', () {
     late ProviderContainer c;
     setUp(() { c = makeContainer(); loadEmpty(c); });
     tearDown(() => c.dispose());
-
-    test('addSnippetPalette appends palette and sets it active', () {
-      final snip = _makeSnippet();
-      n(c).addSnippet(snip);
-      final newPal = SnippetPalette.create(name: 'Alt', threads: const [_red]);
-      n(c).addSnippetPalette(snip.id, newPal);
-      final updated = s(c).pattern.snippets.single;
-      expect(updated.palettes, hasLength(2));
-      expect(updated.activePaletteIndex, equals(1));
-    });
-
-    test('deleteSnippetPalette cannot delete last palette', () {
-      final snip = _makeSnippet();
-      n(c).addSnippet(snip);
-      final palId = s(c).pattern.snippets.single.palettes.first.id;
-      n(c).deleteSnippetPalette(snip.id, palId);
-      expect(s(c).pattern.snippets.single.palettes, hasLength(1)); // unchanged
-    });
-
-    test('deleteSnippetPalette removes second palette', () {
-      final snip = _makeSnippet();
-      n(c).addSnippet(snip);
-      final newPal = SnippetPalette.create(name: 'Alt', threads: const [_red]);
-      n(c).addSnippetPalette(snip.id, newPal);
-      final palId = s(c).pattern.snippets.single.palettes.last.id;
-      n(c).deleteSnippetPalette(snip.id, palId);
-      expect(s(c).pattern.snippets.single.palettes, hasLength(1));
-    });
 
     test('setSnippetActivePalette updates index, clamped', () {
       final snip = _makeSnippet();

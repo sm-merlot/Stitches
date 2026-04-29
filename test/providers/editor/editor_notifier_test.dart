@@ -543,28 +543,6 @@ void main() {
     setUp(() { c = makeContainer(); loadEmpty(c); });
     tearDown(() => c.dispose());
 
-    test('removeThread deletes thread and its stitches', () {
-      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
-      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '666'));
-      notifier(c).removeThread('310');
-
-      final codes = editorState(c).pattern.threads.keys;
-      expect(codes, isNot(contains('310')));
-      final stitches = editorState(c).pattern.stitches;
-      expect(stitches.any((s) => s.threadId == '310'), isFalse);
-      expect(stitches.any((s) => s.threadId == '666'), isTrue);
-    });
-
-    test('removeThread updates selectedThread when removed thread was selected', () {
-      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '666'));
-      notifier(c).setSelectedThread('310');
-      notifier(c).removeThread('310');
-      // After removal, selectedThread should point to a remaining thread.
-      final codes = editorState(c).pattern.threads.keys.toList();
-      expect(codes, isNot(contains('310')));
-      expect(codes, contains(editorState(c).selectedThreadId ?? codes.first));
-    });
-
     test('replaceThread remaps all stitches to new code', () {
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));

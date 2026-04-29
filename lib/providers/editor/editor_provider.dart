@@ -54,8 +54,6 @@ enum DrawingMode { draw, erase, pan, colorPicker, select, paste }
 
 enum SnippetResizeMode { clip, scale, expand }
 
-enum SnippetTransform { flipH, flipV, rotateCW }
-
 /// The three top-level application modes.
 ///
 /// - [view] — read-only overview; the default when opening a file.
