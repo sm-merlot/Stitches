@@ -1,0 +1,58 @@
+test/services/render_cache_test.dart
+  f152e190cfa663bb 27
+test/services/format_service_test.dart
+  f152e190cfa663bb 27,74,106
+test/services/stitches_roundtrip_test.dart
+  f152e190cfa663bb 42,150,219
+test/pdf_logic_test.dart
+  f152e190cfa663bb 35
+test/providers/editor_snippets_selection_test.dart
+  f152e190cfa663bb 388
+test/widgets/screen_smoke_test.dart
+  f152e190cfa663bb 90
+test/debug_snap_test.dart
+  f152e190cfa663bb 37,39-40,43-44
+test/models_and_logic_test.dart
+  f152e190cfa663bb 262,274,297,323,347,369,571-572,576-577,581-583,587-590,597-599,606-608
+test/dmc_migration_test.dart
+  f152e190cfa663bb 49,56-57,63,86,100,144
+lib/screens/pattern_scan_preview.dart
+  f152e190cfa663bb 32-39
+lib/services/format_service.dart
+  f152e190cfa663bb 260
+lib/screens/snippet_editor_screen.dart
+  f152e190cfa663bb 116,174,525
+test/widgets/test_helpers.dart
+  f152e190cfa663bb 50
+test/providers/editor_notifier_test.dart
+  f152e190cfa663bb 112,119,431-434,438-440,444,446-447,551,563,574
+test/stitch_compositor_test.dart
+  f152e190cfa663bb 39
+test/page_layout_integration_test.dart
+  f152e190cfa663bb 44,46-47,50-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "27a2c7ce8fddad37369783a07b70476b33625deb",
+  "prompts": {
+    "f152e190cfa663bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "110a807c-15a7-4d9d-a27b-5a69c77d285a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 79,
+      "total_deletions": 84,
+      "accepted_lines": 79,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
