@@ -183,9 +183,7 @@ class StitchCompositor {
     final newBackstitches = backstitchesChanged
         ? <BackStitch>[
             for (final layer in newPattern.layers)
-              if (layer.visible)
-                for (final s in layer.stitches)
-                  if (s is BackStitch) s,
+              if (layer.visible) ...layer.backstitches,
           ]
         : old.backstitches;
 
@@ -215,16 +213,9 @@ class StitchCompositor {
     CrossStitchPattern newPattern,
     Layer changedLayer,
   ) {
-    // Collect unique cell positions and backstitch presence in one pass.
-    final affectedCells = <Cell>{};
-    bool hasBackstitches = false;
-    for (final s in changedLayer.stitches) {
-      if (s is BackStitch) {
-        hasBackstitches = true;
-      } else if (s.cellCoords case final c?) {
-        affectedCells.add(c);
-      }
-    }
+    // Collect unique cell positions and backstitch presence from primary storage.
+    final affectedCells = changedLayer.stitchesByCell.keys.toSet();
+    final hasBackstitches = changedLayer.backstitches.isNotEmpty;
 
     if (affectedCells.isEmpty && !hasBackstitches) return old;
 
@@ -249,9 +240,7 @@ class StitchCompositor {
     final newBackstitches = hasBackstitches
         ? <BackStitch>[
             for (final layer in newPattern.layers)
-              if (layer.visible)
-                for (final s in layer.stitches)
-                  if (s is BackStitch) s,
+              if (layer.visible) ...layer.backstitches,
           ]
         : old.backstitches;
 
@@ -392,20 +381,24 @@ class StitchCompositor {
 
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
-      for (final s in layer.stitches) {
-        if (s is BackStitch) {
-          backstitches.add(s);
-        } else if (s is FullStitch) {
-          final thread = threadMap[s.threadId];
-          if (thread == null) continue;
-          (cellStack[Cell(s.x, s.y)] ??= []).add((
-            stitch: s,
-            color: thread.color,
-            opacity: layer.opacity,
-            blendMode: layer.blendMode,
-          ));
-        } else {
-          otherNonBackRaw.add(s);
+      // Iterate primary storage directly to avoid the O(N) stitches getter.
+      for (final bs in layer.backstitches) {
+        backstitches.add(bs);
+      }
+      for (final entry in layer.stitchesByCell.entries) {
+        for (final s in entry.value) {
+          if (s is FullStitch) {
+            final thread = threadMap[s.threadId];
+            if (thread == null) continue;
+            (cellStack[Cell(s.x, s.y)] ??= []).add((
+              stitch: s,
+              color: thread.color,
+              opacity: layer.opacity,
+              blendMode: layer.blendMode,
+            ));
+          } else {
+            otherNonBackRaw.add(s);
+          }
         }
       }
     }

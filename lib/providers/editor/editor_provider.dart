@@ -680,6 +680,26 @@ class EditorNotifier extends Notifier<EditorState>
     });
   }
 
+  /// Like [_patternWithActiveLayerStitches] but accepts a pre-built [Layer].
+  ///
+  /// Used by the draw hot path ([addStitchRaw], [removeStitchesAtRaw], etc.)
+  /// where the caller has already produced the updated layer via an incremental
+  /// method ([withStitchAdded], [withCellCleared], …) and we just need to
+  /// substitute it into the pattern's layer list.  Avoids the extra
+  /// [Layer.copyWith] + [_indexList] call that [_patternWithActiveLayerStitches]
+  /// would trigger.
+  @override
+  CrossStitchPattern _patternWithActiveLayer(
+      CrossStitchPattern pattern, Layer newLayer) {
+    final activeId = state.activeLayerId;
+    return pattern.mapLayers((l) {
+      if (l.id == activeId || (activeId.isEmpty && l == pattern.layers.first)) {
+        return newLayer;
+      }
+      return l;
+    });
+  }
+
   @override
   bool _isInBounds(Stitch s, int maxX, int maxY) {
     final coords = EditorState.cellCoords(s);
