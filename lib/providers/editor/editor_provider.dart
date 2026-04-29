@@ -420,8 +420,63 @@ class EditorNotifier extends Notifier<EditorState>
 
   // ─── Undo / Redo ────────────────────────────────────────────────────────────
 
+  // Delegate set by the active mode controller via [registerUndoDelegate].
+  // When non-null, [undo] and [redo] route through the controller's
+  // [UndoManager] before falling back to the snapshot undo stack.
+  ({
+    bool Function() canUndo,
+    bool Function() canRedo,
+    void Function() undo,
+    void Function() redo,
+  })? _controllerUndoDelegate;
+
+  /// Registers [canUndo]/[canRedo]/[undo]/[redo] callbacks from the active
+  /// mode controller. Call from [CanvasEditController.attachCanvas].
+  void registerUndoDelegate({
+    required bool Function() canUndo,
+    required bool Function() canRedo,
+    required void Function() undo,
+    required void Function() redo,
+  }) {
+    _controllerUndoDelegate = (
+      canUndo: canUndo,
+      canRedo: canRedo,
+      undo: undo,
+      redo: redo,
+    );
+  }
+
+  /// Removes the controller delegate. Call from [CanvasEditController.detachCanvas].
+  ///
+  /// Does not update state — called during [AidaWidget.dispose] when the
+  /// Riverpod element may already be defunct. The [controllerCanUndo] /
+  /// [controllerCanRedo] fields naturally become stale; they reset to false
+  /// on the next [attachCanvas] + [registerUndoDelegate] cycle.
+  void unregisterUndoDelegate() {
+    _controllerUndoDelegate = null;
+  }
+
+  /// Reads [canUndo]/[canRedo] from the active delegate and updates
+  /// [EditorState.controllerCanUndo] / [EditorState.controllerCanRedo].
+  /// Called after each [UndoManager.execute], [UndoManager.undo], or
+  /// [UndoManager.redo] so the toolbar reflects the live undo state.
+  void updateControllerUndoState() {
+    final d = _controllerUndoDelegate;
+    state = state.copyWith(
+      controllerCanUndo: d?.canUndo() ?? false,
+      controllerCanRedo: d?.canRedo() ?? false,
+    );
+  }
+
   void undo() {
-    if (!state.canUndo) return;
+    // Route through the active controller's UndoManager first.
+    final d = _controllerUndoDelegate;
+    if (d != null && d.canUndo()) {
+      d.undo();
+      updateControllerUndoState();
+      return;
+    }
+    if (state._undoStack.isEmpty) return;
     final undoStack = [...state._undoStack];
     final redoStack = [...state._redoStack];
     final (prevPattern, prevPalettes) = undoStack.removeLast();
@@ -444,7 +499,14 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   void redo() {
-    if (!state.canRedo) return;
+    // Route through the active controller's UndoManager first.
+    final d = _controllerUndoDelegate;
+    if (d != null && d.canRedo()) {
+      d.redo();
+      updateControllerUndoState();
+      return;
+    }
+    if (state._redoStack.isEmpty) return;
     final undoStack = [...state._undoStack];
     final redoStack = [...state._redoStack];
     final (nextPattern, nextPalettes) = redoStack.removeLast();
