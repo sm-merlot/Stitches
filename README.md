@@ -84,6 +84,24 @@ The resulting pattern is saved automatically as a `.stitches` file next to the s
 - **Resizable file sidebar** — drag the sidebar edge to any width between 160–480 px; width is remembered between sessions
 - **Sidebar type filters** — toggle PDF and image visibility in the folder tree independently; settings are persisted; switching a filter off only deselects the currently open item if it is of the filtered type — patterns, PDFs, and images remain open independently
 
+## CI / GitHub Actions
+
+CI workflows are triggered manually via PR comments rather than automatically on every push.
+
+| Comment | PR type | What it runs |
+|---|---|---|
+| `/ci` | Any PR | `flutter analyze` + unit tests + integration tests |
+| `/changeset` | Dependabot PRs only | Adds a changeset file to the PR branch so it feeds into the release pipeline |
+
+Automated workflows (no comment needed):
+
+| Event | What it runs |
+|---|---|
+| Push to `main` | `release.yml` — creates or updates the "version packages" PR; if that PR was just merged, tags the new version |
+| New `v*.*.*` tag | `build.yml` — builds macOS, Android, and Windows; creates a GitHub Release |
+
+`workflow_dispatch` is also available on all workflows for manual runs from the Actions tab.
+
 ## Getting Started
 
 ```bash
