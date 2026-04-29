@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/layer.dart';
 import 'package:stitches/models/layer_blend_mode.dart';
 import 'package:stitches/models/layer_item.dart';
@@ -52,8 +53,8 @@ void main() {
     final layer = StitchCompositor.computeLayer(pattern);
 
     expect(layer.fullStitches, hasLength(1));
-    expect(layer.fullStitches['0,0']?.resolvedThread.dmcCode, '310');
-    expect(layer.fullStitches['0,0']?.isBlended, false);
+    expect(layer.fullStitches[const Cell(0, 0)]?.resolvedThread.dmcCode, '310');
+    expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, false);
     expect(layer.backstitches, isEmpty);
   });
 
@@ -117,7 +118,7 @@ void main() {
     );
     final layer = StitchCompositor.computeLayer(pattern);
     expect(layer.fullStitches, hasLength(1));
-    expect(layer.fullStitches['0,0']?.isBlended, true);
+    expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, true);
   });
 
   test('two layers same cell → crossStitchEquiv totals 1.0 (not 2.0)', () {
@@ -147,8 +148,8 @@ void main() {
     );
     final layer = StitchCompositor.computeLayer(pattern);
     expect(layer.fullStitches, hasLength(2));
-    expect(layer.fullStitches['0,0']?.isBlended, false);
-    expect(layer.fullStitches['1,0']?.isBlended, false);
+    expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, false);
+    expect(layer.fullStitches[const Cell(1, 0)]?.isBlended, false);
     final total = layer.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
     expect(total, closeTo(2.0, 0.001));
   });
@@ -170,7 +171,7 @@ void main() {
       ],
     );
     final layer = StitchCompositor.computeLayer(pattern);
-    final cs = layer.fullStitches['0,0'];
+    final cs = layer.fullStitches[const Cell(0, 0)];
     expect(cs?.stitch, isA<FullStitch>());
     expect((cs?.stitch as FullStitch).threadId, '321'); // top layer wins
   });
@@ -190,7 +191,7 @@ void main() {
       ],
     );
     final layer = StitchCompositor.computeLayer(pattern);
-    final cs = layer.fullStitches['0,0'];
+    final cs = layer.fullStitches[const Cell(0, 0)];
     expect((cs?.stitch as FullStitch).threadId, '310'); // bottom layer wins for Add blend
   });
 
@@ -240,8 +241,8 @@ void main() {
       );
       final patched = StitchCompositor.patchLayer(old, newPat, 3, 4);
       expect(patched.fullStitches, hasLength(1));
-      expect(patched.fullStitches['3,4']?.resolvedThread.dmcCode, '310');
-      expect(patched.fullStitches['3,4']?.isBlended, false);
+      expect(patched.fullStitches[const Cell(3, 4)]?.resolvedThread.dmcCode, '310');
+      expect(patched.fullStitches[const Cell(3, 4)]?.isBlended, false);
     });
 
     test('removes a stitch: cell present in old, absent in new → entry removed', () {
@@ -251,7 +252,7 @@ void main() {
         layers: [_layer(stitches: [FullStitch(x: 3, y: 4, threadId: '310')])],
       );
       final old = StitchCompositor.computeLayer(oldPat);
-      expect(old.fullStitches, contains('3,4'));
+      expect(old.fullStitches, contains(const Cell(3, 4)));
 
       final newPat = _pattern(threads: [t], layers: [_layer(stitches: [])]);
       final patched = StitchCompositor.patchLayer(old, newPat, 3, 4);
@@ -272,8 +273,8 @@ void main() {
         layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '321')])],
       );
       final patched = StitchCompositor.patchLayer(old, newPat, 0, 0);
-      expect(patched.fullStitches['0,0']?.resolvedThread.dmcCode, '321');
-      expect(patched.fullStitches['0,0']?.isBlended, false);
+      expect(patched.fullStitches[const Cell(0, 0)]?.resolvedThread.dmcCode, '321');
+      expect(patched.fullStitches[const Cell(0, 0)]?.isBlended, false);
     });
 
     test('untouched cells are carried over unchanged', () {
@@ -302,8 +303,8 @@ void main() {
       final patched = StitchCompositor.patchLayer(old, newPat, 0, 0);
       expect(patched.fullStitches, hasLength(2));
       // (5,5) still the original CompositeStitch instance.
-      expect(identical(patched.fullStitches['5,5'], old.fullStitches['5,5']), true);
-      expect(patched.fullStitches['0,0']?.resolvedThread.dmcCode, '321');
+      expect(identical(patched.fullStitches[const Cell(5, 5)], old.fullStitches[const Cell(5, 5)]), true);
+      expect(patched.fullStitches[const Cell(0, 0)]?.resolvedThread.dmcCode, '321');
     });
 
     test('multi-layer cell: isBlended true, symbol from bottom when Add blend', () {
@@ -327,7 +328,7 @@ void main() {
         ],
       );
       final patched = StitchCompositor.patchLayer(old, newPat, 2, 2);
-      final cs = patched.fullStitches['2,2'];
+      final cs = patched.fullStitches[const Cell(2, 2)];
       expect(cs?.isBlended, true);
       // Add blend → symbol winner is bottom layer (thread 310).
       expect((cs?.stitch as FullStitch).threadId, '310');
@@ -387,10 +388,10 @@ void main() {
       final full = StitchCompositor.computeLayer(newPat);
 
       expect(patched.fullStitches.keys.toSet(), full.fullStitches.keys.toSet());
-      expect(patched.fullStitches['7,3']?.resolvedThread.dmcCode,
-          full.fullStitches['7,3']?.resolvedThread.dmcCode);
-      expect(patched.fullStitches['7,3']?.isBlended,
-          full.fullStitches['7,3']?.isBlended);
+      expect(patched.fullStitches[const Cell(7, 3)]?.resolvedThread.dmcCode,
+          full.fullStitches[const Cell(7, 3)]?.resolvedThread.dmcCode);
+      expect(patched.fullStitches[const Cell(7, 3)]?.isBlended,
+          full.fullStitches[const Cell(7, 3)]?.isBlended);
     });
   });
 
@@ -410,8 +411,8 @@ void main() {
       );
       final layer = StitchCompositor.computeLayer(pattern);
       expect(layer.fullStitches, hasLength(2));
-      expect(layer.fullStitches['0,0']?.resolvedThread.dmcCode, '310');
-      expect(layer.fullStitches['0,0']?.isBlended, false);
+      expect(layer.fullStitches[const Cell(0, 0)]?.resolvedThread.dmcCode, '310');
+      expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, false);
     });
 
     test('CompositeStitch.isBlended is true for multi-layer overlapping cells', () {
@@ -425,7 +426,7 @@ void main() {
         ],
       );
       final layer = StitchCompositor.computeLayer(pattern);
-      final cs = layer.fullStitches['0,0'];
+      final cs = layer.fullStitches[const Cell(0, 0)];
       expect(cs, isNotNull);
       expect(cs!.isBlended, true);
     });
@@ -437,7 +438,7 @@ void main() {
         layers: [_layer(stitches: [FullStitch(x: 5, y: 5, threadId: '310')])],
       );
       final layer = StitchCompositor.computeLayer(pattern);
-      expect(layer.fullStitches['5,5']?.isBlended, false);
+      expect(layer.fullStitches[const Cell(5, 5)]?.isBlended, false);
     });
 
     test('otherStitches contains half/quarter stitches with resolved thread', () {

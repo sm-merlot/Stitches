@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/dmc_colors.dart';
 import '../../data/symbols.dart';
 import '../../models/layer.dart';
+import '../../models/cell.dart';
 import '../../models/layer_blend_mode.dart';
 import '../../models/layer_item.dart';
 import '../../models/page_config.dart';

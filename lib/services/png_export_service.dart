@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../models/cell.dart';
 import '../models/pattern.dart';
 import '../models/stitch.dart';
 import 'stitch_compositor.dart';
@@ -28,7 +29,7 @@ class PngExportService {
     ];
     final backstitches = composite.backstitches;
     final threadMap = pattern.threads;
-    final blendedColors = {
+    final blendedColors = <Cell, Color>{
       for (final e in composite.fullStitches.entries)
         if (e.value.isBlended) e.key: e.value.blendedColor,
     };
@@ -56,7 +57,7 @@ class PngExportService {
         final cy = _stitchY(s);
         final thread = threadMap[s.threadId];
         if (thread == null) continue;
-        final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+        final effectiveColor = blendedColors[Cell(cx, cy)] ?? thread.color;
         fillPaint.color = effectiveColor;
         final gx = cx * cellSize;
         final gy = cy * cellSize;
@@ -69,7 +70,7 @@ class PngExportService {
         final cy = _stitchY(s);
         final thread = threadMap[s.threadId];
         if (thread == null) continue;
-        final effectiveColor = blendedColors['$cx,$cy'] ?? thread.color;
+        final effectiveColor = blendedColors[Cell(cx, cy)] ?? thread.color;
         fillPaint.color = effectiveColor;
         final gx = cx * cellSize;
         final gy = cy * cellSize;

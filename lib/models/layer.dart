@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import 'cell.dart';
 import 'layer_blend_mode.dart';
 import 'stitch.dart';
 import 'stitch_geometry.dart';
@@ -17,7 +18,7 @@ class Layer {
   // - [stitches] is final; the index is always consistent with it.
   // - [copyWith] creates a fresh [Layer], so the new instance starts with
   //   [_cellIndex] == null and rebuilds on first access.
-  Map<String, List<Stitch>>? _cellIndex;
+  Map<Cell, List<Stitch>>? _cellIndex;
 
   Layer({
     required this.id,
@@ -66,15 +67,15 @@ class Layer {
   /// index (it has no single cell coordinate) and is never returned here.
   List<Stitch> stitchesAt(int x, int y) {
     _cellIndex ??= _buildCellIndex();
-    return _cellIndex!['$x,$y'] ?? const [];
+    return _cellIndex![Cell(x, y)] ?? const [];
   }
 
-  Map<String, List<Stitch>> _buildCellIndex() {
-    final index = <String, List<Stitch>>{};
+  Map<Cell, List<Stitch>> _buildCellIndex() {
+    final index = <Cell, List<Stitch>>{};
     for (final s in stitches) {
       final coords = s.cellCoords;
       if (coords == null) continue; // BackStitch — skip
-      final key = '${coords.$1},${coords.$2}';
+      final key = Cell(coords.$1, coords.$2);
       (index[key] ??= []).add(s);
     }
     return index;

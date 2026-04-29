@@ -314,11 +314,8 @@ Map<String, int> _countDoneStitches(EditorState state) {
   final layer = state.compositeLayer;
   if (layer != null && layer.fullStitches.isNotEmpty) {
     for (final entry in layer.fullStitches.entries) {
-      final parts = entry.key.split(',');
-      if (parts.length != 2) continue;
-      final x = int.tryParse(parts[0]);
-      final y = int.tryParse(parts[1]);
-      if (x == null || y == null) continue;
+      final x = entry.key.x;
+      final y = entry.key.y;
       if (progress.completedStitches.contains((x, y))) {
         final id = entry.value.resolvedThread.dmcCode;
         counts[id] = (counts[id] ?? 0) + 1;
@@ -430,11 +427,8 @@ class _StitchColoursPanel extends ConsumerWidget {
       final layer = state.compositeLayer;
       if (layer != null && layer.fullStitches.isNotEmpty) {
         for (final entry in layer.fullStitches.entries) {
-          final parts = entry.key.split(',');
-          if (parts.length != 2) continue;
-          final sx = int.tryParse(parts[0]);
-          final sy = int.tryParse(parts[1]);
-          if (sx == null || sy == null) continue;
+          final sx = entry.key.x;
+          final sy = entry.key.y;
           if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) {
             final id = entry.value.resolvedThread.dmcCode;
             pageCounts[id] = (pageCounts[id] ?? 0) + 1;

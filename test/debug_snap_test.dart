@@ -45,9 +45,8 @@ void main() {
     };
     final snapColor = <int, int?>{};
     for (final entry in composite.fullStitches.entries) {
-      final parts = entry.key.split(',');
-      final col = int.parse(parts[0]);
-      final row = int.parse(parts[1]);
+      final col = entry.key.x;
+      final row = entry.key.y;
       snapColor[(col << 16) | row] = threadIndex[entry.value.resolvedThread.dmcCode];
     }
 

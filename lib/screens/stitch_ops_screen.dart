@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/cell.dart';
 import '../models/page_layout.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
@@ -155,7 +156,7 @@ class _StitchOpsStats {
 }
 
 _StitchOpsStats _computeStats(CrossStitchPattern pattern,
-    {Map<String, Thread>? compositeCache}) {
+    {Map<Cell, Thread>? compositeCache}) {
   final progress = pattern.progress;
   final log = [...pattern.progressLog]
     ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
@@ -181,13 +182,10 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
   final threadCounts = <String, int>{};
   final threadDoneCounts = <String, int>{};
   if (compositeCache != null && compositeCache.isNotEmpty) {
-    // Each cache entry is "x,y" → Thread (topmost visible layer for that cell).
+    // Each cache entry is Cell → Thread (topmost visible layer for that cell).
     for (final entry in compositeCache.entries) {
-      final parts = entry.key.split(',');
-      if (parts.length != 2) continue;
-      final x = int.tryParse(parts[0]);
-      final y = int.tryParse(parts[1]);
-      if (x == null || y == null) continue;
+      final x = entry.key.x;
+      final y = entry.key.y;
       final id = entry.value.dmcCode;
       threadCounts[id] = (threadCounts[id] ?? 0) + 1;
       if (progress.completedStitches.contains((x, y))) {

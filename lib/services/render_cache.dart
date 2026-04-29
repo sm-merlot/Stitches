@@ -1,5 +1,6 @@
 import 'dart:ui' show Rect;
 import 'package:flutter/material.dart' show Color, HSLColor, immutable;
+import '../models/cell.dart';
 import '../models/page_layout.dart';
 import '../models/pattern_progress.dart';
 import '../models/stitch.dart';
@@ -82,10 +83,10 @@ class RenderViewConfig {
 /// _renderCache.rebuildViewConfig(compositeLayer, config, cellSize);
 ///
 /// // Cells erased (no stitches remain there):
-/// _renderCache.clearCells({'3,7'});
+/// _renderCache.clearCells({Cell(3, 7)});
 ///
 /// // Single-cell update after one stitch is drawn:
-/// _renderCache.updateCells({'3,7'}, compositeLayer, config, cellSize);
+/// _renderCache.updateCells({Cell(3, 7)}, compositeLayer, config, cellSize);
 ///
 /// // In painter:
 /// for (final colorEntry in renderCache.store.entries) {
@@ -99,10 +100,10 @@ class RenderCache {
   /// Nested store: colour → (cellKey → rects for this cell).
   ///
   /// Exposed for read-only use by [CanvasStaticPainter]. Do not mutate.
-  final Map<Color, Map<String, List<Rect>>> store = {};
+  final Map<Color, Map<Cell, List<Rect>>> store = {};
 
-  /// Reverse index: cellKey → set of colours contributed by this cell.
-  final Map<String, Set<Color>> _cellColors = {};
+  /// Reverse index: cell → set of colours contributed by this cell.
+  final Map<Cell, Set<Color>> _cellColors = {};
 
   int _version = 0;
 
@@ -147,7 +148,7 @@ class RenderCache {
 
   /// Removes [keys] from the cache without re-inserting. Use when cells are
   /// known to be empty in the new composite (e.g. stitch erased).
-  void clearCells(Set<String> keys) {
+  void clearCells(Set<Cell> keys) {
     for (final key in keys) {
       _removeCell(key);
     }
@@ -159,7 +160,7 @@ class RenderCache {
   /// O(changed_cells) — removes old rects for each key, recomputes from the
   /// new composite, and re-inserts. Version is bumped once for the whole batch.
   void updateCells(
-    Set<String> keys,
+    Set<Cell> keys,
     CompositeLayer compositeLayer,
     RenderViewConfig config,
     double cellSize,
@@ -172,11 +173,11 @@ class RenderCache {
       final cs = compositeLayer.fullStitches[key];
       if (cs != null) _addCompositeStitch(key, cs, config, cellSize);
     }
-    // Re-add other stitches (half/quarter) whose cellKey is in the dirty set.
+    // Re-add other stitches (half/quarter) whose cell is in the dirty set.
     for (final cs in compositeLayer.otherStitches) {
       final coords = cs.stitch.cellCoords;
       if (coords == null) continue;
-      final key = '${coords.$1},${coords.$2}';
+      final key = Cell(coords.$1, coords.$2);
       if (!keys.contains(key)) continue;
       _addCompositeStitch(key, cs, config, cellSize);
     }
@@ -196,13 +197,13 @@ class RenderCache {
     for (final cs in compositeLayer.otherStitches) {
       final coords = cs.stitch.cellCoords;
       if (coords == null) continue;
-      final key = '${coords.$1},${coords.$2}';
+      final key = Cell(coords.$1, coords.$2);
       _addCompositeStitch(key, cs, config, cellSize);
     }
   }
 
   void _addCompositeStitch(
-    String key,
+    Cell key,
     CompositeStitch cs,
     RenderViewConfig config,
     double cellSize,
@@ -235,7 +236,7 @@ class RenderCache {
     (_cellColors[key] ??= {}).add(color);
   }
 
-  void _removeCell(String key) {
+  void _removeCell(Cell key) {
     final colors = _cellColors.remove(key);
     if (colors == null) return;
     for (final color in colors) {

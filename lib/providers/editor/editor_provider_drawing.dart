@@ -399,7 +399,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     // so a single updateCells() call covers all pointer-move events per render.
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
-        ? <String>{...?prevDirty, '${coords.$1},${coords.$2}'}
+        ? <Cell>{...?prevDirty, Cell(coords.$1, coords.$2)}
         : null; // backstitch → force full rebuild next sync
 
     state = state.copyWith(
@@ -435,7 +435,7 @@ mixin DrawingMixin on Notifier<EditorState> {
         : StitchCompositor.computeLayer(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, '$x,$y'};
+    final mergedDirty = <Cell>{...?prevDirty, Cell(x, y)};
 
     state = state.copyWith(
       pattern: newPattern,
@@ -476,12 +476,12 @@ mixin DrawingMixin on Notifier<EditorState> {
     // Box erase may affect multiple cells — use computeLayer for correctness,
     // but pass dirtyCellKeys so _syncRenderCache calls updateCells() (O(box))
     // instead of rebuild() (O(total_stitches)).
-    final dirtyKeys = <String>{
+    final dirtyKeys = <Cell>{
       for (var xx = x0; xx <= x1; xx++)
-        for (var yy = y0; yy <= y1; yy++) '$xx,$yy',
+        for (var yy = y0; yy <= y1; yy++) Cell(xx, yy),
     };
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, ...dirtyKeys};
+    final mergedDirty = <Cell>{...?prevDirty, ...dirtyKeys};
 
     state = state.copyWith(
       pattern: newPattern,
@@ -544,7 +544,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
-        ? <String>{...?prevDirty, '${coords.$1},${coords.$2}'}
+        ? <Cell>{...?prevDirty, Cell(coords.$1, coords.$2)}
         : null;
 
     state = state.copyWith(
@@ -576,7 +576,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
-        ? <String>{...?prevDirty, '${coords.$1},${coords.$2}'}
+        ? <Cell>{...?prevDirty, Cell(coords.$1, coords.$2)}
         : null;
 
     state = state.copyWith(
@@ -608,7 +608,7 @@ mixin DrawingMixin on Notifier<EditorState> {
         : StitchCompositor.computeLayer(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, '$x,$y'};
+    final mergedDirty = <Cell>{...?prevDirty, Cell(x, y)};
 
     state = state.copyWith(
       pattern: newPattern,
@@ -643,12 +643,12 @@ mixin DrawingMixin on Notifier<EditorState> {
     final newPattern = _pruneUnusedThreads(
         _patternWithActiveLayerStitches(state.pattern, newStitches));
 
-    final dirtyKeys = <String>{
+    final dirtyKeys = <Cell>{
       for (var xx = x0; xx <= x1; xx++)
-        for (var yy = y0; yy <= y1; yy++) '$xx,$yy',
+        for (var yy = y0; yy <= y1; yy++) Cell(xx, yy),
     };
     final prevDirty = state.dirtyCellKeys;
-    final mergedDirty = <String>{...?prevDirty, ...dirtyKeys};
+    final mergedDirty = <Cell>{...?prevDirty, ...dirtyKeys};
 
     state = state.copyWith(
       pattern: newPattern,
