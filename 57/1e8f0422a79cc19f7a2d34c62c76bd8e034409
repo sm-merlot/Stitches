@@ -1,0 +1,10 @@
+test/providers/stitching_timer_test.dart
+  25076478c36ab6f7 1-15,17-171
+  h_c73f350bf316ee 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "571e8f0422a79cc19f7a2d34c62c76bd8e034409",
+  "prompts": {}
+}
