@@ -20,7 +20,8 @@
 #   analyze          Run flutter analyze
 #   test             Run all Dart/Flutter tests
 #   test-planner     Run only the stitch planner tests
-#   ci               Run full CI suite locally (analyze + unit tests + integration tests)
+#   ci [--fast-fail] Run full CI suite locally (analyze + unit tests + integration tests);
+#                      --fast-fail stops immediately on first failure
 #   clean            Delete build artefacts
 #   help             Show this message
 
@@ -134,6 +135,11 @@ case "$cmd" in
     PASS="${GREEN}✔${RESET}"; FAIL="${RED}✘${RESET}"
     LOG=ci.log
 
+    fast_fail=0
+    for arg in "$@"; do
+      [[ "$arg" == "--fast-fail" ]] && fast_fail=1
+    done
+
     # Fresh log file each run
     { echo "Stitches CI — $(date)"; echo; } > "$LOG"
 
@@ -161,11 +167,24 @@ case "$cmd" in
 
     failures=()
 
-    ci_step "pub get"          $FLUTTER pub get                                                                                         || failures+=("pub get")
-    ci_step "analyze"          $FLUTTER analyze --fatal-warnings                                                                        || failures+=("analyze")
-    ci_step "unit tests"       $FLUTTER test --reporter=expanded                                                                        || failures+=("unit tests")
-    ci_step "PK PDF parse"     $FLUTTER test integration_test/pk_real_pdf_parse_test.dart -d macos --no-pub --reporter=expanded         || failures+=("PK PDF parse")
-    ci_step "PK PDF roundtrip" $FLUTTER test integration_test/pk_roundtrip_test.dart      -d macos --no-pub --reporter=expanded         || failures+=("PK PDF roundtrip")
+    run_step() {
+      local label="$1"; shift
+      if ! ci_step "$label" "$@"; then
+        failures+=("$label")
+        if [[ $fast_fail -eq 1 ]]; then
+          printf "\n${BOLD}────────────────────────────────${RESET}\n"
+          printf "${RED}${BOLD}  ✘ Fast-fail: stopped at '%s'${RESET}\n" "$label"
+          printf "${BOLD}────────────────────────────────${RESET}\n\n"
+          exit 1
+        fi
+      fi
+    }
+
+    run_step "pub get"          $FLUTTER pub get
+    run_step "analyze"          $FLUTTER analyze --fatal-warnings
+    run_step "unit tests"       $FLUTTER test --reporter=expanded
+    run_step "PK PDF parse"     $FLUTTER test integration_test/pk_real_pdf_parse_test.dart -d macos --no-pub --reporter=expanded
+    run_step "PK PDF roundtrip" $FLUTTER test integration_test/pk_roundtrip_test.dart      -d macos --no-pub --reporter=expanded
 
     printf "\n${BOLD}────────────────────────────────${RESET}\n"
     if [[ ${#failures[@]} -eq 0 ]]; then
