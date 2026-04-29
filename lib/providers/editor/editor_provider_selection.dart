@@ -153,9 +153,13 @@ mixin SelectionMixin on Notifier<EditorState> {
     // Stitch equality is position-based, so the set lookup correctly evicts
     // any existing stitch at the same slot before we append the new ones.
     final placed = <Stitch>[];
+    bool hasBackstitch = false;
     for (final s in clips) {
       final p = EditorState.offsetStitch(s, dx, dy);
-      if (_isInBounds(p, maxX, maxY)) placed.add(p);
+      if (_isInBounds(p, maxX, maxY)) {
+        placed.add(p);
+        if (p is BackStitch) hasBackstitch = true;
+      }
     }
     final replaceSet = <Stitch>{...placed};
     final stitches = [
@@ -164,13 +168,27 @@ mixin SelectionMixin on Notifier<EditorState> {
     ];
     final newPattern = _patternWithActiveLayerStitches(
         state.pattern.copyWith(threads: threads), stitches);
+
+    // Incremental composite: patch only cells touched by the paste.
+    final dirtyCells = <Cell>{
+      for (final s in placed) ?s.cellCoords,
+    };
+    final oldComposite = state.compositeLayer;
+    final newComposite = oldComposite != null
+        ? StitchCompositor.patchCells(
+            oldComposite, newPattern, dirtyCells,
+            backstitchesChanged: hasBackstitch)
+        : StitchCompositor.computeLayer(newPattern);
+
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeLayer: null,
+      compositeLayer: newComposite,
+      dirtyCellKeys: dirtyCells.isEmpty ? null : dirtyCells,
       isDirty: true,
       redoStack: [],
     );
+    // Debounced full refresh for stitch-count equivalents.
     refreshCompositeCache();
   }
 

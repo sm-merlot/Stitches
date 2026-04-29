@@ -200,44 +200,35 @@ class StitchCompositor {
     return old;
   }
 
-  // ─── Affected-layer patch ──────────────────────────────────────────────────
+  // ─── Multi-cell patch ──────────────────────────────────────────────────────
 
-  /// Patches [old] by recomputing only cells that [changedLayer] touches.
+  /// Recomputes only the given [cells] in [old], mutating in-place.
   ///
-  /// Use when a single layer's visibility, opacity, or blend mode changes.
-  /// Cells not touched by [changedLayer] carry over from [old] unchanged.
+  /// O(cells × avg_layers_per_cell). Use for paste, move, delete-selection —
+  /// any operation that changes a known set of cells without touching the rest.
   ///
-  /// Mutates [old] in-place and bumps [CompositeLayer.version] —
-  /// O(cells_in_layer × avg_layers_per_cell).
-  /// Far cheaper than [computeLayer] (O(total_stitches)) for sparse changes,
-  /// and avoids the O(N × M) trap of calling [patchLayer] N times.
-  static CompositeLayer patchAffectedLayer(
+  /// Pass [backstitchesChanged] = true when any [BackStitch] was added or
+  /// removed; triggers a full backstitch list rescan.
+  static CompositeLayer patchCells(
     CompositeLayer old,
     CrossStitchPattern newPattern,
-    Layer changedLayer,
-  ) {
-    // Collect unique cell positions and backstitch presence from primary storage.
-    final affectedCells = changedLayer.stitchesByCell.keys.toSet();
-    final hasBackstitches = changedLayer.backstitches.isNotEmpty;
+    Set<Cell> cells, {
+    bool backstitchesChanged = false,
+  }) {
+    if (cells.isEmpty && !backstitchesChanged) return old;
 
-    if (affectedCells.isEmpty && !hasBackstitches) return old;
-
-    // Mutate in-place + bump version — same pattern as patchLayer.
     final newOtherContributions = <CompositeStitch>[];
-
-    for (final cell in affectedCells) {
+    for (final cell in cells) {
       _resolveCell(old.fullStitches, newOtherContributions, newPattern, cell.x, cell.y);
     }
 
-    // Patch otherStitches: strip old entries for all affected cells, append new.
     old.otherStitches.removeWhere((cs) {
       final coords = cs.stitch.cellCoords;
-      return coords != null && affectedCells.contains(coords);
+      return coords != null && cells.contains(coords);
     });
     old.otherStitches.addAll(newOtherContributions);
 
-    // Rebuild backstitch list when the changed layer contributes backstitches.
-    if (hasBackstitches) {
+    if (backstitchesChanged) {
       old.backstitches
         ..clear()
         ..addAll([
@@ -248,6 +239,23 @@ class StitchCompositor {
 
     old.version++;
     return old;
+  }
+
+  /// Patches [old] by recomputing only cells that [changedLayer] touches.
+  ///
+  /// Convenience wrapper around [patchCells] for layer-property changes
+  /// (visibility, opacity, blend mode).
+  static CompositeLayer patchAffectedLayer(
+    CompositeLayer old,
+    CrossStitchPattern newPattern,
+    Layer changedLayer,
+  ) {
+    return patchCells(
+      old,
+      newPattern,
+      changedLayer.stitchesByCell.keys.toSet(),
+      backstitchesChanged: changedLayer.backstitches.isNotEmpty,
+    );
   }
 
   // ─── Shared cell resolver ─────────────────────────────────────────────────
