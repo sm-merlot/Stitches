@@ -550,13 +550,15 @@ mixin DrawingMixin on Notifier<EditorState> {
           .toList();
     }
 
+    // In-place mutation: O(1) — no map copy.  Safe because Raw methods are
+    // only called via UndoManager commands (undo reverses via removeStitchRaw).
     final bool cellEmpty = existingAtCell == null || existingAtCell.isEmpty;
     final bool needsReplace = !cellEmpty && existingAtCell.any((s) => s == stitch);
-    final newActiveLayer = needsReplace
-        ? state.activeLayer.withStitchReplaced(stitch)
-        : state.activeLayer.withStitchAdded(stitch);
+    needsReplace
+        ? state.activeLayer.replaceStitchInPlace(stitch)
+        : state.activeLayer.addStitchInPlace(stitch);
 
-    final rawPattern = _patternWithActiveLayer(pattern, newActiveLayer);
+    final rawPattern = _patternWithActiveLayer(pattern, state.activeLayer);
     final String? displacedThread = needsReplace
         ? existingAtCell
             .where((s) => s == stitch && s.threadId != stitch.threadId)
@@ -591,11 +593,20 @@ mixin DrawingMixin on Notifier<EditorState> {
 
   void removeStitchRaw(Stitch stitch) {
     if (state.activeLayer.locked) return;
-    final newActiveLayer = state.activeLayer.withStitchRemoved(stitch);
-    if (identical(newActiveLayer, state.activeLayer)) return;
+    // Check presence before in-place mutation.
     final coords = stitch.cellCoords;
+    if (stitch is BackStitch) {
+      if (!state.activeLayer.backstitches.any((s) => s == stitch)) return;
+    } else if (coords != null) {
+      final atCell = state.activeLayer.stitchesAt(coords.x, coords.y);
+      if (!atCell.any((s) => s == stitch)) return;
+    } else {
+      return;
+    }
+
+    state.activeLayer.removeStitchInPlace(stitch);
     final newPattern = _pruneUnusedThreads(
-        _patternWithActiveLayer(state.pattern, newActiveLayer));
+        _patternWithActiveLayer(state.pattern, state.activeLayer));
 
     final oldComposite = state.compositeLayer;
     final quickComposite = (oldComposite != null && coords != null)
@@ -628,9 +639,9 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     final removedAnyBackstitch =
         state.activeLayer.backstitches.any((s) => _backstitchInCell(s, x, y));
-    final newActiveLayer = state.activeLayer.withCellCleared(x, y);
+    state.activeLayer.clearCellInPlace(x, y);
     final newPattern = _pruneUnusedThreads(
-        _patternWithActiveLayer(state.pattern, newActiveLayer));
+        _patternWithActiveLayer(state.pattern, state.activeLayer));
 
     final oldComposite = state.compositeLayer;
     final quickComposite = oldComposite != null
@@ -660,19 +671,32 @@ mixin DrawingMixin on Notifier<EditorState> {
     final y0 = cy - half;
     final y1 = cy + (size - 1 - half);
 
-    bool hit(Stitch s) {
+    // Check if anything to erase — O(box²) via stitchesAt.
+    bool anyHit = false;
+    for (var x = x0; x <= x1 && !anyHit; x++) {
+      for (var y = y0; y <= y1 && !anyHit; y++) {
+        if (state.activeLayer.stitchesAt(x, y).isNotEmpty) anyHit = true;
+      }
+    }
+    if (!anyHit && !state.activeLayer.backstitches.any((s) {
       for (var x = x0; x <= x1; x++) {
         for (var y = y0; y <= y1; y++) {
-          if (_stitchAtCell(s, x, y) || _backstitchInCell(s, x, y)) return true;
+          if (_backstitchInCell(s, x, y)) return true;
         }
       }
       return false;
+    })) {
+      return;
     }
 
-    if (!state.activeLayer.stitches.any(hit)) return;
-    final newStitches = state.activeLayer.stitches.where((s) => !hit(s)).toList();
+    // In-place clear each cell in the box.
+    for (var x = x0; x <= x1; x++) {
+      for (var y = y0; y <= y1; y++) {
+        state.activeLayer.clearCellInPlace(x, y);
+      }
+    }
     final newPattern = _pruneUnusedThreads(
-        _patternWithActiveLayerStitches(state.pattern, newStitches));
+        _patternWithActiveLayer(state.pattern, state.activeLayer));
 
     final dirtyKeys = <Cell>{
       for (var xx = x0; xx <= x1; xx++)

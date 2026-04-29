@@ -79,8 +79,8 @@ class Layer {
       locked: false,
       opacity: 1.0,
       blendMode: LayerBlendMode.normal,
-      stitchesByCell: const {},
-      backstitches: const [],
+      stitchesByCell: {},
+      backstitches: [],
     );
   }
 
@@ -118,11 +118,18 @@ class Layer {
   List<Stitch> stitchesAt(int x, int y) =>
       stitchesByCell[Cell(x, y)] ?? const [];
 
-  // ── Incremental update methods (hot draw path) ───────────────────────────────
+  // ── Immutable update methods ────────────────────────────────────────────────
   //
   // Each returns a new [Layer] sharing the same metadata.  [stitchesByCell] is
   // shallow-copied (O(N_cells)) and the target cell is updated in-place.
   // BackStitch variants copy [backstitches] instead (O(n_back)).
+  //
+  // Use these for operations that push to the snapshot undo stack (addStitch,
+  // paste, move, delete, etc.) where immutable snapshots must be preserved.
+  //
+  // For the 120 Hz draw hot-path (addStitchRaw, removeStitchRaw, etc.) use
+  // the in-place variants below — they mutate [stitchesByCell] directly for
+  // O(1) per call.
 
   /// Returns a new [Layer] with [stitch] appended.  O(N_cells).
   ///
@@ -197,6 +204,77 @@ class Layer {
     bool inside(double gx, double gy) =>
         gx >= x && gx <= x + 1 && gy >= y && gy <= y + 1;
     return inside(s.x1, s.y1) || inside(s.x2, s.y2);
+  }
+
+  // ── In-place mutation methods (120 Hz hot path) ──────────────────────────────
+  //
+  // Mutate [stitchesByCell] / [backstitches] directly and return `this`.
+  // O(1) per call — no map copy.
+  //
+  // Safe ONLY when called via the UndoManager command path (addStitchRaw,
+  // removeStitchRaw, etc.) where undo is handled by reversing commands,
+  // not by snapshot restoration.  The snapshot undo stack never observes
+  // partially-mutated maps because snapshot operations (addStitch, paste,
+  // etc.) always create new Layer instances via the immutable methods above.
+
+  /// Appends [stitch] in-place.  O(1).  Returns `this`.
+  Layer addStitchInPlace(Stitch stitch) {
+    if (stitch is BackStitch) {
+      backstitches.add(stitch);
+      return this;
+    }
+    final c = stitch.cellCoords!;
+    final existing = stitchesByCell[c];
+    if (existing != null) {
+      existing.add(stitch);
+    } else {
+      stitchesByCell[c] = [stitch];
+    }
+    return this;
+  }
+
+  /// Removes stitch equal to [stitch] at its cell and appends [stitch].
+  /// O(stitches_at_cell).  Returns `this`.
+  Layer replaceStitchInPlace(Stitch stitch) {
+    if (stitch is BackStitch) {
+      backstitches.removeWhere((s) => s == stitch);
+      backstitches.add(stitch);
+      return this;
+    }
+    final c = stitch.cellCoords!;
+    final existing = stitchesByCell[c];
+    if (existing != null) {
+      existing.removeWhere((s) => s == stitch);
+      existing.add(stitch);
+    } else {
+      stitchesByCell[c] = [stitch];
+    }
+    return this;
+  }
+
+  /// Removes [stitch] in-place.  O(stitches_at_cell).  Returns `this`.
+  /// Returns `this` even when [stitch] was not present (no-op).
+  Layer removeStitchInPlace(Stitch stitch) {
+    if (stitch is BackStitch) {
+      backstitches.removeWhere((s) => s == stitch);
+      return this;
+    }
+    final c = stitch.cellCoords;
+    if (c == null) return this;
+    final existing = stitchesByCell[c];
+    if (existing == null) return this;
+    existing.removeWhere((s) => s == stitch);
+    if (existing.isEmpty) stitchesByCell.remove(c);
+    return this;
+  }
+
+  /// Removes all stitches at ([x], [y]) plus touching backstitches.  O(1).
+  /// Returns `this`.
+  Layer clearCellInPlace(int x, int y) {
+    final c = Cell(x, y);
+    stitchesByCell.remove(c);
+    backstitches.removeWhere((s) => _bsInCell(s, x, y));
+    return this;
   }
 
   // ── Bulk copyWith (non-hot path) ─────────────────────────────────────────────
