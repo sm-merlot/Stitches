@@ -223,7 +223,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
       threadDoneCounts[s.threadId] = (threadDoneCounts[s.threadId] ?? 0) + 1;
     }
   }
-  final threadStats = pattern.threads.map((t) {
+  final threadStats = pattern.threads.values.map((t) {
     final total = threadCounts[t.dmcCode] ?? 0;
     final done = threadDoneCounts[t.dmcCode] ?? 0;
     return _ThreadStats(thread: t, total: total, done: done);
@@ -316,7 +316,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
 
   // ── Colours & pages ──────────────────────────────────────────────────────
   final allStitches = pattern.stitches;
-  final doneColours = pattern.threads
+  final doneColours = pattern.threads.values
       .where((t) => progress.isColourDone(t.dmcCode, allStitches))
       .length;
   final totalColours = pattern.threads.length;

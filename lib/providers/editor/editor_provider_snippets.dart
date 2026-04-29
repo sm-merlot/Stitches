@@ -241,7 +241,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
           .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
           .toList();
       final threadIds = stitches.map((s) => s.threadId).toSet();
-      threads = state.pattern.threads
+      threads = state.pattern.threads.values
           .where((t) => threadIds.contains(t.dmcCode))
           .toList();
     }

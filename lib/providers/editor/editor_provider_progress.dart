@@ -581,7 +581,7 @@ mixin ProgressMixin on Notifier<EditorState> {
     final allStitches = state.pattern.stitches;
     for (final threadId in threadIds) {
       if (prog.isColourDone(threadId, allStitches)) {
-        final thread = state.pattern.threads.where((t) => t.dmcCode == threadId).firstOrNull;
+        final thread = state.pattern.threads[threadId];
         if (thread != null) {
           state = state.copyWith(
             pendingCanvasWarning: '${thread.dmcCode} ${thread.name} complete ✓',

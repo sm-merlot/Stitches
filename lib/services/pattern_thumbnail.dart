@@ -13,9 +13,7 @@ const int _kThumbH = 110;
 /// Returns null if the pattern has no stitches or rendering fails.
 Future<Uint8List?> generatePatternThumbnail(CrossStitchPattern pattern) async {
   // Build a colour map from threadId → Color for fast lookup.
-  final colorMap = <String, Color>{
-    for (final t in pattern.threads) t.dmcCode: t.color,
-  };
+  final colorMap = pattern.threads.map((k, v) => MapEntry(k, v.color));
 
   // Collect all visible stitches across all layers.
   final allLayers = pattern.layers;

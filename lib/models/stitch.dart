@@ -40,6 +40,10 @@ sealed class Stitch {
       _ => throw FormatException('Unknown stitch type: $type'),
     };
   }
+
+  /// Parses a YAML list into a [List<Stitch>].
+  static List<Stitch> listFromYaml(List<dynamic> yaml) =>
+      yaml.map((s) => Stitch.fromYaml(Map<String, dynamic>.from(s as Map))).toList();
 }
 
 @immutable

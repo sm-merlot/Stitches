@@ -111,7 +111,7 @@ class ProgressInfoBar extends ConsumerWidget {
     // Colours done.
     final allStitches = state.pattern.stitches;
     final threads = state.pattern.threads;
-    final doneColours = threads
+    final doneColours = threads.values
         .where((t) => progress.isColourDone(t.dmcCode, allStitches))
         .length;
 

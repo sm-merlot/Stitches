@@ -114,12 +114,12 @@ class Snippet {
       width: yaml['width'] as int,
       height: yaml['height'] as int,
       activePaletteIndex: (yaml['activePalette'] as int?) ?? 0,
-      stitches: (yaml['stitches'] as List?)
-              ?.map((s) =>
-                  Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
-              .toList() ??
-          [],
+      stitches: Stitch.listFromYaml(yaml['stitches'] as List? ?? const []),
       palettes: safePalettes,
     );
   }
+
+  /// Parses a YAML list into a [List<Snippet>].
+  static List<Snippet> listFromYaml(List<dynamic> yaml) =>
+      yaml.map((s) => Snippet.fromYaml(Map<String, dynamic>.from(s as Map))).toList();
 }

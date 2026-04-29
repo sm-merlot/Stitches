@@ -32,7 +32,7 @@ CrossStitchPattern _pattern({
     name: 'Test',
     width: 10,
     height: 10,
-    threads: threads,
+    threads: {for (final t in threads) t.dmcCode: t},
     layerItems: layers.map((l) => LayerLeaf(layer: l)).toList(),
   );
 }

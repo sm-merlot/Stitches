@@ -24,7 +24,7 @@ CrossStitchPattern _pattern({
     name: 'Test',
     width: 20,
     height: 20,
-    threads: threads,
+    threads: {for (final t in threads) t.dmcCode: t},
     layerItems: [LayerLeaf(layer: layer)],
   );
 }

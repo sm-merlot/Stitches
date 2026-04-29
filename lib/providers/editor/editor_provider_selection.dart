@@ -96,8 +96,9 @@ mixin SelectionMixin on Notifier<EditorState> {
         .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
         .toList();
     final threadIds = clips.map((s) => s.threadId).toSet();
-    final threads =
-        state.pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
+    final threads = state.pattern.threads.values
+        .where((t) => threadIds.contains(t.dmcCode))
+        .toList();
     await Clipboard.setData(ClipboardData(text: _serializeClipboard(threads, clips)));
     state = state.copyWith(
       clipboard: clips,
@@ -140,10 +141,11 @@ mixin SelectionMixin on Notifier<EditorState> {
     final maxX = state.pattern.width;
     final maxY = state.pattern.height;
 
-    var threads = [...state.pattern.threads];
+    var threads = Map<String, Thread>.from(state.pattern.threads);
     for (final ct in state.clipboardThreads ?? <Thread>[]) {
-      if (!threads.any((t) => t.dmcCode == ct.dmcCode)) {
-        threads.add(_resolveThreadSymbol(ct, threads));
+      if (!threads.containsKey(ct.dmcCode)) {
+        final resolved = _resolveThreadSymbol(ct, threads.values.toList());
+        threads[resolved.dmcCode] = resolved;
       }
     }
 

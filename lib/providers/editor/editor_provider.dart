@@ -167,7 +167,7 @@ class EditorNotifier extends Notifier<EditorState>
     String? threadId = selectedThreadId;
     if (threadId == null || withSymbols.threadByCode(threadId) == null) {
       threadId = withSymbols.threads.isNotEmpty
-          ? withSymbols.threads.first.dmcCode
+          ? withSymbols.threads.values.first.dmcCode
           : null;
     }
 
@@ -368,8 +368,8 @@ class EditorNotifier extends Notifier<EditorState>
     final seeded = pattern.copyWith(threads: threads);
     state = EditorState(
       pattern: seeded,
-      selectedThreadId: threads.first.dmcCode,
-      recentThreadIds: [threads.first.dmcCode],
+      selectedThreadId: threads.values.first.dmcCode,
+      recentThreadIds: [threads.values.first.dmcCode],
       mode: AppMode.edit,
       drawingMode: DrawingMode.draw,
       isFileOpen: true,
@@ -691,8 +691,11 @@ class EditorNotifier extends Notifier<EditorState>
         });
       }
     }
-    final pruned = pattern.threads.where((t) => used.contains(t.dmcCode)).toList();
-    if (pruned.length == pattern.threads.length) return pattern;
+    if (pattern.threads.keys.every(used.contains)) return pattern;
+    final pruned = {
+      for (final e in pattern.threads.entries)
+        if (used.contains(e.key)) e.key: e.value,
+    };
     return pattern.copyWith(threads: pruned);
   }
 
@@ -731,22 +734,25 @@ class EditorNotifier extends Notifier<EditorState>
   /// any that are missing one. [existingSymbols] pre-populates the "taken"
   /// set so composite symbols are not reused for layer threads on load.
   @visibleForTesting
-  List<Thread> assignSymbolsForTest(List<Thread> threads,
+  Map<String, Thread> assignSymbolsForTest(Map<String, Thread> threads,
           {Set<String> existingSymbols = const {}}) =>
       _assignSymbols(threads, existingSymbols: existingSymbols);
 
-  List<Thread> _assignSymbols(List<Thread> threads,
+  Map<String, Thread> _assignSymbols(Map<String, Thread> threads,
       {Set<String> existingSymbols = const {}}) {
     final assigned = <String>{...existingSymbols};
-    return threads.map((t) {
+    final result = <String, Thread>{};
+    for (final t in threads.values) {
       if (symbolIsVisible(t.symbol) && !symbolIsPdfUnsupported(t.symbol)) {
         assigned.add(t.symbol);
-        return t;
+        result[t.dmcCode] = t;
+      } else {
+        final s = _nextSymbol(assigned);
+        if (s.isNotEmpty) assigned.add(s);
+        result[t.dmcCode] = t.copyWith(symbol: s);
       }
-      final s = _nextSymbol(assigned);
-      if (s.isNotEmpty) assigned.add(s);
-      return t.copyWith(symbol: s);
-    }).toList();
+    }
+    return result;
   }
 }
 

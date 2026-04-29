@@ -51,7 +51,7 @@ class PdfService {
 
     // ── Data prep ──────────────────────────────────────────────────────────────
 
-    final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
+    final threadMap = pattern.threads;
 
     // Single composite pass — matches the canvas view exactly.
     final compositeLayer = StitchCompositor.computeLayer(pattern);
@@ -115,7 +115,7 @@ class PdfService {
     // Source threads come from pattern.threads; blended composite threads come
     // from compositeLayer.fullStitches resolved threads.
     final allCompositeThreads = <String, Thread>{
-      for (final t in pattern.threads) t.dmcCode: t,
+      ...pattern.threads,
       for (final cs in compositeLayer.fullStitches.values) cs.resolvedThread.dmcCode: cs.resolvedThread,
     };
     final crossThreads = allCompositeThreads.values

@@ -39,7 +39,7 @@ void main() {
       expect(parsed.materialsSuggestions, equals(original.materialsSuggestions));
 
       expect(parsed.threads.length, equals(3));
-      expect(parsed.threads.map((t) => t.dmcCode), containsAll(['310', '666', '820']));
+      expect(parsed.threads.keys, containsAll(['310', '666', '820']));
 
       expect(parsed.layerItems, hasLength(2));
       final group = parsed.layerItems.first as LayerGroup;
@@ -147,7 +147,7 @@ stitching:
       expect(parsed.width, equals(4));
       expect(parsed.height, equals(3));
       expect(parsed.description, equals('still parses'));
-      expect(parsed.threads.single.dmcCode, equals('310'));
+      expect(parsed.threads.values.single.dmcCode, equals('310'));
     });
 
     test('legacy v1-style fixture (flat stitches list) still loads', () async {
@@ -216,7 +216,7 @@ CrossStitchPattern _buildRichPattern() {
       (aidaCount: 14, strands: 2),
       (aidaCount: 18, strands: 3),
     ],
-    threads: const [black, red, blue],
+    threads: const {'310': black, '666': red, '820': blue},
     layerItems: [
       LayerGroup(
         id: 'group-1',

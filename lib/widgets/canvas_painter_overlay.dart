@@ -21,7 +21,7 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
   final List<Stitch>? ghostStitches;
   final List<Thread>? ghostThreads;
   final double ghostOpacity;
-  final List<Thread> patternThreads;
+  final Map<String, Thread> patternThreads;
   final (int, int)? stylusHoverCell;
   final Color? stylusHoverColor;
   final bool stitchMode;
@@ -70,7 +70,7 @@ class CanvasOverlayPainter extends CustomPainter with _DrawingMethods {
     // Ghost stitches (paste / move preview)
     if (ghostStitches != null && ghostStitches!.isNotEmpty) {
       final threadMap = <String, Thread>{
-        for (final t in patternThreads) t.dmcCode: t,
+        ...patternThreads,
         if (ghostThreads != null) for (final t in ghostThreads!) t.dmcCode: t,
       };
       _drawGhostStitches(canvas, ghostStitches!, threadMap, opacity: ghostOpacity);

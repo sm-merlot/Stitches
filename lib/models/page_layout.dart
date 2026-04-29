@@ -159,8 +159,7 @@ class PageLayout {
     // resolved, topmost layer wins for overlapping FullStitches).
     final composite = StitchCompositor.computeLayer(pattern);
     final threadIndex = <String, int>{
-      for (int i = 0; i < pattern.threads.length; i++)
-        pattern.threads[i].dmcCode: i,
+      for (final (i, dmcCode) in pattern.threads.keys.indexed) dmcCode: i,
     };
 
     // fullStitches is keyed 'x,y' → CompositeStitch; resolvedThread is the winner.

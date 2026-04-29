@@ -27,7 +27,7 @@ class PngExportService {
       ...composite.otherStitches.map((cs) => cs.stitch),
     ];
     final backstitches = composite.backstitches;
-    final threadMap = {for (final t in pattern.threads) t.dmcCode: t};
+    final threadMap = pattern.threads;
     final blendedColors = {
       for (final e in composite.fullStitches.entries)
         if (e.value.isBlended) e.key: e.value.blendedColor,

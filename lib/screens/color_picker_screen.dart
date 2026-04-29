@@ -267,7 +267,7 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
     final settings = ref.watch(settingsProvider);
     final editorState = ref.watch(editorProvider);
     final usedCodes =
-        editorState.pattern.threads.map((t) => t.dmcCode).toSet();
+        editorState.pattern.threads.keys.toSet();
     final filtered = _filteredFor(settings.useDmc);
     final refColor = _referenceColor(editorState);
 

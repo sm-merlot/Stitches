@@ -109,14 +109,14 @@ void main() {
 
     test('addStitch auto-adds new thread to palette', () {
       notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '820'));
-      expect(editorState(c).pattern.threads.map((t) => t.dmcCode), contains('820'));
+      expect(editorState(c).pattern.threads.keys, contains('820'));
     });
 
     test('overpainting same cell with new thread: old thread pruned when no other stitches', () {
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       // Repaint same cell with red — original thread should disappear.
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '666'));
-      final threads = editorState(c).pattern.threads.map((t) => t.dmcCode);
+      final threads = editorState(c).pattern.threads.keys;
       expect(threads, contains('666'));
       expect(threads, isNot(contains('310')));
     });
@@ -428,29 +428,23 @@ void main() {
     tearDown(() => c.dispose());
 
     test('_assignSymbols gives each thread a symbol', () {
-      final threads = [
-        const Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: ''),
-        const Thread(dmcCode: '666', color: Color(0xFFCC0000), name: 'Red',   symbol: ''),
-      ];
-      final result = notifier(c).assignSymbolsForTest(threads);
-      expect(result.every((t) => t.symbol.isNotEmpty), isTrue);
+      const t310 = Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: '');
+      const t666 = Thread(dmcCode: '666', color: Color(0xFFCC0000), name: 'Red',   symbol: '');
+      final result = notifier(c).assignSymbolsForTest({'310': t310, '666': t666});
+      expect(result.values.every((t) => t.symbol.isNotEmpty), isTrue);
     });
 
     test('_assignSymbols preserves existing valid symbol', () {
-      final threads = [
-        const Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: 'X'),
-      ];
-      final result = notifier(c).assignSymbolsForTest(threads);
-      expect(result.first.symbol, equals('X'));
+      const t310 = Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: 'X');
+      final result = notifier(c).assignSymbolsForTest({'310': t310});
+      expect(result.values.first.symbol, equals('X'));
     });
 
     test('_assignSymbols does not reuse existingSymbols set', () {
-      final threads = [
-        const Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: ''),
-      ];
+      const t310 = Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: '');
       // If 'X' is already taken by composite symbols, it should not be reused.
-      final result = notifier(c).assignSymbolsForTest(threads, existingSymbols: {'X'});
-      expect(result.first.symbol, isNot(equals('X')));
+      final result = notifier(c).assignSymbolsForTest({'310': t310}, existingSymbols: {'X'});
+      expect(result.values.first.symbol, isNot(equals('X')));
     });
   });
 
@@ -554,7 +548,7 @@ void main() {
       notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '666'));
       notifier(c).removeThread('310');
 
-      final codes = editorState(c).pattern.threads.map((t) => t.dmcCode);
+      final codes = editorState(c).pattern.threads.keys;
       expect(codes, isNot(contains('310')));
       final stitches = editorState(c).pattern.stitches;
       expect(stitches.any((s) => s.threadId == '310'), isFalse);
@@ -566,7 +560,7 @@ void main() {
       notifier(c).setSelectedThread('310');
       notifier(c).removeThread('310');
       // After removal, selectedThread should point to a remaining thread.
-      final codes = editorState(c).pattern.threads.map((t) => t.dmcCode).toList();
+      final codes = editorState(c).pattern.threads.keys.toList();
       expect(codes, isNot(contains('310')));
       expect(codes, contains(editorState(c).selectedThreadId ?? codes.first));
     });
@@ -577,7 +571,7 @@ void main() {
 
       notifier(c).replaceThread('310', '666', const Color(0xFFCC0000), 'Red');
 
-      final codes = editorState(c).pattern.threads.map((t) => t.dmcCode);
+      final codes = editorState(c).pattern.threads.keys;
       expect(codes, contains('666'));
       expect(codes, isNot(contains('310')));
       expect(

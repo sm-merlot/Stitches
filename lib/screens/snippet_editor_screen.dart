@@ -113,7 +113,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             name: s.name,
             width: s.width,
             height: s.height,
-            threads: s.threads,
+            threads: {for (final t in s.threads) t.dmcCode: t},
             aidaColor: widget.aidaColor,
             layerItems: [
               LayerLeaf(
@@ -151,7 +151,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
       // palette by slot (symbol belongs to the slot, not the thread).
       final editorNotifier = ref.read(editorProvider.notifier);
       if (s != null) {
-        final symbolised = ref.read(editorProvider).pattern.threads;
+        final symbolised = ref.read(editorProvider).pattern.threads.values.toList();
         final palettes = s.palettes.isNotEmpty
             ? [
                 s.palettes[0].copyWith(threads: symbolised),
@@ -171,7 +171,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
           setState(() {
             _initialStitchHash =
                 s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
-            _initialThreadHash = s.pattern.threads.fold(
+            _initialThreadHash = s.pattern.threads.values.fold(
                 0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
             _initialPalettes = s.snippetPalettes;
           });
@@ -206,7 +206,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     final s = ref.read(editorProvider);
     _initialStitchHash =
         s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
-    _initialThreadHash = s.pattern.threads.fold(
+    _initialThreadHash = s.pattern.threads.values.fold(
         0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
     _initialPalettes = s.snippetPalettes;
   }
@@ -333,10 +333,10 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     // palette slot indices and corrupts the colour mapping on reload.
     final savedPalettes = localPalettes.isNotEmpty
         ? [
-            localPalettes[0].copyWith(threads: pattern.threads),
+            localPalettes[0].copyWith(threads: pattern.threads.values.toList()),
             ...localPalettes.skip(1),
           ]
-        : [SnippetPalette.create(name: 'Palette 1', threads: pattern.threads)];
+        : [SnippetPalette.create(name: 'Palette 1', threads: pattern.threads.values.toList())];
 
     final result = widget.snippet != null
         ? widget.snippet!.copyWith(
@@ -351,7 +351,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             name: name,
             width: pattern.width,
             height: pattern.height,
-            threads: pattern.threads,
+            threads: pattern.threads.values.toList(),
             stitches: pattern.stitches,
           );
 
@@ -522,7 +522,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
     if (stitchHash != _initialStitchHash) return true;
     // Thread list changes (colour/DMC replacements via replaceThread)
-    final threadHash = s.pattern.threads.fold(
+    final threadHash = s.pattern.threads.values.fold(
         0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
     if (threadHash != _initialThreadHash) return true;
     // Palette changes (secondary colorway edits via setSnippetPaletteThreadColor)

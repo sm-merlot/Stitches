@@ -44,10 +44,9 @@ class _DesignColoursPanel extends ConsumerWidget {
         : state.activeLayer.stitches
             .map((s) => s.threadId)
             .toSet()
-            .map((id) => state.pattern.threads.firstWhere(
-                  (t) => t.dmcCode == id,
-                  orElse: () => state.pattern.threads.first,
-                ))
+            .map((id) =>
+                state.pattern.threads[id] ??
+                state.pattern.threads.values.first)
             .toList();
 
     final activeLayer = state.pattern.layers.firstWhere(
@@ -150,7 +149,7 @@ class _DesignColoursPanel extends ConsumerWidget {
                 ),
                 TextButton(
                   onPressed: () {
-                    _autoFixSymbols(notifier, state.pattern.threads);
+                    _autoFixSymbols(notifier, state.pattern.threads.values.toList());
                     // Rebuild composite cache so blended-thread symbols are
                     // also reassigned using the fixed pattern-thread symbols.
                     if (state.showCompositeThreads) {
@@ -200,13 +199,12 @@ class _DesignColoursPanel extends ConsumerWidget {
             stitchCounts: stitchCounts,
             onTap: (t) => notifier.setSelectedThread(t.dmcCode),
             onSwatchTap: (t) {
-              final isLayerThread = state.pattern.threads
-                  .any((pt) => pt.dmcCode == t.dmcCode);
+              final isLayerThread = state.pattern.threads.containsKey(t.dmcCode);
               if (isLayerThread) {
                 // Include composite symbols so the picker won't offer a symbol
                 // already assigned to a blended/composite thread.
                 final usedByOthers = <String>{
-                  ...state.pattern.threads
+                  ...state.pattern.threads.values
                       .where((pt) => pt.dmcCode != t.dmcCode)
                       .map((pt) => pt.symbol)
                       .where(symbolIsVisible),
@@ -221,7 +219,7 @@ class _DesignColoursPanel extends ConsumerWidget {
                 // Composite thread — use changeCompositeSymbol so the
                 // compositeSymbols registry (and PDF) is updated correctly.
                 final usedSymbols = <String>{
-                  ...state.pattern.threads
+                  ...state.pattern.threads.values
                       .map((pt) => pt.symbol)
                       .where(symbolIsVisible),
                   ...state.pattern.compositeSymbols.entries
@@ -248,7 +246,7 @@ class _DesignColoursPanel extends ConsumerWidget {
       }
       return unique.values.toList();
     }
-    return state.pattern.threads;
+    return state.pattern.threads.values.toList();
   }
 }
 
@@ -615,7 +613,7 @@ class _StitchColoursPanel extends ConsumerWidget {
       }
       return unique.values.toList();
     }
-    return state.pattern.threads;
+    return state.pattern.threads.values.toList();
   }
 
 }
@@ -782,8 +780,9 @@ class StitchDemoButton extends StatelessWidget {
       thread = pattern.threadByCode(focusId);
     } else {
       final threadIds = fullStitches.map((s) => s.threadId).toSet();
-      final candidates =
-          pattern.threads.where((t) => threadIds.contains(t.dmcCode)).toList();
+      final candidates = pattern.threads.values
+          .where((t) => threadIds.contains(t.dmcCode))
+          .toList();
       if (candidates.isEmpty) return;
       if (candidates.length == 1) {
         thread = candidates.first;
@@ -836,7 +835,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
     final activeIdx = state.snippetActivePaletteIndex;
     final threads = (palettes.isNotEmpty && activeIdx < palettes.length)
         ? palettes[activeIdx].threads
-        : state.pattern.threads;
+        : state.pattern.threads.values.toList();
 
     // Stitches always reference primary-palette DMC codes. For a secondary
     // palette we remap counts slot-by-slot: secondary[i] inherits the count
@@ -862,7 +861,7 @@ class _SnippetColoursPanel extends ConsumerWidget {
       onTap: (t) => notifier.setSelectedThread(t.dmcCode),
       onSwatchTap: (t) => _showSymbolPicker(
         context, notifier, t,
-        state.pattern.threads
+        state.pattern.threads.values
             .where((pt) => pt.dmcCode != t.dmcCode)
             .map((pt) => pt.symbol)
             .where(symbolIsVisible)

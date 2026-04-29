@@ -34,13 +34,14 @@ void main() {
 
     // ── Build snap-colour map via StitchCompositor (mirrors PageLayout.compute)
     final composite = StitchCompositor.computeLayer(pattern);
+    final threadList = pattern.threads.values.toList();
     final threadIndex = <String, int>{
-      for (int i = 0; i < pattern.threads.length; i++)
-        pattern.threads[i].dmcCode: i,
+      for (int i = 0; i < threadList.length; i++)
+        threadList[i].dmcCode: i,
     };
     final indexToSym = <int, String>{
-      for (int i = 0; i < pattern.threads.length; i++)
-        i: pattern.threads[i].symbol,
+      for (int i = 0; i < threadList.length; i++)
+        i: threadList[i].symbol,
     };
     final snapColor = <int, int?>{};
     for (final entry in composite.fullStitches.entries) {

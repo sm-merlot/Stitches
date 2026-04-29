@@ -24,7 +24,7 @@ void main() {
 
       // Threads: index 0 is cloth (skipped), index 1 is DMC 310
       expect(pattern.threads.length, 1);
-      expect(pattern.threads.first.dmcCode, equals('310'));
+      expect(pattern.threads.values.first.dmcCode, equals('310'));
 
       final item = pattern.layerItems.first;
       expect(item, isA<LayerLeaf>());
@@ -71,7 +71,7 @@ void main() {
         width: 20,
         height: 20,
         aidaColor: const Color(0xFFF0F0F0),
-        threads: [thread],
+        threads: {thread.dmcCode: thread},
         layerItems: [
           LayerLeaf(
             layer: Layer(
@@ -103,7 +103,7 @@ void main() {
         expect(decoded.height, equals(20));
         expect(decoded.aidaColor, equals(original.aidaColor));
         expect(decoded.threads.length, 1);
-        expect(decoded.threads.first.dmcCode, equals('310'));
+        expect(decoded.threads.values.first.dmcCode, equals('310'));
 
         final item = decoded.layerItems.first;
         expect(item, isA<LayerLeaf>());

@@ -61,9 +61,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   /// Progress data — used in stitch mode to dim completed stitch cells.
   final PatternProgress progress;
 
-  late final Map<String, Thread> _threadMap = {
-    for (final t in pattern.threads) t.dmcCode: t,
-  };
+  late final Map<String, Thread> _threadMap = pattern.threads;
 
   /// Stitch mode is always B&W now (no block/colour toggle).
   bool get _isBWStitchMode => stitchMode;

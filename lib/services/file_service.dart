@@ -229,7 +229,7 @@ class FileService {
     }
 
     buf.writeln('  threads:');
-    for (final t in pattern.threads) {
+    for (final t in pattern.threads.values) {
       final m = t.toYaml();
       buf.writeln('    - dmcCode: ${_yamlStr(m['dmcCode'] as String)}');
       buf.writeln('      color: ${_yamlStr(m['color'] as String)}');

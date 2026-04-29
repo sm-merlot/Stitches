@@ -163,9 +163,7 @@ class StitchCompositor {
     bool backstitchesChanged = false,
   }) {
     final key = '$x,$y';
-    final threadMap = <String, Thread>{
-      for (final t in newPattern.threads) t.dmcCode: t,
-    };
+    final threadMap = newPattern.threads;
 
     // Collect full-stitch stack and other-stitch contributions at (x, y).
     final cellStack = <({
@@ -283,9 +281,7 @@ class StitchCompositor {
 
   /// Single-pass composite build. O(total visible stitches).
   static CompositeLayer _buildLayer(CrossStitchPattern pattern) {
-    final threadMap = <String, Thread>{
-      for (final t in pattern.threads) t.dmcCode: t,
-    };
+    final threadMap = pattern.threads;
 
     // ── Pass 1: bucket FullStitches per cell; collect everything else ────────
     final cellStack = <String,

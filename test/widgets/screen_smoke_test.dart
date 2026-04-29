@@ -87,7 +87,7 @@ void main() {
     testWidgets('renders with a pattern that has stitches', (tester) async {
       const thread = Thread(dmcCode: '310', color: Color(0xFF000000), name: 'Black', symbol: 'X');
       final pattern = CrossStitchPattern.empty(name: 'With Stitches').copyWith(
-        threads: [thread],
+        threads: {thread.dmcCode: thread},
       );
       final layer = pattern.layers.first.copyWith(stitches: const [
         FullStitch(x: 0, y: 0, threadId: '310'),
