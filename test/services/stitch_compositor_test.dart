@@ -395,6 +395,76 @@ void main() {
     });
   });
 
+  // ─── patchAffectedLayer ───────────────────────────────────────────────────────
+
+  group('StitchCompositor.patchAffectedLayer', () {
+    final black = const Color(0xFF000000);
+    final red   = const Color(0xFFFF0000);
+    final tBlack = _thread('310', black);
+    final tRed   = _thread('666', red);
+
+    test('toggling visibility removes cells from composite', () {
+      final layer = _layer(stitches: [FullStitch(x: 1, y: 1, threadId: '310')]);
+      final pat = _pattern(threads: [tBlack], layers: [layer]);
+      final old = StitchCompositor.computeLayer(pat);
+      expect(old.fullStitches.containsKey(const Cell(1, 1)), isTrue);
+
+      // Toggle layer hidden.
+      final hiddenLayer = layer.copyWith(visible: false);
+      final newPat = _pattern(
+        threads: [tBlack],
+        layers: [hiddenLayer],
+      );
+      final patched = StitchCompositor.patchAffectedLayer(old, newPat, layer);
+      expect(patched.fullStitches.containsKey(const Cell(1, 1)), isFalse);
+    });
+
+    test('toggling visibility adds cells to composite', () {
+      final hiddenLayer = _layer(
+        stitches: [FullStitch(x: 2, y: 3, threadId: '310')], visible: false);
+      final pat = _pattern(threads: [tBlack], layers: [hiddenLayer]);
+      final old = StitchCompositor.computeLayer(pat);
+      expect(old.fullStitches.containsKey(const Cell(2, 3)), isFalse);
+
+      // Toggle layer visible.
+      final visibleLayer = hiddenLayer.copyWith(visible: true);
+      final newPat = _pattern(threads: [tBlack], layers: [visibleLayer]);
+      final patched = StitchCompositor.patchAffectedLayer(old, newPat, hiddenLayer);
+      expect(patched.fullStitches.containsKey(const Cell(2, 3)), isTrue);
+      expect(patched.fullStitches[const Cell(2, 3)]?.resolvedThread.dmcCode, '310');
+    });
+
+    test('result matches computeLayer after visibility toggle', () {
+      final layer1 = _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')]);
+      final layer2 = _layer(stitches: [FullStitch(x: 1, y: 1, threadId: '666')]);
+      final pat = _pattern(threads: [tBlack, tRed], layers: [layer1, layer2]);
+      final old = StitchCompositor.computeLayer(pat);
+
+      final hiddenLayer2 = layer2.copyWith(visible: false);
+      final newPat = _pattern(threads: [tBlack, tRed], layers: [layer1, hiddenLayer2]);
+
+      final patched = StitchCompositor.patchAffectedLayer(old, newPat, layer2);
+      final full    = StitchCompositor.computeLayer(newPat);
+
+      expect(patched.fullStitches.keys.toSet(), full.fullStitches.keys.toSet());
+    });
+
+    test('unaffected cells are unchanged after visibility toggle', () {
+      final layer1 = _layer(stitches: [FullStitch(x: 5, y: 5, threadId: '310')]);
+      final layer2 = _layer(stitches: [FullStitch(x: 7, y: 7, threadId: '666')]);
+      final pat = _pattern(threads: [tBlack, tRed], layers: [layer1, layer2]);
+      final old = StitchCompositor.computeLayer(pat);
+
+      final hiddenLayer2 = layer2.copyWith(visible: false);
+      final newPat = _pattern(threads: [tBlack, tRed], layers: [layer1, hiddenLayer2]);
+      final patched = StitchCompositor.patchAffectedLayer(old, newPat, layer2);
+
+      // Cell (5,5) belongs only to layer1 — untouched.
+      expect(patched.fullStitches[const Cell(5, 5)],
+          same(old.fullStitches[const Cell(5, 5)]));
+    });
+  });
+
   // ─── CompositeLayer / instance API ───────────────────────────────────────────
 
   group('StitchCompositor instance + CompositeLayer', () {

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart' show Color;
 import '../models/cell.dart';
+import '../models/layer/layer.dart';
 import '../models/layer/layer_blend_mode.dart';
 import '../models/pattern.dart';
 import '../models/stitch/stitch.dart';
@@ -144,10 +145,11 @@ class StitchCompositor {
 
   /// Incrementally patches [old] by recomputing only the cell at ([x], [y]).
   ///
-  /// Scans all visible-layer stitches to find contributions at ([x], [y]) only,
-  /// then copies [old.fullStitches] and updates just that key. All other cells
-  /// are carried over unchanged — O(total_stitches) for the scan but avoids the
-  /// O(total_cells) map-rebuild of [computeLayer].
+  /// Uses [Layer.stitchesAt] (O(1) via lazy cell index) to collect contributions
+  /// at ([x], [y]) from each visible layer, then copies [old.fullStitches] and
+  /// updates just that key. All other cells carry over unchanged.
+  /// Complexity: O(visible_layers × stitches_at_cell) — effectively O(1) for
+  /// sparse patterns.
   ///
   /// Pass [backstitchesChanged] = true when a [BackStitch] touching cell ([x],[y])
   /// was added or removed; triggers a full backstitch list rescan. For ordinary
@@ -274,6 +276,57 @@ class StitchCompositor {
       crossStitchEquiv: old.crossStitchEquiv,
       backStitchEquiv: old.backStitchEquiv,
     );
+  }
+
+  // ─── Affected-layer patch ──────────────────────────────────────────────────
+
+  /// Patches [old] by recomputing only cells that [changedLayer] touches.
+  ///
+  /// Use when a single layer's visibility, opacity, or blend mode changes.
+  /// Cells not touched by [changedLayer] carry over from [old] unchanged.
+  ///
+  /// Complexity: O(cells_in_layer × avg_layers_per_cell) — far cheaper than
+  /// [computeLayer] (O(total_stitches)) for large multi-layer patterns.
+  static CompositeLayer patchAffectedLayer(
+    CompositeLayer old,
+    CrossStitchPattern newPattern,
+    Layer changedLayer,
+  ) {
+    // Collect unique cell positions and backstitch presence in one pass.
+    final affectedCells = <Cell>{};
+    bool hasBackstitches = false;
+    for (final s in changedLayer.stitches) {
+      if (s is BackStitch) {
+        hasBackstitches = true;
+      } else if (s.cellCoords case final c?) {
+        affectedCells.add(c);
+      }
+    }
+
+    // Patch each affected cell — patchLayer now uses stitchesAt(x,y) → O(1).
+    var result = old;
+    for (final cell in affectedCells) {
+      result = patchLayer(result, newPattern, cell.x, cell.y);
+    }
+
+    // Rebuild backstitch list when the changed layer contributes backstitches.
+    if (hasBackstitches) {
+      final newBackstitches = [
+        for (final layer in newPattern.layers)
+          if (layer.visible)
+            for (final s in layer.stitches)
+              if (s is BackStitch) s,
+      ];
+      result = CompositeLayer(
+        fullStitches: result.fullStitches,
+        otherStitches: result.otherStitches,
+        backstitches: newBackstitches,
+        crossStitchEquiv: result.crossStitchEquiv,
+        backStitchEquiv: result.backStitchEquiv,
+      );
+    }
+
+    return result;
   }
 
   // ─── Core build logic ─────────────────────────────────────────────────────

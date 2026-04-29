@@ -148,11 +148,15 @@ mixin LayersMixin on Notifier<EditorState> {
   }
 
   void toggleLayerVisible(String id) {
+    // Capture the layer BEFORE toggling — its cells are what changed.
+    final changedLayer = state.pattern.layers.firstWhere((l) => l.id == id);
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(visible: !l.visible));
-    state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeLayer: null);
-    refreshCompositeCache();
+    final oldComposite = state.compositeLayer;
+    final newComposite = oldComposite != null
+        ? StitchCompositor.patchAffectedLayer(oldComposite, newPattern, changedLayer)
+        : StitchCompositor.computeLayer(newPattern);
+    state = state.copyWith(pattern: newPattern, isDirty: true, compositeLayer: newComposite);
   }
 
   void toggleLayerLocked(String id) {
@@ -162,11 +166,14 @@ mixin LayersMixin on Notifier<EditorState> {
   }
 
   void setLayerBlendMode(String id, LayerBlendMode mode) {
+    final changedLayer = state.pattern.layers.firstWhere((l) => l.id == id);
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
-    state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeLayer: null);
-    refreshCompositeCache();
+    final oldComposite = state.compositeLayer;
+    final newComposite = oldComposite != null
+        ? StitchCompositor.patchAffectedLayer(oldComposite, newPattern, changedLayer)
+        : StitchCompositor.computeLayer(newPattern);
+    state = state.copyWith(pattern: newPattern, isDirty: true, compositeLayer: newComposite);
   }
 
   void setLayerOpacity(String id, double opacity) {
