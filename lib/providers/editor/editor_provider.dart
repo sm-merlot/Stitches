@@ -652,6 +652,22 @@ class EditorNotifier extends Notifier<EditorState>
     return [...filtered, newStitch];
   }
 
+  /// Removes [threadId] from [pattern.threads] only if no stitch in any layer
+  /// still references it.  Short-circuits on first hit — O(1) when the thread
+  /// is still in use (the common case).
+  @override
+  CrossStitchPattern _pruneSpecificThread(
+      CrossStitchPattern pattern, String threadId) {
+    if (!pattern.threads.containsKey(threadId)) return pattern;
+    for (final layer in pattern.layers) {
+      for (final s in layer.stitches) {
+        if (s.threadId == threadId) return pattern; // still used
+      }
+    }
+    final pruned = Map<String, Thread>.from(pattern.threads)..remove(threadId);
+    return pattern.copyWith(threads: pruned);
+  }
+
   @override
   CrossStitchPattern _patternWithActiveLayerStitches(
       CrossStitchPattern pattern, List<Stitch> newStitches) {

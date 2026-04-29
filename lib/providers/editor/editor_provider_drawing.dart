@@ -12,6 +12,7 @@ mixin DrawingMixin on Notifier<EditorState> {
   CrossStitchPattern _patternWithActiveLayerStitches(
       CrossStitchPattern p, List<Stitch> s);
   CrossStitchPattern _pruneUnusedThreads(CrossStitchPattern pattern);
+  CrossStitchPattern _pruneSpecificThread(CrossStitchPattern pattern, String threadId);
   String _nextSymbol(Set<String> used);
   void refreshCompositeCache(); // provided by LayersMixin
   void _saveSession();          // provided by EditorNotifier
@@ -328,12 +329,16 @@ mixin DrawingMixin on Notifier<EditorState> {
     if (state.activeLayer.locked) return;
     // O(1) via _cellIndex for cell stitches; O(n) only for BackStitch (rare).
     final coords = stitch.cellCoords;
-    final alreadyExists = coords != null
+    final existingAtCell = coords != null
         ? state.activeLayer.stitchesAt(coords.x, coords.y)
-            .any((s) => s == stitch && s.threadId == stitch.threadId)
-        : state.activeLayer.stitches
-            .any((s) => s == stitch && s.threadId == stitch.threadId);
-    if (alreadyExists) return;
+        : null;
+
+    // Early-return if exact stitch (same position + thread) already placed.
+    if (existingAtCell != null) {
+      if (existingAtCell.any((s) => s == stitch && s.threadId == stitch.threadId)) return;
+    } else if (stitch is BackStitch) {
+      if (state.activeLayer.stitches.any((s) => s == stitch && s.threadId == stitch.threadId)) return;
+    }
 
     var pattern = state.pattern;
     final threadId = stitch.threadId;
@@ -359,10 +364,28 @@ mixin DrawingMixin on Notifier<EditorState> {
           .toList();
     }
 
-    final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
+    // Build new stitch list.
+    // Common case: cell empty → plain append (no O(n) filter pass needed).
+    // Rare case: cell has a stitch of different type/thread → filter + replace.
+    final bool cellEmpty = existingAtCell == null || existingAtCell.isEmpty;
+    final bool needsReplace = !cellEmpty && existingAtCell.any((s) => s == stitch);
+    final List<Stitch> newStitches = needsReplace
+        ? _stitchesWithAdded(state.activeLayer.stitches, stitch)
+        : [...state.activeLayer.stitches, stitch];
+
     final rawPattern = _patternWithActiveLayerStitches(pattern, newStitches);
-    // Prune threads whose last stitch was painted over by a different colour.
-    final newPattern = _pruneUnusedThreads(rawPattern);
+
+    // Prune only the displaced thread (if any) — not all threads.
+    // Common case (empty cell): no displacement → skip O(total_stitches) scan.
+    final String? displacedThread = needsReplace
+        ? existingAtCell
+            .where((s) => s == stitch && s.threadId != stitch.threadId)
+            .map((s) => s.threadId)
+            .firstOrNull
+        : null;
+    final newPattern = displacedThread != null
+        ? _pruneSpecificThread(rawPattern, displacedThread)
+        : rawPattern;
 
     // Incremental composite: patch only the affected cell when possible.
     // Falls back to computeLayer for backstitches (no cell coords) or when
@@ -487,12 +510,15 @@ mixin DrawingMixin on Notifier<EditorState> {
   void addStitchRaw(Stitch stitch) {
     if (state.activeLayer.locked) return;
     final coords = stitch.cellCoords;
-    final alreadyExists = coords != null
+    final existingAtCell = coords != null
         ? state.activeLayer.stitchesAt(coords.x, coords.y)
-            .any((s) => s == stitch && s.threadId == stitch.threadId)
-        : state.activeLayer.stitches
-            .any((s) => s == stitch && s.threadId == stitch.threadId);
-    if (alreadyExists) return;
+        : null;
+
+    if (existingAtCell != null) {
+      if (existingAtCell.any((s) => s == stitch && s.threadId == stitch.threadId)) return;
+    } else if (stitch is BackStitch) {
+      if (state.activeLayer.stitches.any((s) => s == stitch && s.threadId == stitch.threadId)) return;
+    }
 
     var pattern = state.pattern;
     final threadId = stitch.threadId;
@@ -518,9 +544,22 @@ mixin DrawingMixin on Notifier<EditorState> {
           .toList();
     }
 
-    final newStitches = _stitchesWithAdded(state.activeLayer.stitches, stitch);
+    final bool cellEmpty = existingAtCell == null || existingAtCell.isEmpty;
+    final bool needsReplace = !cellEmpty && existingAtCell.any((s) => s == stitch);
+    final List<Stitch> newStitches = needsReplace
+        ? _stitchesWithAdded(state.activeLayer.stitches, stitch)
+        : [...state.activeLayer.stitches, stitch];
+
     final rawPattern = _patternWithActiveLayerStitches(pattern, newStitches);
-    final newPattern = _pruneUnusedThreads(rawPattern);
+    final String? displacedThread = needsReplace
+        ? existingAtCell
+            .where((s) => s == stitch && s.threadId != stitch.threadId)
+            .map((s) => s.threadId)
+            .firstOrNull
+        : null;
+    final newPattern = displacedThread != null
+        ? _pruneSpecificThread(rawPattern, displacedThread)
+        : rawPattern;
 
     final oldComposite = state.compositeLayer;
     final quickComposite = (oldComposite != null && coords != null)
