@@ -252,8 +252,8 @@ mixin SnippetsMixin on Notifier<EditorState> {
     for (final s in stitches) {
       final coords = EditorState.cellCoords(s);
       if (coords != null) {
-        if (coords.$1 + 1 > maxX) maxX = coords.$1 + 1;
-        if (coords.$2 + 1 > maxY) maxY = coords.$2 + 1;
+        if (coords.x + 1 > maxX) maxX = coords.x + 1;
+        if (coords.y + 1 > maxY) maxY = coords.y + 1;
       }
     }
 

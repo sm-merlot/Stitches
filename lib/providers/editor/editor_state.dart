@@ -220,13 +220,13 @@ class EditorState {
   }
 
   /// Prefer [Stitch.cellCoords] extension getter over this static method.
-  static (int, int)? cellCoords(Stitch s) => s.cellCoords;
+  static Cell? cellCoords(Stitch s) => s.cellCoords;
 
   static bool isStitchInRect(Stitch s, Rect rect) {
     final coords = cellCoords(s);
     if (coords != null) {
-      return coords.$1 >= rect.left && coords.$1 < rect.right &&
-          coords.$2 >= rect.top && coords.$2 < rect.bottom;
+      return coords.x >= rect.left && coords.x < rect.right &&
+          coords.y >= rect.top && coords.y < rect.bottom;
     }
     final bs = s as BackStitch;
     return bs.x1 >= rect.left && bs.x1 <= rect.right &&

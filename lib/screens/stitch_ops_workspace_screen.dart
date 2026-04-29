@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import '../models/cell.dart';
 import '../models/pattern.dart';
 import '../models/progress_log.dart';
 import '../models/stitch.dart';
@@ -128,7 +129,7 @@ class _WorkspaceStats {
 }
 
 _PatternSummary _summarisePattern(CrossStitchPattern p) {
-  final cellSet = <(int, int)>{};
+  final cellSet = <Cell>{};
   for (final s in p.stitches) {
     if (s is BackStitch) continue;
     final xy = s.cellCoords;

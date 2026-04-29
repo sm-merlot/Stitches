@@ -75,7 +75,7 @@ class Layer {
     for (final s in stitches) {
       final coords = s.cellCoords;
       if (coords == null) continue; // BackStitch — skip
-      final key = Cell(coords.$1, coords.$2);
+      final key = coords;
       (index[key] ??= []).add(s);
     }
     return index;

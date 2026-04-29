@@ -21,6 +21,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/pattern.dart';
 import 'package:stitches/models/stitch.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
@@ -178,7 +179,7 @@ void main() {
             .pattern
             .progress
             .completedStitches
-            .any((s) => s == (0, 0)),
+            .any((s) => s == const Cell(0, 0)),
         isTrue);
   });
 

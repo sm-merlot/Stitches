@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
+import '../models/cell.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
@@ -316,18 +317,18 @@ Map<String, int> _countDoneStitches(EditorState state) {
     for (final entry in layer.fullStitches.entries) {
       final x = entry.key.x;
       final y = entry.key.y;
-      if (progress.completedStitches.contains((x, y))) {
+      if (progress.completedStitches.contains(Cell(x, y))) {
         final id = entry.value.resolvedThread.dmcCode;
         counts[id] = (counts[id] ?? 0) + 1;
       }
     }
   } else {
     // No composite cache — fall back to raw iteration but deduplicate by cell.
-    final seen = <(int, int)>{};
+    final seen = <Cell>{};
     for (final layer in state.pattern.layers) {
       for (final stitch in layer.stitches) {
         if (stitch is! FullStitch) continue;
-        final cell = (stitch.x, stitch.y);
+        final cell = Cell(stitch.x, stitch.y);
         if (!seen.add(cell)) continue; // already counted from earlier layer
         if (progress.completedStitches.contains(cell)) {
           counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
@@ -460,7 +461,8 @@ class _StitchColoursPanel extends ConsumerWidget {
         } else {
           final coords = EditorState.cellCoords(s);
           if (coords == null) continue;
-          (sx, sy) = coords;
+          sx = coords.x;
+          sy = coords.y;
         }
         if (pageLayout.cellOnPage(sx, sy, pageCol, pageRow)) {
           pageCounts[s.threadId] = (pageCounts[s.threadId] ?? 0) + 1;
@@ -687,7 +689,8 @@ class StitchDemoButton extends StatelessWidget {
           if (stitch is BackStitch) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
-          final (sx, sy) = coords;
+          final sx = coords.x;
+          final sy = coords.y;
           if (sx >= region.left && sx < region.right &&
               sy >= region.top && sy < region.bottom) {
             if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
@@ -1497,7 +1500,8 @@ class MarkDoneButton extends ConsumerWidget {
           if (s.stitchBackMode) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
-          final (sx, sy) = coords;
+          final sx = coords.x;
+          final sy = coords.y;
           if (sx >= region.left && sx < region.right &&
               sy >= region.top && sy < region.bottom) {
             if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
@@ -1536,12 +1540,13 @@ class MarkDoneButton extends ConsumerWidget {
           if (s.stitchBackMode) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
-          final (sx, sy) = coords;
+          final sx = coords.x;
+          final sy = coords.y;
           if (sx >= region.left && sx < region.right &&
               sy >= region.top && sy < region.bottom) {
             if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
             hasAny = true;
-            if (!progress.completedStitches.contains((sx, sy))) return false;
+            if (!progress.completedStitches.contains(Cell(sx, sy))) return false;
           }
         }
       }

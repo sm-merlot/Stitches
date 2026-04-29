@@ -189,7 +189,7 @@ class StitchCompositor {
           ));
         } else if (s is! BackStitch) {
           final coords = s.cellCoords;
-          if (coords != null && coords.$1 == x && coords.$2 == y) {
+          if (coords != null && coords.x == x && coords.y == y) {
             final t = threadMap[s.threadId];
             if (t != null) {
               newOtherAtCell.add(CompositeStitch(
@@ -254,7 +254,7 @@ class StitchCompositor {
     final newOtherStitches = <CompositeStitch>[
       ...old.otherStitches.where((cs) {
         final coords = cs.stitch.cellCoords;
-        return coords == null || coords.$1 != x || coords.$2 != y;
+        return coords == null || coords.x != x || coords.y != y;
       }),
       ...newOtherAtCell,
     ];

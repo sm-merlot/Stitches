@@ -192,7 +192,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           if (!stitch.isInViewport(minCX, minCY, maxCX, maxCY)) continue;
 
           final sCoords = stitch.cellCoords;
-          if (sCoords != null && !_stitchOnPage(sCoords.$1, sCoords.$2)) continue;
+          if (sCoords != null && !_stitchOnPage(sCoords.x, sCoords.y)) continue;
 
           // Skip done cells in B&W mode.
           if (sCoords != null && progress.completedStitches.contains(sCoords)) continue;
@@ -303,7 +303,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       for (final cs in [...layer.fullStitches.values, ...layer.otherStitches]) {
         final coords = cs.stitch.cellCoords;
         if (coords == null) continue;
-        final (cx, cy) = coords;
+        final cx = coords.x;
+        final cy = coords.y;
         final intKey = (cx << 16) | cy;
         if (focusId == null || cs.resolvedThread.dmcCode == focusId) {
           focusedKeys.add(intKey);

@@ -162,7 +162,7 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
     ..sort((a, b) => a.isoDate.compareTo(b.isoDate));
 
   // ── Total stitch counts ──────────────────────────────────────────────────
-  final cellSet = <(int, int)>{};
+  final cellSet = <Cell>{};
   int totalBackstitches = 0;
   for (final s in pattern.stitches) {
     if (s is BackStitch) {
@@ -188,19 +188,19 @@ _StitchOpsStats _computeStats(CrossStitchPattern pattern,
       final y = entry.key.y;
       final id = entry.value.dmcCode;
       threadCounts[id] = (threadCounts[id] ?? 0) + 1;
-      if (progress.completedStitches.contains((x, y))) {
+      if (progress.completedStitches.contains(Cell(x, y))) {
         threadDoneCounts[id] = (threadDoneCounts[id] ?? 0) + 1;
       }
     }
   } else {
     // No composite cache: build a cell→threadId map where the last (topmost)
     // visible layer claiming a cell wins — consistent with the composite renderer.
-    final cellThread = <(int, int), String>{};
+    final cellThread = <Cell, String>{};
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
       for (final s in layer.stitches) {
         if (s is! FullStitch) continue;
-        cellThread[(s.x, s.y)] = s.threadId; // later layer overwrites → top wins
+        cellThread[Cell(s.x, s.y)] = s.threadId; // later layer overwrites → top wins
       }
     }
     for (final entry in cellThread.entries) {

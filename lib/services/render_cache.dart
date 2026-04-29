@@ -177,7 +177,7 @@ class RenderCache {
     for (final cs in compositeLayer.otherStitches) {
       final coords = cs.stitch.cellCoords;
       if (coords == null) continue;
-      final key = Cell(coords.$1, coords.$2);
+      final key = coords;
       if (!keys.contains(key)) continue;
       _addCompositeStitch(key, cs, config, cellSize);
     }
@@ -197,7 +197,7 @@ class RenderCache {
     for (final cs in compositeLayer.otherStitches) {
       final coords = cs.stitch.cellCoords;
       if (coords == null) continue;
-      final key = Cell(coords.$1, coords.$2);
+      final key = coords;
       _addCompositeStitch(key, cs, config, cellSize);
     }
   }
@@ -294,7 +294,7 @@ class RenderCache {
     final coords = stitch.cellCoords;
     if (coords == null) return false;
     final (pageCol, pageRow) = layout.pageCoords(config.currentPage);
-    return layout.cellOnPage(coords.$1, coords.$2, pageCol, pageRow);
+    return layout.cellOnPage(coords.x, coords.y, pageCol, pageRow);
   }
 
   // ─── Colour helpers (mirrors painter originals, moved here) ──────────────

@@ -36,7 +36,7 @@ class Cell {
   /// For [BackStitch], matches if either endpoint lies within the cell bounds.
   static bool hitStitch(Stitch s, int x, int y) {
     final coords = s.cellCoords;
-    if (coords != null) return coords.$1 == x && coords.$2 == y;
+    if (coords != null) return coords.x == x && coords.y == y;
     if (s is BackStitch) {
       bool inside(double gx, double gy) =>
           gx >= x && gx <= x + 1 && gy >= y && gy <= y + 1;

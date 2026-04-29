@@ -295,7 +295,7 @@ class FileService {
         if (prog.completedStitches.isNotEmpty) {
           buf.writeln('    completedStitches:');
           for (final c in prog.completedStitches) {
-            buf.writeln('      - ${c.$1},${c.$2}');
+            buf.writeln('      - ${c.x},${c.y}');
           }
         }
         if (prog.completedBackstitches.isNotEmpty) {

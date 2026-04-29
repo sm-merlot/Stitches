@@ -299,7 +299,7 @@ class EditorNotifier extends Notifier<EditorState>
     int pruned = 0;
     var pattern = state.pattern;
     if (mode == AppMode.stitch) {
-      final validCells = <(int, int)>{};
+      final validCells = <Cell>{};
       final validBack = <(double, double, double, double)>{};
       for (final layer in pattern.layers) {
         for (final stitch in layer.stitches) {
@@ -670,7 +670,7 @@ class EditorNotifier extends Notifier<EditorState>
   bool _isInBounds(Stitch s, int maxX, int maxY) {
     final coords = EditorState.cellCoords(s);
     if (coords != null) {
-      return coords.$1 >= 0 && coords.$1 < maxX && coords.$2 >= 0 && coords.$2 < maxY;
+      return coords.x >= 0 && coords.x < maxX && coords.y >= 0 && coords.y < maxY;
     }
     final bs = s as BackStitch;
     return bs.x1 >= 0 && bs.x1 <= maxX && bs.y1 >= 0 && bs.y1 <= maxY &&

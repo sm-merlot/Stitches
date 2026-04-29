@@ -15,6 +15,7 @@ import 'package:stitches/models/snippet.dart';
 import 'package:stitches/models/snippet_palette.dart';
 import 'package:stitches/models/snippet_palette_resolver.dart';
 import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/stitch_geometry.dart';
 import 'package:stitches/models/stitch_plan.dart';
 import 'package:stitches/models/thread.dart';
@@ -25,35 +26,35 @@ import 'package:stitches/services/stitch_renderer.dart';
 void main() {
   group('stitch_geometry — stitchXY', () {
     test('FullStitch returns (x, y)', () {
-      expect(stitchXY(const FullStitch(x: 3, y: 7, threadId: 'a')), equals((3, 7)));
+      expect(stitchXY(const FullStitch(x: 3, y: 7, threadId: 'a')), equals(const Cell(3, 7)));
     });
 
     test('HalfStitch returns (x, y)', () {
       expect(
           stitchXY(const HalfStitch(
               x: 1, y: 2, threadId: 'a', isForward: true)),
-          equals((1, 2)));
+          equals(const Cell(1, 2)));
     });
 
     test('QuarterStitch returns (x, y)', () {
       expect(
           stitchXY(const QuarterStitch(
               x: 5, y: 6, threadId: 'a', quadrant: QuadrantPosition.topRight)),
-          equals((5, 6)));
+          equals(const Cell(5, 6)));
     });
 
     test('HalfCrossStitch returns (x, y)', () {
       expect(
           stitchXY(const HalfCrossStitch(
               x: 2, y: 4, threadId: 'a', half: HalfOrientation.top)),
-          equals((2, 4)));
+          equals(const Cell(2, 4)));
     });
 
     test('QuarterCrossStitch returns (x, y)', () {
       expect(
           stitchXY(const QuarterCrossStitch(
               x: 0, y: 0, threadId: 'a', quadrant: QuadrantPosition.bottomLeft)),
-          equals((0, 0)));
+          equals(const Cell(0, 0)));
     });
 
     test('BackStitch returns null', () {
@@ -66,7 +67,7 @@ void main() {
 
   group('StitchGeometry.cellCoords', () {
     test('FullStitch returns (x, y)', () {
-      expect(const FullStitch(x: 3, y: 7, threadId: 'a').cellCoords, equals((3, 7)));
+      expect(const FullStitch(x: 3, y: 7, threadId: 'a').cellCoords, equals(const Cell(3, 7)));
     });
     test('BackStitch returns null', () {
       expect(const BackStitch(x1: 0, y1: 0, x2: 1, y2: 1, threadId: 'a').cellCoords, isNull);

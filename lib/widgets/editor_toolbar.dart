@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/aida_presets.dart';
 import '../data/dmc_colors.dart';
+import '../models/cell.dart';
 import '../models/stitch.dart';
 import '../models/thread.dart';
 import '../models/storage_location.dart';

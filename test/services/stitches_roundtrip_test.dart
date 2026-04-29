@@ -11,6 +11,7 @@ import 'package:stitches/models/layer_blend_mode.dart';
 import 'package:stitches/models/layer_item.dart';
 import 'package:stitches/models/page_config.dart';
 import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/pattern_progress.dart';
 import 'package:stitches/models/progress_log.dart';
 import 'package:stitches/models/snippet.dart';
@@ -77,7 +78,7 @@ void main() {
         parsed.progress,
         equals(
           PatternProgress(
-            completedStitches: {(1, 1), (2, 2)},
+            completedStitches: {const Cell(1, 1), const Cell(2, 2)},
             completedBackstitches: {(0.5, 0.5, 1.5, 1.5)},
             completedPages: {0, 3},
           ),
@@ -261,7 +262,7 @@ CrossStitchPattern _buildRichPattern() {
       fuzzyAmount: 1,
     ),
     progress: PatternProgress(
-      completedStitches: {(1, 1), (2, 2)},
+      completedStitches: {const Cell(1, 1), const Cell(2, 2)},
       completedBackstitches: {(0.5, 0.5, 1.5, 1.5)},
       completedPages: {0, 3},
     ),

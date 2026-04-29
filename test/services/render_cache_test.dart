@@ -246,7 +246,7 @@ void main() {
     );
     // Mark (0,0) as done.
     final progress = PatternProgress.empty.copyWith(
-      completedStitches: {(0, 0)},
+      completedStitches: {const Cell(0, 0)},
     );
     final bwCfg = RenderViewConfig(stitchMode: true, progress: progress);
     final cache = RenderCache();

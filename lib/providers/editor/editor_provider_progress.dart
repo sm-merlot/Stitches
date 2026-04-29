@@ -90,9 +90,9 @@ mixin ProgressMixin on Notifier<EditorState> {
     if (focusId != null && _topThreadAt(x, y) != focusId) return;
 
     final prog = state.pattern.progress;
-    final cell = (x, y);
+    final cell = Cell(x, y);
     final current = prog.completedStitches;
-    Set<(int, int)> next;
+    Set<Cell> next;
     if (current.contains(cell)) {
       next = {...current}..remove(cell);
     } else {
@@ -144,14 +144,14 @@ mixin ProgressMixin on Notifier<EditorState> {
   /// In page mode, only stitches on the current page are affected.
   void markRegionDone(Rect region) {
     final prog = state.pattern.progress;
-    final current = Set<(int, int)>.from(prog.completedStitches);
+    final current = Set<Cell>.from(prog.completedStitches);
     final affectedThreads = <String>{};
     final layout = state.pageLayout;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
     final focusId = state.stitchFocusThreadId;
     if (!state.stitchBackMode) {
     // Build topmost-thread map so focus mode matches single-tap behaviour.
-    final topThread = <(int, int), String>{};
+    final topThread = <Cell, String>{};
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -166,13 +166,14 @@ mixin ProgressMixin on Notifier<EditorState> {
         if (stitch is BackStitch) continue;
         final coords = _crossStitchXY(stitch);
         if (coords == null) continue;
-        final (sx, sy) = coords;
+        final sx = coords.x;
+        final sy = coords.y;
         // In focus mode, only mark cells where the focused thread is on top.
-        if (focusId != null && topThread[(sx, sy)] != focusId) continue;
+        if (focusId != null && topThread[coords] != focusId) continue;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
           if (layout != null && !layout.rawCellOnPage(sx, sy, pageCol, pageRow)) continue;
-          current.add((sx, sy));
+          current.add(coords);
           affectedThreads.add(stitch.threadId);
         }
       }
@@ -226,12 +227,12 @@ mixin ProgressMixin on Notifier<EditorState> {
     // Backstitch focus mode: flood fill only applies to cross-stitches.
     if (state.stitchBackMode) return;
     final prog = state.pattern.progress;
-    final startIsDone = originalStartIsDone ?? prog.completedStitches.contains((x, y));
+    final startIsDone = originalStartIsDone ?? prog.completedStitches.contains(Cell(x, y));
 
     // Build a map of cell → topmost visible thread by iterating layers in
     // render order (later layers paint on top, so last write wins).
     // This matches exactly what the user sees on the composite canvas.
-    final topThread = <(int, int), String>{};
+    final topThread = <Cell, String>{};
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -242,7 +243,7 @@ mixin ProgressMixin on Notifier<EditorState> {
     }
 
     // The thread that is visually on top at the starting cell.
-    final threadId = topThread[(x, y)];
+    final threadId = topThread[Cell(x, y)];
     if (threadId == null) return;
 
     // In focus mode, only flood-fill if the starting cell matches the focus thread.
@@ -257,19 +258,20 @@ mixin ProgressMixin on Notifier<EditorState> {
     // BFS flood fill — 8-directional (sides + diagonals).
     // Only traverse cells where the same thread is the topmost visible stitch.
     // In page mode, also restrict to cells on the current page.
-    final queue = <(int, int)>[(x, y)];
-    final visited = <(int, int)>{};
+    final queue = <Cell>[Cell(x, y)];
+    final visited = <Cell>{};
     while (queue.isNotEmpty) {
       final cell = queue.removeLast();
       if (visited.contains(cell)) continue;
       if (topThread[cell] != threadId) continue;
-      if (layout != null && !layout.cellOnPage(cell.$1, cell.$2, pageCol, pageRow)) continue;
+      if (layout != null && !layout.cellOnPage(cell.x, cell.y, pageCol, pageRow)) continue;
       visited.add(cell);
-      final (cx, cy) = cell;
+      final cx = cell.x;
+      final cy = cell.y;
       for (final n in [
-        (cx - 1, cy - 1), (cx, cy - 1), (cx + 1, cy - 1),
-        (cx - 1, cy),                   (cx + 1, cy),
-        (cx - 1, cy + 1), (cx, cy + 1), (cx + 1, cy + 1),
+        Cell(cx - 1, cy - 1), Cell(cx, cy - 1), Cell(cx + 1, cy - 1),
+        Cell(cx - 1, cy),                        Cell(cx + 1, cy),
+        Cell(cx - 1, cy + 1), Cell(cx, cy + 1), Cell(cx + 1, cy + 1),
       ]) {
         if (!visited.contains(n) && topThread[n] == threadId) queue.add(n);
       }
@@ -277,7 +279,7 @@ mixin ProgressMixin on Notifier<EditorState> {
 
     if (startIsDone) {
       // Un-mark mode: remove all visited cells from completedStitches.
-      final newCompleted = Set<(int, int)>.from(prog.completedStitches)
+      final newCompleted = Set<Cell>.from(prog.completedStitches)
         ..removeAll(visited);
       if (newCompleted.length == prog.completedStitches.length) return;
       final newProg = prog.copyWith(completedStitches: newCompleted);
@@ -285,7 +287,7 @@ mixin ProgressMixin on Notifier<EditorState> {
       _checkPageCompletion(newProg);
     } else {
       // Mark done mode: add all visited cells to completedStitches.
-      final newCompleted = Set<(int, int)>.from(prog.completedStitches)
+      final newCompleted = Set<Cell>.from(prog.completedStitches)
         ..addAll(visited);
       if (newCompleted.length == prog.completedStitches.length) return;
       final newProg = prog.copyWith(completedStitches: newCompleted);
@@ -299,7 +301,7 @@ mixin ProgressMixin on Notifier<EditorState> {
   /// In page mode, only stitches on the current page are affected.
   void markRegionNotDone(Rect region) {
     final prog = state.pattern.progress;
-    final current = Set<(int, int)>.from(prog.completedStitches);
+    final current = Set<Cell>.from(prog.completedStitches);
     int removed = 0;
     final layout = state.pageLayout;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
@@ -312,11 +314,12 @@ mixin ProgressMixin on Notifier<EditorState> {
         if (focusId != null && stitch.threadId != focusId) continue;
         final coords = _crossStitchXY(stitch);
         if (coords == null) continue;
-        final (sx, sy) = coords;
+        final sx = coords.x;
+        final sy = coords.y;
         if (sx >= region.left && sx < region.right &&
             sy >= region.top && sy < region.bottom) {
           if (layout != null && !layout.rawCellOnPage(sx, sy, pageCol, pageRow)) continue;
-          if (current.remove((sx, sy))) { removed++; }
+          if (current.remove(coords)) { removed++; }
         }
       }
     }
@@ -528,13 +531,14 @@ mixin ProgressMixin on Notifier<EditorState> {
   /// Returns the threadId of the topmost visible non-backstitch at (x, y),
   /// matching what the user sees on the composite canvas. Null if no stitch.
   String? _topThreadAt(int x, int y) {
+    final target = Cell(x, y);
     String? result;
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
         final coords = _crossStitchXY(stitch);
-        if (coords != null && coords.$1 == x && coords.$2 == y) {
+        if (coords == target) {
           result = stitch.threadId; // last write wins = topmost layer
         }
       }
@@ -543,24 +547,26 @@ mixin ProgressMixin on Notifier<EditorState> {
   }
 
   bool _hasCrossStitchAt(int x, int y) {
+    final target = Cell(x, y);
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
         final coords = _crossStitchXY(stitch);
-        if (coords != null && coords.$1 == x && coords.$2 == y) return true;
+        if (coords == target) return true;
       }
     }
     return false;
   }
 
   Set<String> _threadIdsAt(int x, int y) {
+    final target = Cell(x, y);
     final ids = <String>{};
     for (final layer in state.pattern.layers) {
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
         final coords = _crossStitchXY(stitch);
-        if (coords != null && coords.$1 == x && coords.$2 == y) {
+        if (coords == target) {
           ids.add(stitch.threadId);
         }
       }
@@ -568,12 +574,12 @@ mixin ProgressMixin on Notifier<EditorState> {
     return ids;
   }
 
-  static (int, int)? _crossStitchXY(Stitch stitch) => switch (stitch) {
-        FullStitch(:final x, :final y) => (x, y),
-        HalfStitch(:final x, :final y) => (x, y),
-        HalfCrossStitch(:final x, :final y) => (x, y),
-        QuarterStitch(:final x, :final y) => (x, y),
-        QuarterCrossStitch(:final x, :final y) => (x, y),
+  static Cell? _crossStitchXY(Stitch stitch) => switch (stitch) {
+        FullStitch(:final x, :final y) => Cell(x, y),
+        HalfStitch(:final x, :final y) => Cell(x, y),
+        HalfCrossStitch(:final x, :final y) => Cell(x, y),
+        QuarterStitch(:final x, :final y) => Cell(x, y),
+        QuarterCrossStitch(:final x, :final y) => Cell(x, y),
         BackStitch() => null,
       };
 
@@ -615,7 +621,7 @@ mixin ProgressMixin on Notifier<EditorState> {
           } else {
             final coords = _crossStitchXY(stitch);
             if (coords == null) continue;
-            if (!layout.cellOnPage(coords.$1, coords.$2, pageCol, pageRow)) continue;
+            if (!layout.cellOnPage(coords.x, coords.y, pageCol, pageRow)) continue;
             hasAny = true;
             if (!prog.completedStitches.contains(coords)) { allDone = false; break; }
           }

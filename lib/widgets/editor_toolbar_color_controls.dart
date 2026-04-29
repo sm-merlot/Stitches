@@ -100,15 +100,15 @@ class _QuickSwatches extends ConsumerWidget {
                 total++;
                 final x = entry.key.x;
                 final y = entry.key.y;
-                if (progress.completedStitches.contains((x, y))) {
+                if (progress.completedStitches.contains(Cell(x, y))) {
                   done++;
                 }
               }
             } else {
-              final seen = <(int, int)>{};
+              final seen = <Cell>{};
               for (final s in allStitches) {
                 if (s is! FullStitch || s.threadId != id) continue;
-                final cell = (s.x, s.y);
+                final cell = Cell(s.x, s.y);
                 if (!seen.add(cell)) continue;
                 total++;
                 if (progress.completedStitches.contains(cell)) done++;

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/cell.dart';
 import '../models/stitch.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
@@ -88,7 +89,7 @@ class ProgressInfoBar extends ConsumerWidget {
     }
 
     // Count unique cells (cross-stitches) and individual backstitches.
-    final totalCells = <(int, int)>{};
+    final totalCells = <Cell>{};
     var totalBack = 0;
     for (final layer in state.pattern.layers) {
       for (final stitch in layer.stitches) {
