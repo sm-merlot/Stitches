@@ -1,0 +1,25 @@
+lib/providers/editor/editor_provider_drawing.dart
+  12515c4e5323b7ff 553-554,557-559,561,596,598-607,609,642,644,674-681,684,688-689,692-697,699
+lib/models/layer/layer.dart
+  12515c4e5323b7ff 82-83,121,126-132,209-279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e42cd45961d49af9738e76427ea55976d412bf3c",
+  "prompts": {
+    "12515c4e5323b7ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "183d1233-a754-465a-9f65-e7b175bb3352",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 122,
+      "total_deletions": 20,
+      "accepted_lines": 121,
+      "overriden_lines": 0
+    }
+  }
+}
