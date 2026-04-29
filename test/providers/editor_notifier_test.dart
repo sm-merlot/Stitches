@@ -751,6 +751,90 @@ void main() {
       notifier(c).toggleStitchDone(0, 0);
       expect(editorState(c).pattern.progressLog.last.stitchCount, equals(2));
     });
+
+    // Bug 3+4: timer minutes must survive stitch marking/frogging ─────────────
+
+    test('addTimeToLog minutes preserved when stitches toggled afterwards', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 0, threadId: '310'));
+      notifier(c).addStitch(const FullStitch(x: 2, y: 0, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      // Simulate timer stop — adds time to today's log entry.
+      notifier(c).addTimeToLog(30);
+      expect(editorState(c).pattern.progressLog.last.minutesSpent, equals(30));
+
+      // Mark a stitch done — must not clobber the 30 minutes.
+      notifier(c).toggleStitchDone(1, 0);
+      final entry = editorState(c).pattern.progressLog
+          .firstWhere((e) => e.minutesSpent > 0, orElse: () => throw 'no entry');
+      expect(entry.minutesSpent, equals(30));
+    });
+
+    test('addTimeToLog accumulates across multiple stops in same day', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 0, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).addTimeToLog(20);
+      notifier(c).addTimeToLog(15);
+      // Should accumulate: 20 + 15 = 35 minutes.
+      expect(editorState(c).pattern.progressLog.last.minutesSpent, equals(35));
+    });
+
+    test('minutes kept in log entry when stitch count returns to baseline', () {
+      // If a user marks and then unmarks stitches, count returns to its
+      // starting value. The log entry must be kept (not deleted) if it has
+      // timer minutes, so time is not lost.
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 0, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      // Timer minutes present before any marking.
+      notifier(c).addTimeToLog(45);
+
+      // Mark and immediately frog — net count change is zero.
+      notifier(c).toggleStitchDone(1, 0); // mark
+      notifier(c).toggleStitchDone(1, 0); // frog back
+
+      // Entry must still exist with minutes intact.
+      final todayEntries = editorState(c).pattern.progressLog;
+      expect(todayEntries, isNotEmpty);
+      expect(todayEntries.last.minutesSpent, equals(45));
+    });
+
+    // Bug 2: markRegionDone focus-mode uses topmost-thread check ──────────────
+
+    test('markRegionDone in focus mode only marks cells where focused thread is topmost', () {
+      // Two layers: layer1 (bottom) has red at (0,0) and (1,0).
+      //             layer2 (top)    has black at (1,0) only.
+      // Focus on red → only (0,0) should be marked (it has red on top).
+      // (1,0) has black on top → must NOT be marked even though red is present.
+      notifier(c).setMode(AppMode.edit);
+
+      // addStitch auto-registers threads; draw red on layer1 (active after load).
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '666'));
+      notifier(c).addStitch(const FullStitch(x: 1, y: 0, threadId: '666'));
+
+      // Create a second layer and draw black on top of (1,0).
+      notifier(c).addLayer();
+      final layer2Id = editorState(c).pattern.layers.last.id;
+      notifier(c).setActiveLayer(layer2Id);
+      notifier(c).addStitch(const FullStitch(x: 1, y: 0, threadId: '310'));
+
+      notifier(c).setMode(AppMode.stitch);
+      notifier(c).setStitchFocusThread('666'); // focus on red
+
+      notifier(c).markRegionDone(const Rect.fromLTRB(0, 0, 2, 1));
+
+      final prog = editorState(c).pattern.progress;
+      // (0,0): only red stitch, topmost = red → should be done
+      expect(prog.isStitchDone(0, 0), isTrue,
+          reason: 'cell with red on top must be marked');
+      // (1,0): red below, black on top → topmost ≠ focused → must NOT be marked
+      expect(prog.isStitchDone(1, 0), isFalse,
+          reason: 'cell with black on top must not be marked in red focus mode');
+    });
   });
 
   // ─── Pattern metadata ──────────────────────────────────────────────────────
