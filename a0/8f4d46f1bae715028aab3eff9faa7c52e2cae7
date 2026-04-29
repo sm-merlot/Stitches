@@ -1,0 +1,49 @@
+lib/providers/editor/editor_provider_selection.dart
+  12515c4e5323b7ff 181
+lib/services/stitch_compositor.dart
+  12515c4e5323b7ff 109,151
+lib/models/page/page_layout.dart
+  12515c4e5323b7ff 146
+lib/services/pdf_service.dart
+  12515c4e5323b7ff 58
+test/models/page/page_layout_integration_test.dart
+  12515c4e5323b7ff 43
+test/models/page/debug_snap_test.dart
+  12515c4e5323b7ff 36
+test/services/render_cache_test.dart
+  12515c4e5323b7ff 34
+test/services/stitch_compositor_test.dart
+  12515c4e5323b7ff 53,67,77,89,101,119,134,149,173,193,207,222,254,269,291,388,409,426,441,447,456,482,498,510,524
+lib/providers/editor/editor_provider_layers.dart
+  12515c4e5323b7ff 154-164,183-190,582
+lib/services/png_export_service.dart
+  12515c4e5323b7ff 25
+integration_test/pk_roundtrip_test.dart
+  12515c4e5323b7ff 32
+lib/providers/editor/editor_provider_drawing.dart
+  12515c4e5323b7ff 401,443,497,573,604,639,686
+test/services/pdf_logic_test.dart
+  12515c4e5323b7ff 5,105,121,139,157,170,185,200,212,230
+lib/providers/editor/editor_provider.dart
+  12515c4e5323b7ff 496,520
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a08f4d46f1bae715028aab3eff9faa7c52e2cae7",
+  "prompts": {
+    "12515c4e5323b7ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "183d1233-a754-465a-9f65-e7b175bb3352",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 76,
+      "total_deletions": 74,
+      "accepted_lines": 74,
+      "overriden_lines": 0
+    }
+  }
+}
