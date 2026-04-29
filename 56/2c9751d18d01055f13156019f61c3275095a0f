@@ -1,0 +1,33 @@
+lib/services/stitch_compositor.dart
+  12515c4e5323b7ff 68-75,81,176-178,180,183-187,190-200
+test/providers/editor/editor_notifier_test.dart
+  12515c4e5323b7ff 134,136-140,147,149-151
+lib/utils/controllers/snippet_edit_controller.dart
+  12515c4e5323b7ff 4-5,89-97,103-107,114-125
+lib/widgets/canvas/aida_widget.dart
+  12515c4e5323b7ff 286,310,325-329,352
+test/widgets/canvas/aida_widget_test.dart
+  12515c4e5323b7ff 312,355
+lib/utils/controllers/edit_controller.dart
+  12515c4e5323b7ff 4-5,112-121,127-132,139-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "562c9751d18d01055f13156019f61c3275095a0f",
+  "prompts": {
+    "12515c4e5323b7ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "183d1233-a754-465a-9f65-e7b175bb3352",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 107,
+      "total_deletions": 48,
+      "accepted_lines": 107,
+      "overriden_lines": 0
+    }
+  }
+}
