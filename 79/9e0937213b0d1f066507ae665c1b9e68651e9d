@@ -1,0 +1,25 @@
+lib/providers/editor/editor_provider.dart
+  f57fc8e2f18c74c8 655-670
+lib/providers/editor/editor_provider_drawing.dart
+  f57fc8e2f18c74c8 15,332,334-341,367-375,377-388,513,515-521,547-552,554-562
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "799e0937213b0d1f066507ae665c1b9e68651e9d",
+  "prompts": {
+    "f57fc8e2f18c74c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84b0b47c-b9ff-40e7-bc21-9128561b4241",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 74,
+      "total_deletions": 19,
+      "accepted_lines": 70,
+      "overriden_lines": 0
+    }
+  }
+}
