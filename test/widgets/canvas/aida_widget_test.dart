@@ -309,7 +309,7 @@ void main() {
       final cache = RenderCache();
       final p1 = painter(renderCache: cache, cacheVersion: 0);
       cache.rebuild(
-        const CompositeLayer(
+        CompositeLayer(
           fullStitches: {},
           otherStitches: [],
           backstitches: [],
@@ -352,7 +352,7 @@ void main() {
       final cache = RenderCache();
       final p1 = painter(renderCache: cache, cacheVersion: 0);
       cache.rebuildViewConfig(
-        const CompositeLayer(
+        CompositeLayer(
           fullStitches: {},
           otherStitches: [],
           backstitches: [],

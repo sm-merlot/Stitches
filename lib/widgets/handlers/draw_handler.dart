@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart' show Offset;
 import '../../models/stitch/stitch.dart';
-import '../../models/stitch/stitch_geometry.dart';
 import '../../providers/editor/editor_provider.dart'
     show DrawingMode, DrawingTool, EditorState;
 import '../canvas/canvas_viewport.dart';
@@ -232,13 +231,12 @@ class DrawHandler {
     final layers = state.pattern.layers;
 
     if (state.drawingMode == DrawingMode.erase) {
-      final activeHasStitch = activeLayer.stitches
-          .any((s) => _stitchAtCell(s, cellX, cellY));
+      final activeHasStitch = activeLayer.stitchesAt(cellX, cellY).isNotEmpty;
       if (!activeHasStitch) {
         final othersHaveStitch = layers.any((l) =>
             l.id != activeLayer.id &&
             l.visible &&
-            l.stitches.any((s) => _stitchAtCell(s, cellX, cellY)));
+            l.stitchesAt(cellX, cellY).isNotEmpty);
         if (othersHaveStitch) {
           onLayerWarning(
               'Nothing to erase on active layer here — check other layers');
@@ -255,8 +253,8 @@ class DrawHandler {
         for (var i = activeIdx + 1; i < layers.length; i++) {
           final above = layers[i];
           if (!above.visible || above.opacity < 1.0) continue;
-          final covered = above.stitches
-              .any((s) => s is FullStitch && _stitchAtCell(s, cellX, cellY));
+          final covered = above.stitchesAt(cellX, cellY)
+              .any((s) => s is FullStitch);
           if (covered) {
             onLayerWarning(
                 '"${above.name}" covers this cell — drawing won\'t be visible');
@@ -267,8 +265,4 @@ class DrawHandler {
     }
   }
 
-  static bool _stitchAtCell(Stitch s, int x, int y) {
-    final coords = s.cellCoords;
-    return coords != null && coords.x == x && coords.y == y;
-  }
 }

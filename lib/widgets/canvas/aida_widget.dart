@@ -283,6 +283,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   // something relevant actually changed (not on every pan/zoom setState).
   CrossStitchPattern? _lastCachedPattern;
   CompositeLayer? _lastCachedComposite;
+  int _lastCachedCompositeVersion = -1;
   RenderViewConfig? _lastCachedViewConfig;
 
   RenderViewConfig _buildViewConfig(EditorState state) => RenderViewConfig(
@@ -306,6 +307,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     }
     _lastCachedPattern = state.pattern;
     _lastCachedComposite = state.compositeLayer;
+    _lastCachedCompositeVersion = state.compositeLayer?.version ?? -1;
     _lastCachedViewConfig = config;
   }
 
@@ -320,7 +322,11 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   void _syncRenderCache(EditorState state) {
     final config = _buildViewConfig(state);
     final patternChanged = !identical(_lastCachedPattern, state.pattern);
-    final compositeChanged = !identical(_lastCachedComposite, state.compositeLayer);
+    // Detect composite changes via version counter (supports in-place mutation
+    // by patchLayer) OR identity change (full recompute paths).
+    final compositeVersion = state.compositeLayer?.version ?? -1;
+    final compositeChanged = !identical(_lastCachedComposite, state.compositeLayer)
+        || compositeVersion != _lastCachedCompositeVersion;
     final configChanged = config != _lastCachedViewConfig;
 
     if (!patternChanged && !compositeChanged && !configChanged) return;
@@ -343,6 +349,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     }
     _lastCachedPattern = state.pattern;
     _lastCachedComposite = state.compositeLayer;
+    _lastCachedCompositeVersion = compositeVersion;
     _lastCachedViewConfig = config;
   }
 

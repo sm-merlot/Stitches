@@ -2,7 +2,7 @@
 //
 // Coverage:
 //   • PdfService.buildPdfSymbolMapForTest — filters invisible / PDF-unsupported symbols
-//   • StitchCompositor.computeLayer       — layer compositing for the PDF chart
+//   • StitchCompositor.computeComposite       — layer compositing for the PDF chart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -102,7 +102,7 @@ void main() {
         threads: [t],
         layers: [_layer(stitches: [const FullStitch(x: 0, y: 0, threadId: '310')])],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       expect(r.fullStitches, hasLength(1));
       expect(r.fullStitches[const Cell(0, 0)]?.isBlended, false);
     });
@@ -118,7 +118,7 @@ void main() {
           ),
         ],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       expect(r.fullStitches, isEmpty);
       expect(r.otherStitches, isEmpty);
     });
@@ -136,7 +136,7 @@ void main() {
           ),
         ],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       expect(r.fullStitches, hasLength(1));
       expect(r.fullStitches[const Cell(2, 3)]?.isBlended, true);
       final winner = r.fullStitches[const Cell(2, 3)]?.stitch as FullStitch;
@@ -154,7 +154,7 @@ void main() {
           ]),
         ],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       expect(r.otherStitches, hasLength(2));
       expect(r.fullStitches, isEmpty);
     });
@@ -167,7 +167,7 @@ void main() {
           _layer(stitches: [const FullStitch(x: 0, y: 0, threadId: 'UNKNOWN')]),
         ],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       expect(r.fullStitches, isEmpty);
       expect(r.otherStitches, isEmpty);
     });
@@ -182,7 +182,7 @@ void main() {
           _layer(stitches: [const FullStitch(x: 1, y: 0, threadId: '321')]),
         ],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       expect(r.fullStitches, hasLength(2));
       expect(r.fullStitches.values.any((cs) => cs.isBlended), false);
     });
@@ -197,7 +197,7 @@ void main() {
           _layer(stitches: [const FullStitch(x: 0, y: 0, threadId: '321')]),
         ],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       final total = r.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
       expect(total, closeTo(1.0, 0.001));
     });
@@ -209,7 +209,7 @@ void main() {
         threads: [t],
         layers: [_layer(stitches: [bs])],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       expect(r.fullStitches, isEmpty);
       expect(r.backstitches, hasLength(1));
     });
@@ -227,7 +227,7 @@ void main() {
           ),
         ],
       );
-      final r = StitchCompositor.computeLayer(pattern);
+      final r = StitchCompositor.computeComposite(pattern);
       final winner = r.fullStitches[const Cell(0, 0)]?.stitch as FullStitch;
       expect(winner.threadId, '321');
     });

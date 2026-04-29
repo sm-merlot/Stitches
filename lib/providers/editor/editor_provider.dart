@@ -493,7 +493,7 @@ class EditorNotifier extends Notifier<EditorState>
       // rebuilds the render cache from the restored pattern. Without this,
       // the old composite is kept (sentinel pass-through) and the canvas
       // shows the pre-undo stitches until something else forces a refresh.
-      compositeLayer: StitchCompositor.computeLayer(restored),
+      compositeLayer: StitchCompositor.computeComposite(restored),
     );
   }
 
@@ -517,7 +517,7 @@ class EditorNotifier extends Notifier<EditorState>
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
-      compositeLayer: StitchCompositor.computeLayer(restored),
+      compositeLayer: StitchCompositor.computeComposite(restored),
     );
   }
 
@@ -675,6 +675,26 @@ class EditorNotifier extends Notifier<EditorState>
     return pattern.mapLayers((l) {
       if (l.id == activeId || (activeId.isEmpty && l == pattern.layers.first)) {
         return l.copyWith(stitches: newStitches);
+      }
+      return l;
+    });
+  }
+
+  /// Like [_patternWithActiveLayerStitches] but accepts a pre-built [Layer].
+  ///
+  /// Used by the draw hot path ([addStitchRaw], [removeStitchesAtRaw], etc.)
+  /// where the caller has already produced the updated layer via an incremental
+  /// method ([withStitchAdded], [withCellCleared], …) and we just need to
+  /// substitute it into the pattern's layer list.  Avoids the extra
+  /// [Layer.copyWith] + [_indexList] call that [_patternWithActiveLayerStitches]
+  /// would trigger.
+  @override
+  CrossStitchPattern _patternWithActiveLayer(
+      CrossStitchPattern pattern, Layer newLayer) {
+    final activeId = state.activeLayerId;
+    return pattern.mapLayers((l) {
+      if (l.id == activeId || (activeId.isEmpty && l == pattern.layers.first)) {
+        return newLayer;
       }
       return l;
     });

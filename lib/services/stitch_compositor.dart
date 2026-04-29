@@ -65,12 +65,20 @@ class CompositeLayer {
   /// Backstitch Euclidean cell-unit length per threadId.
   final Map<String, double> backStitchEquiv;
 
-  const CompositeLayer({
+  /// Monotonically increasing version counter.
+  ///
+  /// Bumped by [StitchCompositor.patchLayer] and [patchAffectedLayer] when the
+  /// composite is mutated in-place. [_syncRenderCache] in [AidaWidget] uses
+  /// this instead of `identical()` to detect changes.
+  int version;
+
+  CompositeLayer({
     required this.fullStitches,
     required this.otherStitches,
     required this.backstitches,
     required this.crossStitchEquiv,
     required this.backStitchEquiv,
+    this.version = 0,
   });
 
 }
@@ -98,7 +106,7 @@ class CompositeLayer {
 /// For one-shot use (services, tests, PDF export):
 ///
 /// ```dart
-/// final layer = StitchCompositor.computeLayer(pattern);  // CompositeLayer
+/// final layer = StitchCompositor.computeComposite(pattern);  // CompositeLayer
 /// ```
 class StitchCompositor {
   final CrossStitchPattern _pattern;
@@ -140,7 +148,7 @@ class StitchCompositor {
   // ─── Static convenience ───────────────────────────────────────────────────
 
   /// Compute the composite for [pattern] and return a [CompositeLayer].
-  static CompositeLayer computeLayer(CrossStitchPattern pattern) =>
+  static CompositeLayer computeComposite(CrossStitchPattern pattern) =>
       _buildLayer(pattern);
 
   /// Incrementally patches [old] by recomputing only the cell at ([x], [y]).
@@ -165,102 +173,88 @@ class StitchCompositor {
     int y, {
     bool backstitchesChanged = false,
   }) {
-    // Copy fullStitches map once, then update in-place via shared helper.
-    final newFullStitches = Map<Cell, CompositeStitch>.from(old.fullStitches);
+    // Mutate in-place + bump version — avoids O(N_cells) Map.from copy.
+    // Safe because the old CompositeLayer is discarded (callers always pass
+    // the result to state.copyWith which replaces the previous reference).
     final newOtherAtCell = <CompositeStitch>[];
-    _resolveCell(newFullStitches, newOtherAtCell, newPattern, x, y);
+    _resolveCell(old.fullStitches, newOtherAtCell, newPattern, x, y);
 
     // Patch otherStitches: drop old entries at (x, y), append new ones.
-    final newOtherStitches = <CompositeStitch>[
-      ...old.otherStitches.where((cs) {
-        final coords = cs.stitch.cellCoords;
-        return coords == null || coords.x != x || coords.y != y;
-      }),
-      ...newOtherAtCell,
-    ];
+    old.otherStitches.removeWhere((cs) {
+      final coords = cs.stitch.cellCoords;
+      return coords != null && coords.x == x && coords.y == y;
+    });
+    old.otherStitches.addAll(newOtherAtCell);
 
     // Rebuild backstitches only when one was added or removed.
-    final newBackstitches = backstitchesChanged
-        ? <BackStitch>[
-            for (final layer in newPattern.layers)
-              if (layer.visible)
-                for (final s in layer.stitches)
-                  if (s is BackStitch) s,
-          ]
-        : old.backstitches;
+    if (backstitchesChanged) {
+      old.backstitches
+        ..clear()
+        ..addAll([
+          for (final layer in newPattern.layers)
+            if (layer.visible) ...layer.backstitches,
+        ]);
+    }
 
-    return CompositeLayer(
-      fullStitches: newFullStitches,
-      otherStitches: newOtherStitches,
-      backstitches: newBackstitches,
-      crossStitchEquiv: old.crossStitchEquiv,
-      backStitchEquiv: old.backStitchEquiv,
-    );
+    old.version++;
+    return old;
   }
 
-  // ─── Affected-layer patch ──────────────────────────────────────────────────
+  // ─── Multi-cell patch ──────────────────────────────────────────────────────
+
+  /// Recomputes only the given [cells] in [old], mutating in-place.
+  ///
+  /// O(cells × avg_layers_per_cell). Use for paste, move, delete-selection —
+  /// any operation that changes a known set of cells without touching the rest.
+  ///
+  /// Pass [backstitchesChanged] = true when any [BackStitch] was added or
+  /// removed; triggers a full backstitch list rescan.
+  static CompositeLayer patchCells(
+    CompositeLayer old,
+    CrossStitchPattern newPattern,
+    Set<Cell> cells, {
+    bool backstitchesChanged = false,
+  }) {
+    if (cells.isEmpty && !backstitchesChanged) return old;
+
+    final newOtherContributions = <CompositeStitch>[];
+    for (final cell in cells) {
+      _resolveCell(old.fullStitches, newOtherContributions, newPattern, cell.x, cell.y);
+    }
+
+    old.otherStitches.removeWhere((cs) {
+      final coords = cs.stitch.cellCoords;
+      return coords != null && cells.contains(coords);
+    });
+    old.otherStitches.addAll(newOtherContributions);
+
+    if (backstitchesChanged) {
+      old.backstitches
+        ..clear()
+        ..addAll([
+          for (final layer in newPattern.layers)
+            if (layer.visible) ...layer.backstitches,
+        ]);
+    }
+
+    old.version++;
+    return old;
+  }
 
   /// Patches [old] by recomputing only cells that [changedLayer] touches.
   ///
-  /// Use when a single layer's visibility, opacity, or blend mode changes.
-  /// Cells not touched by [changedLayer] carry over from [old] unchanged.
-  ///
-  /// Copies [old.fullStitches] ONCE then updates all affected cells in-place —
-  /// O(cells_in_layer × avg_layers_per_cell + total_composite_cells).
-  /// Far cheaper than [computeLayer] (O(total_stitches)) for sparse changes,
-  /// and avoids the O(N × M) trap of calling [patchLayer] N times (each
-  /// of which would copy the full map).
+  /// Convenience wrapper around [patchCells] for layer-property changes
+  /// (visibility, opacity, blend mode).
   static CompositeLayer patchAffectedLayer(
     CompositeLayer old,
     CrossStitchPattern newPattern,
     Layer changedLayer,
   ) {
-    // Collect unique cell positions and backstitch presence in one pass.
-    final affectedCells = <Cell>{};
-    bool hasBackstitches = false;
-    for (final s in changedLayer.stitches) {
-      if (s is BackStitch) {
-        hasBackstitches = true;
-      } else if (s.cellCoords case final c?) {
-        affectedCells.add(c);
-      }
-    }
-
-    if (affectedCells.isEmpty && !hasBackstitches) return old;
-
-    // Copy fullStitches map ONCE, then update all affected cells in-place.
-    final newFullStitches = Map<Cell, CompositeStitch>.from(old.fullStitches);
-    final newOtherContributions = <CompositeStitch>[];
-
-    for (final cell in affectedCells) {
-      _resolveCell(newFullStitches, newOtherContributions, newPattern, cell.x, cell.y);
-    }
-
-    // Patch otherStitches: strip old entries for all affected cells, append new.
-    final newOtherStitches = <CompositeStitch>[
-      ...old.otherStitches.where((cs) {
-        final coords = cs.stitch.cellCoords;
-        return coords == null || !affectedCells.contains(coords);
-      }),
-      ...newOtherContributions,
-    ];
-
-    // Rebuild backstitch list when the changed layer contributes backstitches.
-    final newBackstitches = hasBackstitches
-        ? <BackStitch>[
-            for (final layer in newPattern.layers)
-              if (layer.visible)
-                for (final s in layer.stitches)
-                  if (s is BackStitch) s,
-          ]
-        : old.backstitches;
-
-    return CompositeLayer(
-      fullStitches: newFullStitches,
-      otherStitches: newOtherStitches,
-      backstitches: newBackstitches,
-      crossStitchEquiv: old.crossStitchEquiv,
-      backStitchEquiv: old.backStitchEquiv,
+    return patchCells(
+      old,
+      newPattern,
+      changedLayer.stitchesByCell.keys.toSet(),
+      backstitchesChanged: changedLayer.backstitches.isNotEmpty,
     );
   }
 
@@ -392,20 +386,24 @@ class StitchCompositor {
 
     for (final layer in pattern.layers) {
       if (!layer.visible) continue;
-      for (final s in layer.stitches) {
-        if (s is BackStitch) {
-          backstitches.add(s);
-        } else if (s is FullStitch) {
-          final thread = threadMap[s.threadId];
-          if (thread == null) continue;
-          (cellStack[Cell(s.x, s.y)] ??= []).add((
-            stitch: s,
-            color: thread.color,
-            opacity: layer.opacity,
-            blendMode: layer.blendMode,
-          ));
-        } else {
-          otherNonBackRaw.add(s);
+      // Iterate primary storage directly to avoid the O(N) stitches getter.
+      for (final bs in layer.backstitches) {
+        backstitches.add(bs);
+      }
+      for (final entry in layer.stitchesByCell.entries) {
+        for (final s in entry.value) {
+          if (s is FullStitch) {
+            final thread = threadMap[s.threadId];
+            if (thread == null) continue;
+            (cellStack[Cell(s.x, s.y)] ??= []).add((
+              stitch: s,
+              color: thread.color,
+              opacity: layer.opacity,
+              blendMode: layer.blendMode,
+            ));
+          } else {
+            otherNonBackRaw.add(s);
+          }
         }
       }
     }

@@ -55,7 +55,7 @@ class PdfService {
     final threadMap = pattern.threads;
 
     // Single composite pass — matches the canvas view exactly.
-    final compositeLayer = StitchCompositor.computeLayer(pattern);
+    final compositeLayer = StitchCompositor.computeComposite(pattern);
 
     // For blended cells, derive display color and symbol from CompositeLayer.
     final blendedCellColors = <Cell, Color>{};
