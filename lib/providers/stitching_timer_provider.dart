@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'editor/editor_provider.dart';
@@ -50,6 +51,10 @@ class StitchingTimerState {
 class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   Timer? _ticker;
 
+  /// Returns the current wall-clock time. Override in tests to control time.
+  @visibleForTesting
+  DateTime now() => DateTime.now();
+
   @override
   StitchingTimerState build() {
     ref.onDispose(() => _ticker?.cancel());
@@ -66,7 +71,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     if (ms == null) return;
     final savedStart = DateTime.fromMillisecondsSinceEpoch(ms);
     // Sanity check: ignore sessions older than 24 hours (likely a stale entry).
-    if (DateTime.now().difference(savedStart).inHours > 24) {
+    if (now().difference(savedStart).inHours > 24) {
       await prefs.remove(_kSessionStartKey);
       return;
     }
@@ -84,7 +89,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   /// Start the timer. No-op if already running.
   void start() async {
     if (state.isRunning) return;
-    final now = DateTime.now();
+    final now = this.now();
     // Persist the session start time before updating state so a kill between
     // the two operations still recovers the session on next launch.
     final prefs = await SharedPreferences.getInstance();
@@ -110,7 +115,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     _ticker = null;
 
     final sessionStart = state.sessionStart!;
-    final now = DateTime.now();
+    final now = this.now();
     final totalMinutes = now.difference(sessionStart).inMinutes;
 
     state = state.copyWith(

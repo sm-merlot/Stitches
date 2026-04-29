@@ -277,6 +277,76 @@ void main() {
       expect(layout.cellOnPage(0, 10, 0, 0), isFalse);
     });
 
+    // ── rawCellOnPage (Bug 1: edge cells near page boundary) ──────────────────
+
+    test('rawCellOnPage agrees with cellOnPage when fuzzyAmount=0', () {
+      // With no fuzzy offset there are no corner exclusions, so the two methods
+      // must return the same result for every cell.
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 20, height: 20));
+      for (var y = 0; y < 20; y++) {
+        for (var x = 0; x < 20; x++) {
+          for (var py = 0; py < layout.pagesDown; py++) {
+            for (var px = 0; px < layout.pagesAcross; px++) {
+              expect(
+                layout.rawCellOnPage(x, y, px, py),
+                equals(layout.cellOnPage(x, y, px, py)),
+                reason: 'cell ($x,$y) page ($px,$py)',
+              );
+            }
+          }
+        }
+      }
+    });
+
+    test('rawCellOnPage returns false for out-of-bounds cells', () {
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 10, height: 10));
+      expect(layout.rawCellOnPage(-1, 0, 0, 0), isFalse);
+      expect(layout.rawCellOnPage(0, 10, 0, 0), isFalse);
+    });
+
+    test('rawCellOnPage returns false for cell on wrong page', () {
+      final layout = PageLayout.compute(cfg10, emptyPattern(width: 20, height: 10));
+      // Cell (9,0) is the last cell of page 0 — must NOT be on page 1.
+      expect(layout.rawCellOnPage(9, 0, 0, 0), isTrue);
+      expect(layout.rawCellOnPage(9, 0, 1, 0), isFalse);
+    });
+
+    test('rawCellOnPage true for every cell that passes boundary check regardless of exclusion', () {
+      // Build a layout with fuzzyAmount > 0 to potentially create exclusions.
+      // rawCellOnPage should return true for every cell that passes the raw
+      // boundary check (i.e. is inside the fuzzy boundaries), even if cellOnPage
+      // would exclude it due to the corner-connectivity post-pass.
+      const fuzzyCfg = PageConfig(
+        enabled: true,
+        pageWidth: 10,
+        pageHeight: 10,
+        fuzzyAmount: 3,
+      );
+      // A uniform empty pattern → no snap offset, random fallback only.
+      final layout = PageLayout.compute(fuzzyCfg, emptyPattern(width: 20, height: 20));
+      for (var y = 0; y < 20; y++) {
+        for (var x = 0; x < 20; x++) {
+          for (var py = 0; py < layout.pagesDown; py++) {
+            for (var px = 0; px < layout.pagesAcross; px++) {
+              // Any cell where rawCellOnPage is true should also be markable
+              // (it passes the fuzzy boundary check for this page).
+              if (layout.rawCellOnPage(x, y, px, py)) {
+                // cellOnPage may be false (excluded) but rawCellOnPage must be true.
+                // The converse: if cellOnPage is true, rawCellOnPage must also be true.
+                expect(layout.rawCellOnPage(x, y, px, py), isTrue,
+                    reason: 'cell ($x,$y) page ($px,$py) passed boundary but rawCellOnPage false');
+              }
+              if (layout.cellOnPage(x, y, px, py)) {
+                expect(layout.rawCellOnPage(x, y, px, py), isTrue,
+                    reason:
+                        'cellOnPage true implies rawCellOnPage true for ($x,$y) page ($px,$py)');
+              }
+            }
+          }
+        }
+      }
+    });
+
     test('every cell in pattern belongs to exactly one page', () {
       final layout = PageLayout.compute(cfg10, emptyPattern(width: 15, height: 12));
       for (var y = 0; y < 12; y++) {

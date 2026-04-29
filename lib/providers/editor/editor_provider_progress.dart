@@ -36,21 +36,32 @@ mixin ProgressMixin on Notifier<EditorState> {
     final prevBackCount = prevEntry?.backstitchCount ?? 0;
 
     // If today's net change is zero (count returned to yesterday's baseline),
-    // remove today's entry — it carries no information.
+    // remove today's entry — unless it has timer minutes, in which case keep
+    // it (it still records how long the user stitched today).
+    final existing = state.pattern.progressLog
+        .where((e) => e.isoDate == today)
+        .firstOrNull;
     if (newCount == prevCount && newBackCount == prevBackCount) {
-      if (state.pattern.progressLog.any((e) => e.isoDate == today)) {
+      if (existing == null) return state.pattern.progressLog;
+      if (existing.minutesSpent == 0) {
+        // Purely a stitch-count entry with no net change — discard.
         return state.pattern.progressLog
             .where((e) => e.isoDate != today)
             .toList();
       }
-      return state.pattern.progressLog;
+      // Timer minutes present — keep entry, just sync the stitch counts.
+      if (existing.stitchCount == newCount &&
+          existing.backstitchCount == newBackCount) {
+        return state.pattern.progressLog; // already in sync
+      }
+      return [
+        ...state.pattern.progressLog.where((e) => e.isoDate != today),
+        existing.copyWith(stitchCount: newCount, backstitchCount: newBackCount),
+      ];
     }
 
     // Write the actual current count (may be lower than a previous today
     // entry if stitches were frogged since the last save).
-    final existing = state.pattern.progressLog
-        .where((e) => e.isoDate == today)
-        .firstOrNull;
     if (existing != null &&
         existing.stitchCount == newCount &&
         existing.backstitchCount == newBackCount) {
