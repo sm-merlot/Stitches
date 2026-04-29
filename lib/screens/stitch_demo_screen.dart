@@ -5,7 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../models/stitch_plan.dart';
+import '../models/stitch/stitch_plan.dart';
 import '../services/gif_renderer.dart';
 import '../services/stitch_planner.dart';
 import '../services/stitch_renderer.dart' show computeGridBounds, stitchTypeArgb;

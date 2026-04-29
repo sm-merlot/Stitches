@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/stitch_plan.dart';
+import '../models/stitch/stitch_plan.dart';
 import '../services/dashed_line.dart';
 import '../services/gif_renderer.dart' show kDemoSubFrames;
 import '../services/stitch_renderer.dart';

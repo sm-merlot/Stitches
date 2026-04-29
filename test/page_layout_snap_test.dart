@@ -9,7 +9,7 @@
 // The crossIndex is held fixed at 0 throughout unless noted.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/models/page_layout.dart';
+import 'package:stitches/models/page/page_layout.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

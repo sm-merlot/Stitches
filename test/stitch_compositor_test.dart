@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/cell.dart';
-import 'package:stitches/models/layer.dart';
-import 'package:stitches/models/layer_blend_mode.dart';
-import 'package:stitches/models/layer_item.dart';
+import 'package:stitches/models/layer/layer.dart';
+import 'package:stitches/models/layer/layer_blend_mode.dart';
+import 'package:stitches/models/layer/layer_item.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/models/thread.dart';
 import 'package:stitches/services/stitch_compositor.dart';
 

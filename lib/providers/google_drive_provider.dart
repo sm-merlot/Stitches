@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../models/pattern.dart';
 import '../services/file_service.dart';
-import '../services/google_auth_service.dart';
-import '../services/google_drive_service.dart';
+import '../services/drive/google_auth_service.dart';
+import '../services/drive/google_drive_service.dart';
 
 // ---------------------------------------------------------------------------
 // State

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart' show Colors, Rect;
 import 'package:flutter/widgets.dart' show Offset;
-import 'package:stitches/models/layer.dart';
-import 'package:stitches/models/layer_item.dart';
-import 'package:stitches/models/page_config.dart';
-import 'package:stitches/models/page_layout.dart';
+import 'package:stitches/models/layer/layer.dart';
+import 'package:stitches/models/layer/layer_item.dart';
+import 'package:stitches/models/page/page_config.dart';
+import 'package:stitches/models/page/page_layout.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
-import 'package:stitches/widgets/canvas_viewport.dart';
+import 'package:stitches/widgets/canvas/canvas_viewport.dart';
 
 // ─── Shared viewport + pattern dimensions ────────────────────────────────────
 

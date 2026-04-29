@@ -6,7 +6,7 @@ import 'dart:math' as math;
 
 import 'package:image/image.dart' as img;
 
-import '../models/stitch_plan.dart';
+import '../models/stitch/stitch_plan.dart';
 import 'dashed_line.dart';
 import 'stitch_renderer.dart';
 

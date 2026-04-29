@@ -6,17 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:stitches/models/layer.dart';
-import 'package:stitches/models/layer_blend_mode.dart';
-import 'package:stitches/models/layer_item.dart';
-import 'package:stitches/models/page_config.dart';
+import 'package:stitches/models/layer/layer.dart';
+import 'package:stitches/models/layer/layer_blend_mode.dart';
+import 'package:stitches/models/layer/layer_item.dart';
+import 'package:stitches/models/page/page_config.dart';
 import 'package:stitches/models/pattern.dart';
 import 'package:stitches/models/cell.dart';
-import 'package:stitches/models/pattern_progress.dart';
-import 'package:stitches/models/progress_log.dart';
-import 'package:stitches/models/snippet.dart';
-import 'package:stitches/models/snippet_palette.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/progress/pattern_progress.dart';
+import 'package:stitches/models/progress/progress_log.dart';
+import 'package:stitches/models/snippet/snippet.dart';
+import 'package:stitches/models/snippet/snippet_palette.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/models/thread.dart';
 import 'package:stitches/services/file_service.dart';
 

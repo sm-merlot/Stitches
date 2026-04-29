@@ -2,12 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/stitch.dart';
-import 'package:stitches/models/stitch_geometry.dart';
+import 'package:stitches/models/stitch/stitch.dart';
+import 'package:stitches/models/stitch/stitch_geometry.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';
 import 'package:stitches/services/editor_session_service.dart';
-import 'package:stitches/utils/command.dart';
+import 'package:stitches/utils/commands/command.dart';
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 

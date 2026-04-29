@@ -2,8 +2,8 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
-import 'package:stitches/utils/edit_controller.dart';
-import 'package:stitches/utils/snippet_edit_controller.dart';
+import 'package:stitches/utils/controllers/edit_controller.dart';
+import 'package:stitches/utils/controllers/snippet_edit_controller.dart';
 
 import '../widgets/test_helpers.dart';
 

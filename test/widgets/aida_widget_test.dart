@@ -12,18 +12,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:stitches/models/pattern_progress.dart';
+import 'package:stitches/models/progress/pattern_progress.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';
 import 'package:stitches/services/render_cache.dart';
 import 'package:stitches/services/stitch_compositor.dart';
-import 'package:stitches/utils/canvas_callbacks.dart';
-import 'package:stitches/utils/edit_controller.dart';
-import 'package:stitches/utils/shortcut_router.dart';
-import 'package:stitches/utils/stitch_controller.dart';
-import 'package:stitches/utils/view_mode_controller.dart';
-import 'package:stitches/widgets/aida_widget.dart';
-import 'package:stitches/widgets/canvas_painter.dart';
+import 'package:stitches/utils/controllers/canvas_callbacks.dart';
+import 'package:stitches/utils/controllers/edit_controller.dart';
+import 'package:stitches/utils/commands/shortcut_router.dart';
+import 'package:stitches/utils/controllers/stitch_controller.dart';
+import 'package:stitches/utils/controllers/view_mode_controller.dart';
+import 'package:stitches/widgets/canvas/aida_widget.dart';
+import 'package:stitches/widgets/canvas/canvas_painter.dart';
 
 import 'test_helpers.dart';
 

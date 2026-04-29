@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/widgets/paste_handler.dart';
+import 'package:stitches/widgets/handlers/paste_handler.dart';
 import 'test_helpers.dart';
 
 void main() {

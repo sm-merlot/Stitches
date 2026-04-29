@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../data/dmc_colors.dart';
-import 'layer.dart';
-import 'layer_item.dart';
-import 'page_config.dart';
-import 'pattern_progress.dart';
-import 'progress_log.dart';
-import 'snippet.dart';
-import 'stitch.dart';
+import 'layer/layer.dart';
+import 'layer/layer_item.dart';
+import 'page/page_config.dart';
+import 'progress/pattern_progress.dart';
+import 'progress/progress_log.dart';
+import 'snippet/snippet.dart';
+import 'stitch/stitch.dart';
 import 'thread.dart';
 
 class CrossStitchPattern {

@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import '../models/layer.dart';
-import '../models/layer_item.dart';
+import '../models/layer/layer.dart';
+import '../models/layer/layer_item.dart';
 import '../models/pattern.dart';
-import '../models/snippet.dart';
-import '../models/snippet_palette.dart';
+import '../models/snippet/snippet.dart';
+import '../models/snippet/snippet_palette.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../widgets/dialogs/dmc_picker_dialog.dart';
-import '../widgets/right_sidebar.dart';
-import '../widgets/snippet_edit_view.dart';
-import '../widgets/snippet_thumbnail.dart';
+import '../widgets/sidebar/right_sidebar.dart';
+import '../widgets/views/snippet_edit_view.dart';
+import '../widgets/snippets/snippet_thumbnail.dart';
 
 part 'snippet_editor_screen_dialogs.dart';
 

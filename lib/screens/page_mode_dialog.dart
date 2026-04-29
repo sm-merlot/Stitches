@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/page_config.dart';
+import '../models/page/page_config.dart';
 import '../providers/editor/editor_provider.dart';
 
 Future<void> showPageModeDialog(BuildContext context, WidgetRef ref) {

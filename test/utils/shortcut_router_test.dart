@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart' show KeyDownEvent, KeyEvent, LogicalKeyboardKey, PhysicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/utils/shortcut_router.dart';
+import 'package:stitches/utils/commands/shortcut_router.dart';
 
 // ─── Test double ──────────────────────────────────────────────────────────────
 

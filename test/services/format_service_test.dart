@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
-import 'package:stitches/models/layer.dart';
-import 'package:stitches/models/layer_item.dart';
+import 'package:stitches/models/layer/layer.dart';
+import 'package:stitches/models/layer/layer_item.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/models/thread.dart';
 import 'package:stitches/services/format_service.dart';
 

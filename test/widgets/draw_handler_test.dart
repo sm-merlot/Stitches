@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
-import 'package:stitches/widgets/draw_handler.dart';
+import 'package:stitches/widgets/handlers/draw_handler.dart';
 import 'test_helpers.dart';
 
 void main() {

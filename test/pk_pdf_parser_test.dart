@@ -16,7 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:stitches/data/dmc_colors.dart';
 import 'package:stitches/services/pdf_pattern_keeper_parser.dart';
-import 'package:stitches/services/scan_result.dart';
+import 'package:stitches/services/scan/scan_result.dart';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

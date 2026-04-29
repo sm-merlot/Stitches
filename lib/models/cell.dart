@@ -1,5 +1,5 @@
-import '../models/stitch.dart';
-import '../models/stitch_geometry.dart';
+import '../models/stitch/stitch.dart';
+import '../models/stitch/stitch_geometry.dart';
 
 /// A grid cell at integer coordinates [x],[y].
 ///

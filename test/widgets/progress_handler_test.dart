@@ -1,9 +1,9 @@
 import 'package:flutter/widgets.dart' show Offset, Rect;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/cell.dart';
-import 'package:stitches/models/pattern_progress.dart';
-import 'package:stitches/models/stitch.dart';
-import 'package:stitches/widgets/progress_handler.dart';
+import 'package:stitches/models/progress/pattern_progress.dart';
+import 'package:stitches/models/stitch/stitch.dart';
+import 'package:stitches/widgets/handlers/progress_handler.dart';
 import 'test_helpers.dart';
 
 void main() {

@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../data/aida_presets.dart';
-import '../models/stitch.dart';
+import '../models/stitch/stitch.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 import '../services/skein_calculator.dart';

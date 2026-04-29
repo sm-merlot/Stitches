@@ -6,7 +6,7 @@ import 'package:flutter/gestures.dart'
         PointerPanZoomUpdateEvent,
         PointerScrollEvent;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/widgets/zoom_pan_handler.dart';
+import 'package:stitches/widgets/handlers/zoom_pan_handler.dart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

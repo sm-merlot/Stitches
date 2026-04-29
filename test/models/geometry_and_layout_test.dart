@@ -8,16 +8,16 @@ library;
 import 'package:flutter/material.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:stitches/models/page_config.dart';
-import 'package:stitches/models/page_layout.dart';
+import 'package:stitches/models/page/page_config.dart';
+import 'package:stitches/models/page/page_layout.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/snippet.dart';
-import 'package:stitches/models/snippet_palette.dart';
-import 'package:stitches/models/snippet_palette_resolver.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/snippet/snippet.dart';
+import 'package:stitches/models/snippet/snippet_palette.dart';
+import 'package:stitches/models/snippet/snippet_palette_resolver.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/models/cell.dart';
-import 'package:stitches/models/stitch_geometry.dart';
-import 'package:stitches/models/stitch_plan.dart';
+import 'package:stitches/models/stitch/stitch_geometry.dart';
+import 'package:stitches/models/stitch/stitch_plan.dart';
 import 'package:stitches/models/thread.dart';
 import 'package:stitches/services/stitch_renderer.dart';
 

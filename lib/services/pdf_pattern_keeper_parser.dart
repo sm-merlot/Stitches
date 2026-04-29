@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../data/dmc_colors.dart';
-import 'scan_result.dart';
+import 'scan/scan_result.dart';
 
 /// Tier-1 PDF import: parse a PatternKeeper-compatible (text-native) PDF
 /// directly from its text layer — no rasterisation, no user input required.

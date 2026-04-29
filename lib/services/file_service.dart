@@ -5,13 +5,13 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:yaml/yaml.dart';
-import '../models/layer.dart';
+import '../models/layer/layer.dart';
 import 'pattern_cache.dart';
-import '../models/layer_blend_mode.dart';
-import '../models/layer_item.dart';
-import '../models/page_config.dart';
+import '../models/layer/layer_blend_mode.dart';
+import '../models/layer/layer_item.dart';
+import '../models/page/page_config.dart';
 import '../models/pattern.dart';
-import '../models/snippet.dart';
+import '../models/snippet/snippet.dart';
 import 'format_service.dart';
 
 class FileService {

@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/cell.dart';
 import '../models/pattern.dart';
-import '../models/stitch.dart';
+import '../models/stitch/stitch.dart';
 import 'stitch_compositor.dart';
 
 /// Renders a pattern as a PNG image and returns the raw bytes.

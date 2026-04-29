@@ -18,13 +18,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:stitches/models/layer.dart';
-import 'package:stitches/models/layer_item.dart';
+import 'package:stitches/models/layer/layer.dart';
+import 'package:stitches/models/layer/layer_item.dart';
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/snippet.dart';
+import 'package:stitches/models/snippet/snippet.dart';
 import 'dart:convert';
-import 'package:stitches/models/snippet_palette.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/snippet/snippet_palette.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/models/thread.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';

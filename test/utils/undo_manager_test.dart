@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/utils/command.dart';
-import 'package:stitches/utils/undo_manager.dart';
+import 'package:stitches/utils/commands/command.dart';
+import 'package:stitches/utils/commands/undo_manager.dart';
 
 // Simple command that records execute/undo calls for testing.
 class _TrackingCommand extends Command {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/models/progress_log.dart';
+import 'package:stitches/models/progress/progress_log.dart';
 
 void main() {
   // ─── helpers ──────────────────────────────────────────────────────────────

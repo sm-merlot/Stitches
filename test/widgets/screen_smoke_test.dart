@@ -11,12 +11,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:stitches/models/pattern.dart';
-import 'package:stitches/models/snippet.dart';
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/snippet/snippet.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/models/thread.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/google_drive_provider.dart';
-import 'package:stitches/providers/recent_items_provider.dart';
+import 'package:stitches/providers/files/recent_items_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';
 import 'package:stitches/providers/workspace_provider.dart';
 import 'package:stitches/screens/color_picker_screen.dart';

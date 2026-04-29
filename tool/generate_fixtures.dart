@@ -18,8 +18,8 @@
 
 import 'dart:io';
 
-import 'package:stitches/models/stitch_plan.dart';
-import 'package:stitches/services/grid_parser.dart';
+import 'package:stitches/models/stitch/stitch_plan.dart';
+import 'package:stitches/services/scan/grid_parser.dart';
 import 'package:stitches/services/stitch_planner.dart';
 
 // ── Corner serialisation ───────────────────────────────────────────────────

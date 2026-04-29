@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart' show Offset, Size;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/widgets/page_nav_handler.dart';
+import 'package:stitches/widgets/handlers/page_nav_handler.dart';
 
 void main() {
   group('PageNavHandler', () {

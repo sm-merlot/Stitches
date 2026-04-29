@@ -6,9 +6,9 @@ import 'package:image/image.dart' as img;
 import 'package:uuid/uuid.dart';
 
 import '../data/dmc_colors.dart';
-import '../models/snippet.dart';
-import '../models/snippet_palette.dart';
-import '../models/stitch.dart';
+import '../models/snippet/snippet.dart';
+import '../models/snippet/snippet_palette.dart';
+import '../models/stitch/stitch.dart';
 import '../models/thread.dart';
 import 'color_space.dart';
 

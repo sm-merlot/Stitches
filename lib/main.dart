@@ -7,11 +7,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'app.dart';
 import 'services/file_service.dart';
-import 'utils/shortcut_router.dart';
+import 'utils/commands/shortcut_router.dart';
 import 'services/incoming_file_service.dart';
 import 'services/pdf_pattern_keeper_parser.dart';
 import 'services/pdf_service.dart';
-import 'services/scan_result.dart';
+import 'services/scan/scan_result.dart';
 
 // Flutter on Windows uses BoringSSL with bundled root certs instead of the
 // Windows certificate store, causing TLS failures against Google endpoints.

@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../models/pattern.dart';
-import '../models/stitch.dart';
+import '../models/stitch/stitch.dart';
 
 const int _kThumbW = 160;
 const int _kThumbH = 110;

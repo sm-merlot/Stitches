@@ -1,4 +1,4 @@
-import '../models/stitch_plan.dart';
+import '../models/stitch/stitch_plan.dart';
 
 /// A resolved stitch line ready for rendering, in pixel coordinates.
 class StitchSegment {
