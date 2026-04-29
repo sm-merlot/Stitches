@@ -8,7 +8,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/services/sprite_importer.dart';
 
 void main() {

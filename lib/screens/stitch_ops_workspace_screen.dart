@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/cell.dart';
 import '../models/pattern.dart';
-import '../models/progress_log.dart';
-import '../models/stitch.dart';
-import '../models/stitch_geometry.dart';
+import '../models/progress/progress_log.dart';
+import '../models/stitch/stitch.dart';
+import '../models/stitch/stitch_geometry.dart';
 import '../models/storage_location.dart';
 import '../providers/google_drive_provider.dart';
 import '../services/file_service.dart';
-import '../services/google_drive_service.dart';
+import '../services/drive/google_drive_service.dart';
 import 'stitch_ops_screen.dart';
 
 // ─── Public entry point ───────────────────────────────────────────────────────

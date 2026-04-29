@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart' show Color;
 import '../models/cell.dart';
-import '../models/layer_blend_mode.dart';
+import '../models/layer/layer_blend_mode.dart';
 import '../models/pattern.dart';
-import '../models/stitch.dart';
-import '../models/stitch_geometry.dart';
+import '../models/stitch/stitch.dart';
+import '../models/stitch/stitch_geometry.dart';
 import '../models/thread.dart';
 import 'sprite_importer.dart';
 

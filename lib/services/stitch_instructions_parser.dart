@@ -24,7 +24,7 @@
 
 import 'dart:convert';
 
-import '../models/stitch_plan.dart';
+import '../models/stitch/stitch_plan.dart';
 
 /// Parses [jsonText] and returns a [PlannedAida] ready for rendering.
 ///

@@ -20,10 +20,10 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:image/image.dart' as img;
-import 'package:stitches/models/stitch_plan.dart' show PlannedAida;
+import 'package:stitches/models/stitch/stitch_plan.dart' show PlannedAida;
 import 'package:stitches/services/gif_renderer.dart'
     show kDemoSubFrames, renderDemoGif;
-import 'package:stitches/services/grid_parser.dart';
+import 'package:stitches/services/scan/grid_parser.dart';
 import 'package:stitches/services/stitch_instructions_parser.dart';
 import 'package:stitches/services/stitch_planner.dart';
 import 'package:stitches/services/stitch_renderer.dart';

@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import '../models/stitch_plan.dart';
+import '../models/stitch/stitch_plan.dart';
 
 // FrontOne (\): TopLeft -> BottomRight
 // FrontTwo (/): TopRight -> BottomLeft

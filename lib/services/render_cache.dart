@@ -1,10 +1,10 @@
 import 'dart:ui' show Rect;
 import 'package:flutter/material.dart' show Color, HSLColor, immutable;
 import '../models/cell.dart';
-import '../models/page_layout.dart';
-import '../models/pattern_progress.dart';
-import '../models/stitch.dart';
-import '../models/stitch_geometry.dart';
+import '../models/page/page_layout.dart';
+import '../models/progress/pattern_progress.dart';
+import '../models/stitch/stitch.dart';
+import '../models/stitch/stitch_geometry.dart';
 import 'stitch_compositor.dart';
 
 // ─── RenderViewConfig ─────────────────────────────────────────────────────────

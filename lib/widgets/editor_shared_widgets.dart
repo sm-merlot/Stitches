@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cell.dart';
-import '../models/stitch.dart';
+import '../models/stitch/stitch.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/snackbars.dart';

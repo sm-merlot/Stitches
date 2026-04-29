@@ -21,7 +21,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../test/test_fixtures.dart';
 
-import 'package:stitches/models/stitch.dart';
+import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/services/file_service.dart';
 import 'package:stitches/services/pdf_pattern_keeper_parser.dart';
 import 'package:stitches/services/pdf_service.dart';

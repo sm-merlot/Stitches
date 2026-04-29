@@ -2,11 +2,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cell.dart';
-import '../models/page_layout.dart';
+import '../models/page/page_layout.dart';
 import '../models/pattern.dart';
-import '../models/progress_log.dart';
-import '../models/stitch.dart';
-import '../models/stitch_geometry.dart';
+import '../models/progress/progress_log.dart';
+import '../models/stitch/stitch.dart';
+import '../models/stitch/stitch_geometry.dart';
 import '../models/thread.dart';
 import '../providers/editor/editor_provider.dart';
 

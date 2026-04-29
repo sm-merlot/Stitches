@@ -7,10 +7,10 @@ import 'package:yaml/yaml.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/dmc_colors.dart';
-import '../models/layer.dart';
-import '../models/layer_item.dart';
+import '../models/layer/layer.dart';
+import '../models/layer/layer_item.dart';
 import '../models/pattern.dart';
-import '../models/stitch.dart';
+import '../models/stitch/stitch.dart';
 import '../models/thread.dart';
 import 'sprite_importer.dart';
 

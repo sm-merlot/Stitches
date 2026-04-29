@@ -13,7 +13,7 @@ import '../data/dmc_colors.dart';
 import '../data/symbols.dart';
 import '../models/cell.dart';
 import '../models/pattern.dart';
-import '../models/stitch.dart';
+import '../models/stitch/stitch.dart';
 import '../models/thread.dart';
 import 'skein_calculator.dart';
 import 'stitch_compositor.dart';
