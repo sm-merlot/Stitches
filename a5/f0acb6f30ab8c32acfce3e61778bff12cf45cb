@@ -1,0 +1,32 @@
+.github/workflows/ci.yml
+  2b2f596675a34dd2 12
+.github/workflows/test.yml
+  2b2f596675a34dd2 14,39
+.github/workflows/dep-changeset.yml
+  2b2f596675a34dd2 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a5f0acb6f30ab8c32acfce3e61778bff12cf45cb",
+  "prompts": {
+    "2b2f596675a34dd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bfb86bd3-50c3-43af-8885-b68ca160829c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 4,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
