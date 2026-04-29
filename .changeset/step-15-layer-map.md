@@ -2,31 +2,45 @@
 "stitches": patch
 ---
 
-Step 15: Layer primary storage → Map, draw hot-path O(N) → O(N_cells)
+Step 15: Layer Map primary storage + O(1) draw hot-path + CompositeLayer version counter
 
 **`Layer` data structure change**
 - Primary storage is now `Map<Cell, List<Stitch>> stitchesByCell` + `List<BackStitch> backstitches`
 - `List<Stitch> get stitches` is a computed getter (O(N)) for compatibility — serialisation, bulk transforms, non-hot-path code
-- `stitchesAt(int x, int y)` is always O(1) with no lazy rebuild — the index exists from construction and is never discarded
-- New incremental update methods for the hot draw path:
-  - `withStitchAdded(stitch)` — O(N_cells) map copy, no O(N_stitches) index rebuild
-  - `withStitchReplaced(stitch)` — same, overwrites same-geometry stitch at cell
-  - `withStitchRemoved(stitch)` — O(N_cells) or O(n_back) for BackStitch
-  - `withCellCleared(x, y)` — removes all cell stitches + any touching BackStitch
+- `stitchesAt(int x, int y)` is always O(1) — no lazy rebuild, index exists from construction
+- Immutable update methods for snapshot-undo paths (paste, move, delete, etc.):
+  - `withStitchAdded`, `withStitchReplaced`, `withStitchRemoved`, `withCellCleared` — O(N_cells) map copy
+- In-place mutation methods for 120 Hz draw hot-path (via UndoManager commands):
+  - `addStitchInPlace`, `replaceStitchInPlace`, `removeStitchInPlace`, `clearCellInPlace` — O(1), zero map copy
 
-**Draw hot-path: O(N_stitches) → O(N_cells)**
-- `addStitch` / `addStitchRaw`: replaced `[...layer.stitches, stitch]` (O(N_stitches) list copy) + `_buildCellIndex()` O(N_stitches) rebuild with `withStitchAdded`/`withStitchReplaced` (O(N_cells) map copy)
-- `removeStitchesAt` / `removeStitchesAtRaw`: replaced `stitches.where(...).toList()` with `withCellCleared`; backstitch check uses `layer.backstitches` directly
-- `removeStitchRaw`: uses `withStitchRemoved` + identity check instead of list scan
-- `removeBackstitchAt`: uses `layer.backstitches` + `withStitchRemoved`
-- `floodFill`: seed lookup via `stitchesAt` (O(1)); occupied map built from `stitchesByCell` directly
-- `pickColorAtCell`: both loops use `stitchesAt(x, y)` instead of iterating all stitches
+**Draw hot-path: O(N_stitches) → O(1)**
+- `addStitchRaw`: `addStitchInPlace` mutates map directly — no copy
+- `removeStitchRaw`: `removeStitchInPlace` — no copy
+- `removeStitchesAtRaw`: `clearCellInPlace` — no copy
+- `removeStitchesInBoxRaw`: `clearCellInPlace` per box cell — O(box²)
+- Safe because UndoManager commands reverse mutations exactly (add ↔ remove); snapshot undo always uses immutable methods that create new Layer instances
 
-**`StitchCompositor._buildLayer`**
-- Iterates `layer.stitchesByCell` + `layer.backstitches` directly instead of `layer.stitches` getter — avoids O(N) list allocation per layer per composite build
+**`CompositeLayer` version counter + in-place mutation**
+- `patchLayer`: mutates `old.fullStitches` in-place + bumps `version` — eliminates O(N_cells) `Map.from` copy
+- `patchCells(old, pattern, cells)`: new method for multi-cell patches (paste, etc.) — O(cells × layers_per_cell)
+- `patchAffectedLayer`: thin wrapper around `patchCells`, in-place mutation
+- `_syncRenderCache` detects changes via version counter instead of `identical()`
 
-**`draw_handler._checkLayerWarning`**
-- Erase/draw visibility checks use `stitchesAt(cellX, cellY).isNotEmpty` (O(1)) instead of `stitches.any(...)` (O(N))
+**`toggleLayerVisible` / `setLayerBlendMode` → `patchAffectedLayer`**
+- Now that `patchAffectedLayer` is in-place (no Map.from copy), it's faster than `computeComposite` for visibility/blend toggles — resolves only cells the changed layer touches
 
-**Net effect on 256×224 pattern (~6 300 occupied cells, ~19 000 stitches)**
-- Per draw event: 3×O(N_stitches) → 1×O(N_cells) ≈ 3–10× fewer allocations in debug; eliminates the per-event `_buildCellIndex` rebuild that caused draw stutter
+**`commitPaste` → `patchCells`**
+- Paste uses `patchCells(dirtyCells)` for incremental composite — only resolves pasted cells instead of full recompute
+
+**Rename: `computeLayer` → `computeComposite`**
+- Clearer name: computes composite from ALL visible layers, not a single layer
+
+**Controller hot-path fixes**
+- `EditController` / `SnippetEditController` `onAddStitch` and `onRemoveAt` callbacks use `stitchesAt` (O(1)) instead of `layer.stitches` getter (O(N) allocation)
+- `draw_handler._checkLayerWarning` uses `stitchesAt` (O(1))
+- `pickColorAtCell`, `floodFill`: use `stitchesAt` / `stitchesByCell` directly
+
+**Net effect on 256×224 pattern (~6 300 cells, ~19 000 stitches)**
+- Per draw event: 3×O(19k) → O(1) — zero list copies, zero map copies, zero index rebuilds
+- Visibility toggle: O(19k) full recompute → O(6.3k cells × ~1 layer) incremental
+- Paste 50 stitches: O(19k) full recompute → O(50 cells) incremental
