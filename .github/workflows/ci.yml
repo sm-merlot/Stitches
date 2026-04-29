@@ -9,7 +9,7 @@ env:
 
 jobs:
   analyze:
-    if: github.event.issue.pull_request != null && contains(github.event.comment.body, '/ci')
+    if: github.event.issue.pull_request != null && contains(github.event.comment.body, '/ci') && github.event.comment.user.login == 'scme0'
     runs-on: ubuntu-latest
 
     steps:
