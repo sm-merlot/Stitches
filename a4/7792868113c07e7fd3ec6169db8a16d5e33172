@@ -1,0 +1,23 @@
+lib/services/stitch_compositor.dart
+  f57fc8e2f18c74c8 180-182,191-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a47792868113c07e7fd3ec6169db8a16d5e33172",
+  "prompts": {
+    "f57fc8e2f18c74c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84b0b47c-b9ff-40e7-bc21-9128561b4241",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 371,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
