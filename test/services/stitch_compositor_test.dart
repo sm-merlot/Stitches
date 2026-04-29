@@ -50,7 +50,7 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
 
     expect(layer.fullStitches, hasLength(1));
     expect(layer.fullStitches[const Cell(0, 0)]?.resolvedThread.dmcCode, '310');
@@ -64,7 +64,7 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.crossStitchEquiv['310'], 1.0);
   });
 
@@ -74,7 +74,7 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [HalfStitch(x: 0, y: 0, isForward: true, threadId: '310')])],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.crossStitchEquiv['310'], closeTo(0.5, 0.001));
   });
 
@@ -86,7 +86,7 @@ void main() {
         QuarterStitch(x: 0, y: 0, quadrant: QuadrantPosition.topLeft, threadId: '310'),
       ])],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.crossStitchEquiv['310'], closeTo(0.25, 0.001));
   });
 
@@ -98,7 +98,7 @@ void main() {
         _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')], visible: false),
       ],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.fullStitches, isEmpty);
     expect(layer.otherStitches, isEmpty);
     expect(layer.crossStitchEquiv, isEmpty);
@@ -116,7 +116,7 @@ void main() {
         _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '321')]),
       ],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.fullStitches, hasLength(1));
     expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, true);
   });
@@ -131,7 +131,7 @@ void main() {
         _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '321')]),
       ],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     final total = layer.crossStitchEquiv.values.fold(0.0, (a, b) => a + b);
     expect(total, closeTo(1.0, 0.001));
   });
@@ -146,7 +146,7 @@ void main() {
         _layer(stitches: [FullStitch(x: 1, y: 0, threadId: '321')]),
       ],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.fullStitches, hasLength(2));
     expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, false);
     expect(layer.fullStitches[const Cell(1, 0)]?.isBlended, false);
@@ -170,7 +170,7 @@ void main() {
         ),
       ],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     final cs = layer.fullStitches[const Cell(0, 0)];
     expect(cs?.stitch, isA<FullStitch>());
     expect((cs?.stitch as FullStitch).threadId, '321'); // top layer wins
@@ -190,7 +190,7 @@ void main() {
         ),
       ],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     final cs = layer.fullStitches[const Cell(0, 0)];
     expect((cs?.stitch as FullStitch).threadId, '310'); // bottom layer wins for Add blend
   });
@@ -204,7 +204,7 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [bs])],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.backstitches, hasLength(1));
     expect(layer.backStitchEquiv['310'], closeTo(1.0, 0.001));
     expect(layer.fullStitches, isEmpty);
@@ -219,7 +219,7 @@ void main() {
       threads: [t],
       layers: [_layer(stitches: [bs])],
     );
-    final layer = StitchCompositor.computeLayer(pattern);
+    final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.backStitchEquiv['310'], closeTo(5.0, 0.001));
   });
 
@@ -251,7 +251,7 @@ void main() {
         threads: [t],
         layers: [_layer(stitches: [FullStitch(x: 3, y: 4, threadId: '310')])],
       );
-      final old = StitchCompositor.computeLayer(oldPat);
+      final old = StitchCompositor.computeComposite(oldPat);
       expect(old.fullStitches, contains(const Cell(3, 4)));
 
       final newPat = _pattern(threads: [t], layers: [_layer(stitches: [])]);
@@ -266,7 +266,7 @@ void main() {
         threads: [t1],
         layers: [_layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')])],
       );
-      final old = StitchCompositor.computeLayer(oldPat);
+      final old = StitchCompositor.computeComposite(oldPat);
 
       final newPat = _pattern(
         threads: [t1, t2],
@@ -288,7 +288,7 @@ void main() {
           ])
         ],
       );
-      final old = StitchCompositor.computeLayer(oldPat);
+      final old = StitchCompositor.computeComposite(oldPat);
       // Patch (0,0) — add a second thread there; (5,5) must survive.
       final t2 = _thread('321', const Color(0xFFFF0000));
       final newPat = _pattern(
@@ -385,7 +385,7 @@ void main() {
         layers: [_layer(stitches: [FullStitch(x: 7, y: 3, threadId: '310')])],
       );
       final patched = StitchCompositor.patchLayer(emptyOld, newPat, 7, 3);
-      final full = StitchCompositor.computeLayer(newPat);
+      final full = StitchCompositor.computeComposite(newPat);
 
       expect(patched.fullStitches.keys.toSet(), full.fullStitches.keys.toSet());
       expect(patched.fullStitches[const Cell(7, 3)]?.resolvedThread.dmcCode,
@@ -406,7 +406,7 @@ void main() {
     test('toggling visibility removes cells from composite', () {
       final layer = _layer(stitches: [FullStitch(x: 1, y: 1, threadId: '310')]);
       final pat = _pattern(threads: [tBlack], layers: [layer]);
-      final old = StitchCompositor.computeLayer(pat);
+      final old = StitchCompositor.computeComposite(pat);
       expect(old.fullStitches.containsKey(const Cell(1, 1)), isTrue);
 
       // Toggle layer hidden.
@@ -423,7 +423,7 @@ void main() {
       final hiddenLayer = _layer(
         stitches: [FullStitch(x: 2, y: 3, threadId: '310')], visible: false);
       final pat = _pattern(threads: [tBlack], layers: [hiddenLayer]);
-      final old = StitchCompositor.computeLayer(pat);
+      final old = StitchCompositor.computeComposite(pat);
       expect(old.fullStitches.containsKey(const Cell(2, 3)), isFalse);
 
       // Toggle layer visible.
@@ -438,13 +438,13 @@ void main() {
       final layer1 = _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '310')]);
       final layer2 = _layer(stitches: [FullStitch(x: 1, y: 1, threadId: '666')]);
       final pat = _pattern(threads: [tBlack, tRed], layers: [layer1, layer2]);
-      final old = StitchCompositor.computeLayer(pat);
+      final old = StitchCompositor.computeComposite(pat);
 
       final hiddenLayer2 = layer2.copyWith(visible: false);
       final newPat = _pattern(threads: [tBlack, tRed], layers: [layer1, hiddenLayer2]);
 
       final patched = StitchCompositor.patchAffectedLayer(old, newPat, layer2);
-      final full    = StitchCompositor.computeLayer(newPat);
+      final full    = StitchCompositor.computeComposite(newPat);
 
       expect(patched.fullStitches.keys.toSet(), full.fullStitches.keys.toSet());
     });
@@ -453,7 +453,7 @@ void main() {
       final layer1 = _layer(stitches: [FullStitch(x: 5, y: 5, threadId: '310')]);
       final layer2 = _layer(stitches: [FullStitch(x: 7, y: 7, threadId: '666')]);
       final pat = _pattern(threads: [tBlack, tRed], layers: [layer1, layer2]);
-      final old = StitchCompositor.computeLayer(pat);
+      final old = StitchCompositor.computeComposite(pat);
 
       final hiddenLayer2 = layer2.copyWith(visible: false);
       final newPat = _pattern(threads: [tBlack, tRed], layers: [layer1, hiddenLayer2]);
@@ -479,7 +479,7 @@ void main() {
           ])
         ],
       );
-      final layer = StitchCompositor.computeLayer(pattern);
+      final layer = StitchCompositor.computeComposite(pattern);
       expect(layer.fullStitches, hasLength(2));
       expect(layer.fullStitches[const Cell(0, 0)]?.resolvedThread.dmcCode, '310');
       expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, false);
@@ -495,7 +495,7 @@ void main() {
           _layer(stitches: [FullStitch(x: 0, y: 0, threadId: '815')]),
         ],
       );
-      final layer = StitchCompositor.computeLayer(pattern);
+      final layer = StitchCompositor.computeComposite(pattern);
       final cs = layer.fullStitches[const Cell(0, 0)];
       expect(cs, isNotNull);
       expect(cs!.isBlended, true);
@@ -507,7 +507,7 @@ void main() {
         threads: [t],
         layers: [_layer(stitches: [FullStitch(x: 5, y: 5, threadId: '310')])],
       );
-      final layer = StitchCompositor.computeLayer(pattern);
+      final layer = StitchCompositor.computeComposite(pattern);
       expect(layer.fullStitches[const Cell(5, 5)]?.isBlended, false);
     });
 
@@ -521,7 +521,7 @@ void main() {
           ])
         ],
       );
-      final layer = StitchCompositor.computeLayer(pattern);
+      final layer = StitchCompositor.computeComposite(pattern);
       expect(layer.fullStitches, isEmpty);
       expect(layer.otherStitches, hasLength(1));
       expect(layer.otherStitches.first.resolvedThread.dmcCode, '321');

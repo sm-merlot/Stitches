@@ -493,7 +493,7 @@ class EditorNotifier extends Notifier<EditorState>
       // rebuilds the render cache from the restored pattern. Without this,
       // the old composite is kept (sentinel pass-through) and the canvas
       // shows the pre-undo stitches until something else forces a refresh.
-      compositeLayer: StitchCompositor.computeLayer(restored),
+      compositeLayer: StitchCompositor.computeComposite(restored),
     );
   }
 
@@ -517,7 +517,7 @@ class EditorNotifier extends Notifier<EditorState>
       undoStack: undoStack,
       redoStack: redoStack,
       isDirty: true,
-      compositeLayer: StitchCompositor.computeLayer(restored),
+      compositeLayer: StitchCompositor.computeComposite(restored),
     );
   }
 

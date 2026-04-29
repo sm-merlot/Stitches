@@ -31,7 +31,7 @@ CrossStitchPattern _pattern({
 }
 
 CompositeLayer _composite(CrossStitchPattern pattern) =>
-    StitchCompositor.computeLayer(pattern);
+    StitchCompositor.computeComposite(pattern);
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 

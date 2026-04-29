@@ -40,7 +40,7 @@ void main() {
 
     // Mirror PageLayout.compute: use StitchCompositor for the canonical
     // visible-stitch view (same source of truth as the algo).
-    final composite = StitchCompositor.computeLayer(pattern);
+    final composite = StitchCompositor.computeComposite(pattern);
     final threadList = pattern.threads.values.toList();
     final threadIndex = <String, int>{
       for (int i = 0; i < threadList.length; i++)

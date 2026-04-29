@@ -33,7 +33,7 @@ void main() {
         'fuzzyAmount=${config.fuzzyAmount} enabled=${config.enabled}');
 
     // ── Build snap-colour map via StitchCompositor (mirrors PageLayout.compute)
-    final composite = StitchCompositor.computeLayer(pattern);
+    final composite = StitchCompositor.computeComposite(pattern);
     final threadList = pattern.threads.values.toList();
     final threadIndex = <String, int>{
       for (int i = 0; i < threadList.length; i++)

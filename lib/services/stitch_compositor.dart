@@ -106,7 +106,7 @@ class CompositeLayer {
 /// For one-shot use (services, tests, PDF export):
 ///
 /// ```dart
-/// final layer = StitchCompositor.computeLayer(pattern);  // CompositeLayer
+/// final layer = StitchCompositor.computeComposite(pattern);  // CompositeLayer
 /// ```
 class StitchCompositor {
   final CrossStitchPattern _pattern;
@@ -148,7 +148,7 @@ class StitchCompositor {
   // ─── Static convenience ───────────────────────────────────────────────────
 
   /// Compute the composite for [pattern] and return a [CompositeLayer].
-  static CompositeLayer computeLayer(CrossStitchPattern pattern) =>
+  static CompositeLayer computeComposite(CrossStitchPattern pattern) =>
       _buildLayer(pattern);
 
   /// Incrementally patches [old] by recomputing only the cell at ([x], [y]).

@@ -398,7 +398,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     final quickComposite = (oldComposite != null && coords != null)
         ? StitchCompositor.patchLayer(
             oldComposite, newPattern, coords.x, coords.y)
-        : StitchCompositor.computeLayer(newPattern);
+        : StitchCompositor.computeComposite(newPattern);
 
     // Accumulate dirty keys across successive draw events within the same frame
     // so a single updateCells() call covers all pointer-move events per render.
@@ -440,7 +440,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     final quickComposite = oldComposite != null
         ? StitchCompositor.patchLayer(oldComposite, newPattern, x, y,
             backstitchesChanged: removedAnyBackstitch)
-        : StitchCompositor.computeLayer(newPattern);
+        : StitchCompositor.computeComposite(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = <Cell>{...?prevDirty, Cell(x, y)};
@@ -494,7 +494,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       undoStack: _buildUndoStack(),
-      compositeLayer: StitchCompositor.computeLayer(newPattern),
+      compositeLayer: StitchCompositor.computeComposite(newPattern),
       dirtyCellKeys: mergedDirty,
       isDirty: true,
       redoStack: [],
@@ -570,7 +570,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     final oldComposite = state.compositeLayer;
     final quickComposite = (oldComposite != null && coords != null)
         ? StitchCompositor.patchLayer(oldComposite, newPattern, coords.x, coords.y)
-        : StitchCompositor.computeLayer(newPattern);
+        : StitchCompositor.computeComposite(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
@@ -601,7 +601,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     final quickComposite = (oldComposite != null && coords != null)
         ? StitchCompositor.patchLayer(oldComposite, newPattern, coords.x, coords.y,
             backstitchesChanged: stitch is BackStitch)
-        : StitchCompositor.computeLayer(newPattern);
+        : StitchCompositor.computeComposite(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = coords != null
@@ -636,7 +636,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     final quickComposite = oldComposite != null
         ? StitchCompositor.patchLayer(oldComposite, newPattern, x, y,
             backstitchesChanged: removedAnyBackstitch)
-        : StitchCompositor.computeLayer(newPattern);
+        : StitchCompositor.computeComposite(newPattern);
 
     final prevDirty = state.dirtyCellKeys;
     final mergedDirty = <Cell>{...?prevDirty, Cell(x, y)};
@@ -683,7 +683,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
-      compositeLayer: StitchCompositor.computeLayer(newPattern),
+      compositeLayer: StitchCompositor.computeComposite(newPattern),
       dirtyCellKeys: mergedDirty,
       isDirty: true,
     );

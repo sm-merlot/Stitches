@@ -178,7 +178,7 @@ mixin SelectionMixin on Notifier<EditorState> {
         ? StitchCompositor.patchCells(
             oldComposite, newPattern, dirtyCells,
             backstitchesChanged: hasBackstitch)
-        : StitchCompositor.computeLayer(newPattern);
+        : StitchCompositor.computeComposite(newPattern);
 
     state = state.copyWith(
       pattern: newPattern,

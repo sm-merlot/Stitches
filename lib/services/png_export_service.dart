@@ -22,7 +22,7 @@ class PngExportService {
     double cellSize = 20.0,
     bool realistic = true,
   }) async {
-    final composite = StitchCompositor.computeLayer(pattern);
+    final composite = StitchCompositor.computeComposite(pattern);
     final nonBack = [
       ...composite.fullStitches.values.map((cs) => cs.stitch),
       ...composite.otherStitches.map((cs) => cs.stitch),

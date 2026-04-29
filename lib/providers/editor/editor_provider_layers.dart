@@ -149,21 +149,19 @@ mixin LayersMixin on Notifier<EditorState> {
 
   void toggleLayerVisible(String id) {
     final changedLayer = state.pattern.layers.firstWhere((l) => l.id == id);
-    // Collect affected cells for incremental render-cache update.
-    final affectedCells = <Cell>{
-      for (final s in changedLayer.stitches) ?s.cellCoords,
-    };
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(visible: !l.visible));
-    // Use computeLayer rather than patchAffectedLayer: visibility toggle affects
-    // every stitch in the layer, so patchAffectedLayer's map-copy overhead
-    // (O(total_composite_cells)) is comparable to a full recompute while also
-    // paying the per-cell _resolveCell cost. computeLayer does a single forward
-    // pass with fewer intermediate allocations.
-    final newComposite = StitchCompositor.computeLayer(newPattern);
-    // Pass dirtyCellKeys so _syncRenderCache uses updateCells instead of rebuild.
-    // When other layers cover the rest of the canvas, this avoids re-processing
-    // the (total_composite - affected) unchanged cells.
+
+    // patchAffectedLayer resolves only cells the toggled layer touches —
+    // O(cells_in_layer × layers_per_cell) with in-place mutation (no map copy).
+    // Falls back to full recompute when no prior composite exists.
+    final affectedCells = changedLayer.stitchesByCell.keys.toSet();
+    final oldComposite = state.compositeLayer;
+    final newComposite = oldComposite != null
+        ? StitchCompositor.patchAffectedLayer(
+            oldComposite, newPattern, changedLayer)
+        : StitchCompositor.computeComposite(newPattern);
+
     state = state.copyWith(
       pattern: newPattern,
       isDirty: true,
@@ -180,12 +178,16 @@ mixin LayersMixin on Notifier<EditorState> {
 
   void setLayerBlendMode(String id, LayerBlendMode mode) {
     final changedLayer = state.pattern.layers.firstWhere((l) => l.id == id);
-    final affectedCells = <Cell>{
-      for (final s in changedLayer.stitches) ?s.cellCoords,
-    };
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(blendMode: mode));
-    final newComposite = StitchCompositor.computeLayer(newPattern);
+
+    final affectedCells = changedLayer.stitchesByCell.keys.toSet();
+    final oldComposite = state.compositeLayer;
+    final newComposite = oldComposite != null
+        ? StitchCompositor.patchAffectedLayer(
+            oldComposite, newPattern, changedLayer)
+        : StitchCompositor.computeComposite(newPattern);
+
     state = state.copyWith(
       pattern: newPattern,
       isDirty: true,
@@ -577,7 +579,7 @@ mixin LayersMixin on Notifier<EditorState> {
   }
 
   void refreshCompositeCache() {
-    final layer = StitchCompositor.computeLayer(state.pattern);
+    final layer = StitchCompositor.computeComposite(state.pattern);
     final activeCodes = layer.fullStitches.values.map((cs) => cs.resolvedThread.dmcCode).toSet();
 
     final patternMap = state.pattern.threads;
