@@ -65,12 +65,20 @@ class CompositeLayer {
   /// Backstitch Euclidean cell-unit length per threadId.
   final Map<String, double> backStitchEquiv;
 
-  const CompositeLayer({
+  /// Monotonically increasing version counter.
+  ///
+  /// Bumped by [StitchCompositor.patchLayer] and [patchAffectedLayer] when the
+  /// composite is mutated in-place. [_syncRenderCache] in [AidaWidget] uses
+  /// this instead of `identical()` to detect changes.
+  int version;
+
+  CompositeLayer({
     required this.fullStitches,
     required this.otherStitches,
     required this.backstitches,
     required this.crossStitchEquiv,
     required this.backStitchEquiv,
+    this.version = 0,
   });
 
 }
@@ -165,35 +173,31 @@ class StitchCompositor {
     int y, {
     bool backstitchesChanged = false,
   }) {
-    // Copy fullStitches map once, then update in-place via shared helper.
-    final newFullStitches = Map<Cell, CompositeStitch>.from(old.fullStitches);
+    // Mutate in-place + bump version — avoids O(N_cells) Map.from copy.
+    // Safe because the old CompositeLayer is discarded (callers always pass
+    // the result to state.copyWith which replaces the previous reference).
     final newOtherAtCell = <CompositeStitch>[];
-    _resolveCell(newFullStitches, newOtherAtCell, newPattern, x, y);
+    _resolveCell(old.fullStitches, newOtherAtCell, newPattern, x, y);
 
     // Patch otherStitches: drop old entries at (x, y), append new ones.
-    final newOtherStitches = <CompositeStitch>[
-      ...old.otherStitches.where((cs) {
-        final coords = cs.stitch.cellCoords;
-        return coords == null || coords.x != x || coords.y != y;
-      }),
-      ...newOtherAtCell,
-    ];
+    old.otherStitches.removeWhere((cs) {
+      final coords = cs.stitch.cellCoords;
+      return coords != null && coords.x == x && coords.y == y;
+    });
+    old.otherStitches.addAll(newOtherAtCell);
 
     // Rebuild backstitches only when one was added or removed.
-    final newBackstitches = backstitchesChanged
-        ? <BackStitch>[
-            for (final layer in newPattern.layers)
-              if (layer.visible) ...layer.backstitches,
-          ]
-        : old.backstitches;
+    if (backstitchesChanged) {
+      old.backstitches
+        ..clear()
+        ..addAll([
+          for (final layer in newPattern.layers)
+            if (layer.visible) ...layer.backstitches,
+        ]);
+    }
 
-    return CompositeLayer(
-      fullStitches: newFullStitches,
-      otherStitches: newOtherStitches,
-      backstitches: newBackstitches,
-      crossStitchEquiv: old.crossStitchEquiv,
-      backStitchEquiv: old.backStitchEquiv,
-    );
+    old.version++;
+    return old;
   }
 
   // ─── Affected-layer patch ──────────────────────────────────────────────────

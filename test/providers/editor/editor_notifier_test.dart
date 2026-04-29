@@ -131,19 +131,24 @@ void main() {
     test('addStitch provides quick compositeLayer immediately', () {
       notifier(c).refreshCompositeCache();
       final before = editorState(c).compositeLayer;
+      final beforeVersion = before?.version ?? -1;
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
-      // Quick composite computed immediately — not null, and different from before.
-      expect(editorState(c).compositeLayer, isNotNull);
-      expect(identical(editorState(c).compositeLayer, before), isFalse);
+      // Quick composite computed immediately — not null, and version bumped.
+      // patchLayer mutates in-place (same identity) and increments version.
+      final after = editorState(c).compositeLayer;
+      expect(after, isNotNull);
+      expect(after!.version, greaterThan(beforeVersion));
     });
 
     test('removeStitchesAt provides fresh compositeLayer immediately', () {
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       notifier(c).refreshCompositeCache();
       final before = editorState(c).compositeLayer;
+      final beforeVersion = before?.version ?? -1;
       notifier(c).removeStitchesAt(0, 0);
-      expect(editorState(c).compositeLayer, isNotNull);
-      expect(identical(editorState(c).compositeLayer, before), isFalse);
+      final after = editorState(c).compositeLayer;
+      expect(after, isNotNull);
+      expect(after!.version, greaterThan(beforeVersion));
     });
 
     test('removeStitchesInBox provides fresh compositeLayer immediately', () {

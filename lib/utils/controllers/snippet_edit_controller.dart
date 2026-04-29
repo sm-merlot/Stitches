@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind, kMiddleMouseButton;
 import 'package:flutter/services.dart' hide UndoManager;
 import '../../models/cell.dart';
+import '../../models/stitch/stitch.dart';
+import '../../models/stitch/stitch_geometry.dart';
 import '../../providers/editor/editor_provider.dart';
 import '../../widgets/canvas/canvas_viewport.dart';
 import '../../widgets/handlers/draw_handler.dart';
@@ -84,25 +86,43 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
     _draw = DrawHandler(
       onAddStitch: (stitch) {
         final state = _getState();
-        final overwritten =
-            state.activeLayer.stitches.where((s) => s == stitch).toList();
+        final coords = stitch.cellCoords;
+        final overwritten = coords != null
+            ? state.activeLayer
+                .stitchesAt(coords.x, coords.y)
+                .where((s) => s == stitch)
+                .toList()
+            : state.activeLayer.backstitches
+                .where((s) => s == stitch)
+                .toList();
         undoManager.execute(
             AddStitchCommand(notifier: n, stitch: stitch, overwritten: overwritten));
       },
       onRemoveAt: (x, y) {
         final state = _getState();
-        final removed = state.activeLayer.stitches
-            .where((s) => Cell.hitStitch(s, x, y))
-            .toList();
+        final layer = state.activeLayer;
+        final removed = <Stitch>[
+          ...layer.stitchesAt(x, y),
+          ...layer.backstitches.where((s) => Cell.hitStitch(s, x, y)),
+        ];
         if (removed.isEmpty) return;
         undoManager.execute(
             RemoveStitchesAtCommand(notifier: n, x: x, y: y, removed: removed));
       },
       onRemoveBox: (cx, cy, size) {
         final state = _getState();
-        final removed = state.activeLayer.stitches
-            .where((s) => Cell.hitBox(s, cx, cy, size))
-            .toList();
+        final layer = state.activeLayer;
+        final half = (size - 1) ~/ 2;
+        final x0 = cx - half;
+        final x1 = cx + (size - 1 - half);
+        final y0 = cy - half;
+        final y1 = cy + (size - 1 - half);
+        final removed = <Stitch>[
+          for (var xx = x0; xx <= x1; xx++)
+            for (var yy = y0; yy <= y1; yy++)
+              ...layer.stitchesAt(xx, yy),
+          ...layer.backstitches.where((s) => Cell.hitBox(s, cx, cy, size)),
+        ];
         if (removed.isEmpty) return;
         undoManager.execute(RemoveStitchesInBoxCommand(
             notifier: n, cx: cx, cy: cy, size: size, removed: removed));
