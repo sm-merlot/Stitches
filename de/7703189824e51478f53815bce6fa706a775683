@@ -1,0 +1,307 @@
+lib/widgets/handlers/select_handler.dart
+  f152e190cfa663bb 1-168
+lib/utils/controllers/stitch_controller.dart
+  f152e190cfa663bb 1-250
+lib/screens/snippet_editor_screen.dart
+  f152e190cfa663bb 5-6,8-9,13-15
+lib/services/stitch_renderer.dart
+  f152e190cfa663bb 1
+lib/utils/controllers/canvas_edit_controller.dart
+  f152e190cfa663bb 1-68
+lib/widgets/handlers/page_nav_handler.dart
+  f152e190cfa663bb 1-35
+lib/services/file_service.dart
+  f152e190cfa663bb 8,10-12,14
+test/stitch_compositor_test.dart
+  f152e190cfa663bb 4-6,8
+lib/models/layer/layer_item.dart
+  f152e190cfa663bb 1-75
+lib/main.dart
+  f152e190cfa663bb 10,14
+lib/services/drive/drive_cache.dart
+  f152e190cfa663bb 1-22
+lib/models/snippet/snippet_palette.dart
+  f152e190cfa663bb 1-57
+lib/providers/files/folder_contents_provider.dart
+  f152e190cfa663bb 1-127
+lib/screens/scan/pattern_scan_review_screen.dart
+  f152e190cfa663bb 1-544
+lib/models/snippet/snippet_palette_resolver.dart
+  f152e190cfa663bb 1-46
+lib/services/drive/google_drive_service.dart
+  f152e190cfa663bb 1-163
+lib/widgets/toolbar/editor_toolbar_button.dart
+  f152e190cfa663bb 1-269
+lib/utils/controllers/snippet_edit_controller.dart
+  f152e190cfa663bb 1-512
+test/models/progress_log_test.dart
+  f152e190cfa663bb 2
+lib/services/png_export_service.dart
+  f152e190cfa663bb 7
+lib/screens/scan/pattern_scan_symbol_screen_widgets.dart
+  f152e190cfa663bb 1-554
+test/widgets/zoom_pan_handler_test.dart
+  f152e190cfa663bb 9
+lib/widgets/toolbar/editor_toolbar_palette_dialog.dart
+  f152e190cfa663bb 1
+test/utils/snippet_edit_controller_test.dart
+  f152e190cfa663bb 5-6
+lib/models/page/page_config.dart
+  f152e190cfa663bb 1-67
+lib/widgets/layers/layers_panel.dart
+  f152e190cfa663bb 1-345
+test/widgets/progress_handler_test.dart
+  f152e190cfa663bb 4-6
+lib/widgets/layers/layers_panel_helpers.dart
+  f152e190cfa663bb 1-145
+lib/widgets/canvas/canvas_viewport.dart
+  f152e190cfa663bb 1-106
+lib/widgets/editor_shared_widgets.dart
+  f152e190cfa663bb 6
+lib/models/progress/pattern_progress.dart
+  f152e190cfa663bb 1-146
+lib/services/scan/grid_parser.dart
+  f152e190cfa663bb 1-61
+lib/screens/workspace_screen.dart
+  f152e190cfa663bb 11,13,17-18,20-21,30,32,35-36,38-39,41-44,49-52
+test/widgets/draw_handler_test.dart
+  f152e190cfa663bb 2,4
+test/models/geometry_and_layout_test.dart
+  f152e190cfa663bb 11-12,14-17,19-20
+lib/models/stitch/stitch_plan.dart
+  f152e190cfa663bb 1-101
+lib/widgets/views/edit_view.dart
+  f152e190cfa663bb 1-111
+lib/services/scan/pdf_scanner.dart
+  f152e190cfa663bb 1-72
+lib/screens/drive/drive_file_picker_dialog.dart
+  f152e190cfa663bb 1-278
+lib/models/stitch/stitch_geometry.dart
+  f152e190cfa663bb 1-116
+lib/widgets/stitch_demo_painter.dart
+  f152e190cfa663bb 3
+test/models_and_logic_test.dart
+  f152e190cfa663bb 21-22,24,26-27
+tool/generate_fixtures.dart
+  f152e190cfa663bb 21-22
+lib/models/pattern.dart
+  f152e190cfa663bb 4-10
+test/utils/view_mode_controller_test.dart
+  f152e190cfa663bb 5-6
+lib/providers/editor/editor_provider.dart
+  f152e190cfa663bb 10,12-15,17-23
+lib/widgets/sidebar/right_sidebar.dart
+  f152e190cfa663bb 1-244
+lib/screens/drive/drive_picker_dialog.dart
+  f152e190cfa663bb 1-290
+lib/widgets/toolbar/editor_toolbar_color_controls.dart
+  f152e190cfa663bb 1-296
+lib/screens/stitch_ops_screen.dart
+  f152e190cfa663bb 5,7-9
+test/widgets/page_nav_handler_test.dart
+  f152e190cfa663bb 3
+test/widgets/aida_widget_test.dart
+  f152e190cfa663bb 15,20-26
+lib/services/gif_renderer.dart
+  f152e190cfa663bb 9
+lib/screens/page_mode_dialog.dart
+  f152e190cfa663bb 4
+test/widgets/hover_handler_test.dart
+  f152e190cfa663bb 3
+lib/utils/controllers/canvas_callbacks.dart
+  f152e190cfa663bb 1-20
+lib/screens/scan/pattern_scan_preview.dart
+  f152e190cfa663bb 1-318
+lib/widgets/layers/layers_panel_rows.dart
+  f152e190cfa663bb 1-534
+lib/models/progress/progress_log.dart
+  f152e190cfa663bb 1-107
+lib/services/scan/scan_result.dart
+  f152e190cfa663bb 1-95
+integration_test/editor_flows_test.dart
+  f152e190cfa663bb 26
+integration_test/pk_roundtrip_test.dart
+  f152e190cfa663bb 24
+test/page_layout_integration_test.dart
+  f152e190cfa663bb 21
+lib/models/layer/layer_blend_mode.dart
+  f152e190cfa663bb 1-75
+test/page_layout_snap_test.dart
+  f152e190cfa663bb 12
+test/utils/shortcut_router_test.dart
+  f152e190cfa663bb 3
+lib/screens/home_screen.dart
+  f152e190cfa663bb 15,17,25
+test/services/render_cache_test.dart
+  f152e190cfa663bb 5-6,8-9
+test/widgets/select_handler_test.dart
+  f152e190cfa663bb 3
+lib/services/stitch_planner.dart
+  f152e190cfa663bb 3
+lib/services/scan/grid_cell_scanner.dart
+  f152e190cfa663bb 1-239
+lib/screens/stitch_demo_screen.dart
+  f152e190cfa663bb 8
+lib/services/format_service.dart
+  f152e190cfa663bb 10-11,13
+test/debug_snap_test.dart
+  f152e190cfa663bb 14
+lib/services/scan/grid_detector.dart
+  f152e190cfa663bb 1-330
+lib/services/render_cache.dart
+  f152e190cfa663bb 4-7
+lib/services/stitch_compositor.dart
+  f152e190cfa663bb 4,6-7
+test/utils/undo_manager_test.dart
+  f152e190cfa663bb 2-3
+lib/widgets/toolbar/editor_toolbar.dart
+  f152e190cfa663bb 1-724
+test/widgets/paste_handler_test.dart
+  f152e190cfa663bb 2
+lib/utils/controllers/view_mode_controller.dart
+  f152e190cfa663bb 1-66
+lib/services/pdf_service.dart
+  f152e190cfa663bb 16
+lib/services/sprite_importer.dart
+  f152e190cfa663bb 9-11
+lib/screens/scan/pattern_scan_crop_screen.dart
+  f152e190cfa663bb 1-577
+lib/utils/controllers/edit_controller.dart
+  f152e190cfa663bb 1-565
+lib/widgets/sidebar/right_sidebar_colours_panel.dart
+  f152e190cfa663bb 1-1683
+lib/services/drive/drive_pattern_refresh.dart
+  f152e190cfa663bb 1-96
+lib/widgets/canvas/canvas_painter_drawing_methods.dart
+  f152e190cfa663bb 1-380
+test/utils/command_test.dart
+  f152e190cfa663bb 5-6,10
+lib/widgets/handlers/draw_handler.dart
+  f152e190cfa663bb 1-274
+lib/widgets/toolbar/editor_toolbar_sprite_picker.dart
+  f152e190cfa663bb 1-359
+bin/stitches_cli.dart
+  f152e190cfa663bb 23,26
+lib/widgets/snippets/snippets_panel.dart
+  f152e190cfa663bb 1-219
+lib/screens/scan/pattern_scan_symbol_screen.dart
+  f152e190cfa663bb 1-380
+lib/widgets/snippets/snippet_thumbnail.dart
+  f152e190cfa663bb 1-116
+test/utils/edit_controller_test.dart
+  f152e190cfa663bb 4
+test/pk_pdf_parser_test.dart
+  f152e190cfa663bb 19
+lib/models/cell.dart
+  f152e190cfa663bb 1-2
+lib/widgets/handlers/paste_handler.dart
+  f152e190cfa663bb 1-229
+test/widgets/screen_smoke_test.dart
+  f152e190cfa663bb 14-15,19
+lib/widgets/snippets/snippets_panel_widgets.dart
+  f152e190cfa663bb 1-340
+lib/models/snippet/snippet.dart
+  f152e190cfa663bb 1-125
+lib/widgets/views/snippet_edit_view.dart
+  f152e190cfa663bb 1-69
+lib/providers/files/recent_items_provider.dart
+  f152e190cfa663bb 1-215
+lib/screens/drive/drive_folder_picker_dialog.dart
+  f152e190cfa663bb 1-272
+lib/screens/scan/pattern_scan_cell_screen.dart
+  f152e190cfa663bb 1-694
+lib/widgets/canvas/aida_widget.dart
+  f152e190cfa663bb 1-1221
+lib/providers/viewers/pdf_viewer_provider.dart
+  f152e190cfa663bb 1-32
+lib/widgets/handlers/zoom_pan_handler.dart
+  f152e190cfa663bb 1-174
+lib/widgets/handlers/progress_handler.dart
+  f152e190cfa663bb 1-278
+lib/widgets/sidebar/file_sidebar.dart
+  f152e190cfa663bb 1-949
+lib/widgets/sidebar/right_sidebar_palettes_panel.dart
+  f152e190cfa663bb 1-440
+lib/services/scan/grid_symbol_matcher.dart
+  f152e190cfa663bb 1-620
+test/providers/editor_notifier_test.dart
+  f152e190cfa663bb 5,7
+lib/utils/commands/undo_manager.dart
+  f152e190cfa663bb 1-67
+lib/widgets/sidebar/folder_tree_node.dart
+  f152e190cfa663bb 1-330
+lib/providers/files/file_loading_provider.dart
+  f152e190cfa663bb 1-13
+test/utils/stitch_controller_test.dart
+  f152e190cfa663bb 4
+lib/providers/google_drive_provider.dart
+  f152e190cfa663bb 8-9
+lib/screens/editor_screen.dart
+  f152e190cfa663bb 10,13-14,21,23,25-26
+lib/services/stitch_instructions_parser.dart
+  f152e190cfa663bb 27
+lib/screens/stitch_ops_workspace_screen.dart
+  f152e190cfa663bb 8-10,14
+lib/models/page/page_layout.dart
+  f152e190cfa663bb 1-699
+lib/services/pdf_pattern_keeper_parser.dart
+  f152e190cfa663bb 7
+test/services/stitches_roundtrip_test.dart
+  f152e190cfa663bb 9-12,15-19
+test/providers/editor_snippets_selection_test.dart
+  f152e190cfa663bb 6-8
+test/services/format_service_test.dart
+  f152e190cfa663bb 6-7,9
+lib/utils/commands/shortcut_router.dart
+  f152e190cfa663bb 1-85
+lib/models/layer/layer.dart
+  f152e190cfa663bb 1-105
+lib/services/drive/google_auth_service.dart
+  f152e190cfa663bb 1-246
+lib/screens/materials_list_screen.dart
+  f152e190cfa663bb 5
+lib/widgets/handlers/hover_handler.dart
+  f152e190cfa663bb 1-105
+test/services/sprite_importer_test.dart
+  f152e190cfa663bb 11
+lib/models/stitch/stitch.dart
+  f152e190cfa663bb 1-298
+lib/widgets/canvas/canvas_painter.dart
+  f152e190cfa663bb 1-524
+lib/services/pattern_thumbnail.dart
+  f152e190cfa663bb 7
+lib/widgets/canvas/canvas_painter_overlay.dart
+  f152e190cfa663bb 1-149
+test/stitch_planner_test.dart
+  f152e190cfa663bb 23-24
+lib/utils/commands/command.dart
+  f152e190cfa663bb 1-107
+test/widgets/test_helpers.dart
+  f152e190cfa663bb 3-6,8,10
+test/pdf_logic_test.dart
+  f152e190cfa663bb 10-12,14
+lib/providers/viewers/image_viewer_provider.dart
+  f152e190cfa663bb 1-22
+lib/widgets/views/stitch_view.dart
+  f152e190cfa663bb 1-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "de7703189824e51478f53815bce6fa706a775683",
+  "prompts": {
+    "f152e190cfa663bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "110a807c-15a7-4d9d-a27b-5a69c77d285a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 21391,
+      "total_deletions": 496,
+      "accepted_lines": 21091,
+      "overriden_lines": 0
+    }
+  }
+}
