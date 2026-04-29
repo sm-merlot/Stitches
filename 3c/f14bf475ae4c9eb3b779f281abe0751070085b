@@ -1,0 +1,45 @@
+.github/workflows/test.yml
+  2b2f596675a34dd2 4-5,14,18-19,39,44-45
+.github/workflows/dep-changeset.yml
+  2b2f596675a34dd2 4-6,10,16-35,38,45
+.github/workflows/ci.yml
+  2b2f596675a34dd2 4-5,12,17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "3cf14bf475ae4c9eb3b779f281abe0751070085b",
+  "prompts": {
+    "2b2f596675a34dd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bfb86bd3-50c3-43af-8885-b68ca160829c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 39,
+      "total_deletions": 16,
+      "accepted_lines": 39,
+      "overriden_lines": 0
+    },
+    "949d3b2c0c079c99": {
+      "agent_id": {
+        "tool": "github-copilot-jetbrains",
+        "id": "1777390765055",
+        "model": "unknown"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 11,
+      "total_deletions": 11,
+      "accepted_lines": 0,
+      "overriden_lines": 7
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
