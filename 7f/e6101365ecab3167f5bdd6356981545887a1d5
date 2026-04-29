@@ -1,0 +1,45 @@
+lib/providers/editor/editor_provider_progress.dart
+  25076478c36ab6f7 59,66,95,120,142-151,159-160,163,184,307,327,354,356,358,360
+lib/models/page_layout.dart
+  25076478c36ab6f7 97-103
+lib/providers/stitching_timer_provider.dart
+  25076478c36ab6f7 101,103-106,112-114,126-147,149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "7fe6101365ecab3167f5bdd6356981545887a1d5",
+  "prompts": {
+    "25076478c36ab6f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f482d640-787a-4863-8645-3d4deeca2652",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 62,
+      "total_deletions": 19,
+      "accepted_lines": 62,
+      "overriden_lines": 0
+    },
+    "2b2f596675a34dd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bfb86bd3-50c3-43af-8885-b68ca160829c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 67,
+      "total_deletions": 18,
+      "accepted_lines": 48,
+      "overriden_lines": 1
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
