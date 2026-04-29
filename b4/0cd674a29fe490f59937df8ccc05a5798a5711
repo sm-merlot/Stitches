@@ -1,0 +1,29 @@
+lib/providers/editor/editor_state.dart
+  f57fc8e2f18c74c8 5-35,37,40-45,47-53,56-59,61-64,78-81,83-89,102-114,116
+lib/services/stitch_compositor.dart
+  f57fc8e2f18c74c8 4,148-152,281-331
+test/services/stitch_compositor_test.dart
+  f57fc8e2f18c74c8 398-467
+lib/providers/editor/editor_provider_layers.dart
+  f57fc8e2f18c74c8 151-152,155-159,169,172-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "b40cd674a29fe490f59937df8ccc05a5798a5711",
+  "prompts": {
+    "f57fc8e2f18c74c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84b0b47c-b9ff-40e7-bc21-9128561b4241",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 218,
+      "total_deletions": 61,
+      "accepted_lines": 218,
+      "overriden_lines": 0
+    }
+  }
+}
