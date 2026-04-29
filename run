@@ -20,6 +20,7 @@
 #   analyze          Run flutter analyze
 #   test             Run all Dart/Flutter tests
 #   test-planner     Run only the stitch planner tests
+#   ci               Run full CI suite locally (analyze + unit tests + integration tests)
 #   clean            Delete build artefacts
 #   help             Show this message
 
@@ -126,6 +127,54 @@ case "$cmd" in
       git push
       echo "Pushed."
     fi
+    ;;
+
+  ci)
+    BOLD='\033[1m'; GREEN='\033[0;32m'; RED='\033[0;31m'; CYAN='\033[0;36m'; DIM='\033[2m'; RESET='\033[0m'
+    PASS="${GREEN}✔${RESET}"; FAIL="${RED}✘${RESET}"
+    LOG=ci.log
+
+    # Fresh log file each run
+    { echo "Stitches CI — $(date)"; echo; } > "$LOG"
+
+    ci_step() {
+      local label="$1"; shift
+      local steplog; steplog=$(mktemp)
+      printf "  ${CYAN}▶${RESET} %-26s" "$label..."
+      if "$@" >> "$steplog" 2>&1; then
+        printf "\r  ${PASS} ${BOLD}%-26s${RESET} ${DIM}(see ci.log)${RESET}\n" "$label"
+        { printf '=== %s ===\n' "$label"; cat "$steplog"; printf '\n'; } >> "$LOG"
+        rm "$steplog"
+        return 0
+      else
+        printf "\r  ${FAIL} ${BOLD}%-26s FAILED${RESET}\n" "$label"
+        { printf '=== %s ===\n' "$label"; cat "$steplog"; printf '\n'; } >> "$LOG"
+        printf "${RED}%s${RESET}\n" "$(cat "$steplog")"
+        rm "$steplog"
+        return 1
+      fi
+    }
+
+    printf "\n${BOLD}┌──────────────────────────────┐${RESET}\n"
+    printf "${BOLD}│      Stitches CI Suite       │${RESET}\n"
+    printf "${BOLD}└──────────────────────────────┘${RESET}\n\n"
+
+    failures=()
+
+    ci_step "pub get"          $FLUTTER pub get                                                                                         || failures+=("pub get")
+    ci_step "analyze"          $FLUTTER analyze --fatal-warnings                                                                        || failures+=("analyze")
+    ci_step "unit tests"       $FLUTTER test --reporter=expanded                                                                        || failures+=("unit tests")
+    ci_step "PK PDF parse"     $FLUTTER test integration_test/pk_real_pdf_parse_test.dart -d macos --no-pub --reporter=expanded         || failures+=("PK PDF parse")
+    ci_step "PK PDF roundtrip" $FLUTTER test integration_test/pk_roundtrip_test.dart      -d macos --no-pub --reporter=expanded         || failures+=("PK PDF roundtrip")
+
+    printf "\n${BOLD}────────────────────────────────${RESET}\n"
+    if [[ ${#failures[@]} -eq 0 ]]; then
+      printf "${GREEN}${BOLD}  ✔ All checks passed${RESET}\n"
+    else
+      printf "${RED}${BOLD}  ✘ Failed: %s${RESET}\n" "$(IFS=', '; echo "${failures[*]}")"
+      exit 1
+    fi
+    printf "${BOLD}────────────────────────────────${RESET}\n\n"
     ;;
 
   analyze)
