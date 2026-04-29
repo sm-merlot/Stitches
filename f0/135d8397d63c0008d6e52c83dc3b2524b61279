@@ -1,0 +1,77 @@
+lib/widgets/progress_handler.dart
+  f152e190cfa663bb 3,257
+lib/screens/stitch_ops_screen.dart
+  f152e190cfa663bb 165,191,198,203
+lib/providers/editor/editor_provider_selection.dart
+  f152e190cfa663bb 553,564,577-578
+lib/services/stitch_compositor.dart
+  f152e190cfa663bb 192,257
+test/services/stitches_roundtrip_test.dart
+  f152e190cfa663bb 14,81,265
+integration_test/editor_flows_test.dart
+  f152e190cfa663bb 24,182
+lib/models/layer.dart
+  f152e190cfa663bb 78
+lib/providers/editor/editor_provider_drawing.dart
+  f152e190cfa663bb 30,395,402,542,547,573,579,790-791
+lib/providers/editor/editor_provider.dart
+  f152e190cfa663bb 302,673
+lib/models/stitch_geometry.dart
+  f152e190cfa663bb 2,14,18,22-27
+lib/widgets/draw_handler.dart
+  f152e190cfa663bb 272
+lib/providers/editor/editor_provider_snippets.dart
+  f152e190cfa663bb 255-256
+lib/providers/editor/editor_state.dart
+  f152e190cfa663bb 223,228-229
+test/utils/command_test.dart
+  f152e190cfa663bb 218-219
+lib/models/pattern_progress.dart
+  f152e190cfa663bb 2,8-9,31,52,64,73,110,142
+test/services/render_cache_test.dart
+  f152e190cfa663bb 249
+lib/widgets/editor_toolbar.dart
+  f152e190cfa663bb 9
+lib/widgets/canvas_painter.dart
+  f152e190cfa663bb 195,306-307
+test/models/geometry_and_layout_test.dart
+  f152e190cfa663bb 18,29,36,43,50,57,70
+lib/providers/editor/editor_provider_progress.dart
+  f152e190cfa663bb 93,95,147,154,169-170,172,176,230,235,246,261-262,267,269-270,272-274,282,290,304,317-318,322,534,541,550,556,563,569,577-582,624
+lib/services/file_service.dart
+  f152e190cfa663bb 298
+lib/screens/stitch_ops_workspace_screen.dart
+  f152e190cfa663bb 6,132
+test/widgets/progress_handler_test.dart
+  f152e190cfa663bb 3,197
+lib/models/cell.dart
+  f152e190cfa663bb 39
+lib/widgets/editor_shared_widgets.dart
+  f152e190cfa663bb 5,92
+lib/widgets/right_sidebar_colours_panel.dart
+  f152e190cfa663bb 5,320,327,331,464-465,692-693,1503-1504,1543-1544,1549
+lib/widgets/editor_toolbar_color_controls.dart
+  f152e190cfa663bb 103,108,111
+lib/services/render_cache.dart
+  f152e190cfa663bb 180,200,297
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "f0135d8397d63c0008d6e52c83dc3b2524b61279",
+  "prompts": {
+    "f152e190cfa663bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "110a807c-15a7-4d9d-a27b-5a69c77d285a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 132,
+      "total_deletions": 110,
+      "accepted_lines": 132,
+      "overriden_lines": 0
+    }
+  }
+}
