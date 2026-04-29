@@ -1,0 +1,36 @@
+lib/providers/editor/editor_provider_progress.dart
+  25076478c36ab6f7 39-43,45-47,52-60
+test/models/geometry_and_layout_test.dart
+  25076478c36ab6f7 280-349
+test/providers/editor_notifier_test.dart
+  25076478c36ab6f7 754-837
+lib/providers/stitching_timer_provider.dart
+  25076478c36ab6f7 2,54-57,74,92,118
+test/providers/stitching_timer_test.dart
+  25076478c36ab6f7 1-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "65825a10718c2474ad9d60a517955898ef5c81eb",
+  "prompts": {
+    "25076478c36ab6f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f482d640-787a-4863-8645-3d4deeca2652",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 358,
+      "total_deletions": 16,
+      "accepted_lines": 351,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_c73f350bf316ee": {
+      "author": "scme0"
+    }
+  }
+}
