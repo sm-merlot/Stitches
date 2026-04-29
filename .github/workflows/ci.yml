@@ -1,18 +1,21 @@
 name: Analyze
 
 on:
-  pull_request:
-    branches: [main]
+  issue_comment:
+    types: [created]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   analyze:
+    if: github.event.issue.pull_request != null && contains(github.event.comment.body, '/ci')
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
 
       - uses: subosito/flutter-action@v2
         with:
