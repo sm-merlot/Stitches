@@ -207,11 +207,10 @@ class StitchCompositor {
   /// Use when a single layer's visibility, opacity, or blend mode changes.
   /// Cells not touched by [changedLayer] carry over from [old] unchanged.
   ///
-  /// Copies [old.fullStitches] ONCE then updates all affected cells in-place —
-  /// O(cells_in_layer × avg_layers_per_cell + total_composite_cells).
+  /// Mutates [old] in-place and bumps [CompositeLayer.version] —
+  /// O(cells_in_layer × avg_layers_per_cell).
   /// Far cheaper than [computeLayer] (O(total_stitches)) for sparse changes,
-  /// and avoids the O(N × M) trap of calling [patchLayer] N times (each
-  /// of which would copy the full map).
+  /// and avoids the O(N × M) trap of calling [patchLayer] N times.
   static CompositeLayer patchAffectedLayer(
     CompositeLayer old,
     CrossStitchPattern newPattern,
@@ -223,38 +222,32 @@ class StitchCompositor {
 
     if (affectedCells.isEmpty && !hasBackstitches) return old;
 
-    // Copy fullStitches map ONCE, then update all affected cells in-place.
-    final newFullStitches = Map<Cell, CompositeStitch>.from(old.fullStitches);
+    // Mutate in-place + bump version — same pattern as patchLayer.
     final newOtherContributions = <CompositeStitch>[];
 
     for (final cell in affectedCells) {
-      _resolveCell(newFullStitches, newOtherContributions, newPattern, cell.x, cell.y);
+      _resolveCell(old.fullStitches, newOtherContributions, newPattern, cell.x, cell.y);
     }
 
     // Patch otherStitches: strip old entries for all affected cells, append new.
-    final newOtherStitches = <CompositeStitch>[
-      ...old.otherStitches.where((cs) {
-        final coords = cs.stitch.cellCoords;
-        return coords == null || !affectedCells.contains(coords);
-      }),
-      ...newOtherContributions,
-    ];
+    old.otherStitches.removeWhere((cs) {
+      final coords = cs.stitch.cellCoords;
+      return coords != null && affectedCells.contains(coords);
+    });
+    old.otherStitches.addAll(newOtherContributions);
 
     // Rebuild backstitch list when the changed layer contributes backstitches.
-    final newBackstitches = hasBackstitches
-        ? <BackStitch>[
-            for (final layer in newPattern.layers)
-              if (layer.visible) ...layer.backstitches,
-          ]
-        : old.backstitches;
+    if (hasBackstitches) {
+      old.backstitches
+        ..clear()
+        ..addAll([
+          for (final layer in newPattern.layers)
+            if (layer.visible) ...layer.backstitches,
+        ]);
+    }
 
-    return CompositeLayer(
-      fullStitches: newFullStitches,
-      otherStitches: newOtherStitches,
-      backstitches: newBackstitches,
-      crossStitchEquiv: old.crossStitchEquiv,
-      backStitchEquiv: old.backStitchEquiv,
-    );
+    old.version++;
+    return old;
   }
 
   // ─── Shared cell resolver ─────────────────────────────────────────────────
