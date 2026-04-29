@@ -4,8 +4,6 @@ name: Update DMC Colors
 # If the community color dataset has changed, opens a PR with the diff.
 
 on:
-  schedule:
-    - cron: '0 9 1 * *' # 09:00 UTC on the 1st of each month
   workflow_dispatch:     # Manual trigger from the Actions tab
 
 permissions:
