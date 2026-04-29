@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +13,7 @@ import 'package:stitches/services/editor_session_service.dart';
 class _FakeTimerNotifier extends StitchingTimerNotifier {
   _FakeTimerNotifier(DateTime Function() nowFn) : _nowFn = nowFn;
 
-  DateTime Function() _nowFn;
+  final DateTime Function() _nowFn;
 
   @override
   DateTime now() => _nowFn();
