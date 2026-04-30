@@ -1,0 +1,25 @@
+lib/providers/editor/editor_provider.dart
+  c567271c2db94130 32-35,181-183,196,199-207,210-216,237,248-253,260-262,271-273,293,295,297-300,345-363,372-374,397,420-425,431-432,434-438,443,446-451,546,585-587,591-593,604-606,610-614,620,623-628,641,645,650,652,660,662,670,672,680,682,691-693
+lib/providers/editor/editor_state.dart
+  c567271c2db94130 9,17,23-26,29-31,33-34,36,52,58-62,102-105,141,143,226-229,256-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a0203178e6acd79aab324032bdb657f9c80e0f44",
+  "prompts": {
+    "c567271c2db94130": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb504ae6-0393-41db-93ce-50082432c3d4",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 857,
+      "overriden_lines": 0
+    }
+  }
+}
