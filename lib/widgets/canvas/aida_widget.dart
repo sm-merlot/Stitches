@@ -637,7 +637,19 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         }
         setState(() {});
       }
-      // Fit canvas to page when page mode navigates.
+      // Snap to current page when entering stitch mode.
+      if (next.mode == AppMode.stitch &&
+          prev?.mode != AppMode.stitch &&
+          next.stitchSession.pageLayout != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final current = ref.read(editorProvider);
+          if (current.mode != AppMode.stitch) return;
+          _fitToPage(current, current.stitchSession.currentPage);
+        });
+      }
+      // Fit canvas to page on explicit navigation (page up/down, config save).
+      // Uses pendingFitPage as a one-shot signal — cleared after use.
       if (next.stitchSession.pendingFitPage != null &&
           next.stitchSession.pendingFitPage != prev?.stitchSession.pendingFitPage) {
         WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -362,7 +362,7 @@ class EditorNotifier extends Notifier<EditorState>
         focusThreadId: mode == AppMode.stitch
             ? state.stitchSession.focusThreadId
             : null,
-        pendingFitPage: mode == AppMode.stitch ? state.stitchSession.currentPage : null,
+        pendingFitPage: null,
       ),
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
