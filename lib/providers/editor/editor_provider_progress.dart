@@ -90,9 +90,9 @@ mixin ProgressMixin on Notifier<EditorState> {
   /// Toggle a single cell done/undone.
   void toggleStitchDone(int x, int y) {
     // Backstitch focus mode: cross-stitch marking blocked.
-    if (state.stitchBackMode) return;
+    if (state.stitchSession.backMode) return;
     // In focus mode, only interact with cells whose topmost thread matches.
-    final focusId = state.stitchFocusThreadId;
+    final focusId = state.stitchSession.focusThreadId;
     if (focusId != null && _topThreadAt(x, y) != focusId) return;
 
     final prog = state.pattern.progress;
@@ -106,9 +106,9 @@ mixin ProgressMixin on Notifier<EditorState> {
       final hasStitch = _hasCrossStitchAt(x, y);
       if (!hasStitch) return;
       // In page mode, only mark cells on the current page.
-      final layout = state.pageLayout;
+      final layout = state.stitchSession.pageLayout;
       if (layout != null) {
-        final (pageCol, pageRow) = layout.pageCoords(state.currentPage);
+        final (pageCol, pageRow) = layout.pageCoords(state.stitchSession.currentPage);
         if (!layout.rawCellOnPage(x, y, pageCol, pageRow)) return;
       }
       next = {...current, cell};
@@ -122,18 +122,18 @@ mixin ProgressMixin on Notifier<EditorState> {
   /// Toggle a single backstitch done/undone.
   void toggleBackstitchDone(double x1, double y1, double x2, double y2) {
     // Cross-stitch focus mode: backstitch marking blocked.
-    if (state.stitchCrossMode) return;
+    if (state.stitchSession.crossMode) return;
     // Focus mode guard.
-    final focusId = state.stitchFocusThreadId;
+    final focusId = state.stitchSession.focusThreadId;
     if (focusId != null) {
       final thread = _backstitchThreadAt(x1, y1, x2, y2);
       if (thread == null || thread != focusId) return;
     }
     // Page mode guard — backstitch must lie on the current page.
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout != null) {
       final mid = ((x1 + x2) / 2, (y1 + y2) / 2);
-      final (pageCol, pageRow) = layout.pageCoords(state.currentPage);
+      final (pageCol, pageRow) = layout.pageCoords(state.stitchSession.currentPage);
       if (!layout.rawCellOnPage(mid.$1.floor(), mid.$2.floor(), pageCol, pageRow)) return;
     }
     final prog = state.pattern.progress;
@@ -152,10 +152,10 @@ mixin ProgressMixin on Notifier<EditorState> {
     final prog = state.pattern.progress;
     final current = Set<Cell>.from(prog.completedStitches);
     final affectedThreads = <String>{};
-    final layout = state.pageLayout;
-    final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
-    final focusId = state.stitchFocusThreadId;
-    if (!state.stitchBackMode) {
+    final layout = state.stitchSession.pageLayout;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.stitchSession.currentPage) : (0, 0);
+    final focusId = state.stitchSession.focusThreadId;
+    if (!state.stitchSession.backMode) {
     // Build topmost-thread map so focus mode matches single-tap behaviour.
     final topThread = <Cell, String>{};
     for (final layer in state.pattern.layers) {
@@ -188,7 +188,7 @@ mixin ProgressMixin on Notifier<EditorState> {
     // Backstitches — include if midpoint is within region (and on current page).
     final backCurrent = Set<(double, double, double, double)>.from(
         prog.completedBackstitches);
-    if (!state.stitchCrossMode) {
+    if (!state.stitchSession.crossMode) {
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -231,7 +231,7 @@ mixin ProgressMixin on Notifier<EditorState> {
   void floodFillDone(int x, int y,
       {bool? originalStartIsDone, bool afterSingleTap = false}) {
     // Backstitch focus mode: flood fill only applies to cross-stitches.
-    if (state.stitchBackMode) return;
+    if (state.stitchSession.backMode) return;
     final prog = state.pattern.progress;
     final startIsDone = originalStartIsDone ?? prog.completedStitches.contains(Cell(x, y));
 
@@ -253,13 +253,13 @@ mixin ProgressMixin on Notifier<EditorState> {
     if (threadId == null) return;
 
     // In focus mode, only flood-fill if the starting cell matches the focus thread.
-    final focusId = state.stitchFocusThreadId;
+    final focusId = state.stitchSession.focusThreadId;
     if (focusId != null && threadId != focusId) return;
 
     // In page mode, constrain flood fill to the current page.
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     final (pageCol, pageRow) =
-        layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
+        layout != null ? layout.pageCoords(state.stitchSession.currentPage) : (0, 0);
 
     // BFS flood fill — 8-directional (sides + diagonals).
     // Only traverse cells where the same thread is the topmost visible stitch.
@@ -309,10 +309,10 @@ mixin ProgressMixin on Notifier<EditorState> {
     final prog = state.pattern.progress;
     final current = Set<Cell>.from(prog.completedStitches);
     int removed = 0;
-    final layout = state.pageLayout;
-    final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.currentPage) : (0, 0);
-    final focusId = state.stitchFocusThreadId;
-    if (!state.stitchBackMode) {
+    final layout = state.stitchSession.pageLayout;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.stitchSession.currentPage) : (0, 0);
+    final focusId = state.stitchSession.focusThreadId;
+    if (!state.stitchSession.backMode) {
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -333,7 +333,7 @@ mixin ProgressMixin on Notifier<EditorState> {
     // Backstitches in region.
     final backCurrent = Set<(double, double, double, double)>.from(
         prog.completedBackstitches);
-    if (!state.stitchCrossMode) {
+    if (!state.stitchSession.crossMode) {
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
@@ -546,7 +546,9 @@ mixin ProgressMixin on Notifier<EditorState> {
         final thread = state.pattern.threads[threadId];
         if (thread != null) {
           state = state.copyWith(
-            pendingCanvasWarning: '${thread.dmcCode} ${thread.name} complete ✓',
+            editSession: state.editSession.copyWith(
+              pendingCanvasWarning: '${thread.dmcCode} ${thread.name} complete ✓',
+            ),
           );
         }
       }
@@ -554,7 +556,7 @@ mixin ProgressMixin on Notifier<EditorState> {
   }
 
   void _checkPageCompletion(PatternProgress prog) {
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
     final pages = Set<int>.from(prog.completedPages);
     bool changed = false;

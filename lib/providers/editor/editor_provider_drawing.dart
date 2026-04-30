@@ -65,7 +65,10 @@ mixin DrawingMixin on Notifier<EditorState> {
             ...state.recentThreadIds.where(
                 (id) => id != threadId && id != state.selectedThreadId),
           ].take(10).toList();
-    state = state.copyWith(selectedThreadId: threadId, recentThreadIds: recents);
+    state = state.copyWith(
+      selectedThreadId: threadId,
+      recentThreadIds: recents,
+    );
     _saveSession();
   }
 
@@ -106,7 +109,7 @@ mixin DrawingMixin on Notifier<EditorState> {
         pattern: updatedPattern ?? s.pattern,
         selectedThreadId: threadId,
         recentThreadIds: recents,
-        drawingMode: DrawingMode.draw,
+        editSession: s.editSession.copyWith(drawingMode: DrawingMode.draw),
       );
     }
 
@@ -191,7 +194,7 @@ mixin DrawingMixin on Notifier<EditorState> {
     // snippet editor's Colours panel (which reads from palette threads)
     // stays in sync with pattern.threads. syncPaletteSymbolsToPrimary
     // then propagates the unchanged slot symbol across all secondaries.
-    var snippetPalettes = state.snippetPalettes;
+    var snippetPalettes = state.snippetEditorState.palettes;
     if (snippetPalettes.isNotEmpty) {
       final primary = List<Thread>.from(snippetPalettes[0].threads);
       final pIdx = primary.indexWhere((t) => t.dmcCode == oldDmcCode);
@@ -211,7 +214,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: remappedPattern,
-      snippetPalettes: snippetPalettes,
+      snippetEditorState: state.snippetEditorState.copyWith(palettes: snippetPalettes),
       selectedThreadId:
           state.selectedThreadId == oldDmcCode ? newDmcCode : state.selectedThreadId,
       isDirty: true,
@@ -354,7 +357,7 @@ mixin DrawingMixin on Notifier<EditorState> {
       }
     }
 
-    var snippetPalettes = state.snippetPalettes;
+    var snippetPalettes = state.snippetEditorState.palettes;
     if (addedThread != null && snippetPalettes.isNotEmpty) {
       snippetPalettes = snippetPalettes
           .map((p) => p.copyWith(threads: [...p.threads, addedThread!]))
@@ -402,7 +405,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
-      snippetPalettes: snippetPalettes,
+      snippetEditorState: state.snippetEditorState.copyWith(palettes: snippetPalettes),
       compositeLayer: quickComposite,
       dirtyCellKeys: mergedDirty,
       isDirty: true,
@@ -530,7 +533,7 @@ mixin DrawingMixin on Notifier<EditorState> {
       }
     }
 
-    var snippetPalettes = state.snippetPalettes;
+    var snippetPalettes = state.snippetEditorState.palettes;
     if (addedThread != null && snippetPalettes.isNotEmpty) {
       snippetPalettes = snippetPalettes
           .map((p) => p.copyWith(threads: [...p.threads, addedThread!]))
@@ -568,7 +571,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
-      snippetPalettes: snippetPalettes,
+      snippetEditorState: state.snippetEditorState.copyWith(palettes: snippetPalettes),
       compositeLayer: quickComposite,
       dirtyCellKeys: mergedDirty,
       isDirty: true,
@@ -705,12 +708,21 @@ mixin DrawingMixin on Notifier<EditorState> {
 
   void setEraserSize(int size) {
     // Selecting a size deselects fill erase — they're mutually exclusive.
-    state = state.copyWith(eraserSize: size.clamp(1, 10), fillEraseActive: false);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        eraserSize: size.clamp(1, 10),
+        fillEraseActive: false,
+      ),
+    );
   }
 
   void toggleFillErase() {
     // Toggling fill erase on deselects any size selection, and vice versa.
-    state = state.copyWith(fillEraseActive: !state.fillEraseActive);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        fillEraseActive: !state.editSession.fillEraseActive,
+      ),
+    );
   }
 
   /// 8-connected flood fill. [erase] == false fills empty/same-colour cells;
@@ -809,11 +821,17 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   void setBackstitchStart(Offset? point) {
-    state = state.copyWith(backstitchStartPoint: point);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(backstitchStartPoint: point),
+    );
   }
 
   void toggleBackstitchChainMode() {
-    state = state.copyWith(backstitchChainMode: !state.backstitchChainMode);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        backstitchChainMode: !state.editSession.backstitchChainMode,
+      ),
+    );
   }
 
   void resizePattern(int newWidth, int newHeight, int anchorX, int anchorY) {
@@ -930,12 +948,20 @@ mixin DrawingMixin on Notifier<EditorState> {
   // ─── Colour mode (stitch mode: B&W vs colour) ──────────────────────────────
 
   void toggleColourMode() {
-    state = state.copyWith(colourMode: !state.colourMode);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        colourMode: !state.editSession.colourMode,
+      ),
+    );
     _saveSession();
   }
 
   void toggleCanvasSelectionMode() {
-    state = state.copyWith(canvasSelectionMode: !state.canvasSelectionMode);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        canvasSelectionMode: !state.editSession.canvasSelectionMode,
+      ),
+    );
   }
 
   void toggleStitchMode() {
@@ -945,25 +971,33 @@ mixin DrawingMixin on Notifier<EditorState> {
   /// Cross: hides backstitches. Activating clears Back.
   void setStitchCrossMode(bool active) {
     state = state.copyWith(
-      stitchCrossMode: active,
-      stitchBackMode: active ? false : state.stitchBackMode,
+      stitchSession: state.stitchSession.copyWith(
+        crossMode: active,
+        backMode: active ? false : state.stitchSession.backMode,
+      ),
     );
   }
 
   /// Back: greys normal stitches. Activating clears Cross.
   void setStitchBackMode(bool active) {
     state = state.copyWith(
-      stitchBackMode: active,
-      stitchCrossMode: active ? false : state.stitchCrossMode,
+      stitchSession: state.stitchSession.copyWith(
+        backMode: active,
+        crossMode: active ? false : state.stitchSession.crossMode,
+      ),
     );
   }
 
   void setStitchFocusThread(String? threadId) {
-    state = state.copyWith(stitchFocusThreadId: threadId);
+    state = state.copyWith(
+      stitchSession: state.stitchSession.copyWith(focusThreadId: threadId),
+    );
   }
 
   void setStitchShowPageColours(bool value) {
-    state = state.copyWith(stitchShowPageColours: value);
+    state = state.copyWith(
+      stitchSession: state.stitchSession.copyWith(showPageColours: value),
+    );
   }
 
   // ─── Reference image ─────────────────────────────────────────────────────
@@ -975,32 +1009,38 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(
         referenceImagePath: path,
-        referenceOpacity: state.referenceOpacity,
+        referenceOpacity: state.editSession.referenceOpacity,
       ),
-      referenceImage: image,
-      referenceVisible: true,
       isDirty: true,
+      editSession: state.editSession.copyWith(
+        referenceImage: image,
+        referenceVisible: true,
+      ),
     );
   }
 
   void clearReferenceImage() {
     state = state.copyWith(
       pattern: state.pattern.copyWith(referenceImagePath: null),
-      referenceImage: null,
       isDirty: true,
+      editSession: state.editSession.copyWith(referenceImage: null),
     );
   }
 
   void setReferenceOpacity(double opacity) {
     state = state.copyWith(
       pattern: state.pattern.copyWith(referenceOpacity: opacity),
-      referenceOpacity: opacity,
       isDirty: true,
+      editSession: state.editSession.copyWith(referenceOpacity: opacity),
     );
   }
 
   void toggleReferenceVisible() {
-    state = state.copyWith(referenceVisible: !state.referenceVisible);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        referenceVisible: !state.editSession.referenceVisible,
+      ),
+    );
   }
 
   // ─── Whole-canvas flip/rotate (snippet editor C3) ─────────────────────────
