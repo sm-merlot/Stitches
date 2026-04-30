@@ -183,6 +183,7 @@ class _DmcPickerDialogState extends State<DmcPickerDialog> {
           children: [
             TextField(
               controller: _searchCtrl,
+              autofocus: true,
               decoration: InputDecoration(
                 hintText: 'Search by code or name…',
                 prefixIcon: const Icon(Icons.search),

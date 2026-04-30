@@ -1,6 +1,6 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind, kMiddleMouseButton;
 import 'package:flutter/services.dart' hide UndoManager;
-import 'package:flutter/widgets.dart' show EditableText, FocusManager;
+import 'package:flutter/widgets.dart' show EditableTextState, FocusManager;
 import '../../models/cell.dart';
 import '../../models/stitch/stitch.dart';
 import '../../models/stitch/stitch_geometry.dart';
@@ -582,8 +582,12 @@ class EditController implements CanvasEditController, ShortcutHandler {
     // picker search bar, rename dialog) so that typing doesn't trigger tools.
     // Modifier shortcuts (Cmd/Ctrl+Z etc.) are already handled above and are
     // intentionally not suppressed.
-    final primaryFocus = FocusManager.instance.primaryFocus;
-    if (primaryFocus?.context?.widget is EditableText) return false;
+    //
+    // FocusNode.context is the Focus widget's context (a child of EditableText),
+    // so we must walk up the tree with findAncestorStateOfType rather than
+    // checking context.widget directly.
+    final focusCtx = FocusManager.instance.primaryFocus?.context;
+    if (focusCtx?.findAncestorStateOfType<EditableTextState>() != null) return false;
 
     switch (key) {
       case LogicalKeyboardKey.keyD:

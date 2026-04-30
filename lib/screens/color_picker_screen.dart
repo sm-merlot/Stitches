@@ -284,6 +284,7 @@ class _ColorPickerScreenState extends ConsumerState<ColorPickerScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: TextField(
                   controller: _searchController,
+                  autofocus: true,
                   decoration: InputDecoration(
                     hintText: 'Search by code or name...',
                     prefixIcon: const Icon(Icons.search),
