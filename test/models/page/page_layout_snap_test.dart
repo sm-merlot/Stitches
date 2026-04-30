@@ -371,9 +371,9 @@ void main() {
       expect(result[0], equals(0));
     });
 
-    test('group with bleedCells > tolerance — treated as split, no keep-whole', () {
-      // Group with 3 cells on each side (bleedCells=3), tolerance=2 → split.
-      // DP chooses based on color quality / distance, not keep-whole.
+    test('bleedDepth > tolerance → split (no keep-whole applied)', () {
+      // Group spans cols 2..7 across boundary at col 5 (3 cols each side).
+      // bleedDepth = max(5,6,7) - 5 + 1 = 3 > tolerance=2 → split.
       final superGroups = {
         0: {(2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0)},
       };
@@ -385,8 +385,67 @@ void main() {
         colorAt: colorMap1D([A, A, A, A, A, B, B, B, B, B]),
         superGroups: superGroups,
       );
-      // With clean A|B at col 5 → δ=0 regardless of the split group
+      // Clean A|B at col 5 → δ=0 regardless of the split group
       expect(result[0], equals(0));
+    });
+
+    test('wide minority row: depth=1 regardless of row width → keep-whole', () {
+      // Simulates a horizontal boundary with a 1-row-deep × 50-col-wide bleed.
+      // In (primary=col, cross=row) space for a vertical boundary:
+      //   50 cells at primary=3 (left of boundary=4), cross=0..49
+      //   200 cells at primary=5,6,7 (right), cross=0..49
+      // Old cell-count: bleedCells=50 > tolerance=4 → would split (wrong).
+      // New depth-count: bleedDepth = 4-3 = 1 ≤ tolerance=4 → keep-whole.
+      final groupCells = <(int, int)>{};
+      for (int cross = 0; cross < 50; cross++) {
+        groupCells.add((3, cross)); // minority: 1 col left of boundary
+        groupCells.add((5, cross)); // majority
+        groupCells.add((6, cross));
+        groupCells.add((7, cross));
+      }
+      final superGroups = {0: groupCells};
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 4,
+        tolerance: 4,
+        maxBoundary: 10,
+        maxCross: 50,
+        colorAt: (p, c) => null,
+        superGroups: superGroups,
+      );
+      // Keep-whole-on-right: need actual ≤ 3 → δ ≤ -1 for all cross-indices
+      for (int ci = 0; ci < 50; ci++) {
+        expect(result[ci], lessThanOrEqualTo(-1),
+            reason: 'cross $ci: keep-whole should force δ ≤ -1');
+      }
+    });
+
+    test('horizontal boundary: 1-row bleed across 50 columns → keep-whole', () {
+      // In transposed (primary=row, cross=col) space:
+      //   50 cells at primary=49 (1 row above boundary=50), cross=0..49
+      //   200 cells at primary=51..54, cross=0..49
+      // bleedDepth = 50-49 = 1 ≤ tolerance=4 → keep-whole.
+      final groupCells = <(int, int)>{};
+      for (int cross = 0; cross < 50; cross++) {
+        groupCells.add((49, cross)); // minority: 1 row above boundary
+        groupCells.add((51, cross));
+        groupCells.add((52, cross));
+        groupCells.add((53, cross));
+        groupCells.add((54, cross));
+      }
+      final superGroups = {0: groupCells};
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 50,
+        tolerance: 4,
+        maxBoundary: 100,
+        maxCross: 50,
+        colorAt: (p, c) => null,
+        superGroups: superGroups,
+      );
+      // Keep-whole-on-right: need actual ≤ 49 → δ ≤ -1
+      for (int ci = 0; ci < 50; ci++) {
+        expect(result[ci], lessThanOrEqualTo(-1),
+            reason: 'col $ci: 1-row-bleed should be kept whole on page below');
+      }
     });
   });
 

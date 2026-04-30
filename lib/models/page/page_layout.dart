@@ -297,18 +297,34 @@ class PageLayout {
     final keepWholeRight = <Map<int, List<int>>>[];
 
     for (final groupCells in superGroups.values) {
-      // Count cells on each side of the nominal boundary
+      // Collect distinct primary positions on each side.
+      // 'tolerance' is measured in primary-axis units (columns for vertical
+      // boundaries, rows for horizontal), NOT in total cell count. This ensures
+      // a 1-row × 50-column bleed has depth=1, not depth=50.
+      final leftPrimaries = <int>{};
+      final rightPrimaries = <int>{};
       int countLeft = 0, countRight = 0;
       for (final (p, _) in groupCells) {
         if (p < nominalBoundary) {
+          leftPrimaries.add(p);
           countLeft++;
         } else {
+          rightPrimaries.add(p);
           countRight++;
         }
       }
 
-      final bleedCells = math.min(countLeft, countRight);
-      if (bleedCells == 0 || bleedCells > tolerance) continue;
+      if (leftPrimaries.isEmpty || rightPrimaries.isEmpty) continue;
+
+      // Bleed depth = how many primary-axis steps does the minority cross?
+      //   Majority left  → minority right: depth = max(right) − nominal + 1
+      //   Majority right → minority left:  depth = nominal − min(left)
+      final keepOnLeft = countLeft >= countRight;
+      final bleedDepth = keepOnLeft
+          ? rightPrimaries.reduce(math.max) - nominalBoundary + 1
+          : nominalBoundary - leftPrimaries.reduce(math.min);
+
+      if (bleedDepth > tolerance) continue; // too deep → split
 
       // Build cross → list of primary positions for penalty lookup
       final Map<int, List<int>> byCross = {};
@@ -316,10 +332,10 @@ class PageLayout {
         byCross.putIfAbsent(c, () => []).add(p);
       }
 
-      if (countLeft >= countRight) {
-        keepWholeLeft.add(byCross); // majority on left: keep left
+      if (keepOnLeft) {
+        keepWholeLeft.add(byCross);
       } else {
-        keepWholeRight.add(byCross); // majority on right: keep right
+        keepWholeRight.add(byCross);
       }
     }
 
