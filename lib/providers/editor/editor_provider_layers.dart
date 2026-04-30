@@ -138,6 +138,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void renameLayer(String id, String name) {
@@ -250,6 +251,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Merges [topId]'s stitches into the layer directly below it.
@@ -303,6 +305,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Adds a new layer into [groupId] at the top. The new layer becomes active.
@@ -365,6 +368,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Moves [layerId] into [groupId], inserted below [belowLayerId].
@@ -411,6 +415,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void deleteGroup(String groupId) {
@@ -433,6 +438,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void renameGroup(String groupId, String name) {
@@ -500,6 +506,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void moveLayerToGroup(String layerId, String groupId) {
@@ -517,6 +524,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Removes [layerId] from [groupId] and inserts it as a [LayerLeaf]
@@ -539,6 +547,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void reorderTopLevel(int oldIndex, int newIndex) {
@@ -551,6 +560,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void reorderWithinGroup(String groupId, int oldIndex, int newIndex) {
@@ -569,6 +579,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   // ─── Composite thread cache ────────────────────────────────────────────────
