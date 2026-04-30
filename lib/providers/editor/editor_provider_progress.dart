@@ -156,32 +156,41 @@ mixin ProgressMixin on Notifier<EditorState> {
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.stitchSession.currentPage) : (0, 0);
     final focusId = state.stitchSession.focusThreadId;
     if (!state.stitchSession.backMode) {
-    // Build topmost-thread map so focus mode matches single-tap behaviour.
+    // Build topmost-thread map from compositeLayer so focus mode matches
+    // single-tap behaviour, including composite/blended cells.
     final topThread = <Cell, String>{};
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        final coords = _crossStitchXY(stitch);
-        if (coords != null) topThread[coords] = stitch.threadId;
+    final composite = state.compositeLayer;
+    if (composite != null) {
+      for (final e in composite.fullStitches.entries) {
+        topThread[e.key] = e.value.resolvedThread.dmcCode;
+      }
+      for (final cs in composite.otherStitches) {
+        final cell = cs.stitch.cellCoords;
+        if (cell != null) topThread[cell] = cs.resolvedThread.dmcCode;
+      }
+    } else {
+      // Fallback: raw layer scan when composite not yet available.
+      for (final layer in state.pattern.layers) {
+        if (!layer.visible) continue;
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) continue;
+          final coords = _crossStitchXY(stitch);
+          if (coords != null) topThread[coords] = stitch.threadId;
+        }
       }
     }
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        final coords = _crossStitchXY(stitch);
-        if (coords == null) continue;
-        final sx = coords.x;
-        final sy = coords.y;
-        // In focus mode, only mark cells where the focused thread is on top.
-        if (focusId != null && topThread[coords] != focusId) continue;
-        if (sx >= region.left && sx < region.right &&
-            sy >= region.top && sy < region.bottom) {
-          if (layout != null && !layout.rawCellOnPage(sx, sy, pageCol, pageRow)) continue;
-          current.add(coords);
-          affectedThreads.add(stitch.threadId);
-        }
+    for (final entry in topThread.entries) {
+      final coords = entry.key;
+      final threadId = entry.value;
+      // In focus mode, only mark cells where the focused thread is on top.
+      if (focusId != null && threadId != focusId) continue;
+      final sx = coords.x;
+      final sy = coords.y;
+      if (sx >= region.left && sx < region.right &&
+          sy >= region.top && sy < region.bottom) {
+        if (layout != null && !layout.rawCellOnPage(sx, sy, pageCol, pageRow)) continue;
+        current.add(coords);
+        affectedThreads.add(threadId);
       }
     }
     }
