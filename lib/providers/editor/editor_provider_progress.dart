@@ -5,6 +5,12 @@ part of 'editor_provider.dart';
 // Stitch progress tracking: toggle done, region mark, flood fill, page toggle.
 
 mixin ProgressMixin on Notifier<EditorState> {
+  // Abstract — implemented by EditorNotifier to route through the active
+  // controller delegate. Called by [_applyProgress] when [pushUndo] is true
+  // so that direct-from-UI mutations (markRegion, clearProgress) get an undo
+  // entry in the controller's UndoManager. Toggle/floodFill callbacks are
+  // wrapped by the controller itself and call with [pushUndo: false].
+  void _pushProgressSnapshot(PatternProgress before, PatternProgress after);
   // ─── StitchOps log helpers ─────────────────────────────────────────────────
 
   /// Updates the pattern-level [progressLog] with today's actual cumulative
@@ -108,7 +114,7 @@ mixin ProgressMixin on Notifier<EditorState> {
       next = {...current, cell};
     }
     final newProg = prog.copyWith(completedStitches: next);
-    _applyProgress(newProg, pushUndo: true);
+    _applyProgress(newProg);
     _checkColourCompletion(newProg, _threadIdsAt(x, y));
     _checkPageCompletion(newProg);
   }
@@ -136,7 +142,7 @@ mixin ProgressMixin on Notifier<EditorState> {
     final next = current.contains(key)
         ? ({...current}..remove(key))
         : {...current, key};
-    _applyProgress(prog.copyWith(completedBackstitches: next), pushUndo: true);
+    _applyProgress(prog.copyWith(completedBackstitches: next));
   }
 
   /// Mark all stitches within [region] (cell coords) as done.
@@ -283,7 +289,7 @@ mixin ProgressMixin on Notifier<EditorState> {
         ..removeAll(visited);
       if (newCompleted.length == prog.completedStitches.length) return;
       final newProg = prog.copyWith(completedStitches: newCompleted);
-      _applyProgress(newProg, pushUndo: !afterSingleTap, squashPrev: afterSingleTap);
+      _applyProgress(newProg);
       _checkPageCompletion(newProg);
     } else {
       // Mark done mode: add all visited cells to completedStitches.
@@ -291,7 +297,7 @@ mixin ProgressMixin on Notifier<EditorState> {
         ..addAll(visited);
       if (newCompleted.length == prog.completedStitches.length) return;
       final newProg = prog.copyWith(completedStitches: newCompleted);
-      _applyProgress(newProg, pushUndo: !afterSingleTap, squashPrev: afterSingleTap);
+      _applyProgress(newProg);
       _checkColourCompletion(newProg, {threadId});
       _checkPageCompletion(newProg);
     }
@@ -441,73 +447,23 @@ mixin ProgressMixin on Notifier<EditorState> {
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
-  static const int _maxProgressUndoDepth = 100;
-
-  /// [pushUndo] — push current progress onto the undo stack before applying.
-  /// [squashPrev] — replace the previous undo entry rather than adding a new
-  ///   one. Used by flood fill when it immediately follows a single-tap toggle
-  ///   so the two operations appear as one undo step.
-  void _applyProgress(PatternProgress progress,
-      {required bool pushUndo, bool squashPrev = false}) {
-    // Update today's high-watermark log entry BEFORE building the new pattern.
-    // The log is stored on the pattern (not inside PatternProgress) so it is
-    // never rolled back by undo/redo.
+  /// Applies [progress] and updates [progressLog].
+  ///
+  /// When [pushUndo] is true, calls [_pushProgressSnapshot] so the notifier
+  /// routes the undo entry to the active controller's [UndoManager]. Use for
+  /// direct-from-UI mutations (markRegion, clearProgress).
+  ///
+  /// Pass the default [pushUndo: false] for controller-wrapped callbacks
+  /// (toggleStitchDone, toggleBackstitchDone, floodFillDone) — the controller
+  /// handles undo bookkeeping via [ProgressSnapshotCommand].
+  void _applyProgress(PatternProgress progress, {bool pushUndo = false}) {
+    final before = state.pattern.progress;
     final updatedLog = _updatedLog(progress);
     final newPattern = state.pattern.copyWith(progress: progress, progressLog: updatedLog);
+    state = state.copyWith(pattern: newPattern, isDirty: true);
     if (pushUndo) {
-      final newUndoStack = [
-        ...state._progressUndoStack,
-        state.pattern.progress,
-      ];
-      if (newUndoStack.length > _maxProgressUndoDepth) {
-        newUndoStack.removeAt(0);
-      }
-      state = state.copyWith(
-        pattern: newPattern,
-        progressUndoStack: newUndoStack,
-        progressRedoStack: [],
-        isDirty: true,
-      );
-    } else if (squashPrev) {
-      // The last undo entry already has the pre-single-tap state — just apply
-      // the new progress without adding another entry.
-      state = state.copyWith(
-        pattern: newPattern,
-        progressRedoStack: [],
-        isDirty: true,
-      );
-    } else {
-      state = state.copyWith(
-        pattern: newPattern,
-        isDirty: true,
-      );
+      _pushProgressSnapshot(before, state.pattern.progress);
     }
-  }
-
-  void undoProgress() {
-    if (!state.canUndoProgress) return;
-    final stack = List<PatternProgress>.from(state._progressUndoStack);
-    final prev = stack.removeLast();
-    final redoStack = [...state._progressRedoStack, state.pattern.progress];
-    state = state.copyWith(
-      pattern: state.pattern.copyWith(progress: prev),
-      progressUndoStack: stack,
-      progressRedoStack: redoStack,
-      isDirty: true,
-    );
-  }
-
-  void redoProgress() {
-    if (!state.canRedoProgress) return;
-    final stack = List<PatternProgress>.from(state._progressRedoStack);
-    final next = stack.removeLast();
-    final undoStack = [...state._progressUndoStack, state.pattern.progress];
-    state = state.copyWith(
-      pattern: state.pattern.copyWith(progress: next),
-      progressUndoStack: undoStack,
-      progressRedoStack: stack,
-      isDirty: true,
-    );
   }
 
   /// Returns the threadId of the backstitch with the given endpoints, or null

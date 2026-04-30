@@ -79,8 +79,6 @@ const kWarnNothingToSave   = 'Nothing to save';
 class EditorNotifier extends Notifier<EditorState>
     with DrawingMixin, LayersMixin, ProgressMixin, SnippetsMixin, SelectionMixin {
 
-  static const int _maxUndoDepth = 200;
-
   @override
   EditorState build() {
     // Cancel any pending composite-refresh debounce when the notifier is
@@ -420,28 +418,44 @@ class EditorNotifier extends Notifier<EditorState>
   // ─── Undo / Redo ────────────────────────────────────────────────────────────
 
   // Delegate set by the active mode controller via [registerUndoDelegate].
-  // When non-null, [undo] and [redo] route through the controller's
-  // [UndoManager] before falling back to the snapshot undo stack.
+  // All undo/redo now routes exclusively through this delegate — there is no
+  // snapshot fallback stack. [clear] is called when a layer structural change
+  // (add/delete/reorder) makes outstanding commands invalid.
+  // [pushProgressSnapshot] is called by [ProgressMixin._applyProgress] for
+  // direct-from-UI progress mutations (markRegion, clearProgress) so their
+  // undo entries land in the controller's UndoManager.
   ({
     bool Function() canUndo,
     bool Function() canRedo,
     void Function() undo,
     void Function() redo,
+    void Function() clear,
+    void Function(PatternProgress before, PatternProgress after) pushProgressSnapshot,
   })? _controllerUndoDelegate;
 
-  /// Registers [canUndo]/[canRedo]/[undo]/[redo] callbacks from the active
-  /// mode controller. Call from [CanvasEditController.attachCanvas].
+  /// Registers undo/redo callbacks from the active mode controller.
+  /// Call from [CanvasEditController.attachCanvas].
+  ///
+  /// [clear] is called when a layer structural change invalidates outstanding
+  /// commands — the controller should clear its [UndoManager].
+  ///
+  /// [pushProgressSnapshot] is called when a direct-UI progress mutation
+  /// (e.g. mark region) needs its undo entry pushed to the controller stack.
   void registerUndoDelegate({
     required bool Function() canUndo,
     required bool Function() canRedo,
     required void Function() undo,
     required void Function() redo,
+    required void Function() clear,
+    required void Function(PatternProgress, PatternProgress) pushProgressSnapshot,
   }) {
     _controllerUndoDelegate = (
       canUndo: canUndo,
       canRedo: canRedo,
       undo: undo,
       redo: redo,
+      clear: clear,
+      pushProgressSnapshot: pushProgressSnapshot,
     );
   }
 
@@ -468,57 +482,51 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   void undo() {
-    // Route through the active controller's UndoManager first.
     final d = _controllerUndoDelegate;
     if (d != null && d.canUndo()) {
       d.undo();
       updateControllerUndoState();
-      return;
     }
-    if (state._undoStack.isEmpty) return;
-    final undoStack = [...state._undoStack];
-    final redoStack = [...state._redoStack];
-    final (prevPattern, prevPalettes) = undoStack.removeLast();
-    redoStack.add((state.pattern, state.snippetPalettes));
-    // Preserve current layer UI state so undo only reverts stitch/thread data,
-    // not layer visibility or lock the user toggled independently.
-    final restored = _applyLayerUiState(prevPattern, state.pattern);
-    state = state.copyWith(
-      pattern: restored,
-      snippetPalettes: prevPalettes,
-      undoStack: undoStack,
-      redoStack: redoStack,
-      isDirty: true,
-      // Recompute composite so _syncRenderCache sees a changed identity and
-      // rebuilds the render cache from the restored pattern. Without this,
-      // the old composite is kept (sentinel pass-through) and the canvas
-      // shows the pre-undo stitches until something else forces a refresh.
-      compositeLayer: StitchCompositor.computeComposite(restored),
-    );
   }
 
   void redo() {
-    // Route through the active controller's UndoManager first.
     final d = _controllerUndoDelegate;
     if (d != null && d.canRedo()) {
       d.redo();
       updateControllerUndoState();
-      return;
     }
-    if (state._redoStack.isEmpty) return;
-    final undoStack = [...state._undoStack];
-    final redoStack = [...state._redoStack];
-    final (nextPattern, nextPalettes) = redoStack.removeLast();
-    undoStack.add((state.pattern, state.snippetPalettes));
-    final restored = _applyLayerUiState(nextPattern, state.pattern);
+  }
+
+  /// Applies a previously-snapshotted [pattern] + [palettes] as the current
+  /// editor state. Called by [PatternSnapshotCommand.execute] and [.undo].
+  ///
+  /// Preserves current layer UI state (visibility, lock) so snapshot restore
+  /// only reverts stitch/thread data, not UI toggles the user made independently.
+  void applyPatternSnapshot(
+      CrossStitchPattern pattern, List<SnippetPalette> palettes) {
+    final restored = _applyLayerUiState(pattern, state.pattern);
     state = state.copyWith(
       pattern: restored,
-      snippetPalettes: nextPalettes,
-      undoStack: undoStack,
-      redoStack: redoStack,
+      snippetPalettes: palettes,
       isDirty: true,
       compositeLayer: StitchCompositor.computeComposite(restored),
     );
+  }
+
+  /// Restores [progress] as the current progress without touching [progressLog].
+  /// Called by [ProgressSnapshotCommand.execute] and [.undo] via a stored
+  /// callback — the log is intentionally preserved across undo/redo.
+  void applyProgressSnapshot(PatternProgress progress) {
+    state = state.copyWith(
+      pattern: state.pattern.copyWith(progress: progress),
+      isDirty: true,
+    );
+  }
+
+  @override
+  void _pushProgressSnapshot(PatternProgress before, PatternProgress after) {
+    _controllerUndoDelegate?.pushProgressSnapshot(before, after);
+    updateControllerUndoState();
   }
 
   /// Returns [target] with each layer's [visible] and [locked] overridden by
@@ -638,12 +646,9 @@ class EditorNotifier extends Notifier<EditorState>
   // ─── Shared helpers (satisfy abstract declarations in mixins) ────────────────
 
   @override
-  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack() {
-    var stack = [...state._undoStack, (state.pattern, state.snippetPalettes)];
-    if (stack.length > _maxUndoDepth) {
-      stack = stack.sublist(stack.length - _maxUndoDepth);
-    }
-    return stack;
+  void _clearUndoManager() {
+    _controllerUndoDelegate?.clear();
+    updateControllerUndoState();
   }
 
   @override

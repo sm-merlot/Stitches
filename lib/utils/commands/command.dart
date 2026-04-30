@@ -1,3 +1,6 @@
+import '../../models/pattern.dart';
+import '../../models/progress/pattern_progress.dart';
+import '../../models/snippet/snippet_palette.dart';
 import '../../models/stitch/stitch.dart';
 import '../../providers/editor/editor_provider.dart';
 
@@ -76,6 +79,63 @@ class RemoveStitchesAtCommand implements Command {
     }
   }
 }
+
+// ─── Bulk pattern commands ────────────────────────────────────────────────────
+
+/// Captures the full pattern state before and after a bulk operation
+/// (paste, move selection, delete selection, flood fill, flip, rotate).
+///
+/// [execute] re-applies [after]; [undo] restores [before].
+/// Used when fine-grained cell tracking is impractical (e.g. flood fill,
+/// multi-layer selection moves).
+class PatternSnapshotCommand implements Command {
+  PatternSnapshotCommand({
+    required this.notifier,
+    required this.before,
+    required this.after,
+  });
+
+  final EditorNotifier notifier;
+  final (CrossStitchPattern, List<SnippetPalette>) before;
+  final (CrossStitchPattern, List<SnippetPalette>) after;
+
+  @override
+  void execute() => notifier.applyPatternSnapshot(after.$1, after.$2);
+
+  @override
+  void undo() => notifier.applyPatternSnapshot(before.$1, before.$2);
+}
+
+// ─── Progress commands ─────────────────────────────────────────────────────────
+
+/// Captures progress state before/after a single progress-marking operation
+/// (toggle stitch/backstitch, flood fill, mark region, clear).
+///
+/// Unlike [PatternSnapshotCommand], restores only [PatternProgress], leaving
+/// [progressLog] untouched — the log is intentionally never rolled back by
+/// undo/redo so it preserves the true stitching history.
+class ProgressSnapshotCommand implements Command {
+  const ProgressSnapshotCommand({
+    required this.before,
+    required this.after,
+    required this.apply,
+  });
+
+  final PatternProgress before;
+  final PatternProgress after;
+
+  /// Callback that applies a [PatternProgress] to the notifier.
+  /// Provided by the controller so this class has no direct [EditorNotifier] dep.
+  final void Function(PatternProgress) apply;
+
+  @override
+  void execute() => apply(after);
+
+  @override
+  void undo() => apply(before);
+}
+
+// ─── Box erase ────────────────────────────────────────────────────────────────
 
 /// Removes all stitches in a [size]×[size] box centred on (cx, cy).
 ///

@@ -41,6 +41,30 @@ class UndoManager {
     onChange?.call();
   }
 
+  /// Replaces the most recently pushed command with [cmd].
+  ///
+  /// No-op when the stack is empty. Clears the redo stack.
+  /// Used by [StitchController] to squash a single-tap + flood-fill pair
+  /// into one undo step: the flood fill replaces the prior single-tap entry,
+  /// preserving the pre-tap [before] state so a single undo rolls back both.
+  void replaceLast(Command cmd) {
+    if (_undoStack.isEmpty) return;
+    _undoStack[_undoStack.length - 1] = cmd;
+    _redoStack.clear();
+    onChange?.call();
+  }
+
+  /// Pushes [cmd] onto the undo stack WITHOUT calling [cmd.execute].
+  ///
+  /// Use when the mutation has already been applied by the notifier directly
+  /// (e.g. commitPaste, floodFill) and we only need to record the inverse for
+  /// later undo.  [cmd.execute] is still called on redo.
+  void push(Command cmd) {
+    _undoStack.add(cmd);
+    _redoStack.clear();
+    onChange?.call();
+  }
+
   /// Undoes the most recently executed command.  No-op when [canUndo] is false.
   void undo() {
     if (!canUndo) return;

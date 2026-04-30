@@ -12,7 +12,7 @@ part of 'editor_provider.dart';
 ///   pattern, filePath, driveFileId, driveParentFolderId, isFileOpen,
 ///   isDirty, compressOnSave, mode, selectedThreadId, activeLayerId,
 ///   showCompositeThreads, compositeLayer, recentThreadIds,
-///   controllerCanUndo, controllerCanRedo, _undoStack, _redoStack.
+///   controllerCanUndo, controllerCanRedo.
 ///
 /// **Edit-mode only** (→ future EditSessionState)
 ///   currentTool, drawingMode, backstitchStartPoint, backstitchChainMode,
@@ -22,8 +22,7 @@ part of 'editor_provider.dart';
 ///
 /// **Stitch-mode only** (→ future StitchSessionState)
 ///   stitchCrossMode, stitchBackMode, stitchFocusThreadId, stitchShowPageColours,
-///   currentPage, pageLayout, pendingFitPage, progressRegion,
-///   _progressUndoStack, _progressRedoStack.
+///   currentPage, pageLayout, pendingFitPage, progressRegion.
 ///
 /// **Snippet-editor only** (→ future SnippetEditorState)
 ///   snippetPalettes, snippetActivePaletteIndex.
@@ -51,8 +50,6 @@ class EditorState {
   final List<String> recentThreadIds;
   final bool controllerCanUndo;
   final bool controllerCanRedo;
-  final List<(CrossStitchPattern, List<SnippetPalette>)> _undoStack;
-  final List<(CrossStitchPattern, List<SnippetPalette>)> _redoStack;
 
   // ── Edit-mode fields ──────────────────────────────────────────────────────
   final DrawingTool currentTool;
@@ -99,8 +96,6 @@ class EditorState {
   /// dashed overlay and drives the "Mark done / Mark not done" sidebar button.
   /// Cleared when leaving stitch mode or starting a new drag.
   final Rect? progressRegion;
-  final List<PatternProgress> _progressUndoStack;
-  final List<PatternProgress> _progressRedoStack;
 
   // ── Snippet-editor fields ─────────────────────────────────────────────────
   final List<SnippetPalette> snippetPalettes;
@@ -141,10 +136,6 @@ class EditorState {
     this.currentTool = DrawingTool.fullStitch,
     this.drawingMode = DrawingMode.draw,
     this.selectedThreadId,
-    List<(CrossStitchPattern, List<SnippetPalette>)> undoStack = const [],
-    List<(CrossStitchPattern, List<SnippetPalette>)> redoStack = const [],
-    List<PatternProgress> progressUndoStack = const [],
-    List<PatternProgress> progressRedoStack = const [],
     this.isDirty = false,
     this.backstitchStartPoint,
     this.recentThreadIds = const [],
@@ -185,15 +176,10 @@ class EditorState {
     this.pendingFitPage,
     this.progressRegion,
     this.dirtyCellKeys,
-  })  : _undoStack = undoStack,
-        _redoStack = redoStack,
-        _progressUndoStack = progressUndoStack,
-        _progressRedoStack = progressRedoStack;
+  });
 
-  bool get canUndo => _undoStack.isNotEmpty || controllerCanUndo;
-  bool get canRedo => _redoStack.isNotEmpty || controllerCanRedo;
-  bool get canUndoProgress => _progressUndoStack.isNotEmpty;
-  bool get canRedoProgress => _progressRedoStack.isNotEmpty;
+  bool get canUndo => controllerCanUndo;
+  bool get canRedo => controllerCanRedo;
 
   /// True when in stitch mode — used by existing consumers without change.
   bool get stitchMode => mode == AppMode.stitch;
@@ -299,10 +285,6 @@ class EditorState {
     DrawingTool? currentTool,
     DrawingMode? drawingMode,
     Object? selectedThreadId = _sentinel,
-    List<(CrossStitchPattern, List<SnippetPalette>)>? undoStack,
-    List<(CrossStitchPattern, List<SnippetPalette>)>? redoStack,
-    List<PatternProgress>? progressUndoStack,
-    List<PatternProgress>? progressRedoStack,
     bool? isDirty,
     Object? backstitchStartPoint = _sentinel,
     List<String>? recentThreadIds,
@@ -352,10 +334,6 @@ class EditorState {
       selectedThreadId: selectedThreadId == _sentinel
           ? this.selectedThreadId
           : selectedThreadId as String?,
-      undoStack: undoStack ?? _undoStack,
-      redoStack: redoStack ?? _redoStack,
-      progressUndoStack: progressUndoStack ?? _progressUndoStack,
-      progressRedoStack: progressRedoStack ?? _progressRedoStack,
       isDirty: isDirty ?? this.isDirty,
       backstitchStartPoint: backstitchStartPoint == _sentinel
           ? this.backstitchStartPoint
