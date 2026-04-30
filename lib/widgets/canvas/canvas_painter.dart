@@ -114,8 +114,8 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
     // ── Background ──────────────────────────────────────────────────────────
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), Paint()..color = aidaColor);
 
-    // ── Reference image overlay ─────────────────────────────────────────────
-    if (referenceImage != null && referenceVisible && referenceOpacity > 0) {
+    // ── Reference image overlay (edit mode only) ────────────────────────────
+    if (!stitchMode && referenceImage != null && referenceVisible && referenceOpacity > 0) {
       canvas.drawImageRect(
         referenceImage!,
         Rect.fromLTWH(0, 0,
