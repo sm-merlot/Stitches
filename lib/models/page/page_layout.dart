@@ -324,17 +324,120 @@ class PageLayout {
           ? rightPrimaries.reduce(math.max) - nominalBoundary + 1
           : nominalBoundary - leftPrimaries.reduce(math.min);
 
-      if (bleedDepth > tolerance) continue; // too large → rely on colour/inertia
-
-      // Small bleed — keep entire object whole on majority side.
-      final Map<int, List<int>> byCross = {};
-      for (final (p, c) in groupCells) {
-        byCross.putIfAbsent(c, () => []).add(p);
+      if (bleedDepth <= tolerance) {
+        // Small object — keep entire thing whole on majority side.
+        final Map<int, List<int>> byCross = {};
+        for (final (p, c) in groupCells) {
+          byCross.putIfAbsent(c, () => []).add(p);
+        }
+        if (keepOnLeft) {
+          keepWholeLeft.add(byCross);
+        } else {
+          keepWholeRight.add(byCross);
+        }
+        continue;
       }
-      if (keepOnLeft) {
-        keepWholeLeft.add(byCross);
-      } else {
-        keepWholeRight.add(byCross);
+
+      // ── Large object (e.g. outlines spanning the pattern). ──────────────
+      // Collect cells within tolerance of boundary on BOTH sides, flood-fill
+      // into local sub-groups, and let each sub-group independently decide
+      // which page it belongs to based on its own left/right balance.
+      final localCells = <(int, int)>{};
+      for (final (p, c) in groupCells) {
+        if (p >= nominalBoundary - tolerance &&
+            p < nominalBoundary + tolerance) {
+          localCells.add((p, c));
+        }
+      }
+
+      final visitedLocal = <(int, int)>{};
+      for (final seed in localCells) {
+        if (visitedLocal.contains(seed)) continue;
+
+        // BFS within local window.
+        final component = <(int, int)>{};
+        final queue = [seed];
+        visitedLocal.add(seed);
+        int qi = 0;
+        while (qi < queue.length) {
+          final (p, c) = queue[qi++];
+          component.add((p, c));
+          for (final (dp, dc) in const [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),           (0, 1),
+            (1, -1),  (1, 0),  (1, 1),
+          ]) {
+            final neighbor = (p + dp, c + dc);
+            if (localCells.contains(neighbor) &&
+                !visitedLocal.contains(neighbor)) {
+              visitedLocal.add(neighbor);
+              queue.add(neighbor);
+            }
+          }
+        }
+
+        // Count cells on each side of boundary.
+        int subLeft = 0, subRight = 0;
+        final subLeftPrimaries = <int>{};
+        final subRightPrimaries = <int>{};
+        for (final (p, _) in component) {
+          if (p < nominalBoundary) {
+            subLeft++;
+            subLeftPrimaries.add(p);
+          } else {
+            subRight++;
+            subRightPrimaries.add(p);
+          }
+        }
+
+        // Skip if entirely on one side (no bleed to resolve).
+        if (subLeftPrimaries.isEmpty || subRightPrimaries.isEmpty) continue;
+
+        // Decide which side this sub-group belongs to.
+        bool subKeepLeft;
+        if (subLeft != subRight) {
+          subKeepLeft = subLeft > subRight;
+        } else {
+          // Tiebreaker: count connections to the full object outside
+          // the tolerance window — whichever side has more continuity wins.
+          int connectsLeft = 0, connectsRight = 0;
+          for (final (p, c) in component) {
+            for (final (dp, dc) in const [
+              (-1, -1), (-1, 0), (-1, 1),
+              (0, -1),           (0, 1),
+              (1, -1),  (1, 0),  (1, 1),
+            ]) {
+              final np = p + dp;
+              final nc = c + dc;
+              if (!localCells.contains((np, nc)) &&
+                  groupCells.contains((np, nc))) {
+                if (np < nominalBoundary) {
+                  connectsLeft++;
+                } else {
+                  connectsRight++;
+                }
+              }
+            }
+          }
+          subKeepLeft = (subLeft + connectsLeft) >= (subRight + connectsRight);
+        }
+
+        // Compute bleed depth for this sub-group.
+        final subBleedDepth = subKeepLeft
+            ? subRightPrimaries.reduce(math.max) - nominalBoundary + 1
+            : nominalBoundary - subLeftPrimaries.reduce(math.min);
+        if (subBleedDepth > tolerance) continue;
+
+        // Add keep-whole constraint for this sub-group.
+        final Map<int, List<int>> byCross = {};
+        for (final (p, c) in component) {
+          byCross.putIfAbsent(c, () => []).add(p);
+        }
+        if (subKeepLeft) {
+          keepWholeLeft.add(byCross);
+        } else {
+          keepWholeRight.add(byCross);
+        }
       }
     }
 

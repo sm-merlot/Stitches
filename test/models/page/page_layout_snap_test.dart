@@ -371,10 +371,13 @@ void main() {
       expect(result[0], equals(0));
     });
 
-    test('bleedDepth > tolerance → split (no keep-whole applied)', () {
-      // Group spans cols 2..7 across boundary at col 5 (3 cols each side).
-      // bleedDepth = max(5,6,7) - 5 + 1 = 3 > tolerance=2 → split.
-      // Large objects rely on colour-change and inertia signals instead.
+    test('large object → local sub-group analysis decides per sub-group', () {
+      // Object spans cols 2..7 across boundary at col 5 (3 cols each side).
+      // Overall bleedDepth = 3 > tolerance=2 → sub-group analysis.
+      // Local window (3..6): 2 cells left, 2 cells right → tied.
+      // Tiebreaker: connections outside window balance → keepLeft wins (≥).
+      // Sub-group bleedDepth = 2 ≤ tolerance=2 → keep-whole on left.
+      // DP pushes boundary right to include cols 5,6 → δ=+2.
       final superGroups = {
         0: {(2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0)},
       };
@@ -383,11 +386,10 @@ void main() {
         tolerance: 2,
         maxBoundary: 10,
         maxCross: 1,
-        colorAt: colorMap1D([A, A, A, A, A, B, B, B, B, B]),
+        colorAt: colorMap1D([A, A, A, A, A, A, A, B, B, B]),
         superGroups: superGroups,
       );
-      // Clean A|B at col 5 → δ=0
-      expect(result[0], equals(0));
+      expect(result[0], equals(2));
     });
 
     test('wide minority row: depth=1 regardless of row width → keep-whole', () {
