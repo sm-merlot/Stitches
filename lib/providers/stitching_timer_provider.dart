@@ -133,10 +133,12 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     final notifier = ref.read(editorProvider.notifier);
     final startDate = DateTime(sessionStart.year, sessionStart.month, sessionStart.day);
     final today = DateTime(now.year, now.month, now.day);
+    final todayIso =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     if (startDate == today) {
       // Same calendar day — attribute all minutes to today.
-      notifier.addTimeToLog(totalMinutes);
+      notifier.addTimeToLog(totalMinutes, isoDate: todayIso);
     } else {
       // Session crossed midnight — split at the day boundary.
       final midnight = today; // midnight = start of today
@@ -148,7 +150,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
         notifier.addTimeToLog(minutesPrevDay, isoDate: prevDayIso);
       }
       if (minutesToday > 0) {
-        notifier.addTimeToLog(minutesToday);
+        notifier.addTimeToLog(minutesToday, isoDate: todayIso);
       }
     }
     return totalMinutes;
