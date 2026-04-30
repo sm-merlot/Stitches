@@ -420,7 +420,7 @@ class PageLayout {
           if (step > 2) continue; // smoothness constraint
           // Inertia: penalise offset changes so the boundary follows
           // colour-change lines straight instead of jittering.
-          final candidate = prev[poi] + step * 5;
+          final candidate = prev[poi] + step * 12;
           if (candidate < best) {
             best = candidate;
             bestPrev = poi;
