@@ -1,0 +1,29 @@
+lib/providers/editor/view_state.dart
+  c567271c2db94130 1-19
+lib/providers/editor/stitch_session_state.dart
+  c567271c2db94130 1-76
+lib/providers/editor/edit_session_state.dart
+  c567271c2db94130 1-108
+lib/providers/editor/snippet_editor_state.dart
+  c567271c2db94130 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "1d7149ab3fa4f865903fd15a20df91f433b95544",
+  "prompts": {
+    "c567271c2db94130": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb504ae6-0393-41db-93ce-50082432c3d4",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 950,
+      "total_deletions": 698,
+      "accepted_lines": 947,
+      "overriden_lines": 0
+    }
+  }
+}
