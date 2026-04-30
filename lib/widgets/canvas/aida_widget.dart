@@ -201,6 +201,20 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointerEvent);
     ShortcutRouter.instance.push(this);
     _rebuildRenderCache(editorState);
+
+    // Snap to current page on mount when in stitch mode with page layout set.
+    // This covers the case where the widget is remounted (StitchView vs
+    // EditView are separate instances, so mode transitions are invisible to
+    // the ref.listen listener).
+    if (editorState.mode == AppMode.stitch &&
+        editorState.stitchSession.pageLayout != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final current = ref.read(editorProvider);
+        if (current.mode != AppMode.stitch) return;
+        _fitToPage(current, current.stitchSession.currentPage);
+      });
+    }
   }
 
   @override
@@ -636,17 +650,6 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
           _zoomPan.setViewport(1.0, const Offset(20, 20));
         }
         setState(() {});
-      }
-      // Snap to current page when entering stitch mode.
-      if (next.mode == AppMode.stitch &&
-          prev?.mode != AppMode.stitch &&
-          next.stitchSession.pageLayout != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final current = ref.read(editorProvider);
-          if (current.mode != AppMode.stitch) return;
-          _fitToPage(current, current.stitchSession.currentPage);
-        });
       }
       // Fit canvas to page on explicit navigation (page up/down, config save).
       // Uses pendingFitPage as a one-shot signal — cleared after use.
