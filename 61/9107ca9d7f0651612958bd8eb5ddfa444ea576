@@ -1,0 +1,29 @@
+test/widgets/test_helpers.dart
+  c567271c2db94130 72-79,89,116-124
+test/providers/editor/editor_snippets_selection_test.dart
+  c567271c2db94130 168,171,173,202,205,219,232,237,242,247,249,266,270-273,276,278,280-281,284,294,304,313,316,353,369,375
+integration_test/editor_flows_test.dart
+  c567271c2db94130 128-129
+test/providers/editor/editor_notifier_test.dart
+  c567271c2db94130 381,384,387,391,393,430,432-433,435,438,446,448,573,575,578,580,582,585-586,588,590,616,619-620
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "619107ca9d7f0651612958bd8eb5ddfa444ea576",
+  "prompts": {
+    "c567271c2db94130": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb504ae6-0393-41db-93ce-50082432c3d4",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 74,
+      "overriden_lines": 0
+    }
+  }
+}
