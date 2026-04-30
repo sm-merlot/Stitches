@@ -243,12 +243,15 @@ class EditorNotifier extends Notifier<EditorState>
     refreshCompositeCache();
 
     // Build page layout if page mode was saved with this pattern.
+    // Do NOT set pendingFitPage here — viewState already restores the saved
+    // viewport. Fitting to a page on open would override the user's last
+    // scroll position in view/edit mode. StitchController triggers the fit
+    // when the user actually switches to stitch mode.
     if (withSymbols.pageConfig.enabled) {
       final layout = PageLayout.compute(withSymbols.pageConfig, withSymbols);
       state = state.copyWith(
         stitchSession: state.stitchSession.copyWith(
           pageLayout: layout,
-          pendingFitPage: 0,
         ),
       );
     }
@@ -359,7 +362,7 @@ class EditorNotifier extends Notifier<EditorState>
         focusThreadId: mode == AppMode.stitch
             ? state.stitchSession.focusThreadId
             : null,
-        pendingFitPage: state.stitchSession.currentPage,
+        pendingFitPage: mode == AppMode.stitch ? state.stitchSession.currentPage : null,
       ),
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
