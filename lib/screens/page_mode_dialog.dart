@@ -27,7 +27,7 @@ class _PageModeDialogState extends State<_PageModeDialog> {
   late bool _enabled;
   late int _pageWidth;
   late int _pageHeight;
-  late int _fuzzyAmount;
+  late int _tolerance;
 
   final _widthCtrl = TextEditingController();
   final _heightCtrl = TextEditingController();
@@ -38,7 +38,7 @@ class _PageModeDialogState extends State<_PageModeDialog> {
     _enabled = widget.initial.enabled;
     _pageWidth = widget.initial.pageWidth;
     _pageHeight = widget.initial.pageHeight;
-    _fuzzyAmount = widget.initial.fuzzyAmount;
+    _tolerance = widget.initial.tolerance;
     _widthCtrl.text = '$_pageWidth';
     _heightCtrl.text = '$_pageHeight';
   }
@@ -109,12 +109,13 @@ class _PageModeDialogState extends State<_PageModeDialog> {
             const SizedBox(height: 20),
             Row(
               children: [
-                const Text('Edge fuzziness', style: TextStyle(fontSize: 14)),
+                const Text('Boundary flexibility', style: TextStyle(fontSize: 14)),
                 const SizedBox(width: 8),
                 Tooltip(
                   message:
-                      'How many stitches the page boundary can shift to align\n'
-                      'with a nearby colour change. 0 = straight edge.',
+                      'How far (in stitches) the page boundary can shift to keep\n'
+                      'colour objects whole. Also controls how smoothly the edge\n'
+                      'can curve between rows. 0 = straight edge.',
                   child: Icon(Icons.info_outline,
                       size: 16,
                       color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -126,17 +127,17 @@ class _PageModeDialogState extends State<_PageModeDialog> {
                 const Text('0', style: TextStyle(fontSize: 12)),
                 Expanded(
                   child: Slider(
-                    value: _fuzzyAmount.toDouble(),
+                    value: _tolerance.toDouble(),
                     min: 0,
-                    max: 3,
-                    divisions: 3,
-                    label: '$_fuzzyAmount stitches',
+                    max: 8,
+                    divisions: 8,
+                    label: '$_tolerance stitches',
                     onChanged: _enabled
-                        ? (v) => setState(() => _fuzzyAmount = v.round())
+                        ? (v) => setState(() => _tolerance = v.round())
                         : null,
                   ),
                 ),
-                const Text('3', style: TextStyle(fontSize: 12)),
+                const Text('8', style: TextStyle(fontSize: 12)),
               ],
             ),
           ],
@@ -153,7 +154,7 @@ class _PageModeDialogState extends State<_PageModeDialog> {
               enabled: _enabled,
               pageWidth: _pageWidth.clamp(1, 9999),
               pageHeight: _pageHeight.clamp(1, 9999),
-              fuzzyAmount: _fuzzyAmount,
+              tolerance: _tolerance,
             ),
           ),
           child: const Text('Apply'),

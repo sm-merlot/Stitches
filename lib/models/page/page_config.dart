@@ -9,49 +9,55 @@ class PageConfig {
   /// Number of rows (stitches) per page.
   final int pageHeight;
 
-  /// Maximum stitches a fuzzy edge can shift from the nominal boundary (0–3).
-  /// 0 = straight edge, 3 = maximum randomisation.
-  final int fuzzyAmount;
+  /// Cell count controlling boundary flexibility (0 = straight edge, default ~4).
+  ///
+  /// Plays double duty:
+  ///   1. **Object rule**: a super-group that bleeds ≤ tolerance cells across a
+  ///      boundary is kept whole on its majority page.
+  ///   2. **Edge shift**: the smooth-edge DP may deviate at most ±tolerance cells
+  ///      from the nominal boundary at any row.
+  final int tolerance;
 
   const PageConfig({
     required this.enabled,
     required this.pageWidth,
     required this.pageHeight,
-    required this.fuzzyAmount,
+    required this.tolerance,
   });
 
   static const PageConfig disabled = PageConfig(
     enabled: false,
     pageWidth: 50,
     pageHeight: 50,
-    fuzzyAmount: 2,
+    tolerance: 4,
   );
 
   PageConfig copyWith({
     bool? enabled,
     int? pageWidth,
     int? pageHeight,
-    int? fuzzyAmount,
+    int? tolerance,
   }) =>
       PageConfig(
         enabled: enabled ?? this.enabled,
         pageWidth: pageWidth ?? this.pageWidth,
         pageHeight: pageHeight ?? this.pageHeight,
-        fuzzyAmount: fuzzyAmount ?? this.fuzzyAmount,
+        tolerance: tolerance ?? this.tolerance,
       );
 
   Map<String, dynamic> toYaml() => {
         'enabled': enabled,
         'pageWidth': pageWidth,
         'pageHeight': pageHeight,
-        'fuzzyAmount': fuzzyAmount,
+        'tolerance': tolerance,
       };
 
   factory PageConfig.fromYaml(Map yaml) => PageConfig(
         enabled: yaml['enabled'] as bool? ?? false,
         pageWidth: yaml['pageWidth'] as int? ?? 50,
         pageHeight: yaml['pageHeight'] as int? ?? 50,
-        fuzzyAmount: yaml['fuzzyAmount'] as int? ?? 2,
+        // Accept both new 'tolerance' key and legacy 'fuzzyAmount' for migration.
+        tolerance: yaml['tolerance'] as int? ?? yaml['fuzzyAmount'] as int? ?? 4,
       );
 
   @override
@@ -60,8 +66,8 @@ class PageConfig {
       enabled == other.enabled &&
       pageWidth == other.pageWidth &&
       pageHeight == other.pageHeight &&
-      fuzzyAmount == other.fuzzyAmount;
+      tolerance == other.tolerance;
 
   @override
-  int get hashCode => Object.hash(enabled, pageWidth, pageHeight, fuzzyAmount);
+  int get hashCode => Object.hash(enabled, pageWidth, pageHeight, tolerance);
 }

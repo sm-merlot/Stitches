@@ -288,7 +288,7 @@ class FileService {
         buf.writeln('    enabled: ${pc.enabled}');
         buf.writeln('    pageWidth: ${pc.pageWidth}');
         buf.writeln('    pageHeight: ${pc.pageHeight}');
-        buf.writeln('    fuzzyAmount: ${pc.fuzzyAmount}');
+        buf.writeln('    tolerance: ${pc.tolerance}');
       }
       if (!prog.isEmpty) {
         buf.writeln('  progress:');
