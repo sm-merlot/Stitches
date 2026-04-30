@@ -8,7 +8,6 @@ mixin SelectionMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
   void warnNoSelection();
-  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
   List<Stitch> _stitchesWithAdded(List<Stitch> existing, Stitch stitch);
   CrossStitchPattern _patternWithActiveLayerStitches(
       CrossStitchPattern p, List<Stitch> s);
@@ -182,11 +181,9 @@ mixin SelectionMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       compositeLayer: newComposite,
       dirtyCellKeys: dirtyCells.isEmpty ? null : dirtyCells,
       isDirty: true,
-      redoStack: [],
     );
     // Debounced full refresh for stitch-count equivalents.
     refreshCompositeCache();
@@ -225,10 +222,8 @@ mixin SelectionMixin on Notifier<EditorState> {
       state = state.copyWith(
         pattern: newPattern,
         selectionRect: newRect,
-        undoStack: _buildUndoStack(),
         compositeLayer: null,
         isDirty: true,
-        redoStack: [],
       );
       refreshCompositeCache();
       return;
@@ -252,10 +247,8 @@ mixin SelectionMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       selectionRect: newRect,
-      undoStack: _buildUndoStack(),
       compositeLayer: null,
       isDirty: true,
-      redoStack: [],
     );
     refreshCompositeCache();
   }
@@ -280,10 +273,8 @@ mixin SelectionMixin on Notifier<EditorState> {
       state = state.copyWith(
         pattern: newPattern,
         selectionRect: null,
-        undoStack: _buildUndoStack(),
         compositeLayer: null,
         isDirty: true,
-        redoStack: [],
       );
       refreshCompositeCache();
       return;
@@ -300,10 +291,8 @@ mixin SelectionMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       selectionRect: null,
-      undoStack: _buildUndoStack(),
       compositeLayer: null,
       isDirty: true,
-      redoStack: [],
     );
     refreshCompositeCache();
   }
@@ -461,7 +450,6 @@ mixin SelectionMixin on Notifier<EditorState> {
             stitches: layer.stitches.map((s) => inSel(s) ? _flipStitchH(s, l, t, w) : s).toList(),
           );
         }),
-        undoStack: _buildUndoStack(),
       );
       return;
     }
@@ -474,7 +462,6 @@ mixin SelectionMixin on Notifier<EditorState> {
         .toList();
     state = state.copyWith(
       pattern: _patternWithActiveLayerStitches(state.pattern, newStitches),
-      undoStack: _buildUndoStack(),
     );
   }
 
@@ -500,7 +487,6 @@ mixin SelectionMixin on Notifier<EditorState> {
             stitches: layer.stitches.map((s) => inSel(s) ? _flipStitchV(s, l, t, h) : s).toList(),
           );
         }),
-        undoStack: _buildUndoStack(),
       );
       return;
     }
@@ -513,7 +499,6 @@ mixin SelectionMixin on Notifier<EditorState> {
         .toList();
     state = state.copyWith(
       pattern: _patternWithActiveLayerStitches(state.pattern, newStitches),
-      undoStack: _buildUndoStack(),
     );
   }
 
@@ -543,7 +528,6 @@ mixin SelectionMixin on Notifier<EditorState> {
           );
         }),
         selectionRect: newRect,
-        undoStack: _buildUndoStack(),
       );
       return;
     }
@@ -557,7 +541,6 @@ mixin SelectionMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: _patternWithActiveLayerStitches(state.pattern, newStitches),
       selectionRect: newRect,
-      undoStack: _buildUndoStack(),
     );
   }
 

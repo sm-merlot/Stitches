@@ -1,11 +1,13 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart' hide UndoManager;
+import '../../models/progress/pattern_progress.dart';
 import '../../providers/editor/editor_provider.dart';
 import '../../widgets/canvas/canvas_viewport.dart';
 import '../../widgets/handlers/hover_handler.dart';
 import '../../widgets/handlers/page_nav_handler.dart';
 import '../../widgets/handlers/progress_handler.dart';
 import 'canvas_callbacks.dart';
+import '../commands/command.dart';
 import '../commands/shortcut_router.dart';
 import '../commands/undo_manager.dart';
 
@@ -47,6 +49,10 @@ class StitchController implements ShortcutHandler {
   ProgressHandler? _progress;
   static const _pageNav = PageNavHandler();
 
+  // Stores the pre-single-tap progress so a subsequent flood fill can squash
+  // both into one undo step via [UndoManager.replaceLast].
+  PatternProgress? _pendingSquashBefore;
+
   /// Read by [AidaWidget] overlay painter.
   HoverHandler? get hover => _hover;
   ProgressHandler? get progress => _progress;
@@ -54,20 +60,75 @@ class StitchController implements ShortcutHandler {
   /// Wire up pointer handlers with view-level callbacks.
   void attachCanvas(CanvasCallbacks cb) {
     final n = _notifier;
+    undoManager.onChange = n.updateControllerUndoState;
     _hover = HoverHandler(scheduleRebuild: cb.scheduleRebuild);
     _progress = ProgressHandler(
-      onToggleStitchDone: n.toggleStitchDone,
-      onToggleBackstitchDone: n.toggleBackstitchDone,
-      onFloodFillDone: n.floodFillDone,
+      onToggleStitchDone: (x, y) {
+        final before = _getState().pattern.progress;
+        n.toggleStitchDone(x, y);
+        final after = _getState().pattern.progress;
+        if (before != after) {
+          _pendingSquashBefore = before;
+          undoManager.push(ProgressSnapshotCommand(
+            before: before, after: after, apply: n.applyProgressSnapshot));
+        } else {
+          _pendingSquashBefore = null;
+        }
+      },
+      onToggleBackstitchDone: (x1, y1, x2, y2) {
+        _pendingSquashBefore = null;
+        final before = _getState().pattern.progress;
+        n.toggleBackstitchDone(x1, y1, x2, y2);
+        final after = _getState().pattern.progress;
+        if (before != after) {
+          undoManager.push(ProgressSnapshotCommand(
+            before: before, after: after, apply: n.applyProgressSnapshot));
+        }
+      },
+      onFloodFillDone: (x, y, {bool? originalStartIsDone, bool afterSingleTap = false}) {
+        if (afterSingleTap && _pendingSquashBefore != null) {
+          final realBefore = _pendingSquashBefore!;
+          _pendingSquashBefore = null;
+          n.floodFillDone(x, y,
+              originalStartIsDone: originalStartIsDone, afterSingleTap: afterSingleTap);
+          final after = _getState().pattern.progress;
+          if (realBefore != after) {
+            undoManager.replaceLast(ProgressSnapshotCommand(
+              before: realBefore, after: after, apply: n.applyProgressSnapshot));
+          }
+        } else {
+          _pendingSquashBefore = null;
+          final before = _getState().pattern.progress;
+          n.floodFillDone(x, y,
+              originalStartIsDone: originalStartIsDone, afterSingleTap: afterSingleTap);
+          final after = _getState().pattern.progress;
+          if (before != after) {
+            undoManager.push(ProgressSnapshotCommand(
+              before: before, after: after, apply: n.applyProgressSnapshot));
+          }
+        }
+      },
       onSetProgressRegion: n.setProgressRegion,
       scheduleRebuild: cb.scheduleRebuild,
+    );
+    n.registerUndoDelegate(
+      canUndo: () => undoManager.canUndo,
+      canRedo: () => undoManager.canRedo,
+      undo: undoManager.undo,
+      redo: undoManager.redo,
+      clear: undoManager.clear,
+      pushProgressSnapshot: (before, after) => undoManager.push(
+        ProgressSnapshotCommand(
+          before: before, after: after, apply: n.applyProgressSnapshot)),
     );
   }
 
   /// Release pointer handlers. Called by [AidaWidget.dispose].
   void detachCanvas() {
+    _notifier.unregisterUndoDelegate();
     _hover = null;
     _progress = null;
+    _pendingSquashBefore = null;
   }
 
   // ── Pointer event dispatch ─────────────────────────────────────────────────
@@ -192,15 +253,15 @@ class StitchController implements ShortcutHandler {
         return true;
       }
       if (key == LogicalKeyboardKey.keyZ && !shift) {
-        _notifier.undoProgress();
+        _notifier.undo();
         return true;
       }
       if (key == LogicalKeyboardKey.keyZ && shift) {
-        _notifier.redoProgress();
+        _notifier.redo();
         return true;
       }
       if (key == LogicalKeyboardKey.keyY) {
-        _notifier.redoProgress();
+        _notifier.redo();
         return true;
       }
       return false;

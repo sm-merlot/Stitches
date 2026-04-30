@@ -274,6 +274,8 @@ void main() {
         canRedo: () => false,
         undo: () {},
         redo: () {},
+        clear: () {},
+        pushProgressSnapshot: (before, after) {},
       );
       notifier(c).updateControllerUndoState();
       expect(editorState(c).controllerCanUndo, isFalse);
@@ -289,6 +291,8 @@ void main() {
         canRedo: () => true,
         undo: () {},
         redo: () {},
+        clear: () {},
+        pushProgressSnapshot: (before, after) {},
       );
       notifier(c).updateControllerUndoState(); // reflect registered delegate
       expect(editorState(c).controllerCanUndo, isTrue);
@@ -306,29 +310,20 @@ void main() {
         canRedo: () => false,
         undo: () => undoCalled = true,
         redo: () {},
+        clear: () {},
+        pushProgressSnapshot: (before, after) {},
       );
       notifier(c).updateControllerUndoState();
       notifier(c).undo();
       expect(undoCalled, isTrue);
     });
 
-    test('notifier.undo() falls through to snapshot stack when delegate empty', () {
-      // Push something to snapshot stack via a full addStitch.
+    test('notifier.undo() is no-op when no delegate registered', () {
+      // No delegate registered — undo should not throw and state unchanged.
       notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       expect(stitches(c).whereType<FullStitch>(), hasLength(1));
-
-      // Register delegate that says it cannot undo.
-      notifier(c).registerUndoDelegate(
-        canUndo: () => false,
-        canRedo: () => false,
-        undo: () {},
-        redo: () {},
-      );
-      notifier(c).updateControllerUndoState();
-
-      // notifier.undo() should fall through to snapshot undo.
-      notifier(c).undo();
-      expect(stitches(c).whereType<FullStitch>(), isEmpty);
+      notifier(c).undo(); // no-op: no delegate
+      expect(stitches(c).whereType<FullStitch>(), hasLength(1));
     });
   });
 }

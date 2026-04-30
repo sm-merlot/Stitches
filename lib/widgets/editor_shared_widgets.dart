@@ -84,7 +84,7 @@ class ProgressInfoBar extends ConsumerWidget {
 
     final progress = state.pattern.progress;
     // Keep the bar visible when there's undoable progress, even if cleared.
-    if (progress.isEmpty && !state.canUndoProgress) {
+    if (progress.isEmpty && !state.canUndo) {
       return const SizedBox.shrink();
     }
 
@@ -177,8 +177,8 @@ class ProgressInfoBar extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 tooltip: 'Undo progress',
-                onPressed: state.canUndoProgress
-                    ? () => ref.read(editorProvider.notifier).undoProgress()
+                onPressed: state.canUndo
+                    ? () => ref.read(editorProvider.notifier).undo()
                     : null,
               ),
               IconButton(
@@ -187,8 +187,8 @@ class ProgressInfoBar extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 tooltip: 'Redo progress',
-                onPressed: state.canRedoProgress
-                    ? () => ref.read(editorProvider.notifier).redoProgress()
+                onPressed: state.canRedo
+                    ? () => ref.read(editorProvider.notifier).redo()
                     : null,
               ),
             ],

@@ -16,6 +16,9 @@ import 'command.dart';
 /// so the toolbar reflects the live can-undo / can-redo state without the
 /// caller needing a separate notification call after each operation.
 class UndoManager {
+  /// Maximum number of undo entries kept.  Oldest entries are dropped first.
+  static const int maxDepth = 200;
+
   /// Called after every state-changing operation ([execute], [undo], [redo]).
   void Function()? onChange;
 
@@ -36,6 +39,31 @@ class UndoManager {
   /// Clears the redo stack — branching redo is not supported.
   void execute(Command cmd) {
     cmd.execute();
+    _undoStack.add(cmd);
+    if (_undoStack.length > maxDepth) _undoStack.removeAt(0);
+    _redoStack.clear();
+    onChange?.call();
+  }
+
+  /// Replaces the most recently pushed command with [cmd].
+  ///
+  /// No-op when the stack is empty. Clears the redo stack.
+  /// Used by [StitchController] to squash a single-tap + flood-fill pair
+  /// into one undo step: the flood fill replaces the prior single-tap entry,
+  /// preserving the pre-tap [before] state so a single undo rolls back both.
+  void replaceLast(Command cmd) {
+    if (_undoStack.isEmpty) return;
+    _undoStack[_undoStack.length - 1] = cmd;
+    _redoStack.clear();
+    onChange?.call();
+  }
+
+  /// Pushes [cmd] onto the undo stack WITHOUT calling [cmd.execute].
+  ///
+  /// Use when the mutation has already been applied by the notifier directly
+  /// (e.g. commitPaste, floodFill) and we only need to record the inverse for
+  /// later undo.  [cmd.execute] is still called on redo.
+  void push(Command cmd) {
     _undoStack.add(cmd);
     _redoStack.clear();
     onChange?.call();

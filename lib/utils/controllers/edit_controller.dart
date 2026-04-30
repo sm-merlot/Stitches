@@ -93,6 +93,19 @@ class EditController implements CanvasEditController, ShortcutHandler {
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
 
+  // ── Snapshot helper ────────────────────────────────────────────────────────
+
+  /// Calls [action], then pushes a [PatternSnapshotCommand] if the pattern changed.
+  void _withSnapshot(void Function() action) {
+    final before = (_getState().pattern, _getState().snippetPalettes);
+    action();
+    final after = (_getState().pattern, _getState().snippetPalettes);
+    if (before.$1 != after.$1 || before.$2 != after.$2) {
+      undoManager.push(PatternSnapshotCommand(
+          notifier: _notifier, before: before, after: after));
+    }
+  }
+
   /// Wire up pointer handlers with view-level callbacks.
   /// Called by [AidaWidget.initState] after the widget is mounted.
   @override
@@ -102,7 +115,14 @@ class EditController implements CanvasEditController, ShortcutHandler {
     undoManager.onChange = n.updateControllerUndoState;
     _hover = HoverHandler(scheduleRebuild: cb.scheduleRebuild);
     _paste = PasteHandler(
-      onCommitPaste: n.commitPaste,
+      onCommitPaste: (dx, dy) {
+        final before = (_getState().pattern, _getState().snippetPalettes);
+        n.commitPaste(dx, dy);
+        final after = (_getState().pattern, _getState().snippetPalettes);
+        if (before.$1 != after.$1) {
+          undoManager.push(PatternSnapshotCommand(notifier: n, before: before, after: after));
+        }
+      },
       onCancelSelection: n.cancelSelection,
       scheduleRebuild: cb.scheduleRebuild,
     );
@@ -153,7 +173,14 @@ class EditController implements CanvasEditController, ShortcutHandler {
         undoManager.execute(RemoveStitchesInBoxCommand(
             notifier: n, cx: cx, cy: cy, size: size, removed: removed));
       },
-      onFloodFill: n.floodFill,
+      onFloodFill: (x, y, {required bool erase}) {
+        final before = (_getState().pattern, _getState().snippetPalettes);
+        n.floodFill(x, y, erase: erase);
+        final after = (_getState().pattern, _getState().snippetPalettes);
+        if (before.$1 != after.$1) {
+          undoManager.push(PatternSnapshotCommand(notifier: n, before: before, after: after));
+        }
+      },
       onPickColor: n.pickColorAtCell,
       onSetBackstitchStart: n.setBackstitchStart,
       onLayerWarning: cb.onWarning,
@@ -161,7 +188,14 @@ class EditController implements CanvasEditController, ShortcutHandler {
     );
     _select = SelectHandler(
       onSetSelectionRect: n.setSelectionRect,
-      onMoveSelection: n.moveSelection,
+      onMoveSelection: (dx, dy) {
+        final before = (_getState().pattern, _getState().snippetPalettes);
+        n.moveSelection(dx, dy);
+        final after = (_getState().pattern, _getState().snippetPalettes);
+        if (before.$1 != after.$1) {
+          undoManager.push(PatternSnapshotCommand(notifier: n, before: before, after: after));
+        }
+      },
       onWarning: cb.onWarning,
       scheduleRebuild: cb.scheduleRebuild,
     );
@@ -171,6 +205,8 @@ class EditController implements CanvasEditController, ShortcutHandler {
       canRedo: () => undoManager.canRedo,
       undo: undoManager.undo,
       redo: undoManager.redo,
+      clear: undoManager.clear,
+      pushProgressSnapshot: (before, after) {}, // no progress ops in edit mode
     );
   }
 
@@ -488,7 +524,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
       if (shift && key == LogicalKeyboardKey.keyH) {
         if (state.drawingMode == DrawingMode.select &&
             state.selectionRect != null) {
-          _notifier.flipSelectionH();
+          _withSnapshot(_notifier.flipSelectionH);
         } else if (state.drawingMode == DrawingMode.paste) {
           _notifier.flipClipboardH();
         } else {
@@ -499,7 +535,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
       if (shift && key == LogicalKeyboardKey.keyV) {
         if (state.drawingMode == DrawingMode.select &&
             state.selectionRect != null) {
-          _notifier.flipSelectionV();
+          _withSnapshot(_notifier.flipSelectionV);
         } else if (state.drawingMode == DrawingMode.paste) {
           _notifier.flipClipboardV();
         } else {
@@ -510,7 +546,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
       if (shift && key == LogicalKeyboardKey.bracketRight) {
         if (state.drawingMode == DrawingMode.select &&
             state.selectionRect != null) {
-          _notifier.rotateSelectionCW();
+          _withSnapshot(_notifier.rotateSelectionCW);
         } else if (state.drawingMode == DrawingMode.paste) {
           _notifier.rotateClipboardCW();
         } else {
@@ -521,9 +557,11 @@ class EditController implements CanvasEditController, ShortcutHandler {
       if (shift && key == LogicalKeyboardKey.bracketLeft) {
         if (state.drawingMode == DrawingMode.select &&
             state.selectionRect != null) {
-          _notifier.rotateSelectionCW();
-          _notifier.rotateSelectionCW();
-          _notifier.rotateSelectionCW();
+          _withSnapshot(() {
+            _notifier.rotateSelectionCW();
+            _notifier.rotateSelectionCW();
+            _notifier.rotateSelectionCW();
+          });
         } else if (state.drawingMode == DrawingMode.paste) {
           _notifier.rotateClipboardCW();
           _notifier.rotateClipboardCW();
@@ -573,7 +611,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
         _notifier.cancelSelection();
       case LogicalKeyboardKey.delete:
       case LogicalKeyboardKey.backspace:
-        _notifier.deleteSelection();
+        _withSnapshot(_notifier.deleteSelection);
       case LogicalKeyboardKey.slash:
         if (shift && onShowShortcuts != null) {
           onShowShortcuts!();

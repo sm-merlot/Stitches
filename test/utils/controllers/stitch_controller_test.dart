@@ -16,9 +16,9 @@ class _FakeNotifier implements EditorNotifier {
   }
 
   @override
-  void undoProgress() => calls.add('undoProgress');
+  void undo() => calls.add('undo');
   @override
-  void redoProgress() => calls.add('redoProgress');
+  void redo() => calls.add('redo');
   @override
   void setDrawingMode(DrawingMode m) => calls.add('setDrawingMode:${m.name}');
   @override
