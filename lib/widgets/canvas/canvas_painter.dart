@@ -167,11 +167,16 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
         final isDone = stitchMode && progress.isBackstitchDone(
             stitch.x1, stitch.y1, stitch.x2, stitch.y2);
         if (stitchMode) {
-          if (!isDone) {
+          final hasFocus = stitchFocusThreadId != null;
+          final isFocused = !hasFocus || stitchFocusThreadId == stitch.threadId;
+          if (hasFocus && !isFocused) {
+            // Unfocused: pale colour if done, pale greyscale if undone.
+            c = isDone
+                ? _paleColor(thread.color)
+                : _paleGreyscale(thread.color);
+          } else if (!isDone) {
+            // Focused/no-focus undone → greyscale.
             c = _bwGreyscale(c);
-          } else if (stitchFocusThreadId != null &&
-              stitchFocusThreadId != stitch.threadId) {
-            c = _muteColor(c);
           }
         }
         if (_isBWStitchMode && _isBackstitchFocused(stitch)) {
@@ -194,17 +199,22 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
           final sCoords = stitch.cellCoords;
           if (sCoords != null && !_stitchOnPage(sCoords.x, sCoords.y)) continue;
 
-          // Skip done cells in B&W mode.
-          if (sCoords != null && progress.completedStitches.contains(sCoords)) continue;
-
           final thread = cs.resolvedThread;
-          if (!symbolIsVisible(thread.symbol)) continue;
-
           final hasFocus = stitchFocusThreadId != null;
           final isFocused = hasFocus && thread.dmcCode == stitchFocusThreadId;
-          final symbolColor = hasFocus && !isFocused
-              ? const Color(0xFF999999)
-              : const Color(0xFF000000);
+          final isDone = sCoords != null && progress.completedStitches.contains(sCoords);
+
+          // Skip done cells — unless unfocused (unfocused done show pale symbol).
+          if (isDone && (!hasFocus || isFocused)) continue;
+
+          if (!symbolIsVisible(thread.symbol)) continue;
+
+          final Color symbolColor;
+          if (hasFocus && !isFocused) {
+            symbolColor = const Color(0x60999999); // pale grey for unfocused
+          } else {
+            symbolColor = const Color(0xFF000000);
+          }
           _drawStitchSymbolBW(canvas, stitch, thread.symbol, symbolColor);
         }
       }
@@ -477,19 +487,28 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
   Color? _resolveBackstitchColor(String threadId, Color original) {
     final hasFocus = stitchFocusThreadId != null;
     final isFocused = !hasFocus || stitchFocusThreadId == threadId;
-    if (hasFocus && !isFocused) return _greyColor(original);
+    if (hasFocus && !isFocused) {
+      return _isBWStitchMode ? _paleColor(original) : _unfocusedGrey;
+    }
     if (stitchCrossMode) return null; // cross mode: hide backstitches
     return original;
   }
 
   static const Color _unfocusedGrey = Color(0xA0B8B8B8);
-  static Color _greyColor(Color c) => _unfocusedGrey;
 
-  static Color _muteColor(Color c) {
+  static Color _paleColor(Color c) {
     final hsl = HSLColor.fromColor(c);
-    return hsl.withSaturation((hsl.saturation * 0.5).clamp(0.0, 1.0))
-        .withLightness((hsl.lightness * 0.85 + 0.10).clamp(0.0, 1.0))
+    return hsl
+        .withSaturation((hsl.saturation * 0.3).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness * 0.5 + 0.45).clamp(0.0, 0.95))
         .toColor();
+  }
+
+  static Color _paleGreyscale(Color c) {
+    final l = c.computeLuminance();
+    final grey = (0.72 + l * 0.22).clamp(0.0, 1.0);
+    final v = (grey * 255).round();
+    return Color.fromARGB(128, v, v, v);
   }
 
   static Color _bwGreyscale(Color c) {

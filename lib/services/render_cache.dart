@@ -264,9 +264,6 @@ class RenderCache {
     final hasFocus = focusId != null;
     final isFocused = !hasFocus || effectiveDmcCode == focusId;
 
-    // Focus greying: unfocused cells shown at a uniform grey.
-    if (hasFocus && !isFocused) return _unfocusedGrey;
-
     // Back mode: all cross-stitches greyed so backstitches stand out.
     if (config.stitchBackMode) return _unfocusedGrey;
 
@@ -274,14 +271,23 @@ class RenderCache {
     if (config.stitchMode) {
       final xy = stitch.cellCoords;
       final isDone = xy != null && config.progress.completedStitches.contains(xy);
+
+      if (hasFocus && !isFocused) {
+        // Unfocused + done → pale version of actual colour (still recognisable).
+        if (isDone) return _paleColor(baseColor);
+        // Unfocused + undone → pale greyscale (symbol still drawn by painter).
+        return _paleGreyscale(baseColor);
+      }
+
       if (!isDone) {
-        // Undone → subtle greyscale tint, distinguishable but clearly not done.
+        // Focused/no-focus undone → subtle greyscale tint.
         return _bwGreyscale(baseColor);
       }
-      // Done + non-focused → muted colour so completed work doesn't overshadow focus.
-      if (hasFocus && !isFocused) return _muteColor(baseColor); // unreachable (caught above)
       return baseColor;
     }
+
+    // Focus greying (design mode): unfocused cells shown at a uniform grey.
+    if (hasFocus && !isFocused) return _unfocusedGrey;
 
     return baseColor;
   }
@@ -312,13 +318,22 @@ class RenderCache {
     return Color.fromARGB(255, v, v, v);
   }
 
-  /// Slightly desaturates + lightens a colour for done-but-non-focused stitches
-  /// so they remain identifiable without overpowering the focus highlight.
-  static Color _muteColor(Color c) {
+  /// Pale version of the actual colour — used for unfocused done stitches.
+  /// Keeps hue, desaturates heavily, and pushes lightness toward white.
+  static Color _paleColor(Color c) {
     final hsl = HSLColor.fromColor(c);
     return hsl
-        .withSaturation((hsl.saturation * 0.5).clamp(0.0, 1.0))
-        .withLightness((hsl.lightness * 0.85 + 0.10).clamp(0.0, 1.0))
+        .withSaturation((hsl.saturation * 0.3).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness * 0.5 + 0.45).clamp(0.0, 0.95))
         .toColor();
+  }
+
+  /// Pale greyscale — used for unfocused undone stitches.
+  /// Same greyscale mapping as [_bwGreyscale] but with alpha for translucency.
+  static Color _paleGreyscale(Color c) {
+    final l = c.computeLuminance();
+    final grey = (0.72 + l * 0.22).clamp(0.0, 1.0);
+    final v = (grey * 255).round();
+    return Color.fromARGB(128, v, v, v);
   }
 }
