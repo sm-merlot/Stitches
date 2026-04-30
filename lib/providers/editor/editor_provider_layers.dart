@@ -116,6 +116,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void deleteLayer(String id) {
@@ -195,14 +196,26 @@ mixin LayersMixin on Notifier<EditorState> {
   }
 
   void setLayerOpacity(String id, double opacity) {
+    _opacityDebounce?.cancel();
     final clamped = opacity.clamp(0.0, 1.0);
+    final changedLayer = state.pattern.layers.firstWhere((l) => l.id == id);
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
+
+    // Use patchAffectedLayer (same as toggleLayerVisible) to avoid blanking
+    // the canvas on every slider tick.
+    final affectedCells = changedLayer.stitchesByCell.keys.toSet();
+    final oldComposite = state.compositeLayer;
+    final newComposite = oldComposite != null
+        ? StitchCompositor.patchAffectedLayer(oldComposite, newPattern, changedLayer)
+        : StitchCompositor.computeComposite(newPattern);
+
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeLayer: null);
-    _opacityDebounce?.cancel();
-    _opacityDebounce =
-        Timer(const Duration(milliseconds: 150), refreshCompositeCache);
+      pattern: newPattern,
+      isDirty: true,
+      compositeLayer: newComposite,
+      dirtyCellKeys: affectedCells.isEmpty ? null : affectedCells,
+    );
   }
 
   /// [delta] = +1 moves layer up (toward top/front), -1 moves down.
@@ -309,6 +322,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Moves [layerId] to top-level, inserted below [prevTopLevelId].

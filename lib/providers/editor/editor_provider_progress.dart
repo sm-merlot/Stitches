@@ -235,16 +235,27 @@ mixin ProgressMixin on Notifier<EditorState> {
     final prog = state.pattern.progress;
     final startIsDone = originalStartIsDone ?? prog.completedStitches.contains(Cell(x, y));
 
-    // Build a map of cell → topmost visible thread by iterating layers in
-    // render order (later layers paint on top, so last write wins).
-    // This matches exactly what the user sees on the composite canvas.
+    // Build a map of cell → topmost visible thread from the composite layer.
+    // This matches exactly what the user sees (including blended/composite cells).
     final topThread = <Cell, String>{};
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        final coords = _crossStitchXY(stitch);
-        if (coords != null) topThread[coords] = stitch.threadId;
+    final composite = state.compositeLayer;
+    if (composite != null) {
+      for (final e in composite.fullStitches.entries) {
+        topThread[e.key] = e.value.resolvedThread.dmcCode;
+      }
+      for (final cs in composite.otherStitches) {
+        final cell = cs.stitch.cellCoords;
+        if (cell != null) topThread[cell] = cs.resolvedThread.dmcCode;
+      }
+    } else {
+      // Fallback: raw layer scan when composite is not yet available.
+      for (final layer in state.pattern.layers) {
+        if (!layer.visible) continue;
+        for (final stitch in layer.stitches) {
+          if (stitch is BackStitch) continue;
+          final coords = _crossStitchXY(stitch);
+          if (coords != null) topThread[coords] = stitch.threadId;
+        }
       }
     }
 
@@ -486,7 +497,12 @@ mixin ProgressMixin on Notifier<EditorState> {
 
   /// Returns the threadId of the topmost visible non-backstitch at (x, y),
   /// matching what the user sees on the composite canvas. Null if no stitch.
+  /// Uses [compositeLayer] for O(1) lookup; falls back to raw layer scan if
+  /// the composite is not yet available.
   String? _topThreadAt(int x, int y) {
+    final composite = state.compositeLayer;
+    if (composite != null) return composite.topThreadAt(Cell(x, y));
+    // Fallback: raw layer scan (should rarely be needed in practice).
     final target = Cell(x, y);
     String? result;
     for (final layer in state.pattern.layers) {
@@ -494,15 +510,16 @@ mixin ProgressMixin on Notifier<EditorState> {
       for (final stitch in layer.stitches) {
         if (stitch is BackStitch) continue;
         final coords = _crossStitchXY(stitch);
-        if (coords == target) {
-          result = stitch.threadId; // last write wins = topmost layer
-        }
+        if (coords == target) result = stitch.threadId;
       }
     }
     return result;
   }
 
   bool _hasCrossStitchAt(int x, int y) {
+    final composite = state.compositeLayer;
+    if (composite != null) return composite.hasCrossStitchAt(Cell(x, y));
+    // Fallback: raw layer scan.
     final target = Cell(x, y);
     for (final layer in state.pattern.layers) {
       if (!layer.visible) continue;

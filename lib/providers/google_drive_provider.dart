@@ -62,8 +62,10 @@ class DriveNotifier extends Notifier<DriveState> {
     // Schedule after build() returns so `state` is initialised before
     // checkConnection() tries to write it (isConfigured=false short-circuits
     // the await, making the first write synchronous otherwise).
+    // Set isConfigured immediately (sync check) so the Drive section in the
+    // Open modal appears on first open even before checkConnection completes.
     Future.microtask(checkConnection);
-    return const DriveState();
+    return DriveState(isConfigured: _auth.isConfigured);
   }
 
   /// Checks stored credentials and updates status accordingly.
