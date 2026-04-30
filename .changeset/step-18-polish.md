@@ -22,6 +22,9 @@
   element tree correctly. Colour picker and DMC picker gain `autofocus: true`.
 - **Reference image visible in stitch mode** — painter now checks `!stitchMode`
   before drawing the overlay; reference image is edit-mode only.
+- **Aida colour removed from canvas** — canvas background is always white;
+  aida colour moved to Pattern Info as metadata (still used in PDF / PNG
+  export). Toolbar aida button removed.
 - **Drive Open modal hid Drive section on first render** — `build()` now
   returns `DriveState(isConfigured: _auth.isConfigured)` synchronously.
 - **Stitch demo used pattern aida colour** — demo background is always white

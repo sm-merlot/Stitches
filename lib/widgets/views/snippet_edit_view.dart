@@ -60,7 +60,6 @@ class _SnippetEditViewState extends ConsumerState<SnippetEditView> {
           showSaveAsSnippetButton: false,
           showSpriteSheetButton: false,
           showWholeCanvasTransforms: true,
-          showAidaButton: false,
           onPasteFromSnippet: widget.onPasteFromSnippet,
         ),
       ],

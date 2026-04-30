@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/aida_presets.dart';
+
 import '../../data/dmc_colors.dart';
 import '../../models/cell.dart';
 import '../../models/stitch/stitch.dart';
@@ -44,7 +44,7 @@ class EditorToolbar extends ConsumerWidget {
   final bool showSpriteSheetButton;
   /// When true, always-visible flip/rotate section for whole-canvas transforms (snippet editor C3).
   final bool showWholeCanvasTransforms;
-  final bool showAidaButton;
+
   /// When non-null, replaces the snippets button with a "Paste from snippet"
   /// button (used inside the snippet editor).
   final VoidCallback? onPasteFromSnippet;
@@ -54,7 +54,6 @@ class EditorToolbar extends ConsumerWidget {
     this.showSaveAsSnippetButton = true,
     this.showSpriteSheetButton = true,
     this.showWholeCanvasTransforms = false,
-    this.showAidaButton = true,
     this.onPasteFromSnippet,
   });
 
@@ -625,12 +624,6 @@ class EditorToolbar extends ConsumerWidget {
                   onPressed: state.canRedo ? () => notifier.redo() : null,
                 ),
               ),
-              if (showAidaButton) ...[
-                vDivider,
-                const SizedBox(width: 4),
-                const _AidaButton(),
-                const SizedBox(width: 4),
-              ],
             ],
           ),
         );
@@ -681,12 +674,6 @@ class EditorToolbar extends ConsumerWidget {
                   onPressed: state.canRedo ? () => notifier.redo() : null,
                 ),
               ),
-              if (showAidaButton) ...[
-                vDivider,
-                const SizedBox(width: 4),
-                const _AidaButton(),
-                const SizedBox(width: 4),
-              ],
             ],
           ),
         );

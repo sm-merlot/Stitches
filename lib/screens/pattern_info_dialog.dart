@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/aida_presets.dart';
 import '../providers/editor/editor_provider.dart';
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
         _InfoRow('Name', p.name),
         _InfoRow('Size', '${p.width} × ${p.height} stitches'),
         _InfoRow('Threads', '${p.threads.length}'),
+        _AidaColorRow(color: p.aidaColor, onTap: null),
         _InfoRow('Stitches (canvas)', '${p.canvasCellCount}'),
         _InfoRow(
           'Stitches (all layers)',
@@ -204,6 +206,11 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
         _field('Est. time', _hoursCtrl, hint: 'e.g. 8 or 6–8'),
         _field('Copyright', _copyrightCtrl, hint: 'e.g. Jane Smith'),
         const SizedBox(height: 8),
+        _AidaColorRow(
+          color: ref.watch(editorProvider).pattern.aidaColor,
+          onTap: () => _showAidaPicker(context),
+        ),
+        const SizedBox(height: 8),
         Text('Materials suggestions',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
@@ -262,6 +269,61 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
                 setState(() => _suggestions.add((aidaCount: 14, strands: 2))),
           ),
       ],
+    );
+  }
+
+  void _showAidaPicker(BuildContext context) {
+    final current = ref.read(editorProvider).pattern.aidaColor;
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Aida fabric colour'),
+        content: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: aidaPresets.map((p) {
+            final selected = p.color.toARGB32() == current.toARGB32();
+            return Tooltip(
+              message: p.label,
+              child: GestureDetector(
+                onTap: () {
+                  ref.read(editorProvider.notifier).setAidaColor(p.color);
+                  Navigator.of(context).pop();
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: p.color,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey.shade400,
+                      width: selected ? 2.5 : 1,
+                    ),
+                  ),
+                  child: selected
+                      ? Icon(
+                          Icons.check,
+                          size: 18,
+                          color: p.color.computeLuminance() > 0.4
+                              ? Colors.black54
+                              : Colors.white70,
+                        )
+                      : null,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -437,6 +499,57 @@ class _PatternInfoDialogState extends ConsumerState<_PatternInfoDialog> {
               ref.read(editorProvider.notifier).toggleCompressOnSave(),
         ),
       ],
+    );
+  }
+}
+
+// ─── Aida colour row ──────────────────────────────────────────────────────────
+
+class _AidaColorRow extends StatelessWidget {
+  final Color color;
+  final VoidCallback? onTap;
+  const _AidaColorRow({required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = aidaColorLabel(color);
+    final row = Row(
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: Colors.grey.shade400, width: 1),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(fontSize: 13)),
+        if (onTap != null) ...[
+          const SizedBox(width: 6),
+          Icon(Icons.edit_outlined, size: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ],
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text('Aida colour',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
+          if (onTap != null)
+            GestureDetector(onTap: onTap, child: row)
+          else
+            row,
+        ],
+      ),
     );
   }
 }
