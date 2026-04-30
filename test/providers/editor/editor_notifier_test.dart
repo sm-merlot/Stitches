@@ -378,19 +378,19 @@ void main() {
       expect(editorState(c).editMode, isTrue);
     });
 
-    test('setMode(stitch) → stitchMode true, drawingMode = select', () {
+    test('setMode(stitch) → stitchMode true, editSession.drawingMode = select', () {
       notifier(c).setMode(AppMode.stitch);
       expect(editorState(c).stitchMode, isTrue);
-      expect(editorState(c).drawingMode, equals(DrawingMode.select));
+      expect(editorState(c).editSession.drawingMode, equals(DrawingMode.select));
     });
 
-    test('view → edit → stitch → view: selectionRect cleared at each transition', () {
+    test('view → edit → stitch → view: editSession.selectionRect cleared at each transition', () {
       notifier(c).setMode(AppMode.edit);
       notifier(c).setDrawingMode(DrawingMode.select);
       notifier(c).setMode(AppMode.stitch);
-      expect(editorState(c).selectionRect, isNull);
+      expect(editorState(c).editSession.selectionRect, isNull);
       notifier(c).setMode(AppMode.view);
-      expect(editorState(c).selectionRect, isNull);
+      expect(editorState(c).editSession.selectionRect, isNull);
     });
   });
 
@@ -427,15 +427,15 @@ void main() {
       expect(editorState(c).isDirty, isFalse);
     });
 
-    test('clipboard preserved across pattern loads', () {
+    test('editSession.clipboard preserved across pattern loads', () {
       loadEmpty(c, name: 'Pattern A');
-      // Simulate clipboard set directly (selection copy isn't easy to drive
-      // without a real UI; testing the clipboard-preservation contract is
+      // Simulate editSession.clipboard set directly (selection copy isn't easy to drive
+      // without a real UI; testing the editSession.clipboard-preservation contract is
       // simpler via loadPattern which reads prevClipboard).
-      // We drive it by loading again — clipboard should still be null since
+      // We drive it by loading again — editSession.clipboard should still be null since
       // we never set it.
       loadEmpty(c, name: 'Pattern B');
-      expect(editorState(c).clipboard, isNull);
+      expect(editorState(c).editSession.clipboard, isNull);
     });
 
     test('newPattern opens in edit mode', () {
@@ -443,9 +443,9 @@ void main() {
       expect(editorState(c).editMode, isTrue);
     });
 
-    test('newPattern sets drawingMode = draw so canvas accepts input', () {
+    test('newPattern sets editSession.drawingMode = draw so canvas accepts input', () {
       notifier(c).newPattern(CrossStitchPattern.empty(name: 'New'));
-      expect(editorState(c).drawingMode, DrawingMode.draw);
+      expect(editorState(c).editSession.drawingMode, DrawingMode.draw);
     });
 
     test('can addStitch immediately after newPattern without switching mode', () {
@@ -570,24 +570,24 @@ void main() {
 
     test('setEraserSize clamps to [1,10]', () {
       notifier(c).setEraserSize(20);
-      expect(editorState(c).eraserSize, equals(10));
+      expect(editorState(c).editSession.eraserSize, equals(10));
       notifier(c).setEraserSize(0);
-      expect(editorState(c).eraserSize, equals(1));
+      expect(editorState(c).editSession.eraserSize, equals(1));
     });
 
-    test('setEraserSize turns off fillEraseActive', () {
+    test('setEraserSize turns off editSession.fillEraseActive', () {
       notifier(c).toggleFillErase();
-      expect(editorState(c).fillEraseActive, isTrue);
+      expect(editorState(c).editSession.fillEraseActive, isTrue);
       notifier(c).setEraserSize(3);
-      expect(editorState(c).fillEraseActive, isFalse);
+      expect(editorState(c).editSession.fillEraseActive, isFalse);
     });
 
-    test('toggleFillErase flips fillEraseActive', () {
-      expect(editorState(c).fillEraseActive, isFalse);
+    test('toggleFillErase flips editSession.fillEraseActive', () {
+      expect(editorState(c).editSession.fillEraseActive, isFalse);
       notifier(c).toggleFillErase();
-      expect(editorState(c).fillEraseActive, isTrue);
+      expect(editorState(c).editSession.fillEraseActive, isTrue);
       notifier(c).toggleFillErase();
-      expect(editorState(c).fillEraseActive, isFalse);
+      expect(editorState(c).editSession.fillEraseActive, isFalse);
     });
   });
 
@@ -613,11 +613,11 @@ void main() {
       );
     });
 
-    test('setTool updates currentTool and clears backstitchStartPoint', () {
+    test('setTool updates editSession.currentTool and clears editSession.backstitchStartPoint', () {
       notifier(c).setBackstitchStart(const Offset(1, 1));
       notifier(c).setTool(DrawingTool.halfForward);
-      expect(editorState(c).currentTool, equals(DrawingTool.halfForward));
-      expect(editorState(c).backstitchStartPoint, isNull);
+      expect(editorState(c).editSession.currentTool, equals(DrawingTool.halfForward));
+      expect(editorState(c).editSession.backstitchStartPoint, isNull);
     });
 
     test('setSelectedThread updates selection and recent list', () {
