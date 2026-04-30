@@ -663,34 +663,18 @@ class _FocusToggle extends StatelessWidget {
   }
 }
 
-/// Returns a map of cell → resolved dmcCode (the thread the user sees).
-/// Uses [EditorState.compositeLayer] when available (O(1) per cell);
-/// falls back to raw layer scan so composite/blended cells are covered.
+/// Returns a map of cell → resolved dmcCode (the thread the user sees),
+/// built from [EditorState.compositeLayer]. Returns empty map if composite
+/// is not yet available (only possible briefly at startup, never in stitch mode).
 Map<Cell, String> _buildTopThread(EditorState s) {
   final composite = s.compositeLayer;
-  if (composite != null) {
-    final map = <Cell, String>{
-      for (final e in composite.fullStitches.entries)
-        e.key: e.value.resolvedThread.dmcCode,
-    };
-    for (final cs in composite.otherStitches) {
-      final cell = EditorState.cellCoords(cs.stitch);
-      if (cell != null) map[cell] = cs.resolvedThread.dmcCode;
-
-    }
-    return map;
-  }
-  // Fallback: raw layer scan (composite not yet available).
-  final map = <Cell, String>{};
-  for (final layer in s.pattern.layers) {
-    if (!layer.visible) continue;
-    for (final stitch in layer.stitches) {
-      if (stitch is BackStitch) continue;
-      final cell = EditorState.cellCoords(stitch);
-      if (cell != null) map[cell] = stitch.threadId;
-    }
-  }
-  return map;
+  if (composite == null) return {};
+  return {
+    for (final e in composite.fullStitches.entries)
+      e.key: e.value.resolvedThread.dmcCode,
+    for (final cs in composite.otherStitches)
+      ?EditorState.cellCoords(cs.stitch): cs.resolvedThread.dmcCode,
+  };
 }
 
 /// Demo button — launches [StitchDemoScreen]. Shown at the bottom of the
@@ -1558,7 +1542,7 @@ class MarkDoneButton extends ConsumerWidget {
           if (midX >= region.left && midX < region.right &&
               midY >= region.top && midY < region.bottom) {
             if (layout != null &&
-                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) continue;
+                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
             return true;
           }
         }
@@ -1603,7 +1587,7 @@ class MarkDoneButton extends ConsumerWidget {
           if (midX >= region.left && midX < region.right &&
               midY >= region.top && midY < region.bottom) {
             if (layout != null &&
-                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) continue;
+                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
             hasAny = true;
             if (!progress.isBackstitchDone(stitch.x1, stitch.y1, stitch.x2, stitch.y2)) return false;
           }

@@ -155,30 +155,16 @@ mixin ProgressMixin on Notifier<EditorState> {
     final layout = state.stitchSession.pageLayout;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.stitchSession.currentPage) : (0, 0);
     final focusId = state.stitchSession.focusThreadId;
-    if (!state.stitchSession.backMode) {
-    // Build topmost-thread map from compositeLayer so focus mode matches
-    // single-tap behaviour, including composite/blended cells.
-    final topThread = <Cell, String>{};
     final composite = state.compositeLayer;
-    if (composite != null) {
-      for (final e in composite.fullStitches.entries) {
-        topThread[e.key] = e.value.resolvedThread.dmcCode;
-      }
-      for (final cs in composite.otherStitches) {
-        final cell = cs.stitch.cellCoords;
-        if (cell != null) topThread[cell] = cs.resolvedThread.dmcCode;
-      }
-    } else {
-      // Fallback: raw layer scan when composite not yet available.
-      for (final layer in state.pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is BackStitch) continue;
-          final coords = _crossStitchXY(stitch);
-          if (coords != null) topThread[coords] = stitch.threadId;
-        }
-      }
-    }
+    if (!state.stitchSession.backMode && composite != null) {
+    // Build topmost-thread map from compositeLayer so focus mode matches
+    // single-tap behaviour, including blended/composite cells.
+    final topThread = <Cell, String>{
+      for (final e in composite.fullStitches.entries)
+        e.key: e.value.resolvedThread.dmcCode,
+      for (final cs in composite.otherStitches)
+        ?cs.stitch.cellCoords: cs.resolvedThread.dmcCode,
+    };
     for (final entry in topThread.entries) {
       final coords = entry.key;
       final threadId = entry.value;
@@ -197,22 +183,18 @@ mixin ProgressMixin on Notifier<EditorState> {
     // Backstitches — include if midpoint is within region (and on current page).
     final backCurrent = Set<(double, double, double, double)>.from(
         prog.completedBackstitches);
-    if (!state.stitchSession.crossMode) {
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is! BackStitch) continue;
-        if (focusId != null && stitch.threadId != focusId) continue;
-        final midX = (stitch.x1 + stitch.x2) / 2;
-        final midY = (stitch.y1 + stitch.y2) / 2;
-        if (midX >= region.left && midX < region.right &&
-            midY >= region.top && midY < region.bottom) {
-          if (layout != null &&
-              !layout.rawCellOnPage(
-                  midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
-          backCurrent.add(PatternProgress.normBackstitch(
-              stitch.x1, stitch.y1, stitch.x2, stitch.y2));
-        }
+    if (!state.stitchSession.crossMode && composite != null) {
+    for (final stitch in composite.backstitches) {
+      if (focusId != null && stitch.threadId != focusId) continue;
+      final midX = (stitch.x1 + stitch.x2) / 2;
+      final midY = (stitch.y1 + stitch.y2) / 2;
+      if (midX >= region.left && midX < region.right &&
+          midY >= region.top && midY < region.bottom) {
+        if (layout != null &&
+            !layout.rawCellOnPage(
+                midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+        backCurrent.add(PatternProgress.normBackstitch(
+            stitch.x1, stitch.y1, stitch.x2, stitch.y2));
       }
     }
     }
@@ -246,27 +228,14 @@ mixin ProgressMixin on Notifier<EditorState> {
 
     // Build a map of cell → topmost visible thread from the composite layer.
     // This matches exactly what the user sees (including blended/composite cells).
-    final topThread = <Cell, String>{};
     final composite = state.compositeLayer;
-    if (composite != null) {
-      for (final e in composite.fullStitches.entries) {
-        topThread[e.key] = e.value.resolvedThread.dmcCode;
-      }
-      for (final cs in composite.otherStitches) {
-        final cell = cs.stitch.cellCoords;
-        if (cell != null) topThread[cell] = cs.resolvedThread.dmcCode;
-      }
-    } else {
-      // Fallback: raw layer scan when composite is not yet available.
-      for (final layer in state.pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is BackStitch) continue;
-          final coords = _crossStitchXY(stitch);
-          if (coords != null) topThread[coords] = stitch.threadId;
-        }
-      }
-    }
+    if (composite == null) return;
+    final topThread = <Cell, String>{
+      for (final e in composite.fullStitches.entries)
+        e.key: e.value.resolvedThread.dmcCode,
+      for (final cs in composite.otherStitches)
+        ?cs.stitch.cellCoords: cs.resolvedThread.dmcCode,
+    };
 
     // The thread that is visually on top at the starting cell.
     final threadId = topThread[Cell(x, y)];
@@ -332,28 +301,15 @@ mixin ProgressMixin on Notifier<EditorState> {
     final layout = state.stitchSession.pageLayout;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(state.stitchSession.currentPage) : (0, 0);
     final focusId = state.stitchSession.focusThreadId;
-    if (!state.stitchSession.backMode) {
-    // Build topThread from compositeLayer so blended cells are filtered correctly.
-    final topThread = <Cell, String>{};
     final composite = state.compositeLayer;
-    if (composite != null) {
-      for (final e in composite.fullStitches.entries) {
-        topThread[e.key] = e.value.resolvedThread.dmcCode;
-      }
-      for (final cs in composite.otherStitches) {
-        final cell = cs.stitch.cellCoords;
-        if (cell != null) topThread[cell] = cs.resolvedThread.dmcCode;
-      }
-    } else {
-      for (final layer in state.pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is BackStitch) continue;
-          final coords = _crossStitchXY(stitch);
-          if (coords != null) topThread[coords] = stitch.threadId;
-        }
-      }
-    }
+    if (!state.stitchSession.backMode && composite != null) {
+    // Build topThread from compositeLayer so blended cells are filtered correctly.
+    final topThread = <Cell, String>{
+      for (final e in composite.fullStitches.entries)
+        e.key: e.value.resolvedThread.dmcCode,
+      for (final cs in composite.otherStitches)
+        ?cs.stitch.cellCoords: cs.resolvedThread.dmcCode,
+    };
     for (final entry in topThread.entries) {
       final coords = entry.key;
       if (focusId != null && entry.value != focusId) continue;
@@ -369,22 +325,18 @@ mixin ProgressMixin on Notifier<EditorState> {
     // Backstitches in region.
     final backCurrent = Set<(double, double, double, double)>.from(
         prog.completedBackstitches);
-    if (!state.stitchSession.crossMode) {
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is! BackStitch) continue;
-        if (focusId != null && stitch.threadId != focusId) continue;
-        final midX = (stitch.x1 + stitch.x2) / 2;
-        final midY = (stitch.y1 + stitch.y2) / 2;
-        if (midX >= region.left && midX < region.right &&
-            midY >= region.top && midY < region.bottom) {
-          if (layout != null &&
-              !layout.rawCellOnPage(
-                  midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
-          if (backCurrent.remove(PatternProgress.normBackstitch(
-              stitch.x1, stitch.y1, stitch.x2, stitch.y2))) { removed++; }
-        }
+    if (!state.stitchSession.crossMode && composite != null) {
+    for (final stitch in composite.backstitches) {
+      if (focusId != null && stitch.threadId != focusId) continue;
+      final midX = (stitch.x1 + stitch.x2) / 2;
+      final midY = (stitch.y1 + stitch.y2) / 2;
+      if (midX >= region.left && midX < region.right &&
+          midY >= region.top && midY < region.bottom) {
+        if (layout != null &&
+            !layout.rawCellOnPage(
+                midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+        if (backCurrent.remove(PatternProgress.normBackstitch(
+            stitch.x1, stitch.y1, stitch.x2, stitch.y2))) { removed++; }
       }
     }
     }
@@ -505,91 +457,59 @@ mixin ProgressMixin on Notifier<EditorState> {
   /// Returns the threadId of the backstitch with the given endpoints, or null
   /// if no visible backstitch matches. Order-independent (matches BackStitch equality).
   String? _backstitchThreadAt(double x1, double y1, double x2, double y2) {
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is! BackStitch) continue;
-        if ((stitch.x1 == x1 && stitch.y1 == y1 &&
-                stitch.x2 == x2 && stitch.y2 == y2) ||
-            (stitch.x1 == x2 && stitch.y1 == y2 &&
-                stitch.x2 == x1 && stitch.y2 == y1)) {
-          return stitch.threadId;
-        }
+    final backstitches = state.compositeLayer?.backstitches;
+    if (backstitches == null) return null;
+    for (final stitch in backstitches) {
+      if ((stitch.x1 == x1 && stitch.y1 == y1 &&
+              stitch.x2 == x2 && stitch.y2 == y2) ||
+          (stitch.x1 == x2 && stitch.y1 == y2 &&
+              stitch.x2 == x1 && stitch.y2 == y1)) {
+        return stitch.threadId;
       }
     }
     return null;
   }
 
-  /// Returns the threadId of the topmost visible non-backstitch at (x, y),
-  /// matching what the user sees on the composite canvas. Null if no stitch.
-  /// Uses [compositeLayer] for O(1) lookup; falls back to raw layer scan if
-  /// the composite is not yet available.
-  String? _topThreadAt(int x, int y) {
-    final composite = state.compositeLayer;
-    if (composite != null) return composite.topThreadAt(Cell(x, y));
-    // Fallback: raw layer scan (should rarely be needed in practice).
-    final target = Cell(x, y);
-    String? result;
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        final coords = _crossStitchXY(stitch);
-        if (coords == target) result = stitch.threadId;
-      }
-    }
-    return result;
-  }
+/// Returns the resolved dmcCode of the composite stitch at (x, y), or null.
+  String? _topThreadAt(int x, int y) =>
+      state.compositeLayer?.topThreadAt(Cell(x, y));
 
-  bool _hasCrossStitchAt(int x, int y) {
-    final composite = state.compositeLayer;
-    if (composite != null) return composite.hasCrossStitchAt(Cell(x, y));
-    // Fallback: raw layer scan.
-    final target = Cell(x, y);
-    for (final layer in state.pattern.layers) {
-      if (!layer.visible) continue;
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        final coords = _crossStitchXY(stitch);
-        if (coords == target) return true;
-      }
-    }
-    return false;
-  }
+  bool _hasCrossStitchAt(int x, int y) =>
+      state.compositeLayer?.hasCrossStitchAt(Cell(x, y)) ?? false;
 
+  /// Returns the composite-resolved thread at (x, y) as a singleton set.
   Set<String> _threadIdsAt(int x, int y) {
-    final target = Cell(x, y);
-    final ids = <String>{};
-    for (final layer in state.pattern.layers) {
-      for (final stitch in layer.stitches) {
-        if (stitch is BackStitch) continue;
-        final coords = _crossStitchXY(stitch);
-        if (coords == target) {
-          ids.add(stitch.threadId);
-        }
-      }
-    }
-    return ids;
+    final dmcCode = state.compositeLayer?.topThreadAt(Cell(x, y));
+    return dmcCode != null ? {dmcCode} : {};
   }
-
-  static Cell? _crossStitchXY(Stitch stitch) => switch (stitch) {
-        FullStitch(:final x, :final y) => Cell(x, y),
-        HalfStitch(:final x, :final y) => Cell(x, y),
-        HalfCrossStitch(:final x, :final y) => Cell(x, y),
-        QuarterStitch(:final x, :final y) => Cell(x, y),
-        QuarterCrossStitch(:final x, :final y) => Cell(x, y),
-        BackStitch() => null,
-      };
 
   void _checkColourCompletion(PatternProgress prog, Set<String> threadIds) {
-    final allStitches = state.pattern.stitches;
+    final composite = state.compositeLayer;
+    if (composite == null) return;
     for (final threadId in threadIds) {
-      if (prog.isColourDone(threadId, allStitches)) {
-        final thread = state.pattern.threads[threadId];
-        if (thread != null) {
+      bool hasAny = false;
+      bool allDone = true;
+      for (final entry in composite.fullStitches.entries) {
+        if (entry.value.resolvedThread.dmcCode != threadId) continue;
+        hasAny = true;
+        if (!prog.completedStitches.contains(entry.key)) { allDone = false; break; }
+      }
+      if (!allDone) continue;
+      for (final cs in composite.otherStitches) {
+        if (cs.resolvedThread.dmcCode != threadId) continue;
+        final cell = cs.stitch.cellCoords;
+        if (cell != null && !prog.completedStitches.contains(cell)) { allDone = false; break; }
+      }
+      if (hasAny && allDone) {
+        final resolvedThread = (state.pattern.threads[threadId] ??
+            composite.fullStitches.values
+                .where((cs) => cs.resolvedThread.dmcCode == threadId)
+                .firstOrNull
+                ?.resolvedThread);
+        if (resolvedThread != null) {
           state = state.copyWith(
             editSession: state.editSession.copyWith(
-              pendingCanvasWarning: '${thread.dmcCode} ${thread.name} complete ✓',
+              pendingCanvasWarning: '${resolvedThread.dmcCode} ${resolvedThread.name} complete ✓',
             ),
           );
         }
@@ -600,6 +520,8 @@ mixin ProgressMixin on Notifier<EditorState> {
   void _checkPageCompletion(PatternProgress prog) {
     final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
+    final composite = state.compositeLayer;
+    if (composite == null) return;
     final pages = Set<int>.from(prog.completedPages);
     bool changed = false;
     for (int p = 0; p < layout.totalPages; p++) {
@@ -607,26 +529,33 @@ mixin ProgressMixin on Notifier<EditorState> {
       final (pageCol, pageRow) = layout.pageCoords(p);
       bool allDone = true;
       bool hasAny = false;
-      for (final layer in state.pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is BackStitch) {
-            final midX = (stitch.x1 + stitch.x2) / 2;
-            final midY = (stitch.y1 + stitch.y2) / 2;
-            if (!layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) continue;
-            hasAny = true;
-            final key = PatternProgress.normBackstitch(
-                stitch.x1, stitch.y1, stitch.x2, stitch.y2);
-            if (!prog.completedBackstitches.contains(key)) { allDone = false; break; }
-          } else {
-            final coords = _crossStitchXY(stitch);
-            if (coords == null) continue;
-            if (!layout.cellOnPage(coords.x, coords.y, pageCol, pageRow)) continue;
-            hasAny = true;
-            if (!prog.completedStitches.contains(coords)) { allDone = false; break; }
-          }
+      // Full cross-stitches.
+      for (final entry in composite.fullStitches.entries) {
+        if (!layout.cellOnPage(entry.key.x, entry.key.y, pageCol, pageRow)) continue;
+        hasAny = true;
+        if (!prog.completedStitches.contains(entry.key)) { allDone = false; break; }
+      }
+      // Other cross-stitches (half, quarter, etc.).
+      if (allDone) {
+        for (final cs in composite.otherStitches) {
+          final cell = cs.stitch.cellCoords;
+          if (cell == null) continue;
+          if (!layout.cellOnPage(cell.x, cell.y, pageCol, pageRow)) continue;
+          hasAny = true;
+          if (!prog.completedStitches.contains(cell)) { allDone = false; break; }
         }
-        if (!allDone) break;
+      }
+      // Backstitches.
+      if (allDone) {
+        for (final stitch in composite.backstitches) {
+          final midX = (stitch.x1 + stitch.x2) / 2;
+          final midY = (stitch.y1 + stitch.y2) / 2;
+          if (!layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) continue;
+          hasAny = true;
+          final key = PatternProgress.normBackstitch(
+              stitch.x1, stitch.y1, stitch.x2, stitch.y2);
+          if (!prog.completedBackstitches.contains(key)) { allDone = false; break; }
+        }
       }
       final nowComplete = hasAny && allDone;
       if (nowComplete && !wasComplete) { pages.add(p); changed = true; }
