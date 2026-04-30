@@ -371,15 +371,17 @@ class PageLayout {
         }
       }
 
-      // Distance: prefer staying close to nominal boundary
-      cost += delta.abs() * 2;
+      // Distance: gentle pull toward nominal; halved so colour-change and
+      // run-coherence signals dominate when present.
+      cost += delta.abs();
 
-      // Color-transition quality: bonus for a qualifying cut at this offset
+      // Color-transition quality: strong bonus for a qualifying cut so the
+      // boundary reliably snaps to colour changes within tolerance.
       final posA = actual - 1;
       final posB = actual;
       if (posA >= 0 && posB < maxBoundary) {
         if (_isQualifyingCut(posA, posB, crossIdx, maxBoundary, colorAt)) {
-          cost -= 4;
+          cost -= 20;
         }
         // Vertical-coherence bonus: favour cuts that run along colour columns
         final cA = colorAt(posA, crossIdx);
