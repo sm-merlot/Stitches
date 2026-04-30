@@ -125,8 +125,8 @@ void main() {
 
     _notifier(c).setSelectionRect(const Rect.fromLTRB(0, 0, 4, 4));
     await _notifier(c).copySelection();
-    expect(_state(c).clipboard, isNotNull);
-    expect(_state(c).drawingMode, equals(DrawingMode.paste));
+    expect(_state(c).editSession.clipboard, isNotNull);
+    expect(_state(c).editSession.drawingMode, equals(DrawingMode.paste));
 
     _notifier(c).commitPaste(5, 5);
 

@@ -100,19 +100,19 @@ mixin SnippetsMixin on Notifier<EditorState> {
     final List<Stitch> stitches;
     final List<Thread> threads;
 
-    if (state.drawingMode == DrawingMode.paste) {
-      stitches = state.clipboard ?? [];
-      threads = state.clipboardThreads ?? [];
+    if (state.editSession.drawingMode == DrawingMode.paste) {
+      stitches = state.editSession.clipboard ?? [];
+      threads = state.editSession.clipboardThreads ?? [];
     } else {
-      final rect = state.selectionRect;
+      final rect = state.editSession.selectionRect;
       if (rect == null) {
         state = state.copyWith(
-          pendingCanvasWarning: kWarnSelectFirst,
+          editSession: state.editSession.copyWith(pendingCanvasWarning: kWarnSelectFirst),
         );
         return false;
       }
       final List<Stitch> inSel;
-      if (state.canvasSelectionMode) {
+      if (state.editSession.canvasSelectionMode) {
         inSel = state.pattern.layers
             .where((l) => l.visible)
             .expand((l) => l.stitches.where((s) => EditorState.isStitchInRect(s, rect)))
@@ -124,8 +124,10 @@ mixin SnippetsMixin on Notifier<EditorState> {
       }
       if (inSel.isEmpty) {
         state = state.copyWith(
-          pendingCanvasWarning: kWarnNothingToSave +
-              (state.canvasSelectionMode ? '' : kLayerHint),
+          editSession: state.editSession.copyWith(
+            pendingCanvasWarning: kWarnNothingToSave +
+                (state.editSession.canvasSelectionMode ? '' : kLayerHint),
+          ),
         );
         return false;
       }
@@ -157,7 +159,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
       stitches: stitches,
     ));
 
-    if (state.drawingMode == DrawingMode.paste) {
+    if (state.editSession.drawingMode == DrawingMode.paste) {
       cancelSelection();
     }
     return true;
@@ -196,11 +198,13 @@ mixin SnippetsMixin on Notifier<EditorState> {
     final targetMode = state.editMode ? state.mode : AppMode.edit;
     state = state.copyWith(
       mode: targetMode,
-      drawingMode: DrawingMode.paste,
-      selectionRect: null,
-      clipboard: clipStitches,
-      clipboardThreads: clipThreads,
-      clipboardFromSnippet: true,
+      editSession: state.editSession.copyWith(
+        drawingMode: DrawingMode.paste,
+        selectionRect: null,
+        clipboard: clipStitches,
+        clipboardThreads: clipThreads,
+        clipboardFromSnippet: true,
+      ),
     );
   }
 
@@ -219,8 +223,10 @@ mixin SnippetsMixin on Notifier<EditorState> {
 
   void initSnippetPalettesLocal(List<SnippetPalette> palettes, int activeIndex) {
     state = state.copyWith(
-      snippetPalettes: syncPaletteSymbolsToPrimary(palettes),
-      snippetActivePaletteIndex: activeIndex,
+      snippetEditorState: state.snippetEditorState.copyWith(
+        palettes: syncPaletteSymbolsToPrimary(palettes),
+        activePaletteIndex: activeIndex,
+      ),
     );
   }
 
@@ -250,38 +256,44 @@ mixin SnippetsMixin on Notifier<EditorState> {
   }
 
   void setSnippetActivePaletteLocal(int index) {
-    state = state.copyWith(snippetActivePaletteIndex: index);
+    state = state.copyWith(
+      snippetEditorState: state.snippetEditorState.copyWith(activePaletteIndex: index),
+    );
   }
 
   void addSnippetPaletteLocal(SnippetPalette palette) {
     final newPalettes =
-        syncPaletteSymbolsToPrimary([...state.snippetPalettes, palette]);
+        syncPaletteSymbolsToPrimary([...state.snippetEditorState.palettes, palette]);
     state = state.copyWith(
-      snippetPalettes: newPalettes,
-      snippetActivePaletteIndex: newPalettes.length - 1,
+      snippetEditorState: state.snippetEditorState.copyWith(
+        palettes: newPalettes,
+        activePaletteIndex: newPalettes.length - 1,
+      ),
     );
   }
 
   void deleteSnippetPaletteLocal(String paletteId) {
-    if (state.snippetPalettes.length <= 1) return;
+    if (state.snippetEditorState.palettes.length <= 1) return;
     final newPalettes =
-        state.snippetPalettes.where((p) => p.id != paletteId).toList();
+        state.snippetEditorState.palettes.where((p) => p.id != paletteId).toList();
     final newActive =
-        state.snippetActivePaletteIndex.clamp(0, newPalettes.length - 1);
+        state.snippetEditorState.activePaletteIndex.clamp(0, newPalettes.length - 1);
     state = state.copyWith(
-        snippetPalettes: newPalettes, snippetActivePaletteIndex: newActive);
+        snippetEditorState: state.snippetEditorState.copyWith(palettes: newPalettes, activePaletteIndex: newActive));
   }
 
   void renameSnippetPaletteLocal(String paletteId, String name) {
-    final newPalettes = state.snippetPalettes
+    final newPalettes = state.snippetEditorState.palettes
         .map((p) => p.id == paletteId ? p.copyWith(name: name) : p)
         .toList();
-    state = state.copyWith(snippetPalettes: newPalettes);
+    state = state.copyWith(
+      snippetEditorState: state.snippetEditorState.copyWith(palettes: newPalettes),
+    );
   }
 
   void setSnippetPaletteThreadColor(
       int paletteIndex, int slotIndex, Thread newThread) {
-    final palettes = List<SnippetPalette>.from(state.snippetPalettes);
+    final palettes = List<SnippetPalette>.from(state.snippetEditorState.palettes);
     if (paletteIndex < 0 || paletteIndex >= palettes.length) return;
     final threads = List<Thread>.from(palettes[paletteIndex].threads);
     if (slotIndex < 0 || slotIndex >= threads.length) return;
@@ -289,40 +301,46 @@ mixin SnippetsMixin on Notifier<EditorState> {
     // not the thread, so swapping the swatch colour must not change it.
     threads[slotIndex] = newThread.copyWith(symbol: threads[slotIndex].symbol);
     palettes[paletteIndex] = palettes[paletteIndex].copyWith(threads: threads);
-    state = state.copyWith(snippetPalettes: palettes);
+    state = state.copyWith(
+      snippetEditorState: state.snippetEditorState.copyWith(palettes: palettes),
+    );
   }
 
   void deleteSnippetPaletteByIndex(int index) {
-    final palettes = List<SnippetPalette>.from(state.snippetPalettes);
+    final palettes = List<SnippetPalette>.from(state.snippetEditorState.palettes);
     if (palettes.length <= 1 || index < 0 || index >= palettes.length) return;
     palettes.removeAt(index);
-    final activeIdx = state.snippetActivePaletteIndex;
+    final activeIdx = state.snippetEditorState.activePaletteIndex;
     state = state.copyWith(
-      snippetPalettes: palettes,
-      snippetActivePaletteIndex:
-          activeIdx >= palettes.length ? palettes.length - 1 : activeIdx,
+      snippetEditorState: state.snippetEditorState.copyWith(
+        palettes: palettes,
+        activePaletteIndex:
+            activeIdx >= palettes.length ? palettes.length - 1 : activeIdx,
+      ),
     );
   }
 
   void renameSnippetPaletteByIndex(int index, String name) {
-    final palettes = List<SnippetPalette>.from(state.snippetPalettes);
+    final palettes = List<SnippetPalette>.from(state.snippetEditorState.palettes);
     if (index < 0 || index >= palettes.length) return;
     palettes[index] = palettes[index].copyWith(name: name);
-    state = state.copyWith(snippetPalettes: palettes);
+    state = state.copyWith(
+      snippetEditorState: state.snippetEditorState.copyWith(palettes: palettes),
+    );
   }
 
   void reorderSnippetPaletteLocal(int oldIndex, int newIndex) {
-    final palettes = [...state.snippetPalettes];
+    final palettes = [...state.snippetEditorState.palettes];
     if (oldIndex < 0 || oldIndex >= palettes.length) return;
     final palette = palettes.removeAt(oldIndex);
     final insertIdx =
         (newIndex > oldIndex ? newIndex - 1 : newIndex).clamp(0, palettes.length);
     palettes.insert(insertIdx, palette);
-    int newActive = state.snippetActivePaletteIndex;
-    if (state.snippetActivePaletteIndex == oldIndex) {
+    int newActive = state.snippetEditorState.activePaletteIndex;
+    if (state.snippetEditorState.activePaletteIndex == oldIndex) {
       newActive = insertIdx.clamp(0, palettes.length - 1);
     }
     state = state.copyWith(
-        snippetPalettes: palettes, snippetActivePaletteIndex: newActive);
+        snippetEditorState: state.snippetEditorState.copyWith(palettes: palettes, activePaletteIndex: newActive));
   }
 }

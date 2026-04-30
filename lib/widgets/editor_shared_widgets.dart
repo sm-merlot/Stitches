@@ -117,7 +117,7 @@ class ProgressInfoBar extends ConsumerWidget {
         .length;
 
     // Pages done (page mode only).
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     final pageMode = layout != null;
     final donePages = progress.completedPages.length;
     final totalPages = layout?.totalPages ?? 0;

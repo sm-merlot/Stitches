@@ -29,6 +29,10 @@ import '../../services/stitch_compositor.dart';
 import '../settings_provider.dart';
 
 part 'editor_state.dart';
+part 'view_state.dart';
+part 'stitch_session_state.dart';
+part 'edit_session_state.dart';
+part 'snippet_editor_state.dart';
 part 'editor_provider_drawing.dart';
 part 'editor_provider_layers.dart';
 part 'editor_provider_progress.dart';
@@ -174,40 +178,42 @@ class EditorNotifier extends Notifier<EditorState>
         ? rawActiveLayerId
         : (withSymbols.layers.isNotEmpty ? withSymbols.layers.first.id : '');
 
-    final prevClipboard = state.clipboard;
-    final prevClipboardThreads = state.clipboardThreads;
-    final prevClipboardFromSnippet = state.clipboardFromSnippet;
+    final prevClipboard = state.editSession.clipboard;
+    final prevClipboardThreads = state.editSession.clipboardThreads;
+    final prevClipboardFromSnippet = state.editSession.clipboardFromSnippet;
     final hasClipboard = prevClipboard != null && prevClipboard.isNotEmpty;
 
     state = EditorState(
       pattern: withSymbols,
       filePath: filePath,
-      currentTool: tool,
       selectedThreadId: threadId,
       recentThreadIds: threadId != null ? [threadId] : [],
       mode: AppMode.view,
-      colourMode: colourMode,
-      drawingMode: DrawingMode.pan,
-      clipboard: hasClipboard ? prevClipboard : null,
-      clipboardThreads: hasClipboard ? prevClipboardThreads : null,
-      clipboardFromSnippet: hasClipboard && prevClipboardFromSnippet,
-      referenceOpacity: withSymbols.referenceOpacity,
       driveFileId: driveFileId,
       driveParentFolderId: driveParentFolderId,
       isFileOpen: true,
       activeLayerId: resolvedLayerId,
-      viewPanX: viewPanX,
-      viewPanY: viewPanY,
-      viewScale: viewScale,
+      viewState: ViewState(panX: viewPanX, panY: viewPanY, scale: viewScale),
       compressOnSave: compressOnSave,
       isDirty: hasLegacyEditorSection,
+      editSession: EditSessionState(
+        currentTool: tool,
+        drawingMode: DrawingMode.pan,
+        colourMode: colourMode,
+        clipboard: hasClipboard ? prevClipboard : null,
+        clipboardThreads: hasClipboard ? prevClipboardThreads : null,
+        clipboardFromSnippet: hasClipboard && prevClipboardFromSnippet,
+        referenceOpacity: withSymbols.referenceOpacity,
+      ),
       // Only restore the saved stitch page when page mode is enabled and the
       // user has already started marking progress on this pattern.
-      currentPage: (withSymbols.pageConfig.enabled &&
-              (withSymbols.progress.completedStitches.isNotEmpty ||
-               withSymbols.progress.completedBackstitches.isNotEmpty))
-          ? stitchPage
-          : 0,
+      stitchSession: StitchSessionState(
+        currentPage: (withSymbols.pageConfig.enabled &&
+                (withSymbols.progress.completedStitches.isNotEmpty ||
+                 withSymbols.progress.completedBackstitches.isNotEmpty))
+            ? stitchPage
+            : 0,
+      ),
     );
 
     // Migrate legacy session fields to app data on first open.
@@ -237,16 +243,26 @@ class EditorNotifier extends Notifier<EditorState>
     refreshCompositeCache();
 
     // Build page layout if page mode was saved with this pattern.
+    // Do NOT set pendingFitPage here — viewState already restores the saved
+    // viewport. Fitting to a page on open would override the user's last
+    // scroll position in view/edit mode. StitchController triggers the fit
+    // when the user actually switches to stitch mode.
     if (withSymbols.pageConfig.enabled) {
       final layout = PageLayout.compute(withSymbols.pageConfig, withSymbols);
-      state = state.copyWith(pageLayout: layout, pendingFitPage: 0);
+      state = state.copyWith(
+        stitchSession: state.stitchSession.copyWith(
+          pageLayout: layout,
+        ),
+      );
     }
 
     if (withSymbols.referenceImagePath != null) {
       ReferenceImageService.decodeFromPath(withSymbols.referenceImagePath!)
           .then((img) {
         if (img != null && ref.mounted) {
-          state = state.copyWith(referenceImage: img);
+          state = state.copyWith(
+            editSession: state.editSession.copyWith(referenceImage: img),
+          );
         }
       });
     }
@@ -255,7 +271,9 @@ class EditorNotifier extends Notifier<EditorState>
   /// Called by AidaWidget on gesture end to persist the current view
   /// position. Does NOT mark the file dirty — view state is session-only.
   void updateViewPosition(double panX, double panY, double scale) {
-    state = state.copyWith(viewPanX: panX, viewPanY: panY, viewScale: scale);
+    state = state.copyWith(
+      viewState: ViewState(panX: panX, panY: panY, scale: scale),
+    );
     _saveSession();
   }
 
@@ -275,14 +293,14 @@ class EditorNotifier extends Notifier<EditorState>
     unawaited(EditorSessionService.save(
       key,
       EditorSession(
-        tool: state.currentTool.name,
+        tool: state.editSession.currentTool.name,
         selectedThreadId: state.selectedThreadId,
-        colourMode: state.colourMode,
+        colourMode: state.editSession.colourMode,
         activeLayerId: state.activeLayerId.isEmpty ? null : state.activeLayerId,
-        viewPanX: state.viewPanX,
-        viewPanY: state.viewPanY,
-        viewScale: state.viewScale,
-        stitchPage: state.currentPage,
+        viewPanX: state.viewState.panX,
+        viewPanY: state.viewState.panY,
+        viewScale: state.viewState.scale,
+        stitchPage: state.stitchSession.currentPage,
       ),
     ));
   }
@@ -326,20 +344,26 @@ class EditorNotifier extends Notifier<EditorState>
     state = state.copyWith(
       pattern: pruned > 0 ? pattern : null,
       mode: mode,
-      drawingMode: switch (mode) {
-        AppMode.stitch => DrawingMode.select,
-        AppMode.edit   => DrawingMode.draw,
-        AppMode.view   => DrawingMode.pan,
-      },
-      selectionRect: null,
-      backstitchStartPoint: null,
-      progressRegion: null,
-      colourMode: mode == AppMode.stitch ? false : null,
       showCompositeThreads: mode == AppMode.stitch || state.showCompositeThreads,
-      stitchCrossMode: false,
-      stitchBackMode: false,
-      stitchFocusThreadId: mode == AppMode.stitch ? state.stitchFocusThreadId : null,
-      pendingFitPage: state.currentPage,
+      editSession: state.editSession.copyWith(
+        drawingMode: switch (mode) {
+          AppMode.stitch => DrawingMode.select,
+          AppMode.edit   => DrawingMode.draw,
+          AppMode.view   => DrawingMode.pan,
+        },
+        selectionRect: null,
+        backstitchStartPoint: null,
+        colourMode: mode == AppMode.stitch ? false : state.editSession.colourMode,
+      ),
+      stitchSession: state.stitchSession.copyWith(
+        progressRegion: null,
+        crossMode: false,
+        backMode: false,
+        focusThreadId: mode == AppMode.stitch
+            ? state.stitchSession.focusThreadId
+            : null,
+        pendingFitPage: null,
+      ),
     );
     if (mode == AppMode.stitch) refreshCompositeCache();
     _saveSession();
@@ -348,7 +372,9 @@ class EditorNotifier extends Notifier<EditorState>
 
   /// Set or clear the committed progress-marking region (stitch mode).
   void setProgressRegion(Rect? region) {
-    state = state.copyWith(progressRegion: region);
+    state = state.copyWith(
+      stitchSession: state.stitchSession.copyWith(progressRegion: region),
+    );
   }
 
   void setDriveFileId(String? id) {
@@ -368,10 +394,10 @@ class EditorNotifier extends Notifier<EditorState>
       selectedThreadId: threads.values.first.dmcCode,
       recentThreadIds: [threads.values.first.dmcCode],
       mode: AppMode.edit,
-      drawingMode: DrawingMode.draw,
       isFileOpen: true,
       activeLayerId: seeded.layers.isNotEmpty ? seeded.layers.first.id : '',
       compressOnSave: compress,
+      editSession: const EditSessionState(drawingMode: DrawingMode.draw),
     );
   }
 
@@ -394,25 +420,38 @@ class EditorNotifier extends Notifier<EditorState>
   // ─── Tool and mode ──────────────────────────────────────────────────────────
 
   void setTool(DrawingTool tool) {
-    state = state.copyWith(currentTool: tool, backstitchStartPoint: null);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        currentTool: tool,
+        backstitchStartPoint: null,
+      ),
+    );
     _saveSession();
   }
 
   void setDrawingMode(DrawingMode mode) {
     final leavingSelection =
-        state.drawingMode == DrawingMode.select || state.drawingMode == DrawingMode.paste;
+        state.editSession.drawingMode == DrawingMode.select ||
+        state.editSession.drawingMode == DrawingMode.paste;
     state = state.copyWith(
-      drawingMode: mode,
-      backstitchStartPoint: null,
-      selectionRect: leavingSelection ? null : state.selectionRect,
+      editSession: state.editSession.copyWith(
+        drawingMode: mode,
+        backstitchStartPoint: null,
+        selectionRect: leavingSelection ? null : state.editSession.selectionRect,
+      ),
     );
   }
 
   void toggleDrawingMode() {
-    final newMode = state.drawingMode == DrawingMode.draw
+    final newMode = state.editSession.drawingMode == DrawingMode.draw
         ? DrawingMode.erase
         : DrawingMode.draw;
-    state = state.copyWith(drawingMode: newMode, backstitchStartPoint: null);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        drawingMode: newMode,
+        backstitchStartPoint: null,
+      ),
+    );
   }
 
   // ─── Undo / Redo ────────────────────────────────────────────────────────────
@@ -507,7 +546,7 @@ class EditorNotifier extends Notifier<EditorState>
     final restored = _applyLayerUiState(pattern, state.pattern);
     state = state.copyWith(
       pattern: restored,
-      snippetPalettes: palettes,
+      snippetEditorState: state.snippetEditorState.copyWith(palettes: palettes),
       isDirty: true,
       compositeLayer: StitchCompositor.computeComposite(restored),
     );
@@ -546,11 +585,15 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   void clearCanvasWarning() {
-    state = state.copyWith(pendingCanvasWarning: null);
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(pendingCanvasWarning: null),
+    );
   }
 
   void clearPendingFitPage() {
-    state = state.copyWith(pendingFitPage: null);
+    state = state.copyWith(
+      stitchSession: state.stitchSession.copyWith(pendingFitPage: null),
+    );
   }
 
   // ─── Page mode ──────────────────────────────────────────────────────────────
@@ -561,22 +604,31 @@ class EditorNotifier extends Notifier<EditorState>
     final layout = config.enabled
         ? PageLayout.compute(config, newPattern)
         : null;
-    final page = config.enabled ? state.currentPage.clamp(0, (layout!.totalPages - 1).clamp(0, 999)) : 0;
+    final page = config.enabled
+        ? state.stitchSession.currentPage.clamp(0, (layout!.totalPages - 1).clamp(0, 999))
+        : 0;
     state = state.copyWith(
       pattern: newPattern,
-      pageLayout: layout,
-      currentPage: page,
-      pendingFitPage: config.enabled ? page : null,
       isDirty: true,
+      stitchSession: state.stitchSession.copyWith(
+        pageLayout: layout,
+        currentPage: page,
+        pendingFitPage: config.enabled ? page : null,
+      ),
     );
   }
 
   /// Navigate to a specific page index.
   void navigatePage(int page) {
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
     final clamped = page.clamp(0, layout.totalPages - 1);
-    state = state.copyWith(currentPage: clamped, pendingFitPage: clamped);
+    state = state.copyWith(
+      stitchSession: state.stitchSession.copyWith(
+        currentPage: clamped,
+        pendingFitPage: clamped,
+      ),
+    );
     // Persist the current page so it is restored on next session open — but
     // only when in stitch mode with page mode active and progress started.
     final progress = state.pattern.progress;
@@ -589,18 +641,18 @@ class EditorNotifier extends Notifier<EditorState>
   }
 
   void navigateNextPage() {
-    navigatePage(state.currentPage + 1);
+    navigatePage(state.stitchSession.currentPage + 1);
   }
 
   void navigatePreviousPage() {
-    navigatePage(state.currentPage - 1);
+    navigatePage(state.stitchSession.currentPage - 1);
   }
 
   /// Navigate one page to the right within the same row.
   void navigatePageRight() {
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
-    final (col, row) = layout.pageCoords(state.currentPage);
+    final (col, row) = layout.pageCoords(state.stitchSession.currentPage);
     if (col < layout.pagesAcross - 1) {
       navigatePage(layout.pageIndex(col + 1, row));
     }
@@ -608,9 +660,9 @@ class EditorNotifier extends Notifier<EditorState>
 
   /// Navigate one page to the left within the same row.
   void navigatePageLeft() {
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
-    final (col, row) = layout.pageCoords(state.currentPage);
+    final (col, row) = layout.pageCoords(state.stitchSession.currentPage);
     if (col > 0) {
       navigatePage(layout.pageIndex(col - 1, row));
     }
@@ -618,9 +670,9 @@ class EditorNotifier extends Notifier<EditorState>
 
   /// Navigate one page down within the same column.
   void navigatePageDown() {
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
-    final (col, row) = layout.pageCoords(state.currentPage);
+    final (col, row) = layout.pageCoords(state.stitchSession.currentPage);
     if (row < layout.pagesDown - 1) {
       navigatePage(layout.pageIndex(col, row + 1));
     }
@@ -628,9 +680,9 @@ class EditorNotifier extends Notifier<EditorState>
 
   /// Navigate one page up within the same column.
   void navigatePageUp() {
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
-    final (col, row) = layout.pageCoords(state.currentPage);
+    final (col, row) = layout.pageCoords(state.stitchSession.currentPage);
     if (row > 0) {
       navigatePage(layout.pageIndex(col, row - 1));
     }
@@ -639,7 +691,9 @@ class EditorNotifier extends Notifier<EditorState>
   @override
   void warnNoSelection() {
     state = state.copyWith(
-      pendingCanvasWarning: kWarnSelectFirst,
+      editSession: state.editSession.copyWith(
+        pendingCanvasWarning: kWarnSelectFirst,
+      ),
     );
   }
 

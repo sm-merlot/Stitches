@@ -653,7 +653,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
               ),
               IconButton(
                 tooltip: 'Reference Image',
-                isSelected: state.referenceImage != null && state.referenceVisible,
+                isSelected: state.editSession.referenceImage != null && state.editSession.referenceVisible,
                 icon: const Icon(Icons.image_outlined),
                 onPressed: () => showModalBottomSheet(
                   context: context,

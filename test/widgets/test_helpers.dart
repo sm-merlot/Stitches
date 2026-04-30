@@ -67,14 +67,16 @@ EditorState fakeEditState({
     EditorState(
       pattern: pattern ?? fakePattern(),
       mode: AppMode.edit,
-      drawingMode: drawingMode,
-      currentTool: currentTool,
       selectedThreadId: selectedThreadId,
-      fillEraseActive: fillEraseActive,
-      eraserSize: eraserSize,
-      backstitchChainMode: backstitchChainMode,
-      backstitchStartPoint: backstitchStartPoint,
       activeLayerId: kLayerId,
+      editSession: EditSessionState(
+        drawingMode: drawingMode,
+        currentTool: currentTool,
+        fillEraseActive: fillEraseActive,
+        eraserSize: eraserSize,
+        backstitchChainMode: backstitchChainMode,
+        backstitchStartPoint: backstitchStartPoint,
+      ),
     );
 
 EditorState fakeViewState({
@@ -83,8 +85,8 @@ EditorState fakeViewState({
     EditorState(
       pattern: pattern ?? fakePattern(),
       mode: AppMode.view,
-      drawingMode: DrawingMode.pan,
       activeLayerId: kLayerId,
+      editSession: const EditSessionState(drawingMode: DrawingMode.pan),
     );
 
 EditorState fakeStitchState({
@@ -110,11 +112,15 @@ EditorState fakeStitchState({
   return EditorState(
     pattern: finalPat,
     mode: AppMode.stitch,
-    drawingMode: DrawingMode.select,
     activeLayerId: kLayerId,
-    stitchCrossMode: stitchCrossMode,
-    stitchFocusThreadId: stitchFocusThreadId,
-    selectionRect: hasSelection ? const Rect.fromLTWH(0, 0, 2, 2) : null,
-    pageLayout: pageLayout,
+    editSession: EditSessionState(
+      drawingMode: DrawingMode.select,
+      selectionRect: hasSelection ? const Rect.fromLTWH(0, 0, 2, 2) : null,
+    ),
+    stitchSession: StitchSessionState(
+      crossMode: stitchCrossMode,
+      focusThreadId: stitchFocusThreadId,
+      pageLayout: pageLayout,
+    ),
   );
 }

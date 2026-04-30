@@ -97,9 +97,9 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
   /// Calls [action], then pushes a [PatternSnapshotCommand] if the pattern changed.
   void _withSnapshot(void Function() action) {
-    final before = (_getState().pattern, _getState().snippetPalettes);
+    final before = (_getState().pattern, _getState().snippetEditorState.palettes);
     action();
-    final after = (_getState().pattern, _getState().snippetPalettes);
+    final after = (_getState().pattern, _getState().snippetEditorState.palettes);
     if (before.$1 != after.$1 || before.$2 != after.$2) {
       undoManager.push(PatternSnapshotCommand(
           notifier: _notifier, before: before, after: after));
@@ -116,9 +116,9 @@ class EditController implements CanvasEditController, ShortcutHandler {
     _hover = HoverHandler(scheduleRebuild: cb.scheduleRebuild);
     _paste = PasteHandler(
       onCommitPaste: (dx, dy) {
-        final before = (_getState().pattern, _getState().snippetPalettes);
+        final before = (_getState().pattern, _getState().snippetEditorState.palettes);
         n.commitPaste(dx, dy);
-        final after = (_getState().pattern, _getState().snippetPalettes);
+        final after = (_getState().pattern, _getState().snippetEditorState.palettes);
         if (before.$1 != after.$1) {
           undoManager.push(PatternSnapshotCommand(notifier: n, before: before, after: after));
         }
@@ -174,9 +174,9 @@ class EditController implements CanvasEditController, ShortcutHandler {
             notifier: n, cx: cx, cy: cy, size: size, removed: removed));
       },
       onFloodFill: (x, y, {required bool erase}) {
-        final before = (_getState().pattern, _getState().snippetPalettes);
+        final before = (_getState().pattern, _getState().snippetEditorState.palettes);
         n.floodFill(x, y, erase: erase);
-        final after = (_getState().pattern, _getState().snippetPalettes);
+        final after = (_getState().pattern, _getState().snippetEditorState.palettes);
         if (before.$1 != after.$1) {
           undoManager.push(PatternSnapshotCommand(notifier: n, before: before, after: after));
         }
@@ -189,9 +189,9 @@ class EditController implements CanvasEditController, ShortcutHandler {
     _select = SelectHandler(
       onSetSelectionRect: n.setSelectionRect,
       onMoveSelection: (dx, dy) {
-        final before = (_getState().pattern, _getState().snippetPalettes);
+        final before = (_getState().pattern, _getState().snippetEditorState.palettes);
         n.moveSelection(dx, dy);
-        final after = (_getState().pattern, _getState().snippetPalettes);
+        final after = (_getState().pattern, _getState().snippetEditorState.palettes);
         if (before.$1 != after.$1) {
           undoManager.push(PatternSnapshotCommand(notifier: n, before: before, after: after));
         }
@@ -235,8 +235,8 @@ class EditController implements CanvasEditController, ShortcutHandler {
   /// Apple Pencil secondary-button (double-tap) in edit/paste mode.
   @override
   void onPencilDoubleTap(EditorState state) {
-    if (state.drawingMode == DrawingMode.paste) {
-      _paste?.commit(state.pattern, state.clipboard);
+    if (state.editSession.drawingMode == DrawingMode.paste) {
+      _paste?.commit(state.pattern, state.editSession.clipboard);
     } else {
       _notifier.toggleDrawingMode();
     }
@@ -257,7 +257,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     final isStylusMouse = kind == PointerDeviceKind.stylus ||
         kind == PointerDeviceKind.invertedStylus ||
         kind == PointerDeviceKind.mouse;
-    final mode = state.drawingMode;
+    final mode = state.editSession.drawingMode;
     final p = state.pattern;
 
     if (isStylusMouse) {
@@ -267,9 +267,9 @@ class EditController implements CanvasEditController, ShortcutHandler {
       if (mode == DrawingMode.select) {
         _select!.onPointerDown(
           localPos, vp, p.width, p.height,
-          currentSelectionRect: state.selectionRect,
+          currentSelectionRect: state.editSession.selectionRect,
           hasSelectedStitches: state.selectedStitches.isNotEmpty,
-          canvasSelectionMode: state.canvasSelectionMode,
+          canvasSelectionMode: state.editSession.canvasSelectionMode,
           isOnCanvas: isOnCanvas,
         );
         return;
@@ -279,7 +279,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
         if (pencilPasteConfirm) {
           _paste!.setOrigin(localPos, vp);
         } else {
-          _paste!.commit(state.pattern, state.clipboard);
+          _paste!.commit(state.pattern, state.editSession.clipboard);
         }
         return;
       }
@@ -292,9 +292,9 @@ class EditController implements CanvasEditController, ShortcutHandler {
     if (mode == DrawingMode.select) {
       _select!.onPointerDown(
         localPos, vp, p.width, p.height,
-        currentSelectionRect: state.selectionRect,
+        currentSelectionRect: state.editSession.selectionRect,
         hasSelectedStitches: state.selectedStitches.isNotEmpty,
-        canvasSelectionMode: state.canvasSelectionMode,
+        canvasSelectionMode: state.editSession.canvasSelectionMode,
         isOnCanvas: isOnCanvas,
       );
       return;
@@ -302,7 +302,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
     if (mode == DrawingMode.paste) {
       if (pencilPasteConfirm) {
-        _paste!.commit(state.pattern, state.clipboard);
+        _paste!.commit(state.pattern, state.editSession.clipboard);
       } else {
         _paste!.setOrigin(localPos, vp);
       }
@@ -323,7 +323,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     final isStylusMouse = kind == PointerDeviceKind.stylus ||
         kind == PointerDeviceKind.invertedStylus ||
         kind == PointerDeviceKind.mouse;
-    final mode = state.drawingMode;
+    final mode = state.editSession.drawingMode;
     final p = state.pattern;
 
     if (isStylusMouse) {
@@ -340,8 +340,8 @@ class EditController implements CanvasEditController, ShortcutHandler {
       }
       if (mode == DrawingMode.colorPicker) return;
 
-      if (state.currentTool == DrawingTool.backstitch) {
-        if (state.backstitchStartPoint != null) {
+      if (state.editSession.currentTool == DrawingTool.backstitch) {
+        if (state.editSession.backstitchStartPoint != null) {
           _draw!.updateBackstitchHover(localPos, vp);
         }
       } else {
@@ -357,7 +357,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
       _paste!.updateOrigin(localPos, vp);
     } else if (mode == DrawingMode.pan) {
       // pan handled by ZoomPanHandler in [AidaWidget]
-    } else if (state.currentTool != DrawingTool.backstitch) {
+    } else if (state.editSession.currentTool != DrawingTool.backstitch) {
       _draw!.handleDrawAt(localPos, state, vp);
     }
   }
@@ -378,9 +378,9 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
     // Touch paste — commit at current origin.
     if (kind == PointerDeviceKind.touch &&
-        state.drawingMode == DrawingMode.paste &&
+        state.editSession.drawingMode == DrawingMode.paste &&
         _paste!.pasteOrigin != null) {
-      _paste!.commit(state.pattern, state.clipboard);
+      _paste!.commit(state.pattern, state.editSession.clipboard);
       _paste!.clearOrigin();
       return;
     }
@@ -431,13 +431,13 @@ class EditController implements CanvasEditController, ShortcutHandler {
     final p = state.pattern;
     _hover!.onPointerHover(localPos, kind, vp, p.width, p.height);
 
-    if (state.drawingMode == DrawingMode.paste) {
+    if (state.editSession.drawingMode == DrawingMode.paste) {
       _paste!.updateOrigin(localPos, vp);
       return;
     }
 
-    if (state.currentTool == DrawingTool.backstitch &&
-        state.backstitchStartPoint != null) {
+    if (state.editSession.currentTool == DrawingTool.backstitch &&
+        state.editSession.backstitchStartPoint != null) {
       _draw!.updateBackstitchHover(localPos, vp);
     }
   }
@@ -522,10 +522,10 @@ class EditController implements CanvasEditController, ShortcutHandler {
         return true;
       }
       if (shift && key == LogicalKeyboardKey.keyH) {
-        if (state.drawingMode == DrawingMode.select &&
-            state.selectionRect != null) {
+        if (state.editSession.drawingMode == DrawingMode.select &&
+            state.editSession.selectionRect != null) {
           _withSnapshot(_notifier.flipSelectionH);
-        } else if (state.drawingMode == DrawingMode.paste) {
+        } else if (state.editSession.drawingMode == DrawingMode.paste) {
           _notifier.flipClipboardH();
         } else {
           onFlipCanvasH?.call();
@@ -533,10 +533,10 @@ class EditController implements CanvasEditController, ShortcutHandler {
         return true;
       }
       if (shift && key == LogicalKeyboardKey.keyV) {
-        if (state.drawingMode == DrawingMode.select &&
-            state.selectionRect != null) {
+        if (state.editSession.drawingMode == DrawingMode.select &&
+            state.editSession.selectionRect != null) {
           _withSnapshot(_notifier.flipSelectionV);
-        } else if (state.drawingMode == DrawingMode.paste) {
+        } else if (state.editSession.drawingMode == DrawingMode.paste) {
           _notifier.flipClipboardV();
         } else {
           onFlipCanvasV?.call();
@@ -544,10 +544,10 @@ class EditController implements CanvasEditController, ShortcutHandler {
         return true;
       }
       if (shift && key == LogicalKeyboardKey.bracketRight) {
-        if (state.drawingMode == DrawingMode.select &&
-            state.selectionRect != null) {
+        if (state.editSession.drawingMode == DrawingMode.select &&
+            state.editSession.selectionRect != null) {
           _withSnapshot(_notifier.rotateSelectionCW);
-        } else if (state.drawingMode == DrawingMode.paste) {
+        } else if (state.editSession.drawingMode == DrawingMode.paste) {
           _notifier.rotateClipboardCW();
         } else {
           onRotateCanvasCW?.call();
@@ -555,14 +555,14 @@ class EditController implements CanvasEditController, ShortcutHandler {
         return true;
       }
       if (shift && key == LogicalKeyboardKey.bracketLeft) {
-        if (state.drawingMode == DrawingMode.select &&
-            state.selectionRect != null) {
+        if (state.editSession.drawingMode == DrawingMode.select &&
+            state.editSession.selectionRect != null) {
           _withSnapshot(() {
             _notifier.rotateSelectionCW();
             _notifier.rotateSelectionCW();
             _notifier.rotateSelectionCW();
           });
-        } else if (state.drawingMode == DrawingMode.paste) {
+        } else if (state.editSession.drawingMode == DrawingMode.paste) {
           _notifier.rotateClipboardCW();
           _notifier.rotateClipboardCW();
           _notifier.rotateClipboardCW();
@@ -602,7 +602,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
         _notifier.setTool(DrawingTool.fill);
       case LogicalKeyboardKey.digit9:
         _notifier.setDrawingMode(DrawingMode.erase);
-        if (!state.fillEraseActive) _notifier.toggleFillErase();
+        if (!state.editSession.fillEraseActive) _notifier.toggleFillErase();
       case LogicalKeyboardKey.keyC:
         _notifier.setDrawingMode(DrawingMode.colorPicker);
       case LogicalKeyboardKey.keyS:

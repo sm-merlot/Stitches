@@ -76,31 +76,31 @@ class DrawHandler {
     if (!state.editMode) return;
     final canvas = viewport.screenToCanvas(screenPos);
 
-    if (state.drawingMode == DrawingMode.colorPicker) {
+    if (state.editSession.drawingMode == DrawingMode.colorPicker) {
       final (cellX, cellY) = viewport.canvasToCell(canvas);
       if (_inBounds(cellX, cellY, state)) onPickColor(cellX, cellY);
       return;
     }
 
-    if (state.drawingMode == DrawingMode.erase) {
+    if (state.editSession.drawingMode == DrawingMode.erase) {
       final (cellX, cellY) = viewport.canvasToCell(canvas);
       if (_inBounds(cellX, cellY, state)) {
         _checkLayerWarning(state, cellX, cellY);
       }
-      if (state.fillEraseActive) {
+      if (state.editSession.fillEraseActive) {
         if (!_inBounds(cellX, cellY, state)) return;
         if (_fillFired) return;
         _fillFired = true;
         onFloodFill(cellX, cellY, erase: true);
-      } else if (state.eraserSize > 1) {
-        onRemoveBox(cellX, cellY, state.eraserSize);
+      } else if (state.editSession.eraserSize > 1) {
+        onRemoveBox(cellX, cellY, state.editSession.eraserSize);
       } else {
         if (_inBounds(cellX, cellY, state)) onRemoveAt(cellX, cellY);
       }
       return;
     }
 
-    if (state.currentTool == DrawingTool.fill) {
+    if (state.editSession.currentTool == DrawingTool.fill) {
       final (cellX, cellY) = viewport.canvasToCell(canvas);
       if (!_inBounds(cellX, cellY, state)) return;
       if (_fillFired) return;
@@ -109,7 +109,7 @@ class DrawHandler {
       return;
     }
 
-    if (state.currentTool == DrawingTool.backstitch) {
+    if (state.editSession.currentTool == DrawingTool.backstitch) {
       _handleBackstitch(canvas, state, viewport);
       return;
     }
@@ -122,7 +122,7 @@ class DrawHandler {
 
     final (subX, subY) = viewport.subCellPos(canvas, cellX, cellY);
     final stitch = _buildStitch(
-        state.currentTool, cellX, cellY, state.selectedThreadId!, subX, subY);
+        state.editSession.currentTool, cellX, cellY, state.selectedThreadId!, subX, subY);
     if (stitch != null) onAddStitch(stitch);
   }
 
@@ -146,11 +146,11 @@ class DrawHandler {
 
     if (gx < 0 || gx > p.width || gy < 0 || gy > p.height) return;
 
-    if (state.backstitchStartPoint == null) {
+    if (state.editSession.backstitchStartPoint == null) {
       onSetBackstitchStart(gridPt);
       _backstitchHoverPoint = null;
     } else {
-      final start = state.backstitchStartPoint!;
+      final start = state.editSession.backstitchStartPoint!;
       final sx = start.dx, sy = start.dy;
       if (sx == gx && sy == gy) {
         onSetBackstitchStart(null);
@@ -164,7 +164,7 @@ class DrawHandler {
           threadId: state.selectedThreadId!,
         ));
         // Chain mode: end point becomes new start for the next backstitch.
-        final chain = getCtrlHeld() || state.backstitchChainMode;
+        final chain = getCtrlHeld() || state.editSession.backstitchChainMode;
         onSetBackstitchStart(chain ? gridPt : null);
         if (!chain) _backstitchHoverPoint = null;
       }
@@ -230,7 +230,7 @@ class DrawHandler {
     final activeLayer = state.activeLayer;
     final layers = state.pattern.layers;
 
-    if (state.drawingMode == DrawingMode.erase) {
+    if (state.editSession.drawingMode == DrawingMode.erase) {
       final activeHasStitch = activeLayer.stitchesAt(cellX, cellY).isNotEmpty;
       if (!activeHasStitch) {
         final othersHaveStitch = layers.any((l) =>
@@ -242,7 +242,7 @@ class DrawHandler {
               'Nothing to erase on active layer here — check other layers');
         }
       }
-    } else if (state.drawingMode == DrawingMode.draw) {
+    } else if (state.editSession.drawingMode == DrawingMode.draw) {
       if (!activeLayer.visible) {
         onLayerWarning('Active layer is hidden — drawing won\'t be visible');
         return;

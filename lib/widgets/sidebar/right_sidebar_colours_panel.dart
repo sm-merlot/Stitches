@@ -415,12 +415,12 @@ class _StitchColoursPanel extends ConsumerWidget {
 
     // Page colour filtering: when page mode is active and the toggle is on,
     // only show threads that have stitches on the current page.
-    final pageLayout = state.pageLayout;
-    final showPageColours = state.stitchShowPageColours && pageLayout != null && state.stitchMode;
+    final pageLayout = state.stitchSession.pageLayout;
+    final showPageColours = state.stitchSession.showPageColours && pageLayout != null && state.stitchMode;
     List<Thread> threads;
     Map<String, int> stitchCounts;
     if (showPageColours) {
-      final (pageCol, pageRow) = pageLayout.pageCoords(state.currentPage);
+      final (pageCol, pageRow) = pageLayout.pageCoords(state.stitchSession.currentPage);
       final pageCounts = <String, int>{};
 
       // FullStitches: use the composite cache so only the topmost visible
@@ -494,7 +494,7 @@ class _StitchColoursPanel extends ConsumerWidget {
     final backStitchCount = showPageColours
         ? (() {
             int count = 0;
-            final (pageCol, pageRow) = pageLayout.pageCoords(state.currentPage);
+            final (pageCol, pageRow) = pageLayout.pageCoords(state.stitchSession.currentPage);
             for (final s in state.pattern.stitches.whereType<BackStitch>()) {
               final sx = s.x1.floor();
               final sy = s.y1.floor();
@@ -517,7 +517,7 @@ class _StitchColoursPanel extends ConsumerWidget {
                 ButtonSegment(value: false, label: Text('All')),
                 ButtonSegment(value: true, label: Text('Page')),
               ],
-              selected: {state.stitchShowPageColours},
+              selected: {state.stitchSession.showPageColours},
               onSelectionChanged: (s) => notifier.setStitchShowPageColours(s.first),
               style: const ButtonStyle(
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -564,18 +564,18 @@ class _StitchColoursPanel extends ConsumerWidget {
                 _FocusToggle(
                   label: 'Cross',
                   icon: Icons.close,
-                  active: state.stitchCrossMode,
+                  active: state.stitchSession.crossMode,
                   onTap: () =>
-                      notifier.setStitchCrossMode(!state.stitchCrossMode),
+                      notifier.setStitchCrossMode(!state.stitchSession.crossMode),
                   theme: theme,
                 ),
                 const SizedBox(width: 4),
                 _FocusToggle(
                   label: 'Back',
                   icon: Icons.show_chart,
-                  active: state.stitchBackMode,
+                  active: state.stitchSession.backMode,
                   onTap: () =>
-                      notifier.setStitchBackMode(!state.stitchBackMode),
+                      notifier.setStitchBackMode(!state.stitchSession.backMode),
                   theme: theme,
                 ),
               ],
@@ -587,12 +587,12 @@ class _StitchColoursPanel extends ConsumerWidget {
         Expanded(
           child: _ThreadList(
             threads: threads,
-            selectedThreadId: state.stitchFocusThreadId,
+            selectedThreadId: state.stitchSession.focusThreadId,
             useDmc: useDmc,
             stitchCounts: stitchCounts,
             doneCounts: doneCounts,
             onTap: (t) => notifier.setStitchFocusThread(
-                state.stitchFocusThreadId == t.dmcCode ? null : t.dmcCode),
+                state.stitchSession.focusThreadId == t.dmcCode ? null : t.dmcCode),
             focusMode: true,
           ),
         ),
@@ -676,11 +676,11 @@ class StitchDemoButton extends StatelessWidget {
   /// In edit mode: selectedStitches from selectionRect.
   /// Fallback: all pattern stitches.
   List<Stitch> _stitchPool() {
-    final region = state.stitchMode ? state.progressRegion : state.selectionRect;
+    final region = state.stitchMode ? state.stitchSession.progressRegion : state.editSession.selectionRect;
     if (region != null) {
-      final layout = state.pageLayout;
+      final layout = state.stitchSession.pageLayout;
       final (pageCol, pageRow) = layout != null
-          ? layout.pageCoords(state.currentPage)
+          ? layout.pageCoords(state.stitchSession.currentPage)
           : (0, 0);
       final stitches = <Stitch>[];
       for (final layer in state.pattern.layers) {
@@ -700,7 +700,7 @@ class StitchDemoButton extends StatelessWidget {
       }
       return stitches;
     }
-    if (state.selectionRect != null) return state.selectedStitches;
+    if (state.editSession.selectionRect != null) return state.selectedStitches;
     return state.pattern.stitches;
   }
 
@@ -708,10 +708,10 @@ class StitchDemoButton extends StatelessWidget {
   Widget build(BuildContext context) {
     // Enabled only when the user has a selection or progress region with stitches,
     // and at least one is a FullStitch matching the focused thread (if any).
-    final focusId = state.stitchFocusThreadId;
+    final focusId = state.stitchSession.focusThreadId;
     final hasRegion = state.stitchMode
-        ? state.progressRegion != null
-        : state.selectionRect != null;
+        ? state.stitchSession.progressRegion != null
+        : state.editSession.selectionRect != null;
     final pool = _stitchPool();
     final enabled = hasRegion &&
         pool.any((s) => s is FullStitch && (focusId == null || s.threadId == focusId));
@@ -769,7 +769,7 @@ class StitchDemoButton extends StatelessWidget {
 
   Future<void> _onDemonstrate(BuildContext context) async {
     final pattern = state.pattern;
-    final focusId = state.stitchFocusThreadId;
+    final focusId = state.stitchSession.focusThreadId;
     final fullStitches = _stitchPool().whereType<FullStitch>().toList();
 
     Thread? thread;
@@ -828,8 +828,8 @@ class _SnippetColoursPanel extends ConsumerWidget {
     final notifier = ref.read(editorProvider.notifier);
     final useDmc = ref.watch(settingsProvider).useDmc;
 
-    final palettes = state.snippetPalettes;
-    final activeIdx = state.snippetActivePaletteIndex;
+    final palettes = state.snippetEditorState.palettes;
+    final activeIdx = state.snippetEditorState.activePaletteIndex;
     final threads = (palettes.isNotEmpty && activeIdx < palettes.length)
         ? palettes[activeIdx].threads
         : state.pattern.threads.values.toList();
@@ -1475,18 +1475,18 @@ class MarkDoneButton extends ConsumerWidget {
   /// Whether the region contains any visible stitches (cross or back) on the
   /// current page that match the focus thread (if one is active).
   static bool _regionHasPageStitches(EditorState s) {
-    final region = s.progressRegion;
+    final region = s.stitchSession.progressRegion;
     if (region == null) return false;
-    final layout = s.pageLayout;
-    final focusId = s.stitchFocusThreadId;
-    final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.currentPage) : (0, 0);
+    final layout = s.stitchSession.pageLayout;
+    final focusId = s.stitchSession.focusThreadId;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.stitchSession.currentPage) : (0, 0);
     for (final layer in s.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (focusId != null && stitch.threadId != focusId) continue;
         if (stitch is BackStitch) {
           // Cross-stitch focus mode: backstitches don't count.
-          if (s.stitchCrossMode) continue;
+          if (s.stitchSession.crossMode) continue;
           final midX = (stitch.x1 + stitch.x2) / 2;
           final midY = (stitch.y1 + stitch.y2) / 2;
           if (midX >= region.left && midX < region.right &&
@@ -1497,7 +1497,7 @@ class MarkDoneButton extends ConsumerWidget {
           }
         } else {
           // Backstitch focus mode: cross-stitches don't count.
-          if (s.stitchBackMode) continue;
+          if (s.stitchSession.backMode) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
           final sx = coords.x;
@@ -1514,19 +1514,19 @@ class MarkDoneButton extends ConsumerWidget {
   }
 
   static bool _isRegionAllDone(EditorState s) {
-    final region = s.progressRegion;
+    final region = s.stitchSession.progressRegion;
     if (region == null) return false;
     final progress = s.pattern.progress;
-    final layout = s.pageLayout;
-    final focusId = s.stitchFocusThreadId;
-    final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.currentPage) : (0, 0);
+    final layout = s.stitchSession.pageLayout;
+    final focusId = s.stitchSession.focusThreadId;
+    final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.stitchSession.currentPage) : (0, 0);
     bool hasAny = false;
     for (final layer in s.pattern.layers) {
       if (!layer.visible) continue;
       for (final stitch in layer.stitches) {
         if (focusId != null && stitch.threadId != focusId) continue;
         if (stitch is BackStitch) {
-          if (s.stitchCrossMode) continue;
+          if (s.stitchSession.crossMode) continue;
           final midX = (stitch.x1 + stitch.x2) / 2;
           final midY = (stitch.y1 + stitch.y2) / 2;
           if (midX >= region.left && midX < region.right &&
@@ -1537,7 +1537,7 @@ class MarkDoneButton extends ConsumerWidget {
             if (!progress.isBackstitchDone(stitch.x1, stitch.y1, stitch.x2, stitch.y2)) return false;
           }
         } else {
-          if (s.stitchBackMode) continue;
+          if (s.stitchSession.backMode) continue;
           final coords = EditorState.cellCoords(stitch);
           if (coords == null) continue;
           final sx = coords.x;
@@ -1582,7 +1582,7 @@ class MarkDoneButton extends ConsumerWidget {
           onPressed: enabled
               ? () {
                   final notifier = ref.read(editorProvider.notifier);
-                  final region = state.progressRegion!;
+                  final region = state.stitchSession.progressRegion!;
                   if (allDone) {
                     notifier.markRegionNotDone(region);
                   } else {

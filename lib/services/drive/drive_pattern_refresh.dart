@@ -57,15 +57,15 @@ Future<void> refreshDrivePatternInBackground(
     // pan/zoom/tool the user has set since opening — not a stale on-disk
     // snapshot that would reset their viewport.
     final liveSession = EditorSession(
-      tool: current.currentTool.name,
+      tool: current.editSession.currentTool.name,
       selectedThreadId: current.selectedThreadId,
-      colourMode: current.colourMode,
+      colourMode: current.editSession.colourMode,
       activeLayerId:
           current.activeLayerId.isEmpty ? null : current.activeLayerId,
-      viewPanX: current.viewPanX,
-      viewPanY: current.viewPanY,
-      viewScale: current.viewScale,
-      stitchPage: current.currentPage,
+      viewPanX: current.viewState.panX,
+      viewPanY: current.viewState.panY,
+      viewScale: current.viewState.scale,
+      stitchPage: current.stitchSession.currentPage,
     );
 
     // Capture mode before loadPattern — it always resets to AppMode.view.

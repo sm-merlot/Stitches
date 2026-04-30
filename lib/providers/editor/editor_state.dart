@@ -6,7 +6,7 @@ part of 'editor_provider.dart';
 
 /// Monolithic editor state shared across all modes.
 ///
-/// Field groups (candidates for future per-mode extraction):
+/// Field groups:
 ///
 /// **Shared / file lifecycle**
 ///   pattern, filePath, driveFileId, driveParentFolderId, isFileOpen,
@@ -14,23 +14,26 @@ part of 'editor_provider.dart';
 ///   showCompositeThreads, compositeLayer, recentThreadIds,
 ///   controllerCanUndo, controllerCanRedo.
 ///
-/// **Edit-mode only** (→ future EditSessionState)
+/// **Edit-mode session** → [editSession] ([EditSessionState])
 ///   currentTool, drawingMode, backstitchStartPoint, backstitchChainMode,
 ///   selectionRect, clipboard, clipboardThreads, clipboardFromSnippet,
 ///   eraserSize, fillEraseActive, canvasSelectionMode, pendingCanvasWarning,
 ///   referenceImage, referenceOpacity, referenceVisible, colourMode.
 ///
-/// **Stitch-mode only** (→ future StitchSessionState)
-///   stitchCrossMode, stitchBackMode, stitchFocusThreadId, stitchShowPageColours,
+/// **Stitch-mode session** → [stitchSession] ([StitchSessionState])
+///   crossMode (was stitchCrossMode), backMode (was stitchBackMode),
+///   focusThreadId (was stitchFocusThreadId),
+///   showPageColours (was stitchShowPageColours),
 ///   currentPage, pageLayout, pendingFitPage, progressRegion.
 ///
-/// **Snippet-editor only** (→ future SnippetEditorState)
-///   snippetPalettes, snippetActivePaletteIndex.
+/// **Snippet-editor session** → [snippetEditorState] ([SnippetEditorState])
+///   palettes (was snippetPalettes),
+///   activePaletteIndex (was snippetActivePaletteIndex).
 ///
-/// **View / pan position** (→ future ViewState)
-///   viewPanX, viewPanY, viewScale.
+/// **View / pan position** → [viewState] ([ViewState])
+///   panX (was viewPanX), panY (was viewPanY), scale (was viewScale).
 ///
-/// **Render pipeline hint** (→ future dedicated field on AidaWidget)
+/// **Render pipeline hint** (kept flat — AidaWidget reads it directly)
 ///   dirtyCellKeys.
 class EditorState {
   // ── Shared / file lifecycle ───────────────────────────────────────────────
@@ -46,67 +49,17 @@ class EditorState {
   final String activeLayerId;
   final bool showCompositeThreads;
   final CompositeLayer? compositeLayer;
+
   /// Most-recently-used thread IDs, most recent first. Max 5. Session-only.
   final List<String> recentThreadIds;
   final bool controllerCanUndo;
   final bool controllerCanRedo;
 
-  // ── Edit-mode fields ──────────────────────────────────────────────────────
-  final DrawingTool currentTool;
-  final DrawingMode drawingMode;
-  final Offset? backstitchStartPoint;
-  /// When true, backstitch drawing chains: the end point of one backstitch
-  /// becomes the start point of the next. Toggled via toolbar (touch) or
-  /// held via Ctrl (desktop).
-  final bool backstitchChainMode;
-  final Rect? selectionRect;
-  final List<Stitch>? clipboard;
-  final List<Thread>? clipboardThreads;
-  final bool clipboardFromSnippet;
-  /// Edge length of the eraser square (1 = single cell, 2 = 2×2, etc.).
-  final int eraserSize;
-  /// When true, erase mode uses flood-fill erase instead of the square eraser.
-  final bool fillEraseActive;
-  /// When true, selection operations act on all visible layers instead of just the active layer.
-  final bool canvasSelectionMode;
-  /// Non-null when the notifier wants AidaWidget to show a one-shot warning banner.
-  /// AidaWidget clears this immediately after showing it.
-  final String? pendingCanvasWarning;
-  final ui.Image? referenceImage;
-  final double referenceOpacity;
-  final bool referenceVisible;
-  final bool colourMode;
-
-  // ── Stitch-mode fields ────────────────────────────────────────────────────
-  final bool stitchCrossMode; // Cross: hides backstitches, normal stitches shown in colour
-  final bool stitchBackMode;  // Back: greys normal stitches, backstitches shown in colour
-  final String? stitchFocusThreadId;
-  /// When true and page mode is active, the stitch-mode colour list shows only
-  /// threads present on the current page. Defaults to false (show all colours).
-  final bool stitchShowPageColours;
-  /// Current page index (0-based) in page mode. Session-only, not persisted.
-  final int currentPage;
-  /// Precomputed page layout. Non-null when page mode is enabled.
-  final PageLayout? pageLayout;
-  /// When non-null, AidaWidget should animate to fit this page index then
-  /// clear the value via [clearPendingFitPage].
-  final int? pendingFitPage;
-  /// The committed progress-marking region in stitch mode (cell coordinates).
-  /// Set when the user finishes a drag-to-select on the canvas. Shown as a
-  /// dashed overlay and drives the "Mark done / Mark not done" sidebar button.
-  /// Cleared when leaving stitch mode or starting a new drag.
-  final Rect? progressRegion;
-
-  // ── Snippet-editor fields ─────────────────────────────────────────────────
-  final List<SnippetPalette> snippetPalettes;
-  final int snippetActivePaletteIndex;
-
-  // ── View / pan position ───────────────────────────────────────────────────
-  /// Last-known canvas view position — written on pointer-up, read on file open.
-  /// Scale == 0 means no saved position (use AidaWidget default).
-  final double viewPanX;
-  final double viewPanY;
-  final double viewScale;
+  // ── Grouped session state ─────────────────────────────────────────────────
+  final ViewState viewState;
+  final StitchSessionState stitchSession;
+  final EditSessionState editSession;
+  final SnippetEditorState snippetEditorState;
 
   // ── Render pipeline hint ──────────────────────────────────────────────────
   /// [Cell] keys whose [RenderCache] entries need incremental update.
@@ -133,48 +86,23 @@ class EditorState {
   const EditorState({
     required this.pattern,
     this.filePath,
-    this.currentTool = DrawingTool.fullStitch,
-    this.drawingMode = DrawingMode.draw,
     this.selectedThreadId,
     this.isDirty = false,
-    this.backstitchStartPoint,
     this.recentThreadIds = const [],
-    this.selectionRect,
-    this.clipboard,
-    this.clipboardThreads,
-    this.clipboardFromSnippet = false,
     this.activeLayerId = '',
     this.showCompositeThreads = true,
     this.compositeLayer,
     this.mode = AppMode.view,
-    this.colourMode = false,
-    this.stitchCrossMode = false,
-    this.stitchBackMode = false,
-    this.stitchFocusThreadId,
-    this.stitchShowPageColours = false,
-    this.referenceImage,
-    this.referenceOpacity = 0.5,
-    this.referenceVisible = true,
     this.driveFileId,
     this.driveParentFolderId,
     this.isFileOpen = false,
-    this.snippetPalettes = const [],
-    this.snippetActivePaletteIndex = 0,
-    this.eraserSize = 1,
-    this.fillEraseActive = false,
-    this.backstitchChainMode = false,
-    this.viewPanX = 0,
-    this.viewPanY = 0,
-    this.viewScale = 0,
-    this.canvasSelectionMode = false,
-    this.pendingCanvasWarning,
     this.compressOnSave = true,
     this.controllerCanUndo = false,
     this.controllerCanRedo = false,
-    this.currentPage = 0,
-    this.pageLayout,
-    this.pendingFitPage,
-    this.progressRegion,
+    this.viewState = const ViewState(),
+    this.stitchSession = const StitchSessionState(),
+    this.editSession = const EditSessionState(),
+    this.snippetEditorState = const SnippetEditorState(),
     this.dirtyCellKeys,
   });
 
@@ -210,9 +138,9 @@ class EditorState {
   }
 
   List<Stitch> get selectedStitches {
-    final rect = selectionRect;
+    final rect = editSession.selectionRect;
     if (rect == null) return [];
-    if (canvasSelectionMode) {
+    if (editSession.canvasSelectionMode) {
       // Mirror the compositor-based logic in copySelection: use the deduplicated
       // visible stitch list so the selection count and copy both reflect what
       // is actually rendered on the canvas.
@@ -282,85 +210,39 @@ class EditorState {
   EditorState copyWith({
     CrossStitchPattern? pattern,
     Object? filePath = _sentinel,
-    DrawingTool? currentTool,
-    DrawingMode? drawingMode,
     Object? selectedThreadId = _sentinel,
     bool? isDirty,
-    Object? backstitchStartPoint = _sentinel,
     List<String>? recentThreadIds,
-    Object? selectionRect = _sentinel,
-    Object? clipboard = _sentinel,
-    Object? clipboardThreads = _sentinel,
-    bool? clipboardFromSnippet,
     String? activeLayerId,
     bool? showCompositeThreads,
     Object? compositeLayer = _sentinel,
     AppMode? mode,
-    bool? colourMode,
-    bool? stitchCrossMode,
-    bool? stitchBackMode,
-    Object? stitchFocusThreadId = _sentinel,
-    bool? stitchShowPageColours,
-    Object? referenceImage = _sentinel,
-    double? referenceOpacity,
-    bool? referenceVisible,
     Object? driveFileId = _sentinel,
     Object? driveParentFolderId = _sentinel,
     bool? isFileOpen,
-    List<SnippetPalette>? snippetPalettes,
-    int? snippetActivePaletteIndex,
-    int? eraserSize,
-    bool? fillEraseActive,
-    bool? backstitchChainMode,
-    double? viewPanX,
-    double? viewPanY,
-    double? viewScale,
-    bool? canvasSelectionMode,
-    Object? pendingCanvasWarning = _sentinel,
     bool? compressOnSave,
     bool? controllerCanUndo,
     bool? controllerCanRedo,
-    int? currentPage,
-    Object? pageLayout = _sentinel,
-    Object? pendingFitPage = _sentinel,
-    Object? progressRegion = _sentinel,
+    ViewState? viewState,
+    StitchSessionState? stitchSession,
+    EditSessionState? editSession,
+    SnippetEditorState? snippetEditorState,
     Set<Cell>? dirtyCellKeys,
   }) {
     return EditorState(
       pattern: pattern ?? this.pattern,
       filePath: filePath == _sentinel ? this.filePath : filePath as String?,
-      currentTool: currentTool ?? this.currentTool,
-      drawingMode: drawingMode ?? this.drawingMode,
       selectedThreadId: selectedThreadId == _sentinel
           ? this.selectedThreadId
           : selectedThreadId as String?,
       isDirty: isDirty ?? this.isDirty,
-      backstitchStartPoint: backstitchStartPoint == _sentinel
-          ? this.backstitchStartPoint
-          : backstitchStartPoint as Offset?,
       recentThreadIds: recentThreadIds ?? this.recentThreadIds,
-      selectionRect: selectionRect == _sentinel ? this.selectionRect : selectionRect as Rect?,
-      clipboard: clipboard == _sentinel ? this.clipboard : clipboard as List<Stitch>?,
-      clipboardThreads: clipboardThreads == _sentinel ? this.clipboardThreads : clipboardThreads as List<Thread>?,
-      clipboardFromSnippet: clipboardFromSnippet ?? this.clipboardFromSnippet,
       activeLayerId: activeLayerId ?? this.activeLayerId,
       showCompositeThreads: showCompositeThreads ?? this.showCompositeThreads,
       compositeLayer: compositeLayer == _sentinel
           ? this.compositeLayer
           : compositeLayer as CompositeLayer?,
       mode: mode ?? this.mode,
-      colourMode: colourMode ?? this.colourMode,
-      stitchCrossMode: stitchCrossMode ?? this.stitchCrossMode,
-      stitchBackMode: stitchBackMode ?? this.stitchBackMode,
-      stitchFocusThreadId: stitchFocusThreadId == _sentinel
-          ? this.stitchFocusThreadId
-          : stitchFocusThreadId as String?,
-      stitchShowPageColours: stitchShowPageColours ?? this.stitchShowPageColours,
-      referenceImage: referenceImage == _sentinel
-          ? this.referenceImage
-          : referenceImage as ui.Image?,
-      referenceOpacity: referenceOpacity ?? this.referenceOpacity,
-      referenceVisible: referenceVisible ?? this.referenceVisible,
       driveFileId: driveFileId == _sentinel
           ? this.driveFileId
           : driveFileId as String?,
@@ -368,25 +250,13 @@ class EditorState {
           ? this.driveParentFolderId
           : driveParentFolderId as String?,
       isFileOpen: isFileOpen ?? this.isFileOpen,
-      snippetPalettes: snippetPalettes ?? this.snippetPalettes,
-      snippetActivePaletteIndex: snippetActivePaletteIndex ?? this.snippetActivePaletteIndex,
-      eraserSize: eraserSize ?? this.eraserSize,
-      fillEraseActive: fillEraseActive ?? this.fillEraseActive,
-      backstitchChainMode: backstitchChainMode ?? this.backstitchChainMode,
-      viewPanX: viewPanX ?? this.viewPanX,
-      viewPanY: viewPanY ?? this.viewPanY,
-      viewScale: viewScale ?? this.viewScale,
-      canvasSelectionMode: canvasSelectionMode ?? this.canvasSelectionMode,
-      pendingCanvasWarning: pendingCanvasWarning == _sentinel
-          ? this.pendingCanvasWarning
-          : pendingCanvasWarning as String?,
       compressOnSave: compressOnSave ?? this.compressOnSave,
       controllerCanUndo: controllerCanUndo ?? this.controllerCanUndo,
       controllerCanRedo: controllerCanRedo ?? this.controllerCanRedo,
-      currentPage: currentPage ?? this.currentPage,
-      pageLayout: pageLayout == _sentinel ? this.pageLayout : pageLayout as PageLayout?,
-      pendingFitPage: pendingFitPage == _sentinel ? this.pendingFitPage : pendingFitPage as int?,
-      progressRegion: progressRegion == _sentinel ? this.progressRegion : progressRegion as Rect?,
+      viewState: viewState ?? this.viewState,
+      stitchSession: stitchSession ?? this.stitchSession,
+      editSession: editSession ?? this.editSession,
+      snippetEditorState: snippetEditorState ?? this.snippetEditorState,
       dirtyCellKeys: dirtyCellKeys,
     );
   }

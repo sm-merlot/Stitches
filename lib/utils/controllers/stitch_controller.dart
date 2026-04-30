@@ -144,8 +144,8 @@ class StitchController implements ShortcutHandler {
     if (_progress == null) return;
     final p = state.pattern;
 
-    if (state.drawingMode == DrawingMode.select) {
-      if (state.progressRegion != null) {
+    if (state.editSession.drawingMode == DrawingMode.select) {
+      if (state.stitchSession.progressRegion != null) {
         _notifier.setProgressRegion(null);
         return;
       }
@@ -227,7 +227,7 @@ class StitchController implements ShortcutHandler {
         Size(canvasWidth, canvasHeight),
         stitchMode: true,
         pageEnabled: state.pattern.pageConfig.enabled,
-        hasPageLayout: state.pageLayout != null,
+        hasPageLayout: state.stitchSession.pageLayout != null,
       );
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ class StitchController implements ShortcutHandler {
     }
 
     // Page-mode arrow navigation.
-    if (state.pattern.pageConfig.enabled && state.pageLayout != null) {
+    if (state.pattern.pageConfig.enabled && state.stitchSession.pageLayout != null) {
       if (key == LogicalKeyboardKey.arrowRight) {
         _notifier.navigatePageRight();
         return true;
@@ -298,7 +298,7 @@ class StitchController implements ShortcutHandler {
     }
 
     if (key == LogicalKeyboardKey.escape) {
-      if (state.selectionRect != null) {
+      if (state.editSession.selectionRect != null) {
         _notifier.cancelSelection();
       } else {
         _notifier.toggleStitchMode();

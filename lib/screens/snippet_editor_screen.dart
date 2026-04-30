@@ -173,7 +173,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
                 s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
             _initialThreadHash = s.pattern.threads.values.fold(
                 0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
-            _initialPalettes = s.snippetPalettes;
+            _initialPalettes = s.snippetEditorState.palettes;
           });
         }
       });
@@ -208,7 +208,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         s.pattern.stitches.fold(0, (h, st) => Object.hash(h, st));
     _initialThreadHash = s.pattern.threads.values.fold(
         0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
-    _initialPalettes = s.snippetPalettes;
+    _initialPalettes = s.snippetEditorState.palettes;
   }
 
   void _onPresetSelected(int? index) {
@@ -325,8 +325,8 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
     final pattern = editorState.pattern;
     final name = _nameController.text.trim();
 
-    final localPalettes = editorState.snippetPalettes;
-    final activePaletteIdx = editorState.snippetActivePaletteIndex;
+    final localPalettes = editorState.snippetEditorState.palettes;
+    final activePaletteIdx = editorState.snippetEditorState.activePaletteIndex;
 
     // Preserve all primary palette threads without pruning unused ones.
     // Pruning can shorten the primary palette list, which shifts secondary
@@ -429,12 +429,12 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             const SizedBox(width: 4),
             // ── Realistic mode toggle — title area, matches main editor ──
             IconButton(
-              tooltip: state.colourMode ? 'Colour mode: on' : 'Colour mode: off',
-              isSelected: state.colourMode,
+              tooltip: state.editSession.colourMode ? 'Colour mode: on' : 'Colour mode: off',
+              isSelected: state.editSession.colourMode,
               icon: const Icon(Icons.invert_colors_outlined),
               selectedIcon: const Icon(Icons.invert_colors),
               onPressed: () => notifier.toggleColourMode(),
-              style: state.colourMode
+              style: state.editSession.colourMode
                   ? IconButton.styleFrom(
                       backgroundColor: theme.colorScheme.primaryContainer,
                       foregroundColor: theme.colorScheme.onPrimaryContainer,
@@ -526,7 +526,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
         0, (h, t) => Object.hash(h, t.dmcCode, t.color.toARGB32(), t.symbol));
     if (threadHash != _initialThreadHash) return true;
     // Palette changes (secondary colorway edits via setSnippetPaletteThreadColor)
-    if (!identical(s.snippetPalettes, _initialPalettes)) return true;
+    if (!identical(s.snippetEditorState.palettes, _initialPalettes)) return true;
     // Name changes (existing snippets only — new snippets with only a name
     // change and no stitches aren't worth warning about)
     if (widget.snippet != null &&
