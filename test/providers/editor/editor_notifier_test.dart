@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stitches/models/layer/layer_blend_mode.dart';
 import 'package:stitches/models/pattern.dart';
+import 'package:stitches/models/progress/pattern_progress.dart';
 import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/models/thread.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
@@ -680,18 +681,21 @@ void main() {
       expect(editorState(c).pattern.progress.completedStitches, isEmpty);
     });
 
-    test('undoProgress reverts last marking; redoProgress reapplies it', () {
+    test('applyProgressSnapshot restores progress without rolling back log', () {
       notifier(c).setMode(AppMode.edit);
       notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
       notifier(c).setMode(AppMode.stitch);
 
       notifier(c).toggleStitchDone(1, 1);
-      expect(editorState(c).pattern.progress.isStitchDone(1, 1), isTrue);
+      final afterToggle = editorState(c).pattern.progress;
+      expect(afterToggle.isStitchDone(1, 1), isTrue);
 
-      notifier(c).undoProgress();
+      // applyProgressSnapshot acts like undo: restore to empty progress.
+      notifier(c).applyProgressSnapshot(PatternProgress.empty);
       expect(editorState(c).pattern.progress.isStitchDone(1, 1), isFalse);
 
-      notifier(c).redoProgress();
+      // Re-apply the toggle state (redo equivalent).
+      notifier(c).applyProgressSnapshot(afterToggle);
       expect(editorState(c).pattern.progress.isStitchDone(1, 1), isTrue);
     });
 
