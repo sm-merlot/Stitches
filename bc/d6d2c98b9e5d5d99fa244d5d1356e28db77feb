@@ -1,0 +1,33 @@
+lib/providers/editor/editor_provider_progress.dart
+  07dbcf85b75c6fc0 238-239,241-258,500-501,503-505,513,520-522
+lib/screens/stitch_demo_screen.dart
+  07dbcf85b75c6fc0 180,319
+lib/providers/google_drive_provider.dart
+  07dbcf85b75c6fc0 65-66,68
+lib/services/stitch_compositor.dart
+  07dbcf85b75c6fc0 84-101
+lib/utils/controllers/edit_controller.dart
+  07dbcf85b75c6fc0 3,581-587
+lib/providers/editor/editor_provider_layers.dart
+  07dbcf85b75c6fc0 119,199,201,204-212,214-218,325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "bcd6d2c98b9e5d5d99fa244d5d1356e28db77feb",
+  "prompts": {
+    "07dbcf85b75c6fc0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21069a76-5a91-4479-8aa8-5e833bfa6f39",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 78,
+      "total_deletions": 19,
+      "accepted_lines": 78,
+      "overriden_lines": 0
+    }
+  }
+}
