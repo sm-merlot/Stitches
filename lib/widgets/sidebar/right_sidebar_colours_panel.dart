@@ -664,9 +664,9 @@ class _FocusToggle extends StatelessWidget {
 }
 
 /// Returns a map of cell → resolved dmcCode (the thread the user sees),
-/// built from [EditorState.compositeLayer]. Returns empty map if composite
+/// built from [StitchStateView.compositeLayer]. Returns empty map if composite
 /// is not yet available (only possible briefly at startup, never in stitch mode).
-Map<Cell, String> _buildTopThread(EditorState s) {
+Map<Cell, String> _buildTopThread(StitchStateView s) {
   final composite = s.compositeLayer;
   if (composite == null) return {};
   return {
@@ -686,33 +686,50 @@ class StitchDemoButton extends StatelessWidget {
   const StitchDemoButton({super.key, required this.state});
 
   /// Returns the pool of stitches for the Demo button.
-  /// In stitch mode: stitches within progressRegion (page-filtered if needed).
+  /// In stitch mode: stitches within progressRegion (page-filtered if needed),
+  ///   resolved via compositeLayer so blended cells are handled correctly.
   /// In edit mode: selectedStitches from selectionRect.
   /// Fallback: all pattern stitches.
   List<Stitch> _stitchPool() {
-    final region = state.stitchMode ? state.stitchSession.progressRegion : state.editSession.selectionRect;
+    final region = state.stitchMode
+        ? state.stitchSession.progressRegion
+        : state.editSession.selectionRect;
     if (region != null) {
       final layout = state.stitchSession.pageLayout;
       final (pageCol, pageRow) = layout != null
           ? layout.pageCoords(state.stitchSession.currentPage)
           : (0, 0);
-      final stitches = <Stitch>[];
-      for (final layer in state.pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is BackStitch) continue;
-          final coords = EditorState.cellCoords(stitch);
+      // Stitch mode: use compositeLayer — no raw layer access.
+      if (state.stitchMode) {
+        final composite = state.compositeLayer;
+        if (composite == null) return [];
+        final stitches = <Stitch>[];
+        for (final cs in composite.fullStitches.values) {
+          final coords = EditorState.cellCoords(cs.stitch);
           if (coords == null) continue;
-          final sx = coords.x;
-          final sy = coords.y;
+          final sx = coords.x; final sy = coords.y;
           if (sx >= region.left && sx < region.right &&
               sy >= region.top && sy < region.bottom) {
             if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
-            stitches.add(stitch);
+            stitches.add(cs.stitch);
           }
         }
+        for (final cs in composite.otherStitches) {
+          final coords = EditorState.cellCoords(cs.stitch);
+          if (coords == null) continue;
+          final sx = coords.x; final sy = coords.y;
+          if (sx >= region.left && sx < region.right &&
+              sy >= region.top && sy < region.bottom) {
+            if (layout != null && !layout.cellOnPage(sx, sy, pageCol, pageRow)) continue;
+            stitches.add(cs.stitch);
+          }
+        }
+        return stitches;
       }
-      return stitches;
+      // Edit mode: use raw selectedStitches (layer-aware selection).
+      return state.selectedStitches
+          .where((s) => EditorState.isStitchInRect(s, region))
+          .toList();
     }
     if (state.editSession.selectionRect != null) return state.selectedStitches;
     return state.pattern.stitches;
@@ -736,7 +753,7 @@ class StitchDemoButton extends StatelessWidget {
       final (pageCol, pageRow) = layout != null
           ? layout.pageCoords(state.stitchSession.currentPage)
           : (0, 0);
-      final topThread = _buildTopThread(state);
+      final topThread = _buildTopThread(StitchStateView(state));
       for (final entry in topThread.entries) {
         final cell = entry.key;
         final threadId = entry.value;
@@ -1509,14 +1526,15 @@ class MarkDoneButton extends ConsumerWidget {
 
   /// Whether the region contains any visible stitches (cross or back) on the
   /// current page that match the focus thread (if one is active).
-  static bool _regionHasPageStitches(EditorState s) {
+  static bool _regionHasPageStitches(StitchStateView s) {
     final region = s.stitchSession.progressRegion;
     if (region == null) return false;
     final layout = s.stitchSession.pageLayout;
     final focusId = s.stitchSession.focusThreadId;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.stitchSession.currentPage) : (0, 0);
+    final composite = s.compositeLayer;
     // Cross-stitches: use compositeLayer so composite/blended cells are covered.
-    if (!s.stitchSession.backMode) {
+    if (!s.stitchSession.backMode && composite != null) {
       final topThread = _buildTopThread(s);
       for (final entry in topThread.entries) {
         final cell = entry.key;
@@ -1530,37 +1548,34 @@ class MarkDoneButton extends ConsumerWidget {
         }
       }
     }
-    // Backstitches: raw threadId is correct (no layer blending for backstitches).
-    if (!s.stitchSession.crossMode) {
-      for (final layer in s.pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is! BackStitch) continue;
-          if (focusId != null && stitch.threadId != focusId) continue;
-          final midX = (stitch.x1 + stitch.x2) / 2;
-          final midY = (stitch.y1 + stitch.y2) / 2;
-          if (midX >= region.left && midX < region.right &&
-              midY >= region.top && midY < region.bottom) {
-            if (layout != null &&
-                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
-            return true;
-          }
+    // Backstitches: compositeLayer.backstitches (no layer blending for backstitches).
+    if (!s.stitchSession.crossMode && composite != null) {
+      for (final stitch in composite.backstitches) {
+        if (focusId != null && stitch.threadId != focusId) continue;
+        final midX = (stitch.x1 + stitch.x2) / 2;
+        final midY = (stitch.y1 + stitch.y2) / 2;
+        if (midX >= region.left && midX < region.right &&
+            midY >= region.top && midY < region.bottom) {
+          if (layout != null &&
+              !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+          return true;
         }
       }
     }
     return false;
   }
 
-  static bool _isRegionAllDone(EditorState s) {
+  static bool _isRegionAllDone(StitchStateView s) {
     final region = s.stitchSession.progressRegion;
     if (region == null) return false;
-    final progress = s.pattern.progress;
+    final progress = s.progress;
     final layout = s.stitchSession.pageLayout;
     final focusId = s.stitchSession.focusThreadId;
     final (pageCol, pageRow) = layout != null ? layout.pageCoords(s.stitchSession.currentPage) : (0, 0);
+    final composite = s.compositeLayer;
     bool hasAny = false;
     // Cross-stitches: use compositeLayer so blended cells are filtered correctly.
-    if (!s.stitchSession.backMode) {
+    if (!s.stitchSession.backMode && composite != null) {
       final topThread = _buildTopThread(s);
       for (final entry in topThread.entries) {
         final cell = entry.key;
@@ -1575,22 +1590,18 @@ class MarkDoneButton extends ConsumerWidget {
         }
       }
     }
-    // Backstitches: raw threadId correct (no blending).
-    if (!s.stitchSession.crossMode) {
-      for (final layer in s.pattern.layers) {
-        if (!layer.visible) continue;
-        for (final stitch in layer.stitches) {
-          if (stitch is! BackStitch) continue;
-          if (focusId != null && stitch.threadId != focusId) continue;
-          final midX = (stitch.x1 + stitch.x2) / 2;
-          final midY = (stitch.y1 + stitch.y2) / 2;
-          if (midX >= region.left && midX < region.right &&
-              midY >= region.top && midY < region.bottom) {
-            if (layout != null &&
-                !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
-            hasAny = true;
-            if (!progress.isBackstitchDone(stitch.x1, stitch.y1, stitch.x2, stitch.y2)) return false;
-          }
+    // Backstitches: compositeLayer.backstitches (no blending).
+    if (!s.stitchSession.crossMode && composite != null) {
+      for (final stitch in composite.backstitches) {
+        if (focusId != null && stitch.threadId != focusId) continue;
+        final midX = (stitch.x1 + stitch.x2) / 2;
+        final midY = (stitch.y1 + stitch.y2) / 2;
+        if (midX >= region.left && midX < region.right &&
+            midY >= region.top && midY < region.bottom) {
+          if (layout != null &&
+              !layout.cellOnPage(midX.floor(), midY.floor(), pageCol, pageRow)) { continue; }
+          hasAny = true;
+          if (!progress.isBackstitchDone(stitch.x1, stitch.y1, stitch.x2, stitch.y2)) return false;
         }
       }
     }
@@ -1599,8 +1610,9 @@ class MarkDoneButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final enabled = _regionHasPageStitches(state);
-    final allDone = enabled && _isRegionAllDone(state);
+    final sv = StitchStateView(state);
+    final enabled = _regionHasPageStitches(sv);
+    final allDone = enabled && _isRegionAllDone(sv);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
       child: GestureDetector(

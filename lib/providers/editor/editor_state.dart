@@ -263,3 +263,32 @@ class EditorState {
 
   static const _sentinel = Object();
 }
+
+// ─── StitchStateView ───────────────────────────────────────────────────────────────
+
+/// Read-only projection of [EditorState] for stitch-mode operations.
+///
+/// Exposes only what stitch-mode logic needs. Deliberately omits
+/// [pattern.layers] so the compiler catches any accidental raw layer
+/// scan introduced into progress / stitch-session code.
+///
+/// Writes always go through [EditorNotifier] via `state = state.copyWith(...)`.
+class StitchStateView {
+  final EditorState _s;
+  const StitchStateView(this._s);
+
+  /// Flat composite view of all visible layers. Always non-null in stitch mode.
+  CompositeLayer? get compositeLayer => _s.compositeLayer;
+
+  /// Stitch-mode session (focus thread, page layout, back/cross mode, etc.).
+  StitchSessionState get stitchSession => _s.stitchSession;
+
+  /// Current pattern progress (completed stitches / backstitches / pages).
+  PatternProgress get progress => _s.pattern.progress;
+
+  /// Pattern-level progress log (daily stitch counts + timer minutes).
+  List<ProgressLogEntry> get progressLog => _s.pattern.progressLog;
+
+  /// Thread palette (dmcCode → Thread). Used for colour-completion messages.
+  Map<String, Thread> get threads => _s.pattern.threads;
+}
