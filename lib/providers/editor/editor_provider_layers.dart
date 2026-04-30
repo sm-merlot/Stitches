@@ -7,7 +7,7 @@ part of 'editor_provider.dart';
 mixin LayersMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
-  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
+  void _clearUndoManager();
   void _saveSession();
 
   Timer? _opacityDebounce;
@@ -112,11 +112,10 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newLayer.id,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   void deleteLayer(String id) {
@@ -134,11 +133,10 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newActiveId,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   void renameLayer(String id, String name) {
@@ -213,11 +211,10 @@ mixin LayersMixin on Notifier<EditorState> {
     if (newItems == null) return;
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
     refreshCompositeCache();
   }
 
@@ -236,11 +233,10 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: duplicate.id,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   /// Merges [topId]'s stitches into the layer directly below it.
@@ -269,11 +265,10 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newActiveId,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
     refreshCompositeCache();
   }
 
@@ -291,11 +286,10 @@ mixin LayersMixin on Notifier<EditorState> {
     final newItems = [group, ...state.pattern.layerItems];
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   /// Adds a new layer into [groupId] at the top. The new layer becomes active.
@@ -311,11 +305,10 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newLayer.id,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   /// Moves [layerId] to top-level, inserted below [prevTopLevelId].
@@ -354,11 +347,10 @@ mixin LayersMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   /// Moves [layerId] into [groupId], inserted below [belowLayerId].
@@ -401,11 +393,10 @@ mixin LayersMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: finalItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   void deleteGroup(String groupId) {
@@ -424,11 +415,10 @@ mixin LayersMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
       activeLayerId: newActiveId,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   void renameGroup(String groupId, String name) {
@@ -492,11 +482,10 @@ mixin LayersMixin on Notifier<EditorState> {
     }
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   void moveLayerToGroup(String layerId, String groupId) {
@@ -510,11 +499,10 @@ mixin LayersMixin on Notifier<EditorState> {
     }).toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   /// Removes [layerId] from [groupId] and inserts it as a [LayerLeaf]
@@ -533,11 +521,10 @@ mixin LayersMixin on Notifier<EditorState> {
     }
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   void reorderTopLevel(int oldIndex, int newIndex) {
@@ -546,11 +533,10 @@ mixin LayersMixin on Notifier<EditorState> {
     items.insert(newIndex, moved);
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: items),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   void reorderWithinGroup(String groupId, int oldIndex, int newIndex) {
@@ -565,11 +551,10 @@ mixin LayersMixin on Notifier<EditorState> {
     }).toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(layerItems: newItems),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
       compositeLayer: null,
     );
+    _clearUndoManager();
   }
 
   // ─── Composite thread cache ────────────────────────────────────────────────

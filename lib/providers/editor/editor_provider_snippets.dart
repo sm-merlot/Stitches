@@ -7,7 +7,6 @@ part of 'editor_provider.dart';
 mixin SnippetsMixin on Notifier<EditorState> {
 
   // Abstract declarations for shared helpers defined in EditorNotifier.
-  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
   String _serializeClipboard(List<Thread> threads, List<Stitch> stitches);
 
   // cancelSelection is provided by SelectionMixin (mixed in on EditorNotifier).
@@ -92,9 +91,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
         state.pattern.snippets.map((s) => s.id == id ? resized : s).toList();
     state = state.copyWith(
       pattern: state.pattern.copyWith(snippets: updated),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
     );
   }
 
@@ -292,16 +289,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
     // not the thread, so swapping the swatch colour must not change it.
     threads[slotIndex] = newThread.copyWith(symbol: threads[slotIndex].symbol);
     palettes[paletteIndex] = palettes[paletteIndex].copyWith(threads: threads);
-    // Non-zero palettes don't modify the pattern; push a palette-only undo entry.
-    if (paletteIndex > 0) {
-      state = state.copyWith(
-        snippetPalettes: palettes,
-        undoStack: _buildUndoStack(),
-        redoStack: [],
-      );
-    } else {
-      state = state.copyWith(snippetPalettes: palettes);
-    }
+    state = state.copyWith(snippetPalettes: palettes);
   }
 
   void deleteSnippetPaletteByIndex(int index) {

@@ -7,7 +7,6 @@ part of 'editor_provider.dart';
 mixin DrawingMixin on Notifier<EditorState> {
 
   // Abstract declarations for helpers defined in EditorNotifier / LayersMixin.
-  List<(CrossStitchPattern, List<SnippetPalette>)> _buildUndoStack();
   CrossStitchPattern _patternWithActiveLayerStitches(
       CrossStitchPattern p, List<Stitch> s);
   CrossStitchPattern _patternWithActiveLayer(
@@ -215,9 +214,7 @@ mixin DrawingMixin on Notifier<EditorState> {
       snippetPalettes: snippetPalettes,
       selectedThreadId:
           state.selectedThreadId == oldDmcCode ? newDmcCode : state.selectedThreadId,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
     );
   }
 
@@ -255,9 +252,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: pruned,
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
     );
   }
 
@@ -318,9 +313,7 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: state.pattern.copyWith(snippets: updated),
-      undoStack: _buildUndoStack(),
       isDirty: true,
-      redoStack: [],
     );
   }
 
@@ -410,11 +403,9 @@ mixin DrawingMixin on Notifier<EditorState> {
     state = state.copyWith(
       pattern: newPattern,
       snippetPalettes: snippetPalettes,
-      undoStack: _buildUndoStack(),
       compositeLayer: quickComposite,
       dirtyCellKeys: mergedDirty,
       isDirty: true,
-      redoStack: [],
     );
     // Debounce full refresh so symbol management doesn't run on every drag event.
     _drawCompositeDebounce?.cancel();
@@ -447,11 +438,9 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       compositeLayer: quickComposite,
       dirtyCellKeys: mergedDirty,
       isDirty: true,
-      redoStack: [],
     );
     _drawCompositeDebounce?.cancel();
     _drawCompositeDebounce =
@@ -493,11 +482,9 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       compositeLayer: StitchCompositor.computeComposite(newPattern),
       dirtyCellKeys: mergedDirty,
       isDirty: true,
-      redoStack: [],
     );
     _drawCompositeDebounce?.cancel();
     _drawCompositeDebounce =
@@ -800,10 +787,8 @@ mixin DrawingMixin on Notifier<EditorState> {
     final newPattern = _patternWithActiveLayerStitches(p, newStitches);
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       compositeLayer: null,
       isDirty: true,
-      redoStack: [],
     );
     refreshCompositeCache();
   }
@@ -817,10 +802,8 @@ mixin DrawingMixin on Notifier<EditorState> {
         _patternWithActiveLayer(state.pattern, newActiveLayer));
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       compositeLayer: null,
       isDirty: true,
-      redoStack: [],
     );
     refreshCompositeCache();
   }
@@ -859,8 +842,6 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
-      redoStack: [],
       isDirty: true,
     );
   }
@@ -942,8 +923,6 @@ mixin DrawingMixin on Notifier<EditorState> {
         old.copyWith(width: newW, height: newH),
         (_) => newStitches,
       ),
-      undoStack: _buildUndoStack(),
-      redoStack: [],
       isDirty: true,
     );
   }
@@ -1036,7 +1015,6 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       isDirty: true,
     );
   }
@@ -1051,7 +1029,6 @@ mixin DrawingMixin on Notifier<EditorState> {
     );
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       isDirty: true,
     );
   }
@@ -1067,7 +1044,6 @@ mixin DrawingMixin on Notifier<EditorState> {
     ).copyWith(width: h, height: w); // swap canvas dimensions
     state = state.copyWith(
       pattern: newPattern,
-      undoStack: _buildUndoStack(),
       isDirty: true,
     );
   }
