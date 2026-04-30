@@ -1,0 +1,23 @@
+lib/widgets/canvas/aida_widget.dart
+  c567271c2db94130 204-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "88aff33133325d43d8fda4c718baccda6dac05d5",
+  "prompts": {
+    "c567271c2db94130": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb504ae6-0393-41db-93ce-50082432c3d4",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 14,
+      "total_deletions": 11,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    }
+  }
+}
