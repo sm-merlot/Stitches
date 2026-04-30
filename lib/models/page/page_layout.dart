@@ -371,22 +371,23 @@ class PageLayout {
         }
       }
 
-      // Distance: gentle pull toward nominal; halved so colour-change and
-      // run-coherence signals dominate when present.
-      cost += delta.abs();
+      // Distance: pull toward nominal; keeps fuzz close without a strong signal.
+      cost += delta.abs() * 2;
 
-      // Color-transition quality: strong bonus for a qualifying cut so the
-      // boundary reliably snaps to colour changes within tolerance.
+      // Colour-change split: strong bonus for cutting at a clean colour
+      // transition — second priority after keep-whole objects.
       final posA = actual - 1;
       final posB = actual;
       if (posA >= 0 && posB < maxBoundary) {
         if (_isQualifyingCut(posA, posB, crossIdx, maxBoundary, colorAt)) {
           cost -= 20;
         }
-        // Vertical-coherence bonus: favour cuts that run along colour columns
+        // Gentle fuzz: small vertical-coherence bonus; creates slight bumps
+        // when no colour change or object signal is present. Capped low so
+        // it never overrides colour-change decisions.
         final cA = colorAt(posA, crossIdx);
         if (cA != null) {
-          cost -= math.min(_verticalRun(posA, crossIdx, cA, maxCross, colorAt), 10);
+          cost -= math.min(_verticalRun(posA, crossIdx, cA, maxCross, colorAt), 3);
         }
       }
 
