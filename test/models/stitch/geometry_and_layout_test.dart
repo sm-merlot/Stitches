@@ -219,7 +219,7 @@ void main() {
     enabled: true,
     pageWidth: 10,
     pageHeight: 10,
-    fuzzyAmount: 0,
+    tolerance: 0,
   );
 
   group('page_layout — PageLayout.compute', () {
@@ -280,7 +280,7 @@ void main() {
 
     // ── rawCellOnPage (Bug 1: edge cells near page boundary) ──────────────────
 
-    test('rawCellOnPage agrees with cellOnPage when fuzzyAmount=0', () {
+    test('rawCellOnPage agrees with cellOnPage when tolerance=0', () {
       // With no fuzzy offset there are no corner exclusions, so the two methods
       // must return the same result for every cell.
       final layout = PageLayout.compute(cfg10, emptyPattern(width: 20, height: 20));
@@ -313,7 +313,7 @@ void main() {
     });
 
     test('rawCellOnPage true for every cell that passes boundary check regardless of exclusion', () {
-      // Build a layout with fuzzyAmount > 0 to potentially create exclusions.
+      // Build a layout with tolerance > 0 to potentially create exclusions.
       // rawCellOnPage should return true for every cell that passes the raw
       // boundary check (i.e. is inside the fuzzy boundaries), even if cellOnPage
       // would exclude it due to the corner-connectivity post-pass.
@@ -321,7 +321,7 @@ void main() {
         enabled: true,
         pageWidth: 10,
         pageHeight: 10,
-        fuzzyAmount: 3,
+        tolerance: 3,
       );
       // A uniform empty pattern → no snap offset, random fallback only.
       final layout = PageLayout.compute(fuzzyCfg, emptyPattern(width: 20, height: 20));

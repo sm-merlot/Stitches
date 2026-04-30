@@ -1,418 +1,476 @@
-// Unit tests for PageLayout.computeOffset — the per-row/column fuzzy-edge
-// snap algorithm.
+// Unit tests for the new object-aware page boundary algorithm in PageLayout.
 //
-// Tests use a simple integer-keyed colour map so we don't need a full pattern
-// object.  Colour values are arbitrary non-null ints; null means "empty aida".
-//
-// Coordinate convention matches the vertical-boundary call-site:
-//   colorAt(primary=col, crossIndex=row)  →  colorAt(col, 0)
-// The crossIndex is held fixed at 0 throughout unless noted.
+// Tests cover:
+//   - Phase 1: detectObjects (8-directional flood-fill)
+//   - Phase 2: buildSuperGroups (union-find with 1-cell-gap adjacency)
+//   - Phase 3+4: computeBoundaryOffsets (keep-whole + smooth-edge DP)
+//   - isQualifyingCut (unchanged per-row colour-transition check)
+//   - PageConfig.fromYaml YAML migration (fuzzyAmount → tolerance)
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stitches/models/page/page_config.dart';
 import 'package:stitches/models/page/page_layout.dart';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const int A = 1;
 const int B = 2;
 const int C = 3;
 const int D = 4;
 
-/// Build a colorAt closure from a flat list (index = primary / col).
+/// Build a colorAt closure from a flat 1D list (index = primary col/row).
 /// Null entries represent empty (unstitched) cells.
-int? Function(int, int) colorMap(List<int?> cells) =>
+// ignore: unintended_html_in_doc_comment
+int? Function(int, int) colorMap1D(List<int?> cells) =>
     (int primary, int crossIndex) =>
         (primary >= 0 && primary < cells.length) ? cells[primary] : null;
 
-/// Convenience: call computeOffset with crossIndex=0, seed=0, maxBoundary=cells.length.
-int snap(
+/// Build a 2D colorAt from rows (crossIndex=row index, primary=col).
+int? Function(int, int) colorMap2D(List<List<int?>> rows) =>
+    (int primary, int crossIndex) =>
+        (crossIndex >= 0 &&
+                crossIndex < rows.length &&
+                primary >= 0 &&
+                primary < rows[crossIndex].length)
+            ? rows[crossIndex][primary]
+            : null;
+
+/// Build a snapColor map from a 2D grid (row-major).
+// ignore: unintended_html_in_doc_comment
+/// Returns Map encoded-cell to color index. Null values are omitted.
+Map<int, int?> snapColorFrom2D(List<List<int?>> grid) {
+  final result = <int, int?>{};
+  for (int row = 0; row < grid.length; row++) {
+    for (int col = 0; col < grid[row].length; col++) {
+      final color = grid[row][col];
+      if (color != null) result[(col << 16) | row] = color;
+    }
+  }
+  return result;
+}
+
+/// Call computeBoundaryOffsets with a 1D colorMap (single-row pattern).
+Map<int, int> offsets1D(
   List<int?> cells,
   int nominalBoundary, {
-  int fuzzyAmount = 3,
-  int? maxBoundary,
-  int maxCross = 1,
-  int seed = 0,
+  int tolerance = 3,
+  Map<int, Set<(int, int)>> superGroups = const {},
 }) =>
-    PageLayout.computeOffset(
+    PageLayout.computeBoundaryOffsets(
       nominalBoundary: nominalBoundary,
-      crossIndex: 0,
-      fuzzyAmount: fuzzyAmount,
-      maxBoundary: maxBoundary ?? cells.length,
-      maxCross: maxCross,
-      colorAt: colorMap(cells),
-      seed: seed,
+      tolerance: tolerance,
+      maxBoundary: cells.length,
+      maxCross: 1,
+      colorAt: colorMap1D(cells),
+      superGroups: superGroups,
     );
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+/// Convenience: single-row offset at crossIndex=0.
+int snap1D(
+  List<int?> cells,
+  int nominalBoundary, {
+  int tolerance = 3,
+  Map<int, Set<(int, int)>> superGroups = const {},
+}) =>
+    offsets1D(cells, nominalBoundary,
+        tolerance: tolerance, superGroups: superGroups)[0]!;
+
+// ── Phase 1: detectObjects ────────────────────────────────────────────────────
 
 void main() {
-  // ── fuzzyAmount = 0 ────────────────────────────────────────────────────────
-  group('fuzzyAmount=0 always returns 0', () {
+  group('Phase 1 — detectObjects', () {
+    test('empty map → no objects', () {
+      final objs = PageLayout.detectObjects({}, 5, 5);
+      expect(objs, isEmpty);
+    });
+
+    test('single cell → one object', () {
+      final sc = {(0 << 16) | 0: A};
+      final objs = PageLayout.detectObjects(sc, 5, 5);
+      expect(objs.length, equals(1));
+      expect(objs.values.single, contains((0, 0)));
+    });
+
+    test('two isolated cells same colour → separate objects', () {
+      final sc = {
+        (0 << 16) | 0: A,
+        (4 << 16) | 4: A, // far away, not 8-connected
+      };
+      final objs = PageLayout.detectObjects(sc, 5, 5);
+      expect(objs.length, equals(2));
+    });
+
+    test('two adjacent cells same colour (orthogonal) → one object', () {
+      final sc = {
+        (0 << 16) | 0: A,
+        (1 << 16) | 0: A,
+      };
+      final objs = PageLayout.detectObjects(sc, 5, 5);
+      expect(objs.length, equals(1));
+      expect(objs.values.single.length, equals(2));
+    });
+
+    test('two diagonal cells same colour → one object (8-directional)', () {
+      final sc = {
+        (0 << 16) | 0: A,
+        (1 << 16) | 1: A,
+      };
+      final objs = PageLayout.detectObjects(sc, 5, 5);
+      expect(objs.length, equals(1));
+    });
+
+    test('two adjacent cells different colour → two objects', () {
+      final sc = {
+        (0 << 16) | 0: A,
+        (1 << 16) | 0: B,
+      };
+      final objs = PageLayout.detectObjects(sc, 5, 5);
+      expect(objs.length, equals(2));
+    });
+
+    test('L-shaped connected region → one object', () {
+      // A . .
+      // A . .
+      // A A A
+      final sc = {
+        (0 << 16) | 0: A, (0 << 16) | 1: A, (0 << 16) | 2: A,
+        (1 << 16) | 2: A,
+        (2 << 16) | 2: A,
+      };
+      final objs = PageLayout.detectObjects(sc, 3, 3);
+      expect(objs.length, equals(1));
+      expect(objs.values.single.length, equals(5));
+    });
+
+    test('two objects of same colour separated by gap → two objects', () {
+      // A . A (col 0, 2 — not connected via 8-directions)
+      final sc = {
+        (0 << 16) | 0: A,
+        (2 << 16) | 0: A,
+      };
+      final objs = PageLayout.detectObjects(sc, 3, 1);
+      expect(objs.length, equals(2));
+    });
+  });
+
+  // ── Phase 2: buildSuperGroups ───────────────────────────────────────────────
+
+  group('Phase 2 — buildSuperGroups', () {
+    test('empty objects → empty super-groups', () {
+      expect(PageLayout.buildSuperGroups({}, 5, 5), isEmpty);
+    });
+
+    test('single object → single super-group', () {
+      final objs = {0: {(0, 0), (1, 0)}};
+      final sg = PageLayout.buildSuperGroups(objs, 5, 5);
+      expect(sg.length, equals(1));
+    });
+
+    test('two objects directly touching → merged into one super-group', () {
+      // Objects at col 0 and col 1 (directly adjacent, 0 gap)
+      final objs = {
+        0: {(0, 0)},
+        1: {(1, 0)},
+      };
+      final sg = PageLayout.buildSuperGroups(objs, 5, 5);
+      expect(sg.length, equals(1));
+      expect(sg.values.single, containsAll([(0, 0), (1, 0)]));
+    });
+
+    test('two objects 1 cell apart → merged into one super-group', () {
+      // Object A at col 0, Object B at col 2; 1-cell gap at col 1
+      final objs = {
+        0: {(0, 0)},
+        1: {(2, 0)},
+      };
+      final sg = PageLayout.buildSuperGroups(objs, 5, 5);
+      expect(sg.length, equals(1), reason: '1-cell gap → merged');
+    });
+
+    test('two objects 2 cells apart → remain separate', () {
+      // Object A at col 0, Object B at col 3; 2-cell gap (cols 1,2 empty)
+      final objs = {
+        0: {(0, 0)},
+        1: {(3, 0)},
+      };
+      final sg = PageLayout.buildSuperGroups(objs, 5, 5);
+      expect(sg.length, equals(2), reason: '2-cell gap → separate');
+    });
+
+    test('three objects in a chain merge transitively', () {
+      // A at 0, B at 2, C at 4: each 1-cell gap apart → all merge
+      final objs = {
+        0: {(0, 0)},
+        1: {(2, 0)},
+        2: {(4, 0)},
+      };
+      final sg = PageLayout.buildSuperGroups(objs, 6, 1);
+      expect(sg.length, equals(1), reason: 'chain merges transitively');
+    });
+
+    test('diagonal 1-cell gap → merged (8-directional expansion)', () {
+      // Object A at (0,0), Object B at (2,2): diagonal 1-cell gap
+      // Chebyshev distance = 2 → merged
+      final objs = {
+        0: {(0, 0)},
+        1: {(2, 2)},
+      };
+      final sg = PageLayout.buildSuperGroups(objs, 5, 5);
+      expect(sg.length, equals(1));
+    });
+  });
+
+  // ── tolerance=0: always straight edge ────────────────────────────────────
+
+  group('tolerance=0 always returns 0', () {
     test('solid block', () {
-      expect(snap([A, A, A, A, A, A], 3, fuzzyAmount: 0), 0);
+      expect(snap1D([A, A, A, A, A, A], 3, tolerance: 0), 0);
     });
     test('colour change at boundary', () {
-      // Even with a clear colour change, no snap when fuzziness is off.
-      expect(snap([A, A, A, B, B, B], 3, fuzzyAmount: 0), 0);
+      expect(snap1D([A, A, A, B, B, B], 3, tolerance: 0), 0);
     });
-  });
-
-  // ── Clean colour boundaries ────────────────────────────────────────────────
-  group('snaps to nearest clean colour boundary', () {
-    test('exact boundary — d=0', () {
-      // boundary between col2 (A) and col3 (B), nominal=3 → d=0
-      expect(snap([A, A, A, B, B, B], 3), 0);
-    });
-
-    test('boundary one right — d=+1', () {
-      // nominal=3: col2=A, col3=A (same). col3=A, col4=B → d=+1
-      expect(snap([A, A, A, A, B, B, B], 3), 1);
-    });
-
-    test('boundary one left — d=-1', () {
-      // nominal=3: same. col1=A, col2=B → d=-1 (closer than d=+1)
-      expect(snap([A, A, B, B, B, B, B], 3), -1);
-    });
-
-    test('prefers closest — positive before negative at same distance', () {
-      // The scan order is d=0, then d=1 (positive first), d=-1, d=2, d=-2 …
-      // [A,A,A,B,B,B,B,A,A] nominal=4:
-      // d=0: cut(3,4) cA=B,cB=B same. Reject.
-      // d=+1: cut(4,5) cA=B,cB=B same. Reject.
-      // d=-1: cut(2,3) cA=A,cB=B → clean. Returns -1.
-      expect(snap([A, A, A, B, B, B, B, A, A], 4), -1);
-    });
-
-    test('boundary at snap-range limit (d=+snapRange)', () {
-      // Nominal=0; colour change at snapRange positions to the right.
-      final range = PageLayout.snapRange;
-      final cells = List<int?>.filled(range * 3, A);
-      cells[range] = B;
-      for (int i = range + 1; i < cells.length; i++) {
-        cells[i] = B;
+    test('all offsets are 0 in multi-row case', () {
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 3,
+        tolerance: 0,
+        maxBoundary: 6,
+        maxCross: 5,
+        colorAt: colorMap2D([
+          [A, A, A, B, B, B],
+          [A, A, A, B, B, B],
+          [A, A, A, B, B, B],
+          [A, A, A, B, B, B],
+          [A, A, A, B, B, B],
+        ]),
+        superGroups: {},
+      );
+      for (final v in result.values) {
+        expect(v, equals(0));
       }
-      expect(snap(cells, 0), range);
-    });
-
-    test('no change beyond snap range falls back to random (deterministic seed)', () {
-      // Solid A everywhere — no colour change within ±snapRange of nominal=5.
-      final result = snap([A, A, A, A, A, A, A, A, A, A, A, A], 5, seed: 42);
-      // Must be within ±fuzzyAmount, not a snap.
-      expect(result, inInclusiveRange(-3, 3));
     });
   });
 
-  // ── Ping-pong (single-stitch sandwich) ───────────────────────────────────
-  group('rejects ping-pong single-stitch islands', () {
-    test('rejects [B, A | B, B] — lone A on left', () {
-      // Nominal=2: cut(1,2) → cA=A, cB=B, col0=B==cB → ping-pong left.
-      // d=+1: cut(2,3) → cA=B, cB=B same. etc.
-      // Should fall back to random (no qualifying cut in range).
-      final cells = [B, A, B, B, B, B, B, B];
-      final result = snap(cells, 2, fuzzyAmount: 2);
+  // ── DP — basic offset behaviour ────────────────────────────────────────────
+
+  group('computeBoundaryOffsets — basic offset selection', () {
+    test('exact colour boundary at nominal → offset 0', () {
+      // Clean A|B at posA=2, posB=3 → qualifying cut → δ=0 preferred
+      final result = snap1D([A, A, A, B, B, B], 3);
+      expect(result, equals(0));
+    });
+
+    test('colour boundary one right → offset +1', () {
+      // Clean A|B at col 3|4, nominal=3 → δ=+1
+      final result = snap1D([A, A, A, A, B, B, B], 3);
+      expect(result, equals(1));
+    });
+
+    test('colour boundary one left → offset -1', () {
+      // Clean A|B at col 1|2, nominal=3 → δ=-1 (closer than δ=+2)
+      final result = snap1D([A, A, B, B, B, B, B], 3);
+      expect(result, equals(-1));
+    });
+
+    test('solid block → offset 0 (no qualifying cut, minimum distance wins)', () {
+      // No colour transitions → DP prefers δ=0 (distance cost minimised)
+      final result = snap1D(List.filled(20, A), 10);
+      expect(result, equals(0));
+    });
+
+    test('offset clamped to ±tolerance', () {
+      final result = snap1D([A, A, B, B, B, B, B, B, B, B], 5, tolerance: 2);
       expect(result, inInclusiveRange(-2, 2));
     });
-
-    test('rejects [A, A | B, A, B] — lone B on right', () {
-      // d=0: cut(1,2) → cA=A, cB=B. col3=A==cA → ping-pong right. Reject.
-      // d=+1: cut(2,3) → cA=B, cB=A. col4=B==cA → ping-pong right. Reject.
-      // Falls back to random.
-      final cells = [A, A, B, A, B, B, B, B];
-      final result = snap(cells, 2, fuzzyAmount: 2);
-      expect(result, inInclusiveRange(-2, 2));
-    });
-
-    test('accepts clean boundary even when ping-pong exists at other offsets', () {
-      // [A,A,A,B,B,B,B,B] nominal=3:
-      // d=0: cut(2,3) cA=A,cB=B. No ping-pong (col1=A≠cB, col4=B≠cA). Clean! Returns 0.
-      expect(snap([A, A, A, B, B, B, B, B], 3), 0);
-    });
   });
 
-  // ── Window-based colour-island check ─────────────────────────────────────
-  group('rejects colour islands (window check)', () {
-    test('rejects 2-stitch B island on left: [A,A,B,B | B,B,B,B,B,B]', () {
-      // Nominal=4: d=0 cut(3,4): cA=B,cB=B same. All B around boundary.
-      // d=-1 cut(2,3): cA=B,cB=B same.
-      // d=-2 cut(1,2): cA=A,cB=B. Left window[−1..1]={A:2,?} right=[2..5]={B:4}.
-      // Wait — let's think carefully about the window:
-      // posA=1: left window = max(0, 1-4+1=−2) → [0..1] = {A:2}
-      // posB=2: right window = [2..5] = {B:4}
-      // No colour on both sides → no island → accept d=-2.
-      // So the cut IS accepted at d=-2 giving boundary at col 2.
-      expect(snap([A, A, B, B, B, B, B, B, B, B], 4), -2);
-    });
+  // ── DP — smoothness across rows ────────────────────────────────────────────
 
-    test('rejects lone B in A region where B majority is on right: [A,A,B,A | B,B,B,B]', () {
-      // Nominal=4: d=0 cut(3,4): cA=A,cB=B. Left[0..3]={A:3,B:1}, Right[4..7]={B:4}.
-      // B: l=1, r=4. minority=1<=2, majority=4>=2 → potential island.
-      // beyondLeft = 3-4=-1 <0 → island confirmed → reject.
-      // d=-1 cut(2,3): cA=B,cB=A. ping-pong right? col4=B==cA → ping-pong. Reject.
-      // d=+1 cut(4,5): cA=B,cB=B same.
-      // d=-2 cut(1,2): cA=A,cB=B. Left[−2..1]=[0..1]={A:2}, Right[2..5]={B:2,A:1}.
-      // B in left: 0. B in right: 2. Only on right → fine.
-      // A in left: 2. A in right: 1. both sides: minority=1<=2, majority=2>=2.
-      // beyondRight = 2+4=6. colorAt(6)=B ≠ A. So A is an island on right → reject.
-      // d=+2 cut(5,6): cA=B, cB=B same. d=-3 cut(0,1): cA=A,cB=A same.
-      // d=+3 cut(6,7): cA=B,cB=B same. d=-4 cut(-1,0): posA<0 skip.
-      // Falls back to random.
-      final cells = [A, A, B, A, B, B, B, B, B, B];
-      final result = snap(cells, 4, fuzzyAmount: 3);
-      expect(result, inInclusiveRange(-3, 3));
-    });
-
-    test('does NOT reject when minority colour continues beyond window', () {
-      // [A,A,A,A,B,B | B,B,B,B,A,A,A,A]: A appears both sides but extends
-      // beyond the window on the left → not an island.
-      // d=0: cut(5,6) → B|B same. d=-1: cut(4,5) → B|B same.
-      // d=-2: cut(3,4): cA=A, cB=B. Left[0..3]={A:4}, Right[4..7]={B:4}.
-      // No colour on both sides → accept.
-      expect(snap([A, A, A, A, B, B, B, B, B, B, A, A, A, A], 6), -2);
-    });
-
-    test('does NOT reject large colour region clipping window edge', () {
-      // [A,A,A,A,A,A | B,B,B,B]: nominal=6. d=0: cA=A,cB=B. clean cut.
-      // Left window[2..5]={A:4}. Right[6..9]={B:4}. No overlap → accept.
-      expect(snap([A, A, A, A, A, A, B, B, B, B], 6), 0);
-    });
-  });
-
-  // ── Extended-scan split check ─────────────────────────────────────────────
-  // When a colour appears only a few times on one side of a cut but reappears
-  // further beyond the window on the other side, the cut is splitting that
-  // colour block.  The algorithm should skip it and prefer a cut that keeps
-  // the colour together on one page.
-  group('extended scan rejects colour-block splits', () {
-    test('skips 8|P cut when 8 reappears past right window: [A,A,8,8|P,P,P,P,8,8,8]', () {
-      // nominal=4. d=0 cut(3,4): cA=8, cB=P. Left window has 2×8, right has
-      // 4×P, then '8' reappears at positions 8–10 (beyond right window) →
-      // reject d=0.  d=-2 cut(1,2): A|8 — clean, accepted.
-      expect(snap([A, A, B, B, C, C, C, C, B, B, B], 4), -2);
-    });
-
-    test('skips 8|P cut when single 8 reappears just past right window', () {
-      // [A,A,A,8,8,P,P,P,P,P,8,A,A] nominal=5.
-      // d=0 cut(4,5): 8|P. Left has 2×8, right 4×P, then 1×8 at pos10 →
-      // reject.  d=-2 cut(2,3): A|8 → accept.
-      expect(snap([A, A, A, B, B, C, C, C, C, C, B, A, A], 5), -2);
-    });
-
-    test('correctly cuts at A|8 when A→8 transition is within snap range', () {
-      // [A,A,A,A,A | 8,8,8,8,8]: nominal=5 → d=0: A|8 → clean → accept.
-      expect(snap([A, A, A, A, A, B, B, B, B, B], 5), 0);
-    });
-
-    test('symmetric: skips P|8 cut when P reappears further left', () {
-      // Mirror scenario: P on right side of cut, with P continuing far left.
-      // [P,P,P,8,8 | A,A,A,A,8]: nominal=5.
-      // d=0 cut(4,5): 8|A. Left has 2×8, right has 4×A, then 8 at pos9.
-      // But wait: the right-side check looks left... let me just verify
-      // the symmetric case resolves without crashing.
-      final result = snap([C, C, C, B, B, A, A, A, A, B], 5);
-      expect(result, inInclusiveRange(-4, 4));
-    });
-  });
-
-  // ── Mixed-colour region near boundary ────────────────────────────────────
-  group('handles mixed/noisy colour regions', () {
-    test('snaps past scattered minority stitches to find a clean run', () {
-      // Simulates the user-reported rows-25/27/29 scenario:
-      // Predominantly A before the boundary with occasional B stitches,
-      // then solid B after. The snap should find the cleanest cut.
-      //
-      // [A,A,A,A,A,A,B,A | B,B,B,B,B,B] nominal=8.
-      // d=0 cut(7,8): cA=A,cB=B. Left[4..7]={A:3,B:1}, Right[8..11]={B:4}.
-      // B: l=1,r=4 → island check: beyondLeft=7-4=3, colorAt(3)=A≠B → island! Reject.
-      // d=-1 cut(6,7): cA=B,cB=A. ping-pong right? col8=B==cA → ping-pong. Reject.
-      // d=+1 cut(8,9): cA=B,cB=B same.
-      // d=-2 cut(5,6): cA=A,cB=B. Left[2..5]={A:4}, Right[6..9]={B:2,A:1,B:...}.
-      //   wait: cells[6]=B,cells[7]=A,cells[8]=B,cells[9]=B. Right={B:3,A:1}.
-      //   A: l=4,r=1. minority=1<=2, majority=4>=2. beyondRight=6+4=10: B≠A → island! Reject.
-      // d=+2 cut(9,10): cA=B,cB=B same.
-      // d=-3 cut(4,5): cA=A,cB=A same.
-      // d=+3 cut(10,11): cA=B,cB=B same.
-      // d=-4 cut(3,4): cA=A,cB=A same.
-      // d=+4 cut(11,12): out of bounds (maxBoundary=14). cA=B,cB=B same.
-      // Falls back to random — correct, because there's no truly clean cut
-      // within snap range for this noisy pattern.
-      final cells = [A, A, A, A, A, A, B, A, B, B, B, B, B, B];
-      final result = snap(cells, 8, fuzzyAmount: 3);
-      expect(result, inInclusiveRange(-3, 3));
-    });
-
-    test('snaps cleanly when A→B boundary is within snap range', () {
-      // [A,A,A,A,A | B,B,B,B,B] nominal=5 → d=0 clean.
-      expect(snap([A, A, A, A, A, B, B, B, B, B], 5), 0);
-    });
-
-    test('snaps to nearest of several possible colour boundaries', () {
-      // [A,A,A,B,B | C,C,C,C,C] nominal=5.
-      // d=0: cut(4,5): cA=B,cB=C. Left[1..4]={A:2,B:2}, Right[5..8]={C:4}.
-      // No colour on both sides → accept. Returns 0.
-      expect(snap([A, A, A, B, B, C, C, C, C, C], 5), 0);
-    });
-  });
-
-  // ── Boundary at pattern edges ─────────────────────────────────────────────
-  group('boundary at pattern edges', () {
-    test('boundary near left edge of pattern', () {
-      // nominal=2 in a short pattern. posA-window might go negative.
-      final result = snap([A, A, B, B, B], 2, maxBoundary: 5);
-      expect(result, 0); // clean cut at d=0
-    });
-
-    test('boundary near right edge of pattern', () {
-      // nominal=3 in a 5-cell pattern with snap range of 4.
-      final result = snap([A, A, A, B, B], 3, maxBoundary: 5);
-      expect(result, 0);
-    });
-  });
-
-  // ── Determinism ───────────────────────────────────────────────────────────
-  group('fallback random is deterministic for same seed', () {
-    test('same seed gives same result', () {
-      final cells = List<int?>.filled(20, A); // solid — always random fallback
-      expect(snap(cells, 10, seed: 12345), snap(cells, 10, seed: 12345));
-    });
-
-    test('different seed gives (usually) different result', () {
-      final cells = List<int?>.filled(20, A);
-      // With a 7-value range (±3) the chance of two seeds colliding is ~14%.
-      // Use seeds that are known to differ.
-      final r1 = snap(cells, 10, seed: 1);
-      final r2 = snap(cells, 10, seed: 999999);
-      // We can't guarantee they differ but we can verify both are in range.
-      expect(r1, inInclusiveRange(-3, 3));
-      expect(r2, inInclusiveRange(-3, 3));
-    });
-  });
-
-  // ── 2D flood-fill scoring ─────────────────────────────────────────────────
-  // These tests use a multi-row colour map so the 2D flood can differentiate
-  // candidates that look identical in 1D.
-
-  /// Build a 2D colorAt from a list of rows (index 0 = crossIndex 0).
-  int? Function(int, int) colorMap2D(List<List<int?>> rows) =>
-      (int primary, int crossIndex) =>
-          (crossIndex >= 0 &&
-                  crossIndex < rows.length &&
-                  primary >= 0 &&
-                  primary < rows[crossIndex].length)
-              ? rows[crossIndex][primary]
-              : null;
-
-  /// Convenience: call computeOffset with a 2D colour map.
-  int snap2D(
-    List<List<int?>> rows,
-    int nominalBoundary, {
-    int crossIndex = 0,
-    int fuzzyAmount = 3,
-    int seed = 0,
-  }) {
-    final maxBoundary = rows.isEmpty ? 0 : rows[0].length;
-    return PageLayout.computeOffset(
-      nominalBoundary: nominalBoundary,
-      crossIndex: crossIndex,
-      fuzzyAmount: fuzzyAmount,
-      maxBoundary: maxBoundary,
-      maxCross: rows.length,
-      colorAt: colorMap2D(rows),
-      seed: seed,
-    );
-  }
-
-  group('2D flood scoring prefers cuts with less stranding', () {
-    test('prefers farther cut when closer one strands A via adjacent rows', () {
-      // Row 0:  C C C A A | B B B B B B B
-      // Row 1:  C C C C A   A A A B B B B
-      // Row 2:  C C C C A   A A A B B B B
-      //
-      // Nominal=5. Qualifying candidates at row 0:
-      //   d=0: posA=4(A), posB=5(B). Clean 1D. But flood A from (4,0)
-      //     reaches (4,1)→(5,1)→(6,1)→(7,1) and same on row 2.
-      //     Stranded A at primary>=5 = 6 cells. Penalty=6.
-      //   d=-2: posA=2(C), posB=3(A). Clean 1D. Flood C from (2,0):
-      //     (2,1)→(3,1), but (3,1)=C at primary>=3 → stranded 2.
-      //     Penalty=2.
-      //
-      // Flood picks d=-2 (penalty 2 < 6). Old first-found picks d=0.
+  group('computeBoundaryOffsets — smoothness constraint', () {
+    test('consecutive offsets never differ by more than 2', () {
+      // 5 rows, all with A|B at different positions — DP must smooth.
       final rows = [
-        [C, C, C, A, A, B, B, B, B, B, B, B], // row 0
-        [C, C, C, C, A, A, A, A, B, B, B, B], // row 1
-        [C, C, C, C, A, A, A, A, B, B, B, B], // row 2
+        [A, A, A, A, A, B, B, B, B, B], // clear cut at col 5, nominal=5 → δ=0
+        [A, A, A, B, B, B, B, B, B, B], // cut at 3, nominal=5 → δ=-2
+        [A, A, A, B, B, B, B, B, B, B], // same
+        [A, A, A, A, A, B, B, B, B, B], // cut at 5 → δ=0
+        [A, A, A, A, A, B, B, B, B, B], // same
       ];
-      expect(snap2D(rows, 5, crossIndex: 0), -2,
-          reason: 'd=-2 strands fewer cells in 2D than d=0');
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 5,
+        tolerance: 4,
+        maxBoundary: 10,
+        maxCross: 5,
+        colorAt: colorMap2D(rows),
+        superGroups: {},
+      );
+      for (int ci = 1; ci < 5; ci++) {
+        expect(
+          (result[ci]! - result[ci - 1]!).abs(),
+          lessThanOrEqualTo(2),
+          reason: 'rows ${ ci - 1}→$ci: Δδ too large',
+        );
+      }
     });
 
-    test('single qualifying candidate returned regardless of penalty', () {
-      // Row 0:  A A B B B B B B
-      // Row 1:  A A A A A B B B
-      //
-      // Nominal=4. Only d=-2 qualifies (A|B at col 2).
-      // Penalty is non-zero (A extends right on row 1) but it's the only
-      // option so it must be returned.
-      final rows = [
-        [A, A, B, B, B, B, B, B], // row 0
-        [A, A, A, A, A, B, B, B], // row 1
-      ];
-      expect(snap2D(rows, 4, crossIndex: 0), -2);
+    test('all offsets in map cover every cross-index', () {
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 5,
+        tolerance: 2,
+        maxBoundary: 10,
+        maxCross: 8,
+        colorAt: colorMap1D([A, A, A, A, A, B, B, B, B, B]),
+        superGroups: {},
+      );
+      expect(result.length, equals(8));
+      for (int i = 0; i < 8; i++) {
+        expect(result.containsKey(i), isTrue, reason: 'crossIndex $i missing');
+      }
+    });
+  });
+
+  // ── DP — keep-whole object constraint ─────────────────────────────────────
+
+  group('computeBoundaryOffsets — keep-whole constraint', () {
+    test('group with 1 minority cell kept whole on majority side', () {
+      // Super-group: 3 cells at col 3-5 (right of boundary at col 4), 1 cell at col 3.
+      // bleedCells=1 ≤ tolerance=2 → keep-whole on right.
+      // The DP should prefer δ that keeps all cells to the right of the boundary.
+      // With group cells (3,0),(4,0),(5,0),(6,0): countLeft=1 (col 3), countRight=3 (cols 4-6).
+      // keep-whole-on-right: need actual ≤ 3 → δ ≤ 3-4=-1.
+      // So DP should choose δ=-1 (or more negative).
+      final superGroups = {
+        0: {(3, 0), (4, 0), (5, 0), (6, 0)},
+      };
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 4,
+        tolerance: 2,
+        maxBoundary: 10,
+        maxCross: 1,
+        colorAt: (p, c) => null, // no color transitions
+        superGroups: superGroups,
+      );
+      // δ=-1 means actual=3; all group cells (3,4,5,6) are at col ≥ 3 → kept right.
+      expect(result[0], lessThanOrEqualTo(-1),
+          reason: 'keep-whole-on-right should force δ ≤ -1');
     });
 
-    test('both candidates clean in 2D: closest to nominal wins', () {
-      // Row 0:  A A B B C C C C
-      // Row 1:  A A B B C C C C
-      // Row 2:  A A B B C C C C
-      //
-      // Nominal=4. d=0: B|C, penalty=0. d=-2: A|B, penalty=0.
-      // Both clean → closest (d=0) wins.
-      final rows = [
-        [A, A, B, B, C, C, C, C],
-        [A, A, B, B, C, C, C, C],
-        [A, A, B, B, C, C, C, C],
-      ];
-      expect(snap2D(rows, 4, crossIndex: 0), 0);
+    test('group entirely on one side — no constraint (bleedCells=0)', () {
+      // Group entirely left of boundary — should not constrain boundary.
+      final superGroups = {
+        0: {(0, 0), (1, 0), (2, 0)}, // all at col 0-2, boundary at col 5
+      };
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 5,
+        tolerance: 2,
+        maxBoundary: 10,
+        maxCross: 1,
+        colorAt: colorMap1D([A, A, A, A, A, B, B, B, B, B]),
+        superGroups: superGroups,
+      );
+      // Should still snap to A|B at col 5 → δ=0
+      expect(result[0], equals(0));
     });
 
-    test('flood detects stranding through L-shaped region', () {
-      // Row 0:  A A A B B B B B B B
-      // Row 1:  A A A A A A B B B B
-      // Row 2:  A A A A A A B B B B
-      //
-      // Nominal=3. Only d=0 (A|B) qualifies. Flood A from (2,0) reaches
-      // rows 1-2 cols 3-5 = 6 stranded cells. But with no alternative,
-      // d=0 is still returned.
-      final rows = [
-        [A, A, A, B, B, B, B, B, B, B], // row 0
-        [A, A, A, A, A, A, B, B, B, B], // row 1
-        [A, A, A, A, A, A, B, B, B, B], // row 2
-      ];
-      expect(snap2D(rows, 3, crossIndex: 0), 0);
+    test('group with bleedCells > tolerance — treated as split, no keep-whole', () {
+      // Group with 3 cells on each side (bleedCells=3), tolerance=2 → split.
+      // DP chooses based on color quality / distance, not keep-whole.
+      final superGroups = {
+        0: {(2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0)},
+      };
+      final result = PageLayout.computeBoundaryOffsets(
+        nominalBoundary: 5,
+        tolerance: 2,
+        maxBoundary: 10,
+        maxCross: 1,
+        colorAt: colorMap1D([A, A, A, A, A, B, B, B, B, B]),
+        superGroups: superGroups,
+      );
+      // With clean A|B at col 5 → δ=0 regardless of the split group
+      expect(result[0], equals(0));
+    });
+  });
+
+  // ── isQualifyingCut ────────────────────────────────────────────────────────
+
+  group('isQualifyingCut', () {
+    bool cut(List<int?> cells, int posA, int posB) =>
+        PageLayout.isQualifyingCut(posA, posB, 0, cells.length, colorMap1D(cells));
+
+    test('clean A|B boundary → qualifying', () {
+      expect(cut([A, A, A, B, B, B], 2, 3), isTrue);
     });
 
-    test('1D-identical cuts differentiated by 2D context', () {
-      // Row 0:  A A A A B B B B C C C C
-      // Row 1:  A A A A A A A B C C C C
-      // Row 2:  A A A A A A A B C C C C
-      //
-      // Nominal=6. Two qualifying candidates:
-      //   d=-2: posA=3(A), posB=4(B). Flood A from (3,0): all left-side,
-      //     rows 1-2 cols 4-6 are A → stranded = 6. Penalty=6.
-      //   d=+2: posA=7(B), posB=8(C). Flood B from (7,0): B at 4-7 row 0,
-      //     col 7 rows 1-2. No B at >=8. Flood C from (8,0): C at 8-11.
-      //     No C at <8. Penalty=0.
-      //
-      // Flood picks d=+2 (penalty 0). Without flood, both are at same
-      // distance but d=+2 is checked first (positive priority) → same result.
-      // This test verifies flood scoring is active even when it agrees with
-      // the old order.
-      final rows = [
-        [A, A, A, A, B, B, B, B, C, C, C, C], // row 0
-        [A, A, A, A, A, A, A, B, C, C, C, C], // row 1
-        [A, A, A, A, A, A, A, B, C, C, C, C], // row 2
-      ];
-      expect(snap2D(rows, 6, crossIndex: 0), 2);
+    test('same colour both sides → not qualifying', () {
+      expect(cut([A, A, A, A, A, A], 2, 3), isFalse);
+    });
+
+    test('null on left → not qualifying', () {
+      expect(cut([null, A, B, B, B, B], 1, 2), isFalse);
+    });
+
+    test('ping-pong left: [B, A | B, B] → not qualifying', () {
+      // posA=1(A), posB=2(B), left(posA-1=0)=B==cB → ping-pong
+      expect(cut([B, A, B, B, B, B, B], 1, 2), isFalse);
+    });
+
+    test('ping-pong right: [A, A | B, A, B] → not qualifying', () {
+      // posA=1(A), posB=2(B), right(posB+1=3)=A==cA → ping-pong
+      expect(cut([A, A, B, A, B, B, B], 1, 2), isFalse);
+    });
+
+    test('left-run check: single A stitch at posA → not qualifying', () {
+      // [B, A, B, B, B] posA=1(A), posA-1=0=B ≠ cA → left run too short
+      expect(cut([B, A, B, B, B], 1, 2), isFalse);
+    });
+
+    test('colour island: B appears 1× left and 4× right → not qualifying', () {
+      // [A, A, B, A | B, B, B, B] — B straddles the cut
+      expect(cut([A, A, B, A, B, B, B, B, B, B], 3, 4), isFalse);
+    });
+  });
+
+  // ── PageConfig YAML migration ──────────────────────────────────────────────
+
+  group('PageConfig.fromYaml — fuzzyAmount migration', () {
+    test('new tolerance key is read correctly', () {
+      final cfg = PageConfig.fromYaml({'enabled': true, 'pageWidth': 50, 'pageHeight': 50, 'tolerance': 6});
+      expect(cfg.tolerance, equals(6));
+    });
+
+    test('legacy fuzzyAmount key maps to tolerance', () {
+      final cfg = PageConfig.fromYaml({'enabled': true, 'pageWidth': 50, 'pageHeight': 50, 'fuzzyAmount': 2});
+      expect(cfg.tolerance, equals(2),
+          reason: 'fuzzyAmount=2 must map to tolerance=2');
+    });
+
+    test('tolerance takes precedence over fuzzyAmount when both present', () {
+      final cfg = PageConfig.fromYaml({
+        'enabled': true,
+        'pageWidth': 50,
+        'pageHeight': 50,
+        'tolerance': 5,
+        'fuzzyAmount': 1,
+      });
+      expect(cfg.tolerance, equals(5));
+    });
+
+    test('missing both keys → default tolerance=4', () {
+      final cfg = PageConfig.fromYaml({'enabled': true, 'pageWidth': 50, 'pageHeight': 50});
+      expect(cfg.tolerance, equals(4));
+    });
+
+    test('toYaml writes tolerance, not fuzzyAmount', () {
+      const cfg = PageConfig(enabled: true, pageWidth: 50, pageHeight: 50, tolerance: 3);
+      final yaml = cfg.toYaml();
+      expect(yaml.containsKey('tolerance'), isTrue);
+      expect(yaml.containsKey('fuzzyAmount'), isFalse);
+      expect(yaml['tolerance'], equals(3));
+    });
+
+    test('round-trip: toYaml + fromYaml preserves tolerance', () {
+      const cfg = PageConfig(enabled: true, pageWidth: 40, pageHeight: 30, tolerance: 6);
+      final cfg2 = PageConfig.fromYaml(cfg.toYaml());
+      expect(cfg2, equals(cfg));
     });
   });
 }
-

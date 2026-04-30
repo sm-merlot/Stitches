@@ -106,7 +106,7 @@ EditorState fakeStitchState({
       enabled: true,
       pageWidth: 10,
       pageHeight: 10,
-      fuzzyAmount: 0,
+      tolerance: 0,
     );
     finalPat = pat.copyWith(pageConfig: config);
     pageLayout = PageLayout.compute(config, finalPat);
