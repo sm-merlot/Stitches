@@ -339,12 +339,18 @@ class PageLayout {
       }
 
       // Object too large to keep whole (e.g. black outlines spanning the
-      // pattern). Split the minority-side cells into connected sub-groups
-      // and evaluate each independently — small tendrils crossing the
-      // boundary get keep-whole treatment even though the parent is huge.
+      // pattern). Look at minority-side cells within tolerance distance of
+      // the boundary — those are the only ones the DP can reach. Flood-fill
+      // them into connected sub-groups; each small tendril gets keep-whole.
       final minorityCells = <(int, int)>{};
       for (final (p, c) in groupCells) {
-        if (keepOnLeft ? p >= nominalBoundary : p < nominalBoundary) {
+        if (keepOnLeft &&
+            p >= nominalBoundary &&
+            p < nominalBoundary + tolerance) {
+          minorityCells.add((p, c));
+        } else if (!keepOnLeft &&
+            p < nominalBoundary &&
+            p >= nominalBoundary - tolerance) {
           minorityCells.add((p, c));
         }
       }
