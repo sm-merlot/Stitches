@@ -324,18 +324,76 @@ class PageLayout {
           ? rightPrimaries.reduce(math.max) - nominalBoundary + 1
           : nominalBoundary - leftPrimaries.reduce(math.min);
 
-      if (bleedDepth > tolerance) continue; // too deep → split
-
-      // Build cross → list of primary positions for penalty lookup
-      final Map<int, List<int>> byCross = {};
-      for (final (p, c) in groupCells) {
-        byCross.putIfAbsent(c, () => []).add(p);
+      if (bleedDepth <= tolerance) {
+        // Small bleed — keep entire object whole on majority side.
+        final Map<int, List<int>> byCross = {};
+        for (final (p, c) in groupCells) {
+          byCross.putIfAbsent(c, () => []).add(p);
+        }
+        if (keepOnLeft) {
+          keepWholeLeft.add(byCross);
+        } else {
+          keepWholeRight.add(byCross);
+        }
+        continue;
       }
 
-      if (keepOnLeft) {
-        keepWholeLeft.add(byCross);
-      } else {
-        keepWholeRight.add(byCross);
+      // Object too large to keep whole (e.g. black outlines spanning the
+      // pattern). Split the minority-side cells into connected sub-groups
+      // and evaluate each independently — small tendrils crossing the
+      // boundary get keep-whole treatment even though the parent is huge.
+      final minorityCells = <(int, int)>{};
+      for (final (p, c) in groupCells) {
+        if (keepOnLeft ? p >= nominalBoundary : p < nominalBoundary) {
+          minorityCells.add((p, c));
+        }
+      }
+
+      final visitedMinority = <(int, int)>{};
+      for (final seed in minorityCells) {
+        if (visitedMinority.contains(seed)) continue;
+        // BFS flood-fill within minority cells to find connected sub-group.
+        final component = <(int, int)>{};
+        final queue = [seed];
+        visitedMinority.add(seed);
+        int qi = 0;
+        while (qi < queue.length) {
+          final (p, c) = queue[qi++];
+          component.add((p, c));
+          for (final (dp, dc) in const [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),           (0, 1),
+            (1, -1),  (1, 0),  (1, 1),
+          ]) {
+            final neighbor = (p + dp, c + dc);
+            if (minorityCells.contains(neighbor) &&
+                !visitedMinority.contains(neighbor)) {
+              visitedMinority.add(neighbor);
+              queue.add(neighbor);
+            }
+          }
+        }
+
+        // Compute bleed depth of this sub-group.
+        final subBleedDepth = keepOnLeft
+            ? component.map((e) => e.$1).reduce(math.max) -
+                nominalBoundary +
+                1
+            : nominalBoundary -
+                component.map((e) => e.$1).reduce(math.min);
+
+        if (subBleedDepth > tolerance) continue; // sub-group too deep
+
+        // Pull this sub-group to the majority side.
+        final Map<int, List<int>> byCross = {};
+        for (final (p, c) in component) {
+          byCross.putIfAbsent(c, () => []).add(p);
+        }
+        if (keepOnLeft) {
+          keepWholeLeft.add(byCross);
+        } else {
+          keepWholeRight.add(byCross);
+        }
       }
     }
 
