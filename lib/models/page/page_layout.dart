@@ -589,17 +589,17 @@ class PageLayout {
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];
 
-    // Phase 1+2: Build super-groups once for the whole pattern.
-    final superGroups = _buildSuperGroups(
-      _detectObjects(snapColor, pattern.width, pattern.height),
-      pattern.width,
-      pattern.height,
-    );
+    // Phase 1: Detect individual objects (contiguous same-colour regions).
+    // These are used directly for keep-whole classification. Super-groups
+    // (Phase 2) are intentionally NOT used here because union-find chaining
+    // merges objects transitively into mega-groups that always exceed the
+    // tolerance threshold, effectively disabling keep-whole.
+    final objects = _detectObjects(snapColor, pattern.width, pattern.height);
 
-    // Transposed super-groups for horizontal boundaries:
+    // Transposed objects for horizontal boundaries:
     // (primary=row, cross=col) instead of (primary=col, cross=row).
-    final superGroupsT = <int, Set<(int, int)>>{
-      for (final e in superGroups.entries)
+    final objectsT = <int, Set<(int, int)>>{
+      for (final e in objects.entries)
         e.key: e.value.map<(int, int)>((cr) => (cr.$2, cr.$1)).toSet(),
     };
 
@@ -613,7 +613,7 @@ class PageLayout {
         maxBoundary: pattern.width,
         maxCross: pattern.height,
         colorAt: (primary, cross) => colorAt(primary, cross),
-        superGroups: superGroups,
+        superGroups: objects,
       );
     }
 
@@ -627,7 +627,7 @@ class PageLayout {
         maxBoundary: pattern.height,
         maxCross: pattern.width,
         colorAt: (primary, cross) => colorAt(cross, primary),
-        superGroups: superGroupsT,
+        superGroups: objectsT,
       );
     }
 
