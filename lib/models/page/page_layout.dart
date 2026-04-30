@@ -416,10 +416,13 @@ class PageLayout {
         int bestPrev = oi;
 
         for (int poi = 0; poi < numOffsets; poi++) {
-          final prevDelta = poi - T;
-          if ((delta - prevDelta).abs() > 2) continue; // smoothness
-          if (prev[poi] < best) {
-            best = prev[poi];
+          final step = (delta - (poi - T)).abs();
+          if (step > 2) continue; // smoothness constraint
+          // Inertia: penalise offset changes so the boundary follows
+          // colour-change lines straight instead of jittering.
+          final candidate = prev[poi] + step * 5;
+          if (candidate < best) {
+            best = candidate;
             bestPrev = poi;
           }
         }
