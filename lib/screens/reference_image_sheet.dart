@@ -9,7 +9,7 @@ class ReferenceImageSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
-    final hasImage = state.referenceImage != null;
+    final hasImage = state.editSession.referenceImage != null;
     final theme = Theme.of(context);
 
     return SafeArea(
@@ -76,7 +76,7 @@ class ReferenceImageSheet extends ConsumerWidget {
                   const SizedBox(width: 8),
                   const Expanded(child: Text('Visible')),
                   Switch(
-                    value: state.referenceVisible,
+                    value: state.editSession.referenceVisible,
                     onChanged: (_) => notifier.toggleReferenceVisible(),
                   ),
                 ],
@@ -90,18 +90,18 @@ class ReferenceImageSheet extends ConsumerWidget {
                   const Text('Opacity'),
                   Expanded(
                     child: Slider(
-                      value: state.referenceOpacity,
+                      value: state.editSession.referenceOpacity,
                       min: 0.05,
                       max: 1.0,
                       divisions: 19,
-                      label: '${(state.referenceOpacity * 100).round()}%',
+                      label: '${(state.editSession.referenceOpacity * 100).round()}%',
                       onChanged: notifier.setReferenceOpacity,
                     ),
                   ),
                   SizedBox(
                     width: 36,
                     child: Text(
-                      '${(state.referenceOpacity * 100).round()}%',
+                      '${(state.editSession.referenceOpacity * 100).round()}%',
                       style: theme.textTheme.bodySmall,
                       textAlign: TextAlign.right,
                     ),

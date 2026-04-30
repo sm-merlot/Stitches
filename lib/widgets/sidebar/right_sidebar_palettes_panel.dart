@@ -12,8 +12,8 @@ class PalettesPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorProvider);
-    final palettes = state.snippetPalettes;
-    final activeIdx = state.snippetActivePaletteIndex;
+    final palettes = state.snippetEditorState.palettes;
+    final activeIdx = state.snippetEditorState.activePaletteIndex;
 
     return ListView.builder(
       padding: EdgeInsets.zero,

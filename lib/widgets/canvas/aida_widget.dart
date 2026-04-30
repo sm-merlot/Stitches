@@ -132,7 +132,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   /// Compute pan/scale so [pageIndex] fills the canvas with padding.
   /// Called when [EditorState.pendingFitPage] fires.
   void _fitToPage(EditorState state, int pageIndex) {
-    final layout = state.pageLayout;
+    final layout = state.stitchSession.pageLayout;
     if (layout == null) return;
     final size = _canvasSize;
     if (size.isEmpty) return;
@@ -176,9 +176,9 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   void initState() {
     super.initState();
     final editorState = ref.read(editorProvider);
-    final savedScale = editorState.viewScale > 0 ? editorState.viewScale : 1.0;
-    final savedPan = editorState.viewScale > 0
-        ? Offset(editorState.viewPanX, editorState.viewPanY)
+    final savedScale = editorState.viewState.scale > 0 ? editorState.viewState.scale : 1.0;
+    final savedPan = editorState.viewState.scale > 0
+        ? Offset(editorState.viewState.panX, editorState.viewState.panY)
         : const Offset(20, 20);
     _zoomPan = ZoomPanHandler(
       initialScale: savedScale,
@@ -287,14 +287,14 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   RenderViewConfig? _lastCachedViewConfig;
 
   RenderViewConfig _buildViewConfig(EditorState state) => RenderViewConfig(
-        focusThreadId: state.stitchFocusThreadId,
+        focusThreadId: state.stitchSession.focusThreadId,
         stitchMode: state.stitchMode,
-        stitchBackMode: state.stitchBackMode,
-        stitchCrossMode: state.stitchCrossMode,
+        stitchBackMode: state.stitchSession.backMode,
+        stitchCrossMode: state.stitchSession.crossMode,
         paletteOverride: _getOrBuildPaletteOverride(state),
         progress: state.pattern.progress,
-        pageLayout: state.stitchMode ? state.pageLayout : null,
-        currentPage: state.currentPage,
+        pageLayout: state.stitchMode ? state.stitchSession.pageLayout : null,
+        currentPage: state.stitchSession.currentPage,
       );
 
   void _rebuildRenderCache(EditorState state) {
@@ -354,12 +354,12 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   }
 
   /// Returns a stable [Map] instance for the active snippet palette override,
-  /// rebuilding it only when [state.snippetPalettes] identity or the active
+  /// rebuilding it only when [state.snippetEditorState.palettes] identity or the active
   /// index changes. This lets [CanvasStaticPainter.shouldRepaint] use a simple
   /// identity comparison instead of deep equality.
   Map<String, Color>? _getOrBuildPaletteOverride(EditorState state) {
-    final palettes = state.snippetPalettes;
-    final idx = state.snippetActivePaletteIndex;
+    final palettes = state.snippetEditorState.palettes;
+    final idx = state.snippetEditorState.activePaletteIndex;
     if (identical(_lastPalettes, palettes) && _lastPaletteIdx == idx) {
       return _paletteOverride;
     }
@@ -403,7 +403,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
   // ─── Pointer event handling ───────────────────────────────────────────────
 
   bool get _isPanMode =>
-      ref.read(editorProvider).drawingMode == DrawingMode.pan;
+      ref.read(editorProvider).editSession.drawingMode == DrawingMode.pan;
 
   bool _isNavZone(Offset screenPos, EditorState state) =>
       _stitch?.isNavZone(screenPos, _canvasSize.width, _canvasSize.height, state) ??
@@ -623,39 +623,39 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
 
     // Show canvas warning banner triggered by the notifier (e.g. copy with no selection).
     ref.listen<EditorState>(editorProvider, (prev, next) {
-      if (next.pendingCanvasWarning != null &&
-          next.pendingCanvasWarning != prev?.pendingCanvasWarning) {
-        _showWarningBanner(next.pendingCanvasWarning!);
+      if (next.editSession.pendingCanvasWarning != null &&
+          next.editSession.pendingCanvasWarning != prev?.editSession.pendingCanvasWarning) {
+        _showWarningBanner(next.editSession.pendingCanvasWarning!);
         ref.read(editorProvider.notifier).clearCanvasWarning();
       }
       // When the file changes, restore the saved view position for the new file.
       if (next.filePath != prev?.filePath && next.isFileOpen) {
-        if (next.viewScale > 0) {
-          _zoomPan.setViewport(next.viewScale, Offset(next.viewPanX, next.viewPanY));
+        if (next.viewState.scale > 0) {
+          _zoomPan.setViewport(next.viewState.scale, Offset(next.viewState.panX, next.viewState.panY));
         } else {
           _zoomPan.setViewport(1.0, const Offset(20, 20));
         }
         setState(() {});
       }
       // Fit canvas to page when page mode navigates.
-      if (next.pendingFitPage != null &&
-          next.pendingFitPage != prev?.pendingFitPage) {
+      if (next.stitchSession.pendingFitPage != null &&
+          next.stitchSession.pendingFitPage != prev?.stitchSession.pendingFitPage) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           // Re-read current state: if pendingFitPage was cleared before this
           // frame fired (e.g. by a background Drive refresh that wants to
           // preserve the current viewport), skip the fit entirely.
           final current = ref.read(editorProvider);
-          if (current.pendingFitPage == null) return;
-          _fitToPage(current, current.pendingFitPage!);
+          if (current.stitchSession.pendingFitPage == null) return;
+          _fitToPage(current, current.stitchSession.pendingFitPage!);
           ref.read(editorProvider.notifier).clearPendingFitPage();
         });
       }
     });
 
-    final isErasing = state.drawingMode == DrawingMode.erase;
-    final isDrawCursor = state.drawingMode == DrawingMode.draw;
-    final isColorPickerCursor = state.drawingMode == DrawingMode.colorPicker;
+    final isErasing = state.editSession.drawingMode == DrawingMode.erase;
+    final isDrawCursor = state.editSession.drawingMode == DrawingMode.draw;
+    final isColorPickerCursor = state.editSession.drawingMode == DrawingMode.colorPicker;
 
     // Resolve ghost stitches (paste preview or move drag) before passing to
     // the overlay painter. Ghost thread colors are read from state so the
@@ -663,12 +663,12 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     final paste = _edit?.paste;
     final select = _edit?.select;
     List<Stitch>? ghostStitches;
-    if (state.drawingMode == DrawingMode.paste && state.clipboard != null && paste != null) {
+    if (state.editSession.drawingMode == DrawingMode.paste && state.editSession.clipboard != null && paste != null) {
       final origin = paste.pasteOrigin ??
           Offset(state.pattern.width / 2.0, state.pattern.height / 2.0);
-      final (dx, dy) = paste.effectiveOffset(origin, state.clipboard!, state.pattern);
-      ghostStitches = paste.buildGhostStitches(dx, dy, state.clipboard!, EditorState.offsetStitch);
-    } else if (select?.isMoving == true && state.selectionRect != null) {
+      final (dx, dy) = paste.effectiveOffset(origin, state.editSession.clipboard!, state.pattern);
+      ghostStitches = paste.buildGhostStitches(dx, dy, state.editSession.clipboard!, EditorState.offsetStitch);
+    } else if (select?.isMoving == true && state.editSession.selectionRect != null) {
       final dx = select!.moveDelta.dx.round();
       final dy = select.moveDelta.dy.round();
       ghostStitches =
@@ -677,7 +677,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
 
     final pageModeActive = state.stitchMode &&
         state.pattern.pageConfig.enabled &&
-        state.pageLayout != null;
+        state.stitchSession.pageLayout != null;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -721,16 +721,16 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
                         renderCache: _renderCache,
                         cacheVersion: _renderCache.version,
                         stitchMode: state.stitchMode,
-                        stitchCrossMode: state.stitchCrossMode,
-                        stitchBackMode: state.stitchBackMode,
-                        stitchFocusThreadId: state.stitchFocusThreadId,
-                        referenceImage: state.referenceImage,
-                        referenceOpacity: state.referenceOpacity,
-                        referenceVisible: state.referenceVisible,
+                        stitchCrossMode: state.stitchSession.crossMode,
+                        stitchBackMode: state.stitchSession.backMode,
+                        stitchFocusThreadId: state.stitchSession.focusThreadId,
+                        referenceImage: state.editSession.referenceImage,
+                        referenceOpacity: state.editSession.referenceOpacity,
+                        referenceVisible: state.editSession.referenceVisible,
                         compositeLayer: state.compositeLayer,
                         // Pages are a stitch-mode concept — don't filter in edit/view.
-                        pageLayout: state.stitchMode ? state.pageLayout : null,
-                        currentPage: state.currentPage,
+                        pageLayout: state.stitchMode ? state.stitchSession.pageLayout : null,
+                        currentPage: state.stitchSession.currentPage,
                         progress: state.pattern.progress,
                       ),
                       isComplex: true,
@@ -800,25 +800,25 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
                       scale: _scale,
                       aidaColor: state.pattern.aidaColor,
                       patternThreads: state.pattern.threads,
-                      backstitchStartPoint: state.backstitchStartPoint,
+                      backstitchStartPoint: state.editSession.backstitchStartPoint,
                       backstitchCurrentPoint: _edit?.draw?.backstitchHoverPoint,
                       isErasing: isErasing,
-                      eraserSize: state.eraserSize,
-                      fillEraseActive: state.fillEraseActive,
+                      eraserSize: state.editSession.eraserSize,
+                      fillEraseActive: state.editSession.fillEraseActive,
                       isDrawCursor: isDrawCursor,
                       isColorPickerCursor: isColorPickerCursor,
                       cursorScreenPos: (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                           ? null
                           : _activeHover(state.mode)?.mouseScreenPos,
                       selectionRect: _stitch?.progress?.dragRect ??
-                          state.progressRegion ??
+                          state.stitchSession.progressRegion ??
                           select?.dragRect ??
-                          state.selectionRect,
+                          state.editSession.selectionRect,
                       ghostStitches: ghostStitches,
-                      ghostThreads: state.drawingMode == DrawingMode.paste
-                          ? state.clipboardThreads
+                      ghostThreads: state.editSession.drawingMode == DrawingMode.paste
+                          ? state.editSession.clipboardThreads
                           : null,
-                      ghostOpacity: state.drawingMode == DrawingMode.paste
+                      ghostOpacity: state.editSession.drawingMode == DrawingMode.paste
                           ? 0.55
                           : 1.0,
                       stylusHoverCell: _activeHover(state.mode)?.hoverCell,
@@ -832,8 +832,8 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
                   // accidental stitch marks when tapping nav buttons.
                   if (pageModeActive)
                     _PageNavOverlay(
-                      layout: state.pageLayout!,
-                      currentPage: state.currentPage,
+                      layout: state.stitchSession.pageLayout!,
+                      currentPage: state.stitchSession.currentPage,
                       completedPages: state.pattern.progress.completedPages,
                       onLeft:  () => ref.read(editorProvider.notifier).navigatePageLeft(),
                       onRight: () => ref.read(editorProvider.notifier).navigatePageRight(),
@@ -855,7 +855,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       return MouseCursor.defer;
     }
-    return switch (state.drawingMode) {
+    return switch (state.editSession.drawingMode) {
       DrawingMode.pan         => SystemMouseCursors.grab,
       DrawingMode.erase       => SystemMouseCursors.none,
       DrawingMode.colorPicker => SystemMouseCursors.none,

@@ -126,14 +126,14 @@ class EditorToolbar extends ConsumerWidget {
                       children: [
                         _ToolbarButton(
                           tooltip: _tt('Draw  [D]'),
-                          selected: state.drawingMode == DrawingMode.draw,
+                          selected: state.editSession.drawingMode == DrawingMode.draw,
                           onTap: () => notifier.setDrawingMode(DrawingMode.draw),
                           builder: (c) => Icon(Icons.draw_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
                           tooltip: _tt('Erase  [E]'),
-                          selected: state.drawingMode == DrawingMode.erase,
+                          selected: state.editSession.drawingMode == DrawingMode.erase,
                           activeColor: theme.colorScheme.error,
                           onTap: () => notifier.setDrawingMode(DrawingMode.erase),
                           builder: (c) => Icon(Icons.auto_fix_normal, size: 17, color: c),
@@ -141,15 +141,15 @@ class EditorToolbar extends ConsumerWidget {
                         const SizedBox(width: 2),
                         _ToolbarButton(
                           tooltip: _tt('Pick colour  [C]'),
-                          selected: state.drawingMode == DrawingMode.colorPicker,
+                          selected: state.editSession.drawingMode == DrawingMode.colorPicker,
                           onTap: () => notifier.setDrawingMode(DrawingMode.colorPicker),
                           builder: (c) => Icon(Icons.colorize_outlined, size: 17, color: c),
                         ),
                         const SizedBox(width: 2),
                         _ToolbarButton(
                           tooltip: _tt('Select  [S]'),
-                          selected: state.drawingMode == DrawingMode.select ||
-                              state.drawingMode == DrawingMode.paste,
+                          selected: state.editSession.drawingMode == DrawingMode.select ||
+                              state.editSession.drawingMode == DrawingMode.paste,
                           onTap: () => notifier.setDrawingMode(DrawingMode.select),
                           builder: (c) => Icon(Icons.select_all_outlined, size: 17, color: c),
                         ),
@@ -159,7 +159,7 @@ class EditorToolbar extends ConsumerWidget {
                   vDivider,
 
                   // Stitch tools (draw mode only)
-                  if (state.drawingMode == DrawingMode.draw) ...[
+                  if (state.editSession.drawingMode == DrawingMode.draw) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Row(
@@ -167,7 +167,7 @@ class EditorToolbar extends ConsumerWidget {
                         children: [
                           _ToolbarButton(
                             tooltip: _tt('Full stitch  [1]'),
-                            selected: state.currentTool == DrawingTool.fullStitch,
+                            selected: state.editSession.currentTool == DrawingTool.fullStitch,
                             onTap: () => notifier.setTool(DrawingTool.fullStitch),
                             builder: (c) => CustomPaint(
                                 painter: _StitchIconPainter(color: c, draw: _drawFullStitch)),
@@ -175,7 +175,7 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Half diagonal /  [2]'),
-                            selected: state.currentTool == DrawingTool.halfForward,
+                            selected: state.editSession.currentTool == DrawingTool.halfForward,
                             onTap: () => notifier.setTool(DrawingTool.halfForward),
                             builder: (c) => CustomPaint(
                                 painter: _StitchIconPainter(color: c, draw: _drawHalfForward)),
@@ -183,7 +183,7 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Half diagonal \\  [3]'),
-                            selected: state.currentTool == DrawingTool.halfBackward,
+                            selected: state.editSession.currentTool == DrawingTool.halfBackward,
                             onTap: () => notifier.setTool(DrawingTool.halfBackward),
                             builder: (c) => CustomPaint(
                                 painter: _StitchIconPainter(color: c, draw: _drawHalfBackward)),
@@ -191,7 +191,7 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Half-cell cross (X in ½ cell)  [4]'),
-                            selected: state.currentTool == DrawingTool.halfCross,
+                            selected: state.editSession.currentTool == DrawingTool.halfCross,
                             onTap: () => notifier.setTool(DrawingTool.halfCross),
                             builder: (c) => CustomPaint(
                                 painter: _StitchIconPainter(color: c, draw: _drawHalfCross)),
@@ -199,7 +199,7 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Quarter diagonal (auto-corner)  [5]'),
-                            selected: state.currentTool == DrawingTool.quarterDiag,
+                            selected: state.editSession.currentTool == DrawingTool.quarterDiag,
                             onTap: () => notifier.setTool(DrawingTool.quarterDiag),
                             builder: (c) => CustomPaint(
                                 painter: _StitchIconPainter(color: c, draw: _drawQuarterDiag)),
@@ -207,7 +207,7 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Quarter-cell cross / petit point  [6]'),
-                            selected: state.currentTool == DrawingTool.quarterCross,
+                            selected: state.editSession.currentTool == DrawingTool.quarterCross,
                             onTap: () => notifier.setTool(DrawingTool.quarterCross),
                             builder: (c) => CustomPaint(
                                 painter: _StitchIconPainter(color: c, draw: _drawQuarterCross)),
@@ -215,17 +215,17 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Backstitch  [7]'),
-                            selected: state.currentTool == DrawingTool.backstitch,
+                            selected: state.editSession.currentTool == DrawingTool.backstitch,
                             onTap: () => notifier.setTool(DrawingTool.backstitch),
                             builder: (c) => Icon(Icons.gesture, size: 17, color: c),
                           ),
-                          if (state.currentTool == DrawingTool.backstitch) ...[
+                          if (state.editSession.currentTool == DrawingTool.backstitch) ...[
                             const SizedBox(width: 2),
                             _ToolbarButton(
                               tooltip: _isTouchPlatform
                                   ? 'Chain mode (tap ends become next start)'
                                   : 'Chain mode (hold Ctrl, or toggle)',
-                              selected: state.backstitchChainMode,
+                              selected: state.editSession.backstitchChainMode,
                               onTap: () => notifier.toggleBackstitchChainMode(),
                               builder: (c) => Icon(Icons.link, size: 17, color: c),
                             ),
@@ -233,7 +233,7 @@ class EditorToolbar extends ConsumerWidget {
                           const SizedBox(width: 4),
                           _ToolbarButton(
                             tooltip: _tt('Fill colour  [8]'),
-                            selected: state.currentTool == DrawingTool.fill,
+                            selected: state.editSession.currentTool == DrawingTool.fill,
                             onTap: () => notifier.setTool(DrawingTool.fill),
                             builder: (c) => Icon(Icons.format_color_fill, size: 17, color: c),
                           ),
@@ -244,7 +244,7 @@ class EditorToolbar extends ConsumerWidget {
                   ],
 
                   // Erase sub-options (erase mode only)
-                  if (state.drawingMode == DrawingMode.erase) ...[
+                  if (state.editSession.drawingMode == DrawingMode.erase) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Row(
@@ -252,10 +252,10 @@ class EditorToolbar extends ConsumerWidget {
                         children: [
                           // Size picker — styled like _ToolbarButton, opens a popup menu
                           Tooltip(
-                            message: 'Eraser size (${state.eraserSize})',
+                            message: 'Eraser size (${state.editSession.eraserSize})',
                             child: _EraserSizeButton(
-                              eraserSize: state.eraserSize,
-                              selected: !state.fillEraseActive,
+                              eraserSize: state.editSession.eraserSize,
+                              selected: !state.editSession.fillEraseActive,
                               onSelected: (sz) => notifier.setEraserSize(sz),
                             ),
                           ),
@@ -263,7 +263,7 @@ class EditorToolbar extends ConsumerWidget {
                           // Fill erase — in the same radio group as size
                           _ToolbarButton(
                             tooltip: 'Flood Erase (erase connected cells)',
-                            selected: state.fillEraseActive,
+                            selected: state.editSession.fillEraseActive,
                             activeColor: const Color(0xFFFF6D00),
                             onTap: () => notifier.toggleFillErase(),
                             builder: (c) => Icon(Icons.format_color_reset, size: 17, color: c),
@@ -276,17 +276,17 @@ class EditorToolbar extends ConsumerWidget {
 
                   // Copy/delete/flip/rotate — shown when in select mode.
                   // Buttons always tappable; look disabled and show a canvas warning when no selection.
-                  if (state.drawingMode == DrawingMode.select) ...[
+                  if (state.editSession.drawingMode == DrawingMode.select) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       child: Tooltip(
-                        message: state.canvasSelectionMode
+                        message: state.editSession.canvasSelectionMode
                             ? 'Selecting all visible layers'
                             : 'Selecting active layer only',
                         child: IconButton(
                           iconSize: 20,
                           visualDensity: VisualDensity.compact,
-                          style: state.canvasSelectionMode
+                          style: state.editSession.canvasSelectionMode
                               ? ButtonStyle(
                                   backgroundColor: WidgetStateProperty.all(
                                       theme.colorScheme.primaryContainer),
@@ -294,7 +294,7 @@ class EditorToolbar extends ConsumerWidget {
                               : null,
                           icon: Icon(
                             Icons.layers_outlined,
-                            color: state.canvasSelectionMode
+                            color: state.editSession.canvasSelectionMode
                                 ? theme.colorScheme.onPrimaryContainer
                                 : null,
                           ),
@@ -306,7 +306,7 @@ class EditorToolbar extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Builder(builder: (context) {
-                        final hasRect = state.selectionRect != null;
+                        final hasRect = state.editSession.selectionRect != null;
                         final hasSel = hasRect && state.selectedStitches.isNotEmpty;
                         final disabledColor = theme.disabledColor;
                         final noOverlay = WidgetStateProperty.all(Colors.transparent);
@@ -365,7 +365,7 @@ class EditorToolbar extends ConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                         child: Builder(builder: (context) {
-                          final hasRect = state.selectionRect != null;
+                          final hasRect = state.editSession.selectionRect != null;
                           final hasSel = hasRect && state.selectedStitches.isNotEmpty;
                           final disabledColor = theme.disabledColor;
                           final noOverlay = WidgetStateProperty.all(Colors.transparent);
@@ -422,13 +422,13 @@ class EditorToolbar extends ConsumerWidget {
                     vDivider,
                   ],
                   // Cancel + opacity + save-as-snippet — shown while paste preview is active
-                  if (state.drawingMode == DrawingMode.paste) ...[
+                  if (state.editSession.drawingMode == DrawingMode.paste) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (showSaveAsSnippetButton && !state.clipboardFromSnippet)
+                          if (showSaveAsSnippetButton && !state.editSession.clipboardFromSnippet)
                             Tooltip(
                               message: 'Save as snippet',
                               child: IconButton(
@@ -515,10 +515,10 @@ class EditorToolbar extends ConsumerWidget {
                               visualDensity: VisualDensity.compact,
                               icon: const Icon(Icons.flip),
                               onPressed: () {
-                                if (state.drawingMode == DrawingMode.select &&
-                                    state.selectionRect != null) {
+                                if (state.editSession.drawingMode == DrawingMode.select &&
+                                    state.editSession.selectionRect != null) {
                                   notifier.flipSelectionH();
-                                } else if (state.drawingMode == DrawingMode.paste) {
+                                } else if (state.editSession.drawingMode == DrawingMode.paste) {
                                   notifier.flipClipboardH();
                                 } else {
                                   notifier.flipCanvasH();
@@ -536,10 +536,10 @@ class EditorToolbar extends ConsumerWidget {
                                 child: const Icon(Icons.flip),
                               ),
                               onPressed: () {
-                                if (state.drawingMode == DrawingMode.select &&
-                                    state.selectionRect != null) {
+                                if (state.editSession.drawingMode == DrawingMode.select &&
+                                    state.editSession.selectionRect != null) {
                                   notifier.flipSelectionV();
-                                } else if (state.drawingMode == DrawingMode.paste) {
+                                } else if (state.editSession.drawingMode == DrawingMode.paste) {
                                   notifier.flipClipboardV();
                                 } else {
                                   notifier.flipCanvasV();
@@ -554,10 +554,10 @@ class EditorToolbar extends ConsumerWidget {
                               visualDensity: VisualDensity.compact,
                               icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
                               onPressed: () {
-                                if (state.drawingMode == DrawingMode.select &&
-                                    state.selectionRect != null) {
+                                if (state.editSession.drawingMode == DrawingMode.select &&
+                                    state.editSession.selectionRect != null) {
                                   notifier.rotateSelectionCW();
-                                } else if (state.drawingMode == DrawingMode.paste) {
+                                } else if (state.editSession.drawingMode == DrawingMode.paste) {
                                   notifier.rotateClipboardCW();
                                 } else {
                                   notifier.rotateCanvasCW();

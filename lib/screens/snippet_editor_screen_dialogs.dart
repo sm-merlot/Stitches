@@ -279,8 +279,8 @@ class _PaletteManagerSheetState extends ConsumerState<_PaletteManagerSheet> {
   @override
   Widget build(BuildContext context) {
     final editorState = ref.watch(editorProvider);
-    final palettes = editorState.snippetPalettes;
-    final activeIdx = editorState.snippetActivePaletteIndex;
+    final palettes = editorState.snippetEditorState.palettes;
+    final activeIdx = editorState.snippetEditorState.activePaletteIndex;
     final notifier = ref.read(editorProvider.notifier);
 
     return Column(
@@ -330,9 +330,9 @@ class _PaletteManagerSheetState extends ConsumerState<_PaletteManagerSheet> {
           title: const Text('Add new palette…'),
           onTap: () async {
             final state = ref.read(editorProvider);
-            if (state.snippetPalettes.isEmpty) return;
-            final primary = state.snippetPalettes[0];
-            final existingCount = state.snippetPalettes.length;
+            if (state.snippetEditorState.palettes.isEmpty) return;
+            final primary = state.snippetEditorState.palettes[0];
+            final existingCount = state.snippetEditorState.palettes.length;
             final result = await showDialog<SnippetPalette>(
               context: context,
               builder: (dialogContext) => UncontrolledProviderScope(

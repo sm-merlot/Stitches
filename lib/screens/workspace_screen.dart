@@ -1524,10 +1524,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             // ── Edit mode: ref image + resize + save + Done ──────────────────
             if (editorState.isFileOpen && editorState.mode == AppMode.edit && openPdf == null) ...[
               IconButton(
-                tooltip: editorState.referenceImage != null && editorState.referenceVisible
+                tooltip: editorState.editSession.referenceImage != null && editorState.editSession.referenceVisible
                     ? 'Reference Image (on)'
                     : 'Reference Image',
-                isSelected: editorState.referenceImage != null && editorState.referenceVisible,
+                isSelected: editorState.editSession.referenceImage != null && editorState.editSession.referenceVisible,
                 icon: const Icon(Icons.image_outlined),
                 selectedIcon: const Icon(Icons.image),
                 onPressed: () => showModalBottomSheet(

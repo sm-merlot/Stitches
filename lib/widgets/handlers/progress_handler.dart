@@ -94,15 +94,15 @@ class ProgressHandler {
   /// Returns the topmost visible [BackStitch] within [kBackstitchHitRadius]
   /// cell units of [screenPos], or `null` if none qualifies.
   ///
-  /// Returns `null` when [state.stitchCrossMode] is active (cross-stitch focus
+  /// Returns `null` when [state.stitchSession.crossMode] is active (cross-stitch focus
   /// mode suppresses backstitch taps so normal cross-stitch taps work).
   BackStitch? getBackstitchHit(
     Offset screenPos,
     CanvasViewport viewport,
     EditorState state,
   ) {
-    if (state.stitchCrossMode) return null;
-    final focusId = state.stitchFocusThreadId;
+    if (state.stitchSession.crossMode) return null;
+    final focusId = state.stitchSession.focusThreadId;
     final canvas = viewport.screenToCanvas(screenPos);
     final px = canvas.dx / viewport.cellSize;
     final py = canvas.dy / viewport.cellSize;
