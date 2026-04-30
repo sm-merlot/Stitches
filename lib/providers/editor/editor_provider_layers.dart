@@ -116,6 +116,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void deleteLayer(String id) {
@@ -137,6 +138,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void renameLayer(String id, String name) {
@@ -195,14 +197,26 @@ mixin LayersMixin on Notifier<EditorState> {
   }
 
   void setLayerOpacity(String id, double opacity) {
+    _opacityDebounce?.cancel();
     final clamped = opacity.clamp(0.0, 1.0);
+    final changedLayer = state.pattern.layers.firstWhere((l) => l.id == id);
     final newPattern =
         _updateLayer(state.pattern, id, (l) => l.copyWith(opacity: clamped));
+
+    // Use patchAffectedLayer (same as toggleLayerVisible) to avoid blanking
+    // the canvas on every slider tick.
+    final affectedCells = changedLayer.stitchesByCell.keys.toSet();
+    final oldComposite = state.compositeLayer;
+    final newComposite = oldComposite != null
+        ? StitchCompositor.patchAffectedLayer(oldComposite, newPattern, changedLayer)
+        : StitchCompositor.computeComposite(newPattern);
+
     state = state.copyWith(
-        pattern: newPattern, isDirty: true, compositeLayer: null);
-    _opacityDebounce?.cancel();
-    _opacityDebounce =
-        Timer(const Duration(milliseconds: 150), refreshCompositeCache);
+      pattern: newPattern,
+      isDirty: true,
+      compositeLayer: newComposite,
+      dirtyCellKeys: affectedCells.isEmpty ? null : affectedCells,
+    );
   }
 
   /// [delta] = +1 moves layer up (toward top/front), -1 moves down.
@@ -237,6 +251,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Merges [topId]'s stitches into the layer directly below it.
@@ -290,6 +305,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Adds a new layer into [groupId] at the top. The new layer becomes active.
@@ -309,6 +325,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Moves [layerId] to top-level, inserted below [prevTopLevelId].
@@ -351,6 +368,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Moves [layerId] into [groupId], inserted below [belowLayerId].
@@ -397,6 +415,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void deleteGroup(String groupId) {
@@ -419,6 +438,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void renameGroup(String groupId, String name) {
@@ -486,6 +506,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void moveLayerToGroup(String layerId, String groupId) {
@@ -503,6 +524,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   /// Removes [layerId] from [groupId] and inserts it as a [LayerLeaf]
@@ -525,6 +547,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void reorderTopLevel(int oldIndex, int newIndex) {
@@ -537,6 +560,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   void reorderWithinGroup(String groupId, int oldIndex, int newIndex) {
@@ -555,6 +579,7 @@ mixin LayersMixin on Notifier<EditorState> {
       compositeLayer: null,
     );
     _clearUndoManager();
+    refreshCompositeCache();
   }
 
   // ─── Composite thread cache ────────────────────────────────────────────────

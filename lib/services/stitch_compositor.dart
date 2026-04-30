@@ -81,6 +81,24 @@ class CompositeLayer {
     this.version = 0,
   });
 
+  /// Returns the resolved threadId (dmcCode) of the dominant composite stitch
+  /// at [cell]. Checks [fullStitches] first (O(1)), then falls back to
+  /// [otherStitches] for cells with only partial stitches.
+  String? topThreadAt(Cell cell) {
+    final full = fullStitches[cell];
+    if (full != null) return full.resolvedThread.dmcCode;
+    for (final cs in otherStitches) {
+      if (cs.stitch.cellCoords == cell) return cs.resolvedThread.dmcCode;
+    }
+    return null;
+  }
+
+  /// True if [cell] has any visible composite stitch (full or partial).
+  bool hasCrossStitchAt(Cell cell) {
+    if (fullStitches.containsKey(cell)) return true;
+    return otherStitches.any((cs) => cs.stitch.cellCoords == cell);
+  }
+
 }
 
 // ─── StitchCompositor ─────────────────────────────────────────────────────────

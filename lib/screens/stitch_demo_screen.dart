@@ -177,7 +177,7 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
         _GifParams(
           aida: _aida,
           colorMap: colorMap,
-          backgroundArgb: widget.aidaColor.toARGB32(),
+          backgroundArgb: const Color(0xFFFFFFFF).toARGB32(),
         ),
       );
 
@@ -316,7 +316,7 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
                           painter: StitchDemoPainter(
                             aida: _aida,
                             currentSubStep: _subStep,
-                            aidaColor: widget.aidaColor,
+                            aidaColor: const Color(0xFFFFFFFF),
                             startCell: _startCell,
                             pickingStart: _pickingStart,
                           ),
