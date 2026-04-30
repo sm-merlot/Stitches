@@ -16,6 +16,9 @@ import 'command.dart';
 /// so the toolbar reflects the live can-undo / can-redo state without the
 /// caller needing a separate notification call after each operation.
 class UndoManager {
+  /// Maximum number of undo entries kept.  Oldest entries are dropped first.
+  static const int maxDepth = 200;
+
   /// Called after every state-changing operation ([execute], [undo], [redo]).
   void Function()? onChange;
 
@@ -37,6 +40,7 @@ class UndoManager {
   void execute(Command cmd) {
     cmd.execute();
     _undoStack.add(cmd);
+    if (_undoStack.length > maxDepth) _undoStack.removeAt(0);
     _redoStack.clear();
     onChange?.call();
   }

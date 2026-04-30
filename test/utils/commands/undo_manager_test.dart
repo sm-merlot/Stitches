@@ -113,5 +113,18 @@ void main() {
         'exec:A', 'exec:B',
       ]);
     });
+
+    test('undo stack is capped at ${UndoManager.maxDepth} entries', () {
+      for (int i = 0; i < UndoManager.maxDepth + 10; i++) {
+        mgr.execute(_TrackingCommand(log, '$i'));
+      }
+      expect(mgr.undoCount, UndoManager.maxDepth);
+      int undoCount = 0;
+      while (mgr.canUndo) {
+        mgr.undo();
+        undoCount++;
+      }
+      expect(undoCount, UndoManager.maxDepth);
+    });
   });
 }

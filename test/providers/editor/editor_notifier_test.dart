@@ -10,6 +10,8 @@ import 'package:stitches/models/thread.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';
 import 'package:stitches/services/editor_session_service.dart';
+import 'package:stitches/utils/commands/command.dart';
+import 'package:stitches/utils/commands/undo_manager.dart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -175,28 +177,64 @@ void main() {
 
   group('EditorNotifier — undo/redo', () {
     late ProviderContainer c;
-    setUp(() { c = makeContainer(); loadEmpty(c); });
+    late UndoManager um;
+
+    UndoManager _attach(ProviderContainer c) {
+      final mgr = UndoManager();
+      notifier(c).registerUndoDelegate(
+        canUndo: () => mgr.canUndo,
+        canRedo: () => mgr.canRedo,
+        undo: () { mgr.undo(); notifier(c).updateControllerUndoState(); },
+        redo: () { mgr.redo(); notifier(c).updateControllerUndoState(); },
+        clear: mgr.clear,
+        pushProgressSnapshot: (before, after) {},
+      );
+      mgr.onChange = notifier(c).updateControllerUndoState;
+      return mgr;
+    }
+
+    setUp(() {
+      c = makeContainer();
+      loadEmpty(c);
+      um = _attach(c);
+    });
     tearDown(() => c.dispose());
 
-    test('undo reverts last addStitch', () {
-      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+    test('AddStitchCommand undo reverts stitch', () {
+      um.execute(AddStitchCommand(
+        notifier: notifier(c),
+        stitch: const FullStitch(x: 1, y: 1, threadId: '310'),
+        overwritten: [],
+      ));
       expect(editorState(c).pattern.stitches, hasLength(1));
       notifier(c).undo();
       expect(editorState(c).pattern.stitches, isEmpty);
     });
 
-    test('redo re-applies undone stitch', () {
-      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+    test('AddStitchCommand redo re-applies undone stitch', () {
+      um.execute(AddStitchCommand(
+        notifier: notifier(c),
+        stitch: const FullStitch(x: 1, y: 1, threadId: '310'),
+        overwritten: [],
+      ));
       notifier(c).undo();
       notifier(c).redo();
       expect(editorState(c).pattern.stitches, hasLength(1));
     });
 
-    test('new action clears redo stack', () {
-      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+    test('new command clears redo stack', () {
+      um.execute(AddStitchCommand(
+        notifier: notifier(c),
+        stitch: const FullStitch(x: 1, y: 1, threadId: '310'),
+        overwritten: [],
+      ));
       notifier(c).undo();
       expect(editorState(c).canRedo, isTrue);
-      notifier(c).addStitch(const FullStitch(x: 2, y: 2, threadId: '310'));
+      um.execute(AddStitchCommand(
+        notifier: notifier(c),
+        stitch: const FullStitch(x: 2, y: 2, threadId: '310'),
+        overwritten: [],
+      ));
       expect(editorState(c).canRedo, isFalse);
     });
 
@@ -207,7 +245,11 @@ void main() {
 
     test('canUndo / canRedo flags accurate', () {
       expect(editorState(c).canUndo, isFalse);
-      notifier(c).addStitch(const FullStitch(x: 1, y: 1, threadId: '310'));
+      um.execute(AddStitchCommand(
+        notifier: notifier(c),
+        stitch: const FullStitch(x: 1, y: 1, threadId: '310'),
+        overwritten: [],
+      ));
       expect(editorState(c).canUndo, isTrue);
       notifier(c).undo();
       expect(editorState(c).canRedo, isTrue);
@@ -303,13 +345,20 @@ void main() {
       expect(layers.last.id, isNot(equals(id)));
     });
 
-    test('layer undo/redo round-trip', () {
+    test('addLayer clears undo manager via delegate clear', () {
+      // Layer structural changes invalidate outstanding commands; the delegate's
+      // clear callback must be invoked so the controller wipes its UndoManager.
+      var clearCalled = false;
+      notifier(c).registerUndoDelegate(
+        canUndo: () => false,
+        canRedo: () => false,
+        undo: () {},
+        redo: () {},
+        clear: () => clearCalled = true,
+        pushProgressSnapshot: (before, after) {},
+      );
       notifier(c).addLayer();
-      expect(editorState(c).pattern.layers.length, 2);
-      notifier(c).undo();
-      expect(editorState(c).pattern.layers.length, 1);
-      notifier(c).redo();
-      expect(editorState(c).pattern.layers.length, 2);
+      expect(clearCalled, isTrue);
     });
   });
 
@@ -581,29 +630,7 @@ void main() {
 
   // ─── Undo cap ─────────────────────────────────────────────────────────────────
 
-  group('EditorNotifier — undo cap', () {
-    late ProviderContainer c;
-    setUp(() { c = makeContainer(); loadEmpty(c); });
-    tearDown(() => c.dispose());
-
-    test('undo stack never exceeds 200 entries', () {
-      // Add 210 distinct stitches — each push to undo stack.
-      for (int i = 0; i < 210; i++) {
-        notifier(c).addStitch(FullStitch(x: i % 30, y: i ~/ 30, threadId: '310'));
-      }
-      // Stack must be capped at 200.
-      final state = editorState(c);
-      expect(state.canUndo, isTrue);
-      // We can't read _undoStack directly, but we can verify undo 200 times
-      // doesn't crash (and canUndo eventually becomes false).
-      int undoCount = 0;
-      while (editorState(c).canUndo && undoCount < 210) {
-        notifier(c).undo();
-        undoCount++;
-      }
-      expect(undoCount, lessThanOrEqualTo(200));
-    });
-  });
+  // UndoManager cap is tested in test/utils/commands/undo_manager_test.dart.
 
   // ─── Progress marking ─────────────────────────────────────────────────────────
 
