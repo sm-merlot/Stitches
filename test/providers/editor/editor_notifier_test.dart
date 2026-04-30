@@ -179,7 +179,7 @@ void main() {
     late ProviderContainer c;
     late UndoManager um;
 
-    UndoManager _attach(ProviderContainer c) {
+    UndoManager attachDelegate(ProviderContainer c) {
       final mgr = UndoManager();
       notifier(c).registerUndoDelegate(
         canUndo: () => mgr.canUndo,
@@ -196,7 +196,7 @@ void main() {
     setUp(() {
       c = makeContainer();
       loadEmpty(c);
-      um = _attach(c);
+      um = attachDelegate(c);
     });
     tearDown(() => c.dispose());
 
