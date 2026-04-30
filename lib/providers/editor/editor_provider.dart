@@ -234,7 +234,7 @@ class EditorNotifier extends Notifier<EditorState>
             viewPanX: viewPanX,
             viewPanY: viewPanY,
             viewScale: viewScale,
-            stitchPage: stitchPage!,
+            stitchPage: stitchPage,
           ),
         ));
       }
