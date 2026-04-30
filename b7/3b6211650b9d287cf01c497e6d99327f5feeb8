@@ -1,0 +1,23 @@
+lib/providers/editor/editor_provider_progress.dart
+  07dbcf85b75c6fc0 336-353,357-365
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "b73b6211650b9d287cf01c497e6d99327f5feeb8",
+  "prompts": {
+    "07dbcf85b75c6fc0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21069a76-5a91-4479-8aa8-5e833bfa6f39",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 29,
+      "total_deletions": 13,
+      "accepted_lines": 29,
+      "overriden_lines": 0
+    }
+  }
+}
