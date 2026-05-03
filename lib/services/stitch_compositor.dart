@@ -59,7 +59,7 @@ class CompositeLayer {
   final List<BackStitch> backstitches;
 
   /// Cross-stitch equivalent count per dmcCode.
-  /// FullStitches → 1.0; HalfStitch/HalfCross → 0.5; Quarter/QuarterCross → 0.25.
+  /// FullStitches → 1.0; ThreeQuarter → 0.75; HalfStitch/HalfCross → 0.5; Quarter → 0.25.
   final Map<String, double> crossStitchEquiv;
 
   /// Backstitch Euclidean cell-unit length per threadId.
