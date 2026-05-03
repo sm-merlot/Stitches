@@ -172,44 +172,10 @@ class EditorToolbar extends ConsumerWidget {
                                 painter: _StitchIconPainter(color: c, draw: _drawFullStitch)),
                           ),
                           const SizedBox(width: 4),
-                          _ToolbarButton(
-                            tooltip: _tt('Half diagonal /  [2]'),
-                            selected: state.editSession.currentTool == DrawingTool.halfForward,
-                            onTap: () => notifier.setTool(DrawingTool.halfForward),
-                            builder: (c) => CustomPaint(
-                                painter: _StitchIconPainter(color: c, draw: _drawHalfForward)),
-                          ),
-                          const SizedBox(width: 4),
-                          _ToolbarButton(
-                            tooltip: _tt('Half diagonal \\  [3]'),
-                            selected: state.editSession.currentTool == DrawingTool.halfBackward,
-                            onTap: () => notifier.setTool(DrawingTool.halfBackward),
-                            builder: (c) => CustomPaint(
-                                painter: _StitchIconPainter(color: c, draw: _drawHalfBackward)),
-                          ),
-                          const SizedBox(width: 4),
-                          _ToolbarButton(
-                            tooltip: _tt('Half-cell cross (X in ½ cell)  [4]'),
-                            selected: state.editSession.currentTool == DrawingTool.halfCross,
-                            onTap: () => notifier.setTool(DrawingTool.halfCross),
-                            builder: (c) => CustomPaint(
-                                painter: _StitchIconPainter(color: c, draw: _drawHalfCross)),
-                          ),
-                          const SizedBox(width: 4),
-                          _ToolbarButton(
-                            tooltip: _tt('Quarter diagonal (auto-corner)  [5]'),
-                            selected: state.editSession.currentTool == DrawingTool.quarterDiag,
-                            onTap: () => notifier.setTool(DrawingTool.quarterDiag),
-                            builder: (c) => CustomPaint(
-                                painter: _StitchIconPainter(color: c, draw: _drawQuarterDiag)),
-                          ),
-                          const SizedBox(width: 4),
-                          _ToolbarButton(
-                            tooltip: _tt('Quarter-cell cross / petit point  [6]'),
-                            selected: state.editSession.currentTool == DrawingTool.quarterCross,
-                            onTap: () => notifier.setTool(DrawingTool.quarterCross),
-                            builder: (c) => CustomPaint(
-                                painter: _StitchIconPainter(color: c, draw: _drawQuarterCross)),
+                          _PartialStitchButton(
+                            selected: state.editSession.currentTool == DrawingTool.partial,
+                            subTool: state.editSession.partialSubTool,
+                            onSelect: (sub) => notifier.setPartialSubTool(sub),
                           ),
                           const SizedBox(width: 4),
                           _ToolbarButton(

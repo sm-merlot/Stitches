@@ -43,14 +43,19 @@ part 'editor_provider_selection.dart';
 
 enum DrawingTool {
   fullStitch,    // Full X stitch             [1]
-  halfForward,   // Diagonal half /           [2]
-  halfBackward,  // Diagonal half \           [3]
-  halfCross,     // Full X in half cell       [4]
-  quarterDiag,   // Diagonal quarter (auto)   [5]
-  quarterCross,  // Full X in quarter cell    [6]
+  partial,       // Partial stitch (sub-tool) [2-6]
   backstitch,    // Backstitch line           [7]
   fill,          // Flood fill colour         [8]
   fillErase,     // Flood fill erase          [9]
+}
+
+/// Sub-tool for the partial stitch button.
+enum PartialSubTool {
+  diagonalForward,   // Single diagonal /      [2]
+  diagonalBackward,  // Single diagonal \      [3]
+  half,              // Full X in half cell    [4]
+  threeQuarter,      // Three-quarter stitch   [5]
+  quarter,           // Diagonal quarter       [6]
 }
 
 /// Cursor mode — controls what pointer/touch interactions do.
@@ -125,8 +130,12 @@ class EditorNotifier extends Notifier<EditorState>
     // next auto-save rewrites it cleanly without those fields.
     bool hasLegacyEditorSection = false;
 
+    PartialSubTool partialSubTool = PartialSubTool.diagonalForward;
+
     if (session != null) {
-      try { tool = DrawingTool.values.byName(session.tool); } catch (_) {}
+      final migrated = _migrateToolName(session.tool);
+      tool = migrated.$1;
+      partialSubTool = migrated.$2 ?? partialSubTool;
       colourMode       = session.colourMode;
       selectedThreadId = session.selectedThreadId;
       rawActiveLayerId = session.activeLayerId;
@@ -146,7 +155,9 @@ class EditorNotifier extends Notifier<EditorState>
           pattern.editorViewPanY != 0 ||
           pattern.editorViewScale != 0;
       if (pattern.editorTool != null) {
-        try { tool = DrawingTool.values.byName(pattern.editorTool!); } catch (_) {}
+        final migrated = _migrateToolName(pattern.editorTool!);
+        tool = migrated.$1;
+        partialSubTool = migrated.$2 ?? partialSubTool;
       }
       colourMode        = !pattern.editorBlockMode;
       selectedThreadId = pattern.editorSelectedThreadId;
@@ -198,6 +209,7 @@ class EditorNotifier extends Notifier<EditorState>
       isDirty: hasLegacyEditorSection,
       editSession: EditSessionState(
         currentTool: tool,
+        partialSubTool: partialSubTool,
         drawingMode: DrawingMode.pan,
         colourMode: colourMode,
         clipboard: hasClipboard ? prevClipboard : null,
@@ -423,6 +435,17 @@ class EditorNotifier extends Notifier<EditorState>
     state = state.copyWith(
       editSession: state.editSession.copyWith(
         currentTool: tool,
+        backstitchStartPoint: null,
+      ),
+    );
+    _saveSession();
+  }
+
+  void setPartialSubTool(PartialSubTool subTool) {
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        currentTool: DrawingTool.partial,
+        partialSubTool: subTool,
         backstitchStartPoint: null,
       ),
     );
@@ -780,7 +803,7 @@ class EditorNotifier extends Notifier<EditorState>
           HalfStitch(:final threadId) => threadId,
           HalfCrossStitch(:final threadId) => threadId,
           QuarterStitch(:final threadId) => threadId,
-          QuarterCrossStitch(:final threadId) => threadId,
+          ThreeQuarterStitch(:final threadId) => threadId,
           BackStitch(:final threadId) => threadId,
         });
       }
@@ -848,6 +871,25 @@ class EditorNotifier extends Notifier<EditorState>
     }
     return result;
   }
+
+  /// Migrates old DrawingTool names (from saved sessions) to the new enum.
+  /// Returns `(tool, partialSubTool?)` — partialSubTool is non-null when the
+  /// old name maps to DrawingTool.partial + a specific sub-tool.
+  static (DrawingTool, PartialSubTool?) _migrateToolName(String name) =>
+      switch (name) {
+        'fullStitch'   => (DrawingTool.fullStitch, null),
+        'partial'      => (DrawingTool.partial, null),
+        'backstitch'   => (DrawingTool.backstitch, null),
+        'fill'         => (DrawingTool.fill, null),
+        'fillErase'    => (DrawingTool.fillErase, null),
+        // Legacy names → partial + sub-tool
+        'halfForward'  => (DrawingTool.partial, PartialSubTool.diagonalForward),
+        'halfBackward' => (DrawingTool.partial, PartialSubTool.diagonalBackward),
+        'halfCross'    => (DrawingTool.partial, PartialSubTool.half),
+        'quarterDiag'  => (DrawingTool.partial, PartialSubTool.quarter),
+        'quarterCross' => (DrawingTool.partial, PartialSubTool.quarter),
+        _              => (DrawingTool.fullStitch, null),
+      };
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

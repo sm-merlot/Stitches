@@ -59,7 +59,7 @@ class CompositeLayer {
   final List<BackStitch> backstitches;
 
   /// Cross-stitch equivalent count per dmcCode.
-  /// FullStitches → 1.0; HalfStitch/HalfCross → 0.5; Quarter/QuarterCross → 0.25.
+  /// FullStitches → 1.0; HalfStitch/HalfCross/ThreeQuarter → 0.5; Quarter → 0.25.
   final Map<String, double> crossStitchEquiv;
 
   /// Backstitch Euclidean cell-unit length per threadId.
@@ -302,24 +302,56 @@ class StitchCompositor {
     })>[];
     final otherAtCell = <Stitch>[];
 
-    for (final layer in pattern.layers) {
+    // Track claimed regions across layers (top → bottom). Higher-layer stitches
+    // with the exact same regions as a lower stitch → blend. Partial overlap → occlude.
+    // Keyed by the exact region set (as a sorted list identity).
+    final claimedExact = <Set<CellRegion>>[];
+    final reversedLayers = pattern.layers.reversed.toList();
+    final pendingFull = <({
+      FullStitch stitch,
+      Color color,
+      double opacity,
+      LayerBlendMode blendMode,
+    })>[];
+    final pendingOther = <Stitch>[];
+
+    for (final layer in reversedLayers) {
       if (!layer.visible) continue;
       for (final s in layer.stitchesAt(x, y)) {
-        // stitchesAt never returns BackStitch (no cellCoords → not indexed).
+        final regions = s.claimedRegions;
+        // Check if any previously claimed set partially overlaps but is not identical.
+        bool occluded = false;
+        bool blendable = false;
+        for (final claimed in claimedExact) {
+          if (regions.length == claimed.length && regions.containsAll(claimed)) {
+            blendable = true; // exact same regions → allow for blending
+            break;
+          }
+          if (regions.any(claimed.contains)) {
+            occluded = true; // partial overlap → occlude
+            break;
+          }
+        }
+        if (occluded) continue;
+        if (!blendable) claimedExact.add(regions);
         if (s is FullStitch) {
           final thread = threadMap[s.threadId];
           if (thread == null) continue;
-          stack.add((
+          pendingFull.add((
             stitch: s,
             color: thread.color,
             opacity: layer.opacity,
             blendMode: layer.blendMode,
           ));
         } else {
-          otherAtCell.add(s);
+          pendingOther.add(s);
         }
       }
     }
+
+    // Reverse to restore bottom-to-top order for blending.
+    stack.addAll(pendingFull.reversed);
+    otherAtCell.addAll(pendingOther.reversed);
 
     // Remove cell if nothing visible there any more.
     if (stack.isEmpty && otherAtCell.isEmpty) {
@@ -391,7 +423,9 @@ class StitchCompositor {
   static CompositeLayer _buildLayer(CrossStitchPattern pattern) {
     final threadMap = pattern.threads;
 
-    // ── Pass 1: bucket FullStitches per cell; collect everything else ────────
+    // ── Pass 1: bucket FullStitches per cell; collect partial stitches ────────
+    // Tracks claimed regions per cell across layers (bottom → top) so that
+    // higher-layer stitches occlude lower-layer stitches at the same cell.
     final cellStack = <Cell,
         List<({
           FullStitch stitch,
@@ -401,30 +435,64 @@ class StitchCompositor {
         })>>{};
     final otherNonBackRaw = <Stitch>[];
     final backstitches = <BackStitch>[];
+    // Per-cell region tracking: exact region sets claimed by layers above.
+    // Same regions → blend, partial overlap → occlude, no overlap → coexist.
+    final cellClaimedSets = <Cell, List<Set<CellRegion>>>{};
 
-    for (final layer in pattern.layers) {
+    final reversedLayers = pattern.layers.reversed.toList();
+    final pendingOther = <Stitch>[];
+    final pendingFull = <Cell,
+        List<({
+          FullStitch stitch,
+          Color color,
+          double opacity,
+          LayerBlendMode blendMode,
+        })>>{};
+
+    for (final layer in reversedLayers) {
       if (!layer.visible) continue;
-      // Iterate primary storage directly to avoid the O(N) stitches getter.
       for (final bs in layer.backstitches) {
         backstitches.add(bs);
       }
       for (final entry in layer.stitchesByCell.entries) {
+        final cell = entry.key;
+        final claimedSets = cellClaimedSets[cell] ??= [];
         for (final s in entry.value) {
+          final regions = s.claimedRegions;
+          bool occluded = false;
+          bool blendable = false;
+          for (final claimed in claimedSets) {
+            if (regions.length == claimed.length && regions.containsAll(claimed)) {
+              blendable = true;
+              break;
+            }
+            if (regions.any(claimed.contains)) {
+              occluded = true;
+              break;
+            }
+          }
+          if (occluded) continue;
+          if (!blendable) claimedSets.add(regions);
           if (s is FullStitch) {
             final thread = threadMap[s.threadId];
             if (thread == null) continue;
-            (cellStack[Cell(s.x, s.y)] ??= []).add((
+            (pendingFull[cell] ??= []).add((
               stitch: s,
               color: thread.color,
               opacity: layer.opacity,
               blendMode: layer.blendMode,
             ));
           } else {
-            otherNonBackRaw.add(s);
+            pendingOther.add(s);
           }
         }
       }
     }
+    // Reverse to restore bottom-to-top order for blending.
+    for (final entry in pendingFull.entries) {
+      cellStack[entry.key] = entry.value.reversed.toList();
+    }
+    otherNonBackRaw.addAll(pendingOther.reversed);
 
     // ── Pass 2: resolve each cell → blended colour, thread, CompositeStitch ─
     final fullStitches = <Cell, CompositeStitch>{};
@@ -502,7 +570,7 @@ class StitchCompositor {
         HalfStitch() => 0.5,
         HalfCrossStitch() => 0.5,
         QuarterStitch() => 0.25,
-        QuarterCrossStitch() => 0.25,
+        ThreeQuarterStitch() => 0.5,
         _ => 0.0,
       };
       if (v > 0) crossStitchEquiv[dmcCode] = (crossStitchEquiv[dmcCode] ?? 0) + v;

@@ -1,10 +1,11 @@
-import 'dart:ui' show Rect;
+import 'dart:ui' show Path, Rect;
 import 'package:flutter/material.dart' show Color, HSLColor, immutable;
 import '../models/cell.dart';
 import '../models/page/page_layout.dart';
 import '../models/progress/pattern_progress.dart';
 import '../models/stitch/stitch.dart';
 import '../models/stitch/stitch_geometry.dart';
+import 'block_shape.dart';
 import 'stitch_compositor.dart';
 
 // ─── RenderViewConfig ─────────────────────────────────────────────────────────
@@ -57,50 +58,29 @@ class RenderViewConfig {
 
 // ─── RenderCache ─────────────────────────────────────────────────────────────
 
-/// Maintains a pre-resolved `Map<Color, …Rect>` cache of stitch block rects.
+/// Maintains a pre-resolved `Map<Color, …BlockShape>` cache of stitch blocks.
+///
+/// Each stitch type produces a [BlockShape]: [RectShape] for axis-aligned
+/// blocks (full/half-cross/quarter), [PathShape] for diagonal bands (half
+/// stitch) and triangles (three-quarter stitch). The painter iterates the
+/// store and calls `shape.draw(canvas, paint)` — polymorphic dispatch selects
+/// `drawRect` or `drawPath` as appropriate.
 ///
 /// ## Data structure
 ///
 /// ```
-/// _store[color][cellKey] = [rect, ...]
-/// _cellColors[cellKey]   = {color, ...}   ← reverse index
+/// store[color][cellKey]    = BlockShape
+/// _cellColors[cellKey]     = {color, ...}   ← reverse index
 /// ```
 ///
 /// The inner map keyed by `cellKey` enables O(1) cell removal: look up the
 /// cell's colours in [_cellColors], then call `Map.remove(key)` on each colour
 /// bucket — no list scanning, no index bookkeeping.
-///
-/// ## Usage
-///
-/// ```dart
-/// // No composite yet (empty pattern):
-/// _renderCache.clear();
-///
-/// // Full rebuild after pattern or thread changes:
-/// _renderCache.rebuild(compositeLayer, config, cellSize);
-///
-/// // View-config-only change (mode/focus/palette):
-/// _renderCache.rebuildViewConfig(compositeLayer, config, cellSize);
-///
-/// // Cells erased (no stitches remain there):
-/// _renderCache.clearCells({Cell(3, 7)});
-///
-/// // Single-cell update after one stitch is drawn:
-/// _renderCache.updateCells({Cell(3, 7)}, compositeLayer, config, cellSize);
-///
-/// // In painter:
-/// for (final colorEntry in renderCache.store.entries) {
-///   final paint = Paint()..color = colorEntry.key;
-///   for (final rects in colorEntry.value.values) {
-///     for (final rect in rects) canvas.drawRect(rect, paint);
-///   }
-/// }
-/// ```
 class RenderCache {
-  /// Nested store: colour → (cellKey → rects for this cell).
+  /// Nested store: colour → (cellKey → block shape for this cell).
   ///
   /// Exposed for read-only use by [CanvasStaticPainter]. Do not mutate.
-  final Map<Color, Map<Cell, List<Rect>>> store = {};
+  final Map<Color, Map<Cell, BlockShape>> store = {};
 
   /// Reverse index: cell → set of colours contributed by this cell.
   final Map<Cell, Set<Color>> _cellColors = {};
@@ -157,7 +137,7 @@ class RenderCache {
 
   /// Incremental update for a set of changed cells.
   ///
-  /// O(changed_cells) — removes old rects for each key, recomputes from the
+  /// O(changed_cells) — removes old paths for each key, recomputes from the
   /// new composite, and re-inserts. Version is bumped once for the whole batch.
   void updateCells(
     Set<Cell> keys,
@@ -224,16 +204,103 @@ class RenderCache {
     );
     if (color == null) return;
 
-    // Compute block rect.
-    final block = cs.stitch.blockCells;
-    if (block == null) return;
-    final (bl, bt, bw, bh) = block;
-    final rect = Rect.fromLTWH(
-        bl * cellSize, bt * cellSize, bw * cellSize, bh * cellSize);
+    // Build the block shape for this stitch.
+    final shape = _buildBlockShape(cs.stitch, cellSize);
+    if (shape == null) return;
 
     // Insert into store and update reverse index.
-    (store[color] ??= {})[key] = [rect];
+    (store[color] ??= {})[key] = shape;
     (_cellColors[key] ??= {}).add(color);
+  }
+
+  /// Builds the block-mode [BlockShape] for a stitch.
+  ///
+  /// - [FullStitch], [HalfCrossStitch], [QuarterStitch] → [RectShape]
+  /// - [HalfStitch] → [PathShape] (thick diagonal parallelogram)
+  /// - [ThreeQuarterStitch] → [PathShape] (filled triangle)
+  /// - [BackStitch] → null (drawn separately by the painter)
+  static BlockShape? _buildBlockShape(Stitch stitch, double cellSize) {
+    return switch (stitch) {
+      HalfStitch(:final x, :final y, :final isForward) =>
+        PathShape(_halfStitchPath(x, y, isForward, cellSize)),
+      ThreeQuarterStitch(:final x, :final y, :final quadrant) =>
+        PathShape(_threeQuarterPath(x, y, quadrant, cellSize)),
+      BackStitch() => null,
+      _ => _rectShape(stitch, cellSize),
+    };
+  }
+
+  /// [RectShape] for stitches that use standard axis-aligned block geometry.
+  static RectShape? _rectShape(Stitch stitch, double cellSize) {
+    final block = stitch.blockCells;
+    if (block == null) return null;
+    final (bl, bt, bw, bh) = block;
+    return RectShape(Rect.fromLTWH(
+        bl * cellSize, bt * cellSize, bw * cellSize, bh * cellSize));
+  }
+
+  /// Thick diagonal band (parallelogram) for a [HalfStitch].
+  /// Stays within cell bounds. Thickness ≈ 44% of cell size.
+  static Path _halfStitchPath(int x, int y, bool isForward, double cellSize) {
+    final left = x * cellSize;
+    final top = y * cellSize;
+    final cs = cellSize;
+    final t = cs * 0.22; // half-thickness of the band
+
+    if (isForward) {
+      // / diagonal: top-right → bottom-left
+      return Path()
+        ..moveTo(left + cs - t, top)
+        ..lineTo(left + cs, top)
+        ..lineTo(left + cs, top + t)
+        ..lineTo(left + t, top + cs)
+        ..lineTo(left, top + cs)
+        ..lineTo(left, top + cs - t)
+        ..close();
+    } else {
+      // \ diagonal: top-left → bottom-right
+      return Path()
+        ..moveTo(left, top)
+        ..lineTo(left + t, top)
+        ..lineTo(left + cs, top + cs - t)
+        ..lineTo(left + cs, top + cs)
+        ..lineTo(left + cs - t, top + cs)
+        ..lineTo(left, top + t)
+        ..close();
+    }
+  }
+
+  /// Half-cell filled triangle for a [ThreeQuarterStitch].
+  /// The triangle occupies the half of the cell that contains the quadrant corner.
+  static Path _threeQuarterPath(
+      int x, int y, QuadrantPosition quadrant, double cellSize) {
+    final left = x * cellSize;
+    final top = y * cellSize;
+    final right = left + cellSize;
+    final bottom = top + cellSize;
+
+    return switch (quadrant) {
+      QuadrantPosition.topLeft => (Path()
+        ..moveTo(left, top)
+        ..lineTo(right, top)
+        ..lineTo(left, bottom)
+        ..close()),
+      QuadrantPosition.topRight => (Path()
+        ..moveTo(left, top)
+        ..lineTo(right, top)
+        ..lineTo(right, bottom)
+        ..close()),
+      QuadrantPosition.bottomLeft => (Path()
+        ..moveTo(left, top)
+        ..lineTo(left, bottom)
+        ..lineTo(right, bottom)
+        ..close()),
+      QuadrantPosition.bottomRight => (Path()
+        ..moveTo(right, top)
+        ..lineTo(left, bottom)
+        ..lineTo(right, bottom)
+        ..close()),
+    };
   }
 
   void _removeCell(Cell key) {

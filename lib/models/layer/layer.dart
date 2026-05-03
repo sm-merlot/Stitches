@@ -163,6 +163,27 @@ class Layer {
     return _copyFields(stitchesByCell: newByCell);
   }
 
+  /// Returns a new [Layer] with all existing stitches at the cell cleared and
+  /// [stitch] placed as the sole occupant.  O(N_cells).
+  ///
+  /// Use when a FullStitch overwrites all partial stitches at the same cell.
+  Layer withCellReplacedBy(Stitch stitch) {
+    final c = stitch.cellCoords!;
+    final newByCell = Map<Cell, List<Stitch>>.of(stitchesByCell);
+    newByCell[c] = [stitch];
+    return _copyFields(stitchesByCell: newByCell);
+  }
+
+  /// Returns a new [Layer] with overlapping stitches at the cell removed and
+  /// [stitch] added. Non-overlapping stitches are preserved.  O(N_cells).
+  Layer withOverlappingReplaced(Stitch stitch) {
+    final c = stitch.cellCoords!;
+    final newByCell = Map<Cell, List<Stitch>>.of(stitchesByCell);
+    final prev = newByCell[c] ?? const <Stitch>[];
+    newByCell[c] = [...prev.where((s) => !stitchesOverlap(s, stitch)), stitch];
+    return _copyFields(stitchesByCell: newByCell);
+  }
+
   /// Returns a new [Layer] with [stitch] removed.  O(N_cells) for cell stitches,
   /// O(n_back) for [BackStitch].  Returns `this` when [stitch] is not present.
   Layer withStitchRemoved(Stitch stitch) {
@@ -245,6 +266,28 @@ class Layer {
     final existing = stitchesByCell[c];
     if (existing != null) {
       existing.removeWhere((s) => s == stitch);
+      existing.add(stitch);
+    } else {
+      stitchesByCell[c] = [stitch];
+    }
+    return this;
+  }
+
+  /// Clears all stitches at the cell and places [stitch] as sole occupant.
+  /// O(1).  Returns `this`.
+  Layer replaceCellInPlace(Stitch stitch) {
+    final c = stitch.cellCoords!;
+    stitchesByCell[c] = [stitch];
+    return this;
+  }
+
+  /// Removes overlapping stitches at the cell and adds [stitch].
+  /// Non-overlapping stitches are preserved.  O(stitches_at_cell).
+  Layer replaceOverlappingInPlace(Stitch stitch) {
+    final c = stitch.cellCoords!;
+    final existing = stitchesByCell[c];
+    if (existing != null) {
+      existing.removeWhere((s) => stitchesOverlap(s, stitch));
       existing.add(stitch);
     } else {
       stitchesByCell[c] = [stitch];

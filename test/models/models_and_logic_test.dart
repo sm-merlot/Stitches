@@ -75,13 +75,37 @@ void main() {
       }
     });
 
-    test('QuarterCrossStitch all quadrants', () {
+    test('ThreeQuarterStitch all quadrants and directions', () {
       for (final q in QuadrantPosition.values) {
-        final s =
-            QuarterCrossStitch(x: 0, y: 0, quadrant: q, threadId: '321');
-        final back = Stitch.fromYaml(s.toYaml()) as QuarterCrossStitch;
-        expect(back.quadrant, q);
+        for (final forward in [true, false]) {
+          final s = ThreeQuarterStitch(
+              x: 0, y: 0, quadrant: q, isForward: forward, threadId: '321');
+          final back = Stitch.fromYaml(s.toYaml()) as ThreeQuarterStitch;
+          expect(back.quadrant, q);
+          expect(back.isForward, forward);
+        }
       }
+    });
+
+    test('old quarter (single diagonal) YAML is silently dropped via fromYamlOrNull', () {
+      final yaml = {
+        'type': 'quarter',
+        'x': 5,
+        'y': 3,
+        'quadrant': 'topLeft',
+        'thread': '310',
+      };
+      expect(Stitch.fromYamlOrNull(yaml), isNull);
+    });
+
+    test('old quarter stitches are dropped in listFromYaml', () {
+      final list = Stitch.listFromYaml([
+        {'type': 'full', 'x': 0, 'y': 0, 'thread': '310'},
+        {'type': 'quarter', 'x': 1, 'y': 0, 'quadrant': 'topLeft', 'thread': '310'},
+        {'type': 'full', 'x': 2, 'y': 0, 'thread': '310'},
+      ]);
+      expect(list, hasLength(2));
+      expect(list.every((s) => s is FullStitch), isTrue);
     });
 
     test('BackStitch', () {
@@ -623,7 +647,7 @@ List<Stitch> _clipSnippetStitches(
       HalfStitch(:final x, :final y) => x < newW && y < newH,
       QuarterStitch(:final x, :final y) => x < newW && y < newH,
       HalfCrossStitch(:final x, :final y) => x < newW && y < newH,
-      QuarterCrossStitch(:final x, :final y) => x < newW && y < newH,
+      ThreeQuarterStitch(:final x, :final y) => x < newW && y < newH,
       // BackStitch grid-point coords: right/bottom boundary is inclusive.
       BackStitch(:final x1, :final y1, :final x2, :final y2) =>
         x1 <= newW && y1 <= newH && x2 <= newW && y2 <= newH,

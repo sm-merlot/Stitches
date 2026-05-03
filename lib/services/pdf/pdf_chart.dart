@@ -321,19 +321,16 @@ void _fillStitch(
       canvas.drawRect(gx, gy, cs, cs / 2);
       canvas.fillPath();
 
-    // QuarterCrossStitch: fill the appropriate quarter-cell rectangle
-    case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-      canvas.drawRect(gx, gy + cs / 2, cs / 2, cs / 2);
-      canvas.fillPath();
-    case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-      canvas.drawRect(gx + cs / 2, gy + cs / 2, cs / 2, cs / 2);
-      canvas.fillPath();
-    case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-      canvas.drawRect(gx, gy, cs / 2, cs / 2);
-      canvas.fillPath();
-    case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-      canvas.drawRect(gx + cs / 2, gy, cs / 2, cs / 2);
-      canvas.fillPath();
+    // ThreeQuarterStitch: half-cell triangle in the quadrant corner
+    // PDF Y-axis is inverted (origin at bottom-left), so top/bottom are swapped.
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft):
+      canvas.moveTo(gx, gy + cs); canvas.lineTo(gx + cs, gy + cs); canvas.lineTo(gx, gy); canvas.fillPath();
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight):
+      canvas.moveTo(gx, gy + cs); canvas.lineTo(gx + cs, gy + cs); canvas.lineTo(gx + cs, gy); canvas.fillPath();
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft):
+      canvas.moveTo(gx, gy + cs); canvas.lineTo(gx, gy); canvas.lineTo(gx + cs, gy); canvas.fillPath();
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight):
+      canvas.moveTo(gx + cs, gy + cs); canvas.lineTo(gx, gy); canvas.lineTo(gx + cs, gy); canvas.fillPath();
 
     case BackStitch():
       break;
@@ -346,18 +343,23 @@ void _fillStitch(
   return switch (s) {
     FullStitch() || HalfStitch() => (gx + cs / 2, gy + cs / 2),
     // Screen topLeft  = PDF upper-left  → centre (gx+cs/4,   gy+3*cs/4)
-    QuarterStitch(quadrant: QuadrantPosition.topLeft) ||
-    QuarterCrossStitch(quadrant: QuadrantPosition.topLeft) =>
+    QuarterStitch(quadrant: QuadrantPosition.topLeft) =>
       (gx + cs / 4, gy + 3 * cs / 4),
-    QuarterStitch(quadrant: QuadrantPosition.topRight) ||
-    QuarterCrossStitch(quadrant: QuadrantPosition.topRight) =>
+    QuarterStitch(quadrant: QuadrantPosition.topRight) =>
       (gx + 3 * cs / 4, gy + 3 * cs / 4),
-    QuarterStitch(quadrant: QuadrantPosition.bottomLeft) ||
-    QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft) =>
+    QuarterStitch(quadrant: QuadrantPosition.bottomLeft) =>
       (gx + cs / 4, gy + cs / 4),
-    QuarterStitch(quadrant: QuadrantPosition.bottomRight) ||
-    QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight) =>
+    QuarterStitch(quadrant: QuadrantPosition.bottomRight) =>
       (gx + 3 * cs / 4, gy + cs / 4),
+    // ThreeQuarterStitch symbol in the middle of its 3/4 region
+    ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft) =>
+      (gx + cs * 3 / 8, gy + cs * 5 / 8),
+    ThreeQuarterStitch(quadrant: QuadrantPosition.topRight) =>
+      (gx + cs * 5 / 8, gy + cs * 5 / 8),
+    ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft) =>
+      (gx + cs * 3 / 8, gy + cs * 3 / 8),
+    ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight) =>
+      (gx + cs * 5 / 8, gy + cs * 3 / 8),
     HalfCrossStitch(half: HalfOrientation.left) => (gx + cs / 4, gy + cs / 2),
     HalfCrossStitch(half: HalfOrientation.right) =>
       (gx + 3 * cs / 4, gy + cs / 2),
@@ -374,9 +376,9 @@ void _fillStitch(
 double _stitchSubRegionSize(Stitch s, double cs) => switch (s) {
       FullStitch() || HalfStitch() => cs,
       QuarterStitch() ||
-      QuarterCrossStitch() ||
       HalfCrossStitch(half: HalfOrientation.left || HalfOrientation.right) =>
         cs / 2,
+      ThreeQuarterStitch() => cs * 0.5,
       HalfCrossStitch() => cs / 2,
       BackStitch() => cs,
     };
@@ -386,7 +388,7 @@ int _stitches(Stitch s) => switch (s) {
       HalfStitch(x: final x) => x,
       QuarterStitch(x: final x) => x,
       HalfCrossStitch(x: final x) => x,
-      QuarterCrossStitch(x: final x) => x,
+      ThreeQuarterStitch(x: final x) => x,
       BackStitch() => 0,
     };
 
@@ -395,7 +397,7 @@ int _stitchY(Stitch s) => switch (s) {
       HalfStitch(y: final y) => y,
       QuarterStitch(y: final y) => y,
       HalfCrossStitch(y: final y) => y,
-      QuarterCrossStitch(y: final y) => y,
+      ThreeQuarterStitch(y: final y) => y,
       BackStitch() => 0,
     };
 
@@ -443,13 +445,17 @@ void _drawRealisticStitch(PdfGraphics canvas, Stitch s,
     case HalfStitch(isForward: false):
       lens(gx, gy + cs, gx + cs, gy);
     case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-      lens(gx, gy + cs / 2, gx + cs / 2, gy + cs);
+      lens(gx, gy + cs, gx + cs / 2, gy + cs / 2);
+      lens(gx + cs / 2, gy + cs, gx, gy + cs / 2);
     case QuarterStitch(quadrant: QuadrantPosition.topRight):
       lens(gx + cs / 2, gy + cs, gx + cs, gy + cs / 2);
+      lens(gx + cs, gy + cs, gx + cs / 2, gy + cs / 2);
     case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
       lens(gx, gy + cs / 2, gx + cs / 2, gy);
+      lens(gx + cs / 2, gy + cs / 2, gx, gy);
     case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
       lens(gx + cs / 2, gy, gx + cs, gy + cs / 2);
+      lens(gx + cs, gy, gx + cs / 2, gy + cs / 2);
     case HalfCrossStitch(half: HalfOrientation.left):
       lens(gx, gy, gx + cs / 2, gy + cs);
       lens(gx, gy + cs, gx + cs / 2, gy);
@@ -462,14 +468,30 @@ void _drawRealisticStitch(PdfGraphics canvas, Stitch s,
     case HalfCrossStitch(half: HalfOrientation.bottom):
       lens(gx, gy, gx + cs, gy + cs / 2);
       lens(gx, gy + cs / 2, gx + cs, gy);
-    case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-      lens(gx, gy + cs / 2, gx + cs / 2, gy + cs);
-    case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-      lens(gx + cs / 2, gy + cs, gx + cs, gy + cs / 2);
-    case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-      lens(gx, gy + cs / 2, gx + cs / 2, gy);
-    case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-      lens(gx + cs / 2, gy, gx + cs, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft, isForward: true):
+      lens(gx + cs, gy + cs, gx, gy);
+      lens(gx, gy + cs, gx + cs / 2, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft, isForward: false):
+      lens(gx, gy, gx + cs, gy + cs);
+      lens(gx, gy + cs, gx + cs / 2, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight, isForward: true):
+      lens(gx + cs, gy + cs, gx, gy);
+      lens(gx + cs, gy + cs, gx + cs / 2, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight, isForward: false):
+      lens(gx, gy, gx + cs, gy + cs);
+      lens(gx + cs, gy + cs, gx + cs / 2, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft, isForward: true):
+      lens(gx + cs, gy + cs, gx, gy);
+      lens(gx, gy, gx + cs / 2, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft, isForward: false):
+      lens(gx, gy, gx + cs, gy + cs);
+      lens(gx, gy, gx + cs / 2, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight, isForward: true):
+      lens(gx + cs, gy + cs, gx, gy);
+      lens(gx + cs, gy, gx + cs / 2, gy + cs / 2);
+    case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight, isForward: false):
+      lens(gx, gy, gx + cs, gy + cs);
+      lens(gx + cs, gy, gx + cs / 2, gy + cs / 2);
     case BackStitch():
       break;
   }

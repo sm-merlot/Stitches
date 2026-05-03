@@ -24,7 +24,7 @@ extension StitchGeometry on Stitch {
         HalfStitch(:final x, :final y) => Cell(x, y),
         HalfCrossStitch(:final x, :final y) => Cell(x, y),
         QuarterStitch(:final x, :final y) => Cell(x, y),
-        QuarterCrossStitch(:final x, :final y) => Cell(x, y),
+        ThreeQuarterStitch(:final x, :final y) => Cell(x, y),
         BackStitch() => null,
       };
 
@@ -42,7 +42,7 @@ extension StitchGeometry on Stitch {
         HalfStitch(:final x, :final y) ||
         QuarterStitch(:final x, :final y) ||
         HalfCrossStitch(:final x, :final y) ||
-        QuarterCrossStitch(:final x, :final y) =>
+        ThreeQuarterStitch(:final x, :final y) =>
           (
             minX: x.toDouble(),
             maxX: x + 1.0,
@@ -59,7 +59,8 @@ extension StitchGeometry on Stitch {
   /// - [FullStitch] → full cell (1×1)
   /// - [HalfStitch] forward `/` → right half; backward `\` → left half
   /// - [HalfCrossStitch] → corresponding left/right/top/bottom half
-  /// - [QuarterStitch] / [QuarterCrossStitch] → corresponding quarter
+  /// - [QuarterStitch] → corresponding quarter
+  /// - [ThreeQuarterStitch] → 3/4 cell rect anchored at quadrant corner
   /// - [BackStitch] → null (no block representation)
   (double left, double top, double width, double height)? get blockCells =>
       switch (this) {
@@ -79,18 +80,18 @@ extension StitchGeometry on Stitch {
         HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom) =>
           (x.toDouble(), y + 0.5, 1.0, 0.5),
 
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
           (x.toDouble(), y.toDouble(), 0.5, 0.5),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
           (x + 0.5, y.toDouble(), 0.5, 0.5),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
           (x.toDouble(), y + 0.5, 0.5, 0.5),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
           (x + 0.5, y + 0.5, 0.5, 0.5),
+
+        // ThreeQuarterStitch: half-cell triangle — bounding rect is the full cell.
+        ThreeQuarterStitch(:final x, :final y) =>
+          (x.toDouble(), y.toDouble(), 1.0, 1.0),
 
         BackStitch() => null,
       };
@@ -105,7 +106,7 @@ extension StitchGeometry on Stitch {
         HalfStitch(:final x, :final y) ||
         QuarterStitch(:final x, :final y) ||
         HalfCrossStitch(:final x, :final y) ||
-        QuarterCrossStitch(:final x, :final y) =>
+        ThreeQuarterStitch(:final x, :final y) =>
           x >= minX && x < maxX && y >= minY && y < maxY,
         BackStitch(:final x1, :final y1, :final x2, :final y2) =>
           math.max(x1, x2) > minX &&
@@ -113,4 +114,56 @@ extension StitchGeometry on Stitch {
               math.max(y1, y2) > minY &&
               math.min(y1, y2) < maxY,
       };
+
+  /// The sub-cell region(s) this stitch occupies, for overlap detection.
+  ///
+  /// Each stitch claims one or more [CellRegion] values. Two stitches in the
+  /// same cell overlap if they share any region.
+  Set<CellRegion> get claimedRegions => switch (this) {
+    FullStitch() => CellRegion.values.toSet(),
+    HalfStitch(isForward: true) =>
+      {CellRegion.topRight, CellRegion.bottomLeft},
+    HalfStitch(isForward: false) =>
+      {CellRegion.topLeft, CellRegion.bottomRight},
+    QuarterStitch(:final quadrant) =>
+      {CellRegion.fromQuadrant(quadrant)},
+    HalfCrossStitch(half: HalfOrientation.left) =>
+      {CellRegion.topLeft, CellRegion.bottomLeft},
+    HalfCrossStitch(half: HalfOrientation.right) =>
+      {CellRegion.topRight, CellRegion.bottomRight},
+    HalfCrossStitch(half: HalfOrientation.top) =>
+      {CellRegion.topLeft, CellRegion.topRight},
+    HalfCrossStitch(half: HalfOrientation.bottom) =>
+      {CellRegion.bottomLeft, CellRegion.bottomRight},
+    ThreeQuarterStitch(:final quadrant) => switch (quadrant) {
+      QuadrantPosition.topLeft =>
+        {CellRegion.topLeft, CellRegion.topRight, CellRegion.bottomLeft},
+      QuadrantPosition.topRight =>
+        {CellRegion.topLeft, CellRegion.topRight, CellRegion.bottomRight},
+      QuadrantPosition.bottomLeft =>
+        {CellRegion.topLeft, CellRegion.bottomLeft, CellRegion.bottomRight},
+      QuadrantPosition.bottomRight =>
+        {CellRegion.topRight, CellRegion.bottomLeft, CellRegion.bottomRight},
+    },
+    BackStitch() => const {},
+  };
+}
+
+/// Sub-cell quadrant regions for overlap detection.
+enum CellRegion {
+  topLeft, topRight, bottomLeft, bottomRight;
+
+  static CellRegion fromQuadrant(QuadrantPosition q) => switch (q) {
+    QuadrantPosition.topLeft     => CellRegion.topLeft,
+    QuadrantPosition.topRight    => CellRegion.topRight,
+    QuadrantPosition.bottomLeft  => CellRegion.bottomLeft,
+    QuadrantPosition.bottomRight => CellRegion.bottomRight,
+  };
+}
+
+/// Returns true if [a] and [b] (in the same cell) would overlap.
+bool stitchesOverlap(Stitch a, Stitch b) {
+  final ra = a.claimedRegions;
+  final rb = b.claimedRegions;
+  return ra.any(rb.contains);
 }

@@ -106,7 +106,7 @@ void main() {
 
   // ─── Multi-layer deduplication ───────────────────────────────────────────────
 
-  test('two layers with FullStitch at same cell → ONE entry in fullStitches, isBlended', () {
+  test('two layers with FullStitch at same cell → blended (same regions)', () {
     final t1 = _thread('310', const Color(0xFF000000));
     final t2 = _thread('321', const Color(0xFFFF0000));
     final pattern = _pattern(
@@ -192,7 +192,9 @@ void main() {
     );
     final layer = StitchCompositor.computeComposite(pattern);
     final cs = layer.fullStitches[const Cell(0, 0)];
-    expect((cs?.stitch as FullStitch).threadId, '310'); // bottom layer wins for Add blend
+    // Same regions → blended. Add blend → bottom layer provides symbol identity.
+    expect((cs?.stitch as FullStitch).threadId, '310');
+    expect(cs?.isBlended, true);
   });
 
   // ─── Backstitches ────────────────────────────────────────────────────────────
@@ -485,7 +487,7 @@ void main() {
       expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, false);
     });
 
-    test('CompositeStitch.isBlended is true for multi-layer overlapping cells', () {
+    test('CompositeStitch.isBlended is true for multi-layer same-region cells', () {
       final t1 = _thread('310', const Color(0xFF000000));
       final t2 = _thread('815', const Color(0xFF800000));
       final pattern = _pattern(

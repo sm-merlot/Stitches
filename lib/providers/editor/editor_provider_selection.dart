@@ -352,8 +352,8 @@ mixin SelectionMixin on Notifier<EditorState> {
           HalfOrientation.top => HalfOrientation.top,
           HalfOrientation.bottom => HalfOrientation.bottom,
         }),
-    QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
-      QuarterCrossStitch(x: (l + w - 1) - (x - l), y: y, threadId: threadId,
+    ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward, :final threadId) =>
+      ThreeQuarterStitch(x: (l + w - 1) - (x - l), y: y, isForward: !isForward, threadId: threadId,
         quadrant: switch (quadrant) {
           QuadrantPosition.topLeft => QuadrantPosition.topRight,
           QuadrantPosition.topRight => QuadrantPosition.topLeft,
@@ -389,8 +389,8 @@ mixin SelectionMixin on Notifier<EditorState> {
           HalfOrientation.top => HalfOrientation.bottom,
           HalfOrientation.bottom => HalfOrientation.top,
         }),
-    QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
-      QuarterCrossStitch(x: x, y: (t + h - 1) - (y - t), threadId: threadId,
+    ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward, :final threadId) =>
+      ThreeQuarterStitch(x: x, y: (t + h - 1) - (y - t), isForward: !isForward, threadId: threadId,
         quadrant: switch (quadrant) {
           QuadrantPosition.topLeft => QuadrantPosition.bottomLeft,
           QuadrantPosition.topRight => QuadrantPosition.bottomRight,
@@ -432,8 +432,8 @@ mixin SelectionMixin on Notifier<EditorState> {
             HalfOrientation.bottom => HalfOrientation.left,
             HalfOrientation.left => HalfOrientation.top,
           }),
-      QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
-        QuarterCrossStitch(x: rx(x, y), y: ry(x, y), threadId: threadId,
+      ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward, :final threadId) =>
+        ThreeQuarterStitch(x: rx(x, y), y: ry(x, y), isForward: !isForward, threadId: threadId,
           quadrant: switch (quadrant) {
             QuadrantPosition.topLeft => QuadrantPosition.topRight,
             QuadrantPosition.topRight => QuadrantPosition.bottomRight,

@@ -599,15 +599,15 @@ class EditController implements CanvasEditController, ShortcutHandler {
       case LogicalKeyboardKey.digit1:
         _notifier.setTool(DrawingTool.fullStitch);
       case LogicalKeyboardKey.digit2:
-        _notifier.setTool(DrawingTool.halfForward);
+        _notifier.setPartialSubTool(PartialSubTool.diagonalForward);
       case LogicalKeyboardKey.digit3:
-        _notifier.setTool(DrawingTool.halfBackward);
+        _notifier.setPartialSubTool(PartialSubTool.diagonalBackward);
       case LogicalKeyboardKey.digit4:
-        _notifier.setTool(DrawingTool.halfCross);
+        _notifier.setPartialSubTool(PartialSubTool.half);
       case LogicalKeyboardKey.digit5:
-        _notifier.setTool(DrawingTool.quarterDiag);
+        _notifier.setPartialSubTool(PartialSubTool.threeQuarter);
       case LogicalKeyboardKey.digit6:
-        _notifier.setTool(DrawingTool.quarterCross);
+        _notifier.setPartialSubTool(PartialSubTool.quarter);
       case LogicalKeyboardKey.digit7:
         _notifier.setTool(DrawingTool.backstitch);
       case LogicalKeyboardKey.digit8:

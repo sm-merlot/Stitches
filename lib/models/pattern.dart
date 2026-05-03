@@ -153,7 +153,7 @@ class CrossStitchPattern {
       else if (s is HalfStitch) { cells.add((s.x, s.y)); }
       else if (s is QuarterStitch) { cells.add((s.x, s.y)); }
       else if (s is HalfCrossStitch) { cells.add((s.x, s.y)); }
-      else if (s is QuarterCrossStitch) { cells.add((s.x, s.y)); }
+      else if (s is ThreeQuarterStitch) { cells.add((s.x, s.y)); }
     }
     return cells.length;
   }
@@ -332,7 +332,8 @@ class CrossStitchPattern {
       // Migration from v1 flat stitches
       final stitches = stitchesYaml
               ?.map((s) =>
-                  Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
+                  Stitch.fromYamlOrNull(Map<String, dynamic>.from(s as Map)))
+              .whereType<Stitch>()
               .toList() ??
           [];
       layerItems = [

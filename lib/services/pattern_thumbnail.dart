@@ -101,8 +101,8 @@ Rect? _stitchRect(
       _quadrantRect(x, y, quadrant, offsetX, offsetY, cellSize),
     HalfCrossStitch(:final x, :final y, :final half) =>
       _halfCrossRect(x, y, half, offsetX, offsetY, cellSize),
-    QuarterCrossStitch(:final x, :final y, :final quadrant) =>
-      _quadrantRect(x, y, quadrant, offsetX, offsetY, cellSize),
+    ThreeQuarterStitch(:final x, :final y) =>
+      Rect.fromLTWH(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize),
     BackStitch() => null,
   };
 }

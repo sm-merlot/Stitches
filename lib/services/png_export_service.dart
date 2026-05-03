@@ -117,7 +117,7 @@ class PngExportService {
         HalfStitch(x: final x) => x,
         QuarterStitch(x: final x) => x,
         HalfCrossStitch(x: final x) => x,
-        QuarterCrossStitch(x: final x) => x,
+        ThreeQuarterStitch(x: final x) => x,
         BackStitch() => 0,
       };
 
@@ -126,7 +126,7 @@ class PngExportService {
         HalfStitch(y: final y) => y,
         QuarterStitch(y: final y) => y,
         HalfCrossStitch(y: final y) => y,
-        QuarterCrossStitch(y: final y) => y,
+        ThreeQuarterStitch(y: final y) => y,
         BackStitch() => 0,
       };
 
@@ -184,13 +184,17 @@ class PngExportService {
       case HalfStitch(isForward: false):
         lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
       case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy));
+        lens(Offset(gx, gy), Offset(gx + cs / 2, gy + cs / 2));
+        lens(Offset(gx + cs / 2, gy), Offset(gx, gy + cs / 2));
       case QuarterStitch(quadrant: QuadrantPosition.topRight):
         lens(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs / 2));
+        lens(Offset(gx + cs, gy), Offset(gx + cs / 2, gy + cs / 2));
       case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
         lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy + cs));
+        lens(Offset(gx + cs / 2, gy + cs / 2), Offset(gx, gy + cs));
       case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
-        lens(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2));
+        lens(Offset(gx + cs / 2, gy + cs / 2), Offset(gx + cs, gy + cs));
+        lens(Offset(gx + cs, gy + cs / 2), Offset(gx + cs / 2, gy + cs));
       case HalfCrossStitch(half: HalfOrientation.left):
         lens(Offset(gx, gy), Offset(gx + cs / 2, gy + cs));
         lens(Offset(gx, gy + cs), Offset(gx + cs / 2, gy));
@@ -203,14 +207,30 @@ class PngExportService {
       case HalfCrossStitch(half: HalfOrientation.bottom):
         lens(Offset(gx, gy + cs), Offset(gx + cs, gy + cs / 2));
         lens(Offset(gx, gy + cs / 2), Offset(gx + cs, gy + cs));
-      case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy));
-      case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-        lens(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs / 2));
-      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy + cs));
-      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-        lens(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft, isForward: true):
+        lens(Offset(gx + cs, gy), Offset(gx, gy + cs));
+        lens(Offset(gx, gy), Offset(gx + cs / 2, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft, isForward: false):
+        lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
+        lens(Offset(gx, gy), Offset(gx + cs / 2, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight, isForward: true):
+        lens(Offset(gx + cs, gy), Offset(gx, gy + cs));
+        lens(Offset(gx + cs, gy), Offset(gx + cs / 2, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight, isForward: false):
+        lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
+        lens(Offset(gx + cs, gy), Offset(gx + cs / 2, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft, isForward: true):
+        lens(Offset(gx + cs, gy), Offset(gx, gy + cs));
+        lens(Offset(gx, gy + cs), Offset(gx + cs / 2, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft, isForward: false):
+        lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
+        lens(Offset(gx, gy + cs), Offset(gx + cs / 2, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight, isForward: true):
+        lens(Offset(gx + cs, gy), Offset(gx, gy + cs));
+        lens(Offset(gx + cs, gy + cs), Offset(gx + cs / 2, gy + cs / 2));
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight, isForward: false):
+        lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
+        lens(Offset(gx + cs, gy + cs), Offset(gx + cs / 2, gy + cs / 2));
       case BackStitch():
         break;
     }
@@ -249,14 +269,14 @@ class PngExportService {
         canvas.drawRect(Rect.fromLTWH(gx, gy, cs, half), paint);
       case HalfCrossStitch(half: HalfOrientation.bottom):
         canvas.drawRect(Rect.fromLTWH(gx, gy + half, cs, half), paint);
-      case QuarterCrossStitch(quadrant: QuadrantPosition.topLeft):
-        canvas.drawRect(Rect.fromLTWH(gx, gy, half, half), paint);
-      case QuarterCrossStitch(quadrant: QuadrantPosition.topRight):
-        canvas.drawRect(Rect.fromLTWH(gx + half, gy, half, half), paint);
-      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomLeft):
-        canvas.drawRect(Rect.fromLTWH(gx, gy + half, half, half), paint);
-      case QuarterCrossStitch(quadrant: QuadrantPosition.bottomRight):
-        canvas.drawRect(Rect.fromLTWH(gx + half, gy + half, half, half), paint);
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft):
+        canvas.drawPath(Path()..moveTo(gx, gy)..lineTo(gx + cs, gy)..lineTo(gx, gy + cs)..close(), paint);
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight):
+        canvas.drawPath(Path()..moveTo(gx, gy)..lineTo(gx + cs, gy)..lineTo(gx + cs, gy + cs)..close(), paint);
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft):
+        canvas.drawPath(Path()..moveTo(gx, gy)..lineTo(gx, gy + cs)..lineTo(gx + cs, gy + cs)..close(), paint);
+      case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight):
+        canvas.drawPath(Path()..moveTo(gx + cs, gy)..lineTo(gx, gy + cs)..lineTo(gx + cs, gy + cs)..close(), paint);
       case BackStitch():
         break;
     }

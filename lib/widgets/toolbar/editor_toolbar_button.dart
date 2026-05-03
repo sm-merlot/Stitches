@@ -210,23 +210,6 @@ void _drawHalfCross(Canvas canvas, Size size, Color color) {
   );
 }
 
-void _drawQuarterDiag(Canvas canvas, Size size, Color color) {
-  const pad = 5.0;
-  final p = Paint()
-    ..color = color
-    ..strokeWidth = 1.5
-    ..strokeCap = StrokeCap.round
-    ..style = PaintingStyle.stroke;
-  final cx = size.width / 2;
-  final cy = size.height / 2;
-  canvas.drawLine(Offset(pad, pad), Offset(cx, cy), p);
-  final gp = Paint()
-    ..color = color.withValues(alpha: 0.25)
-    ..strokeWidth = 0.8;
-  canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
-  canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
-}
-
 void _drawQuarterCross(Canvas canvas, Size size, Color color) {
   const pad = 5.0;
   final p = Paint()
@@ -236,6 +219,7 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
     ..style = PaintingStyle.stroke;
   final cx = size.width / 2;
   final cy = size.height / 2;
+  // Full X in top-left quarter
   canvas.drawLine(Offset(pad, pad), Offset(cx - 1, cy - 1), p);
   canvas.drawLine(Offset(cx - 1, pad), Offset(pad, cy - 1), p);
   final gp = Paint()
@@ -243,6 +227,146 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
     ..strokeWidth = 0.8;
   canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
   canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
+}
+
+void _drawThreeQuarter(Canvas canvas, Size size, Color color) {
+  const pad = 5.0;
+  final p = Paint()
+    ..color = color
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  final cx = size.width / 2;
+  final cy = size.height / 2;
+  // Full diagonal
+  canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), p);
+  // Quarter diagonal from top-left corner to centre
+  canvas.drawLine(Offset(pad, pad), Offset(cx, cy), p);
+  canvas.drawRect(
+    Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+    Paint()
+      ..color = color.withValues(alpha: 0.25)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke,
+  );
+}
+
+/// Returns the icon draw function for the given [PartialSubTool].
+_DrawFn _partialSubToolIcon(PartialSubTool subTool) => switch (subTool) {
+  PartialSubTool.diagonalForward  => _drawHalfForward,
+  PartialSubTool.diagonalBackward => _drawHalfBackward,
+  PartialSubTool.half             => _drawHalfCross,
+  PartialSubTool.threeQuarter     => _drawThreeQuarter,
+  PartialSubTool.quarter          => _drawQuarterCross,
+};
+
+// ─── Partial stitch button with popup ─────────────────────────────────────────
+
+class _PartialStitchButton extends StatelessWidget {
+  final bool selected;
+  final PartialSubTool subTool;
+  final ValueChanged<PartialSubTool> onSelect;
+
+  const _PartialStitchButton({
+    required this.selected,
+    required this.subTool,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.primary;
+    final bgColor = selected ? color : Colors.transparent;
+    final borderColor = selected ? color : Colors.grey.shade300;
+    final contentColor = selected ? Colors.white : Colors.grey.shade600;
+    final size = _isTouchPlatform ? 40.0 : 34.0;
+
+    return Tooltip(
+      message: _tt('Partial stitch  [2-6]'),
+      child: GestureDetector(
+        onTap: () => _showPopup(context, theme),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: size + 10, // wider to fit dropdown arrow
+          height: size,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: borderColor, width: 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 17,
+                height: 17,
+                child: CustomPaint(
+                  painter: _StitchIconPainter(
+                    color: contentColor,
+                    draw: _partialSubToolIcon(subTool),
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, size: 14, color: contentColor),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPopup(BuildContext context, ThemeData theme) {
+    final RenderBox button = context.findRenderObject()! as RenderBox;
+    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(Offset.zero, ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+    showMenu<PartialSubTool>(
+      context: context,
+      position: position,
+      items: [
+        _popupItem(PartialSubTool.diagonalForward,  'Half diagonal /  [2]', _drawHalfForward),
+        _popupItem(PartialSubTool.diagonalBackward, 'Half diagonal \\  [3]', _drawHalfBackward),
+        _popupItem(PartialSubTool.half,             'Half-cell cross  [4]', _drawHalfCross),
+        _popupItem(PartialSubTool.threeQuarter,     'Three-quarter  [5]', _drawThreeQuarter),
+        _popupItem(PartialSubTool.quarter,          'Petit point  [6]', _drawQuarterCross),
+      ],
+    ).then((value) {
+      if (value != null) onSelect(value);
+    });
+  }
+
+  PopupMenuItem<PartialSubTool> _popupItem(
+      PartialSubTool tool, String label, _DrawFn draw) {
+    return PopupMenuItem(
+      value: tool,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CustomPaint(
+              painter: _StitchIconPainter(
+                color: tool == subTool ? Colors.blue : Colors.grey.shade700,
+                draw: draw,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(
+            fontWeight: tool == subTool ? FontWeight.bold : FontWeight.normal,
+          )),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Save as snippet ──────────────────────────────────────────────────────────

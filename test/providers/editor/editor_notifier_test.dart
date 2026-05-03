@@ -75,7 +75,7 @@ void main() {
       notifier(c).addStitch(const QuarterStitch(x: 2, y: 0, quadrant: QuadrantPosition.topLeft, threadId: '310'));
       notifier(c).addStitch(const BackStitch(x1: 0.5, y1: 0.5, x2: 1.5, y2: 0.5, threadId: '310'));
       notifier(c).addStitch(const HalfCrossStitch(x: 3, y: 0, half: HalfOrientation.left, threadId: '310'));
-      notifier(c).addStitch(const QuarterCrossStitch(x: 4, y: 0, quadrant: QuadrantPosition.bottomRight, threadId: '310'));
+      notifier(c).addStitch(const ThreeQuarterStitch(x: 4, y: 0, quadrant: QuadrantPosition.bottomRight, isForward: true, threadId: '310'));
 
       final stitches = editorState(c).pattern.stitches;
       expect(stitches.whereType<FullStitch>(), hasLength(1));
@@ -83,7 +83,7 @@ void main() {
       expect(stitches.whereType<QuarterStitch>(), hasLength(1));
       expect(stitches.whereType<BackStitch>(), hasLength(1));
       expect(stitches.whereType<HalfCrossStitch>(), hasLength(1));
-      expect(stitches.whereType<QuarterCrossStitch>(), hasLength(1));
+      expect(stitches.whereType<ThreeQuarterStitch>(), hasLength(1));
     });
 
     test('adding same stitch twice is idempotent', () {
@@ -615,8 +615,9 @@ void main() {
 
     test('setTool updates editSession.currentTool and clears editSession.backstitchStartPoint', () {
       notifier(c).setBackstitchStart(const Offset(1, 1));
-      notifier(c).setTool(DrawingTool.halfForward);
-      expect(editorState(c).editSession.currentTool, equals(DrawingTool.halfForward));
+      notifier(c).setPartialSubTool(PartialSubTool.diagonalForward);
+      expect(editorState(c).editSession.currentTool, equals(DrawingTool.partial));
+      expect(editorState(c).editSession.partialSubTool, equals(PartialSubTool.diagonalForward));
       expect(editorState(c).editSession.backstitchStartPoint, isNull);
     });
 

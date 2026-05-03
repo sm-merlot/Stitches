@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart' show Offset;
 import '../../models/stitch/stitch.dart';
 import '../../providers/editor/editor_provider.dart'
-    show DrawingMode, DrawingTool, EditorState;
+    show DrawingMode, DrawingTool, EditorState, PartialSubTool;
 import '../canvas/canvas_viewport.dart';
 
 /// Handles all stitch-drawing and erasing interactions (draw mode).
@@ -122,7 +122,8 @@ class DrawHandler {
 
     final (subX, subY) = viewport.subCellPos(canvas, cellX, cellY);
     final stitch = _buildStitch(
-        state.editSession.currentTool, cellX, cellY, state.selectedThreadId!, subX, subY);
+        state.editSession.currentTool, state.editSession.partialSubTool,
+        cellX, cellY, state.selectedThreadId!, subX, subY);
     if (stitch != null) onAddStitch(stitch);
   }
 
@@ -173,6 +174,7 @@ class DrawHandler {
 
   Stitch? _buildStitch(
     DrawingTool tool,
+    PartialSubTool subTool,
     int x,
     int y,
     String threadId,
@@ -182,28 +184,31 @@ class DrawHandler {
       switch (tool) {
         DrawingTool.fullStitch =>
           FullStitch(x: x, y: y, threadId: threadId),
-        DrawingTool.halfForward =>
-          HalfStitch(x: x, y: y, isForward: true, threadId: threadId),
-        DrawingTool.halfBackward =>
-          HalfStitch(x: x, y: y, isForward: false, threadId: threadId),
-        DrawingTool.halfCross => HalfCrossStitch(
-            x: x,
-            y: y,
-            half: _detectHalf(subX, subY),
-            threadId: threadId,
-          ),
-        DrawingTool.quarterDiag => QuarterStitch(
-            x: x,
-            y: y,
-            quadrant: _detectQuadrant(subX, subY),
-            threadId: threadId,
-          ),
-        DrawingTool.quarterCross => QuarterCrossStitch(
-            x: x,
-            y: y,
-            quadrant: _detectQuadrant(subX, subY),
-            threadId: threadId,
-          ),
+        DrawingTool.partial => switch (subTool) {
+          PartialSubTool.diagonalForward =>
+            HalfStitch(x: x, y: y, isForward: true, threadId: threadId),
+          PartialSubTool.diagonalBackward =>
+            HalfStitch(x: x, y: y, isForward: false, threadId: threadId),
+          PartialSubTool.half => HalfCrossStitch(
+              x: x,
+              y: y,
+              half: _detectHalf(subX, subY),
+              threadId: threadId,
+            ),
+          PartialSubTool.threeQuarter => ThreeQuarterStitch(
+              x: x,
+              y: y,
+              quadrant: _detectQuadrant(subX, subY),
+              isForward: true,
+              threadId: threadId,
+            ),
+          PartialSubTool.quarter => QuarterStitch(
+              x: x,
+              y: y,
+              quadrant: _detectQuadrant(subX, subY),
+              threadId: threadId,
+            ),
+        },
         DrawingTool.backstitch => null,
         DrawingTool.fill => null,
         DrawingTool.fillErase => null,
