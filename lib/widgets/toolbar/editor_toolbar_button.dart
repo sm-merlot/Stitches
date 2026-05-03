@@ -8,6 +8,7 @@ class _ToolbarButton extends StatelessWidget {
   final Widget Function(Color contentColor) builder;
   final String tooltip;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final Color? activeColor; // defaults to theme primary
 
   const _ToolbarButton({
@@ -15,6 +16,7 @@ class _ToolbarButton extends StatelessWidget {
     required this.builder,
     required this.tooltip,
     this.onTap,
+    this.onLongPress,
     this.activeColor,
   });
 
@@ -39,6 +41,7 @@ class _ToolbarButton extends StatelessWidget {
       message: tooltip,
       child: GestureDetector(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           width: size,
@@ -227,7 +230,7 @@ void _drawQuarterDiag(Canvas canvas, Size size, Color color) {
   canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
 }
 
-void _drawQuarterCross(Canvas canvas, Size size, Color color) {
+void _drawThreeQuarter(Canvas canvas, Size size, Color color) {
   const pad = 5.0;
   final p = Paint()
     ..color = color
@@ -236,13 +239,105 @@ void _drawQuarterCross(Canvas canvas, Size size, Color color) {
     ..style = PaintingStyle.stroke;
   final cx = size.width / 2;
   final cy = size.height / 2;
-  canvas.drawLine(Offset(pad, pad), Offset(cx - 1, cy - 1), p);
-  canvas.drawLine(Offset(cx - 1, pad), Offset(pad, cy - 1), p);
-  final gp = Paint()
-    ..color = color.withValues(alpha: 0.25)
-    ..strokeWidth = 0.8;
-  canvas.drawLine(Offset(cx, pad), Offset(cx, size.height - pad), gp);
-  canvas.drawLine(Offset(pad, cy), Offset(size.width - pad, cy), gp);
+  // Full diagonal
+  canvas.drawLine(Offset(size.width - pad, pad), Offset(pad, size.height - pad), p);
+  // Quarter diagonal from top-left corner to centre
+  canvas.drawLine(Offset(pad, pad), Offset(cx, cy), p);
+  canvas.drawRect(
+    Rect.fromLTRB(pad, pad, size.width - pad, size.height - pad),
+    Paint()
+      ..color = color.withValues(alpha: 0.25)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke,
+  );
+}
+
+/// Returns the icon draw function for the given [PartialSubTool].
+_DrawFn _partialSubToolIcon(PartialSubTool subTool) => switch (subTool) {
+  PartialSubTool.diagonalForward  => _drawHalfForward,
+  PartialSubTool.diagonalBackward => _drawHalfBackward,
+  PartialSubTool.half             => _drawHalfCross,
+  PartialSubTool.threeQuarter     => _drawThreeQuarter,
+  PartialSubTool.quarter          => _drawQuarterDiag,
+};
+
+// ─── Partial stitch button with popup ─────────────────────────────────────────
+
+class _PartialStitchButton extends StatelessWidget {
+  final bool selected;
+  final PartialSubTool subTool;
+  final ValueChanged<PartialSubTool> onSelect;
+
+  const _PartialStitchButton({
+    required this.selected,
+    required this.subTool,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _ToolbarButton(
+      tooltip: _tt('Partial stitch  [2-6]'),
+      selected: selected,
+      onTap: () => onSelect(subTool),
+      onLongPress: () => _showPopup(context, theme),
+      builder: (c) => CustomPaint(
+        painter: _StitchIconPainter(color: c, draw: _partialSubToolIcon(subTool)),
+      ),
+    );
+  }
+
+  void _showPopup(BuildContext context, ThemeData theme) {
+    final RenderBox button = context.findRenderObject()! as RenderBox;
+    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(Offset.zero, ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+    showMenu<PartialSubTool>(
+      context: context,
+      position: position,
+      items: [
+        _popupItem(PartialSubTool.diagonalForward,  'Half diagonal /  [2]', _drawHalfForward),
+        _popupItem(PartialSubTool.diagonalBackward, 'Half diagonal \\  [3]', _drawHalfBackward),
+        _popupItem(PartialSubTool.half,             'Half-cell cross  [4]', _drawHalfCross),
+        _popupItem(PartialSubTool.threeQuarter,     'Three-quarter  [5]', _drawThreeQuarter),
+        _popupItem(PartialSubTool.quarter,          'Quarter  [6]', _drawQuarterDiag),
+      ],
+    ).then((value) {
+      if (value != null) onSelect(value);
+    });
+  }
+
+  PopupMenuItem<PartialSubTool> _popupItem(
+      PartialSubTool tool, String label, _DrawFn draw) {
+    return PopupMenuItem(
+      value: tool,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CustomPaint(
+              painter: _StitchIconPainter(
+                color: tool == subTool ? Colors.blue : Colors.grey.shade700,
+                draw: draw,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(
+            fontWeight: tool == subTool ? FontWeight.bold : FontWeight.normal,
+          )),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Save as snippet ──────────────────────────────────────────────────────────
