@@ -1,0 +1,35 @@
+test/widgets/handlers/draw_handler_test.dart
+  a0830b4accaa4ae0 74-78,84-88,93-97,102-108
+test/models/models_and_logic_test.dart
+  a0830b4accaa4ae0 78,80-86,90-105,645
+test/widgets/test_helpers.dart
+  a0830b4accaa4ae0 61,76
+lib/services/file_service.dart
+  a0830b4accaa4ae0 330-331
+test/providers/editor/editor_notifier_test.dart
+  a0830b4accaa4ae0 78,86,618-620
+test/services/stitches_roundtrip_test.dart
+  a0830b4accaa4ae0 58,191,253
+test/models/stitch/geometry_and_layout_test.dart
+  a0830b4accaa4ae0 53,55-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e1c70cfb1cb0364621f043a8852c2d70ea24ac79",
+  "prompts": {
+    "a0830b4accaa4ae0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ffcaddac-c966-4091-b98c-78987e10a209",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 64,
+      "total_deletions": 24,
+      "accepted_lines": 64,
+      "overriden_lines": 0
+    }
+  }
+}
