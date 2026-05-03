@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  pull-requests: read
   statuses: write
 
 env:
