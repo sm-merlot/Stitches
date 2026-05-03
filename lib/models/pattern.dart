@@ -332,7 +332,8 @@ class CrossStitchPattern {
       // Migration from v1 flat stitches
       final stitches = stitchesYaml
               ?.map((s) =>
-                  Stitch.fromYaml(Map<String, dynamic>.from(s as Map)))
+                  Stitch.fromYamlOrNull(Map<String, dynamic>.from(s as Map)))
+              .whereType<Stitch>()
               .toList() ??
           [];
       layerItems = [

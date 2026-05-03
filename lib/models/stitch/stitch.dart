@@ -36,16 +36,24 @@ sealed class Stitch {
       'quarter' => QuarterStitch.fromYaml(yaml),
       'halfcross' => HalfCrossStitch.fromYaml(yaml),
       'threequarter' => ThreeQuarterStitch.fromYaml(yaml),
-      // Migration: old quartercross → QuarterStitch at same position.
-      'quartercross' => QuarterStitch.fromYaml(yaml),
       'back' => BackStitch.fromYaml(yaml),
       _ => throw FormatException('Unknown stitch type: $type'),
     };
   }
 
-  /// Parses a YAML list into a [List<Stitch>].
+  /// Returns null for removed stitch types (e.g. old 'quartercross').
+  static Stitch? fromYamlOrNull(Map<String, dynamic> yaml) {
+    final type = yaml['type'] as String;
+    if (type == 'quartercross') return null; // removed type — silently drop
+    return fromYaml(yaml);
+  }
+
+  /// Parses a YAML list into a [List<Stitch>], silently dropping removed types.
   static List<Stitch> listFromYaml(List<dynamic> yaml) =>
-      yaml.map((s) => Stitch.fromYaml(Map<String, dynamic>.from(s as Map))).toList();
+      yaml
+          .map((s) => Stitch.fromYamlOrNull(Map<String, dynamic>.from(s as Map)))
+          .whereType<Stitch>()
+          .toList();
 }
 
 @immutable

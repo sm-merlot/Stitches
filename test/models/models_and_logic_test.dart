@@ -87,7 +87,7 @@ void main() {
       }
     });
 
-    test('quartercross YAML migrates to QuarterStitch', () {
+    test('quartercross YAML is silently dropped via fromYamlOrNull', () {
       final yaml = {
         'type': 'quartercross',
         'x': 5,
@@ -95,12 +95,17 @@ void main() {
         'quadrant': 'topLeft',
         'thread': '310',
       };
-      final s = Stitch.fromYaml(yaml);
-      expect(s, isA<QuarterStitch>());
-      final qs = s as QuarterStitch;
-      expect(qs.x, 5);
-      expect(qs.y, 3);
-      expect(qs.quadrant, QuadrantPosition.topLeft);
+      expect(Stitch.fromYamlOrNull(yaml), isNull);
+    });
+
+    test('quartercross stitches are dropped in listFromYaml', () {
+      final list = Stitch.listFromYaml([
+        {'type': 'full', 'x': 0, 'y': 0, 'thread': '310'},
+        {'type': 'quartercross', 'x': 1, 'y': 0, 'quadrant': 'topLeft', 'thread': '310'},
+        {'type': 'full', 'x': 2, 'y': 0, 'thread': '310'},
+      ]);
+      expect(list, hasLength(2));
+      expect(list.every((s) => s is FullStitch), isTrue);
     });
 
     test('BackStitch', () {
