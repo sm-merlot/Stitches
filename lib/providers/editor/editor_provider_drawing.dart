@@ -364,28 +364,38 @@ mixin DrawingMixin on Notifier<EditorState> {
           .toList();
     }
 
-    // O(N_cells) map copy instead of O(N_stitches) list copy + index rebuild.
-    // Common case: cell empty → withStitchAdded (no filter pass needed).
-    // Rare case: cell occupied by same-geometry stitch → withStitchReplaced.
+    // Remove any existing stitches that overlap with the new stitch, then add it.
+    // FullStitch covers entire cell → clears everything. Partial stitches coexist
+    // if non-overlapping; overlapping ones are replaced.
     final bool cellEmpty = existingAtCell == null || existingAtCell.isEmpty;
-    final bool needsReplace = !cellEmpty && existingAtCell.any((s) => s == stitch);
-    final newActiveLayer = needsReplace
-        ? state.activeLayer.withStitchReplaced(stitch)
-        : state.activeLayer.withStitchAdded(stitch);
+    final Layer newActiveLayer;
+    if (cellEmpty) {
+      newActiveLayer = state.activeLayer.withStitchAdded(stitch);
+    } else {
+      final overlapping = existingAtCell.where((s) => stitchesOverlap(s, stitch)).toList();
+      if (overlapping.isEmpty) {
+        newActiveLayer = state.activeLayer.withStitchAdded(stitch);
+      } else if (overlapping.length == existingAtCell.length) {
+        newActiveLayer = state.activeLayer.withCellReplacedBy(stitch);
+      } else {
+        newActiveLayer = state.activeLayer.withOverlappingReplaced(stitch);
+      }
+    }
 
     final rawPattern = _patternWithActiveLayer(pattern, newActiveLayer);
 
-    // Prune only the displaced thread (if any) — not all threads.
-    // Common case (empty cell): no displacement → skip O(total_stitches) scan.
-    final String? displacedThread = needsReplace
-        ? existingAtCell
-            .where((s) => s == stitch && s.threadId != stitch.threadId)
-            .map((s) => s.threadId)
-            .firstOrNull
-        : null;
-    final newPattern = displacedThread != null
-        ? _pruneSpecificThread(rawPattern, displacedThread)
-        : rawPattern;
+    // Prune threads that were displaced by the overlap replacement.
+    // Collect thread IDs of removed stitches that differ from the new stitch's thread.
+    var newPattern = rawPattern;
+    if (!cellEmpty) {
+      final displaced = existingAtCell
+          .where((s) => stitchesOverlap(s, stitch) && s.threadId != stitch.threadId)
+          .map((s) => s.threadId)
+          .toSet();
+      for (final tid in displaced) {
+        newPattern = _pruneSpecificThread(newPattern, tid);
+      }
+    }
 
     // Incremental composite: patch only the affected cell when possible.
     // Falls back to computeLayer for backstitches (no cell coords) or when
@@ -543,21 +553,23 @@ mixin DrawingMixin on Notifier<EditorState> {
     // In-place mutation: O(1) — no map copy.  Safe because Raw methods are
     // only called via UndoManager commands (undo reverses via removeStitchRaw).
     final bool cellEmpty = existingAtCell == null || existingAtCell.isEmpty;
-    final bool needsReplace = !cellEmpty && existingAtCell.any((s) => s == stitch);
-    needsReplace
-        ? state.activeLayer.replaceStitchInPlace(stitch)
-        : state.activeLayer.addStitchInPlace(stitch);
+    if (cellEmpty) {
+      state.activeLayer.addStitchInPlace(stitch);
+    } else {
+      state.activeLayer.replaceOverlappingInPlace(stitch);
+    }
 
     final rawPattern = _patternWithActiveLayer(pattern, state.activeLayer);
-    final String? displacedThread = needsReplace
-        ? existingAtCell
-            .where((s) => s == stitch && s.threadId != stitch.threadId)
-            .map((s) => s.threadId)
-            .firstOrNull
-        : null;
-    final newPattern = displacedThread != null
-        ? _pruneSpecificThread(rawPattern, displacedThread)
-        : rawPattern;
+    var newPattern = rawPattern;
+    if (!cellEmpty) {
+      final displaced = existingAtCell
+          .where((s) => stitchesOverlap(s, stitch) && s.threadId != stitch.threadId)
+          .map((s) => s.threadId)
+          .toSet();
+      for (final tid in displaced) {
+        newPattern = _pruneSpecificThread(newPattern, tid);
+      }
+    }
 
     final oldComposite = state.compositeLayer;
     final quickComposite = (oldComposite != null && coords != null)

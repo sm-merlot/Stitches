@@ -302,24 +302,43 @@ class StitchCompositor {
     })>[];
     final otherAtCell = <Stitch>[];
 
-    for (final layer in pattern.layers) {
+    // Track claimed regions across layers (bottom → top). Higher-layer stitches
+    // occlude lower-layer stitches that share any region.
+    final claimedByAbove = <CellRegion>{};
+    // Iterate top-to-bottom so we can mark claimed regions first, then filter.
+    final reversedLayers = pattern.layers.reversed.toList();
+    final pendingFull = <({
+      FullStitch stitch,
+      Color color,
+      double opacity,
+      LayerBlendMode blendMode,
+    })>[];
+    final pendingOther = <Stitch>[];
+
+    for (final layer in reversedLayers) {
       if (!layer.visible) continue;
       for (final s in layer.stitchesAt(x, y)) {
-        // stitchesAt never returns BackStitch (no cellCoords → not indexed).
+        final regions = s.claimedRegions;
+        if (regions.any(claimedByAbove.contains)) continue; // occluded
+        claimedByAbove.addAll(regions);
         if (s is FullStitch) {
           final thread = threadMap[s.threadId];
           if (thread == null) continue;
-          stack.add((
+          pendingFull.add((
             stitch: s,
             color: thread.color,
             opacity: layer.opacity,
             blendMode: layer.blendMode,
           ));
         } else {
-          otherAtCell.add(s);
+          pendingOther.add(s);
         }
       }
     }
+
+    // Reverse to restore bottom-to-top order for blending.
+    stack.addAll(pendingFull.reversed);
+    otherAtCell.addAll(pendingOther.reversed);
 
     // Remove cell if nothing visible there any more.
     if (stack.isEmpty && otherAtCell.isEmpty) {
@@ -391,7 +410,9 @@ class StitchCompositor {
   static CompositeLayer _buildLayer(CrossStitchPattern pattern) {
     final threadMap = pattern.threads;
 
-    // ── Pass 1: bucket FullStitches per cell; collect everything else ────────
+    // ── Pass 1: bucket FullStitches per cell; collect partial stitches ────────
+    // Tracks claimed regions per cell across layers (bottom → top) so that
+    // higher-layer stitches occlude lower-layer stitches at the same cell.
     final cellStack = <Cell,
         List<({
           FullStitch stitch,
@@ -401,30 +422,55 @@ class StitchCompositor {
         })>>{};
     final otherNonBackRaw = <Stitch>[];
     final backstitches = <BackStitch>[];
+    // Per-cell region tracking: claimed regions from layers above.
+    // Layers are ordered bottom-to-top in pattern.layers; we iterate in
+    // reverse (top-to-bottom) and collect, then reverse the results.
+    final cellRegions = <Cell, Set<CellRegion>>{};
 
-    for (final layer in pattern.layers) {
+    // First pass (top-to-bottom): mark claimed regions and filter occluded stitches.
+    final reversedLayers = pattern.layers.reversed.toList();
+    // Collect in reverse order, then reverse at the end.
+    final pendingOther = <Stitch>[];
+    final pendingFull = <Cell,
+        List<({
+          FullStitch stitch,
+          Color color,
+          double opacity,
+          LayerBlendMode blendMode,
+        })>>{};
+
+    for (final layer in reversedLayers) {
       if (!layer.visible) continue;
-      // Iterate primary storage directly to avoid the O(N) stitches getter.
       for (final bs in layer.backstitches) {
         backstitches.add(bs);
       }
       for (final entry in layer.stitchesByCell.entries) {
+        final cell = entry.key;
+        final claimed = cellRegions[cell] ??= {};
         for (final s in entry.value) {
+          final regions = s.claimedRegions;
+          if (regions.any(claimed.contains)) continue; // occluded by higher layer
+          claimed.addAll(regions);
           if (s is FullStitch) {
             final thread = threadMap[s.threadId];
             if (thread == null) continue;
-            (cellStack[Cell(s.x, s.y)] ??= []).add((
+            (pendingFull[cell] ??= []).add((
               stitch: s,
               color: thread.color,
               opacity: layer.opacity,
               blendMode: layer.blendMode,
             ));
           } else {
-            otherNonBackRaw.add(s);
+            pendingOther.add(s);
           }
         }
       }
     }
+    // Reverse to restore bottom-to-top order for blending.
+    for (final entry in pendingFull.entries) {
+      cellStack[entry.key] = entry.value.reversed.toList();
+    }
+    otherNonBackRaw.addAll(pendingOther.reversed);
 
     // ── Pass 2: resolve each cell → blended colour, thread, CompositeStitch ─
     final fullStitches = <Cell, CompositeStitch>{};

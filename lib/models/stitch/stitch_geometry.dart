@@ -114,4 +114,56 @@ extension StitchGeometry on Stitch {
               math.max(y1, y2) > minY &&
               math.min(y1, y2) < maxY,
       };
+
+  /// The sub-cell region(s) this stitch occupies, for overlap detection.
+  ///
+  /// Each stitch claims one or more [CellRegion] values. Two stitches in the
+  /// same cell overlap if they share any region.
+  Set<CellRegion> get claimedRegions => switch (this) {
+    FullStitch() => CellRegion.values.toSet(),
+    HalfStitch(isForward: true) =>
+      {CellRegion.topRight, CellRegion.bottomLeft},
+    HalfStitch(isForward: false) =>
+      {CellRegion.topLeft, CellRegion.bottomRight},
+    QuarterStitch(:final quadrant) =>
+      {CellRegion.fromQuadrant(quadrant)},
+    HalfCrossStitch(half: HalfOrientation.left) =>
+      {CellRegion.topLeft, CellRegion.bottomLeft},
+    HalfCrossStitch(half: HalfOrientation.right) =>
+      {CellRegion.topRight, CellRegion.bottomRight},
+    HalfCrossStitch(half: HalfOrientation.top) =>
+      {CellRegion.topLeft, CellRegion.topRight},
+    HalfCrossStitch(half: HalfOrientation.bottom) =>
+      {CellRegion.bottomLeft, CellRegion.bottomRight},
+    ThreeQuarterStitch(:final quadrant) => switch (quadrant) {
+      QuadrantPosition.topLeft =>
+        {CellRegion.topLeft, CellRegion.topRight, CellRegion.bottomLeft},
+      QuadrantPosition.topRight =>
+        {CellRegion.topLeft, CellRegion.topRight, CellRegion.bottomRight},
+      QuadrantPosition.bottomLeft =>
+        {CellRegion.topLeft, CellRegion.bottomLeft, CellRegion.bottomRight},
+      QuadrantPosition.bottomRight =>
+        {CellRegion.topRight, CellRegion.bottomLeft, CellRegion.bottomRight},
+    },
+    BackStitch() => const {},
+  };
+}
+
+/// Sub-cell quadrant regions for overlap detection.
+enum CellRegion {
+  topLeft, topRight, bottomLeft, bottomRight;
+
+  static CellRegion fromQuadrant(QuadrantPosition q) => switch (q) {
+    QuadrantPosition.topLeft     => CellRegion.topLeft,
+    QuadrantPosition.topRight    => CellRegion.topRight,
+    QuadrantPosition.bottomLeft  => CellRegion.bottomLeft,
+    QuadrantPosition.bottomRight => CellRegion.bottomRight,
+  };
+}
+
+/// Returns true if [a] and [b] (in the same cell) would overlap.
+bool stitchesOverlap(Stitch a, Stitch b) {
+  final ra = a.claimedRegions;
+  final rb = b.claimedRegions;
+  return ra.any(rb.contains);
 }
