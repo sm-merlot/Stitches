@@ -37,8 +37,12 @@ class EditSessionState {
   final bool referenceVisible;
   final bool colourMode;
 
+  /// Currently selected partial stitch sub-tool (session-only, not persisted).
+  final PartialSubTool partialSubTool;
+
   const EditSessionState({
     this.currentTool = DrawingTool.fullStitch,
+    this.partialSubTool = PartialSubTool.diagonalForward,
     this.drawingMode = DrawingMode.draw,
     this.backstitchStartPoint,
     this.backstitchChainMode = false,
@@ -60,6 +64,7 @@ class EditSessionState {
 
   EditSessionState copyWith({
     DrawingTool? currentTool,
+    PartialSubTool? partialSubTool,
     DrawingMode? drawingMode,
     Object? backstitchStartPoint = _sentinel,
     bool? backstitchChainMode,
@@ -78,6 +83,7 @@ class EditSessionState {
   }) =>
       EditSessionState(
         currentTool: currentTool ?? this.currentTool,
+        partialSubTool: partialSubTool ?? this.partialSubTool,
         drawingMode: drawingMode ?? this.drawingMode,
         backstitchStartPoint: backstitchStartPoint == _sentinel
             ? this.backstitchStartPoint
