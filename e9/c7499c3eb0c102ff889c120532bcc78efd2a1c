@@ -1,0 +1,33 @@
+lib/providers/editor/editor_provider_drawing.dart
+  a0830b4accaa4ae0 367-369,371-383,387-398,556-560,563-572
+lib/models/stitch/stitch_geometry.dart
+  a0830b4accaa4ae0 117-168
+lib/models/layer/layer.dart
+  a0830b4accaa4ae0 166-186,276-297
+lib/services/stitch_compositor.dart
+  a0830b4accaa4ae0 305-318,321-323,327,334,339-342,413-415,425-440,442,448-449,451-453,457,464,469-473
+test/services/stitch_compositor_test.dart
+  a0830b4accaa4ae0 109,121-124,182,198-200,315,337-339,493,506-508
+test/services/pdf_logic_test.dart
+  a0830b4accaa4ae0 126,141,143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e9c7499c3eb0c102ff889c120532bcc78efd2a1c",
+  "prompts": {
+    "a0830b4accaa4ae0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ffcaddac-c966-4091-b98c-78987e10a209",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 234,
+      "total_deletions": 74,
+      "accepted_lines": 213,
+      "overriden_lines": 0
+    }
+  }
+}
