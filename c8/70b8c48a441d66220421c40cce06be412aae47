@@ -1,0 +1,27 @@
+lib/models/stitch/stitch.dart
+  a0830b4accaa4ae0 44-51,53-56
+test/models/models_and_logic_test.dart
+  a0830b4accaa4ae0 90,98-108
+lib/models/pattern.dart
+  a0830b4accaa4ae0 335-336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "c870b8c48a441d66220421c40cce06be412aae47",
+  "prompts": {
+    "a0830b4accaa4ae0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ffcaddac-c966-4091-b98c-78987e10a209",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 26,
+      "total_deletions": 12,
+      "accepted_lines": 26,
+      "overriden_lines": 0
+    }
+  }
+}
