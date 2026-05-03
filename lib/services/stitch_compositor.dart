@@ -302,10 +302,10 @@ class StitchCompositor {
     })>[];
     final otherAtCell = <Stitch>[];
 
-    // Track claimed regions across layers (bottom → top). Higher-layer stitches
-    // occlude lower-layer stitches that share any region.
-    final claimedByAbove = <CellRegion>{};
-    // Iterate top-to-bottom so we can mark claimed regions first, then filter.
+    // Track claimed regions across layers (top → bottom). Higher-layer stitches
+    // with the exact same regions as a lower stitch → blend. Partial overlap → occlude.
+    // Keyed by the exact region set (as a sorted list identity).
+    final claimedExact = <Set<CellRegion>>[];
     final reversedLayers = pattern.layers.reversed.toList();
     final pendingFull = <({
       FullStitch stitch,
@@ -319,8 +319,21 @@ class StitchCompositor {
       if (!layer.visible) continue;
       for (final s in layer.stitchesAt(x, y)) {
         final regions = s.claimedRegions;
-        if (regions.any(claimedByAbove.contains)) continue; // occluded
-        claimedByAbove.addAll(regions);
+        // Check if any previously claimed set partially overlaps but is not identical.
+        bool occluded = false;
+        bool blendable = false;
+        for (final claimed in claimedExact) {
+          if (regions.length == claimed.length && regions.containsAll(claimed)) {
+            blendable = true; // exact same regions → allow for blending
+            break;
+          }
+          if (regions.any(claimed.contains)) {
+            occluded = true; // partial overlap → occlude
+            break;
+          }
+        }
+        if (occluded) continue;
+        if (!blendable) claimedExact.add(regions);
         if (s is FullStitch) {
           final thread = threadMap[s.threadId];
           if (thread == null) continue;
@@ -422,14 +435,11 @@ class StitchCompositor {
         })>>{};
     final otherNonBackRaw = <Stitch>[];
     final backstitches = <BackStitch>[];
-    // Per-cell region tracking: claimed regions from layers above.
-    // Layers are ordered bottom-to-top in pattern.layers; we iterate in
-    // reverse (top-to-bottom) and collect, then reverse the results.
-    final cellRegions = <Cell, Set<CellRegion>>{};
+    // Per-cell region tracking: exact region sets claimed by layers above.
+    // Same regions → blend, partial overlap → occlude, no overlap → coexist.
+    final cellClaimedSets = <Cell, List<Set<CellRegion>>>{};
 
-    // First pass (top-to-bottom): mark claimed regions and filter occluded stitches.
     final reversedLayers = pattern.layers.reversed.toList();
-    // Collect in reverse order, then reverse at the end.
     final pendingOther = <Stitch>[];
     final pendingFull = <Cell,
         List<({
@@ -446,11 +456,23 @@ class StitchCompositor {
       }
       for (final entry in layer.stitchesByCell.entries) {
         final cell = entry.key;
-        final claimed = cellRegions[cell] ??= {};
+        final claimedSets = cellClaimedSets[cell] ??= [];
         for (final s in entry.value) {
           final regions = s.claimedRegions;
-          if (regions.any(claimed.contains)) continue; // occluded by higher layer
-          claimed.addAll(regions);
+          bool occluded = false;
+          bool blendable = false;
+          for (final claimed in claimedSets) {
+            if (regions.length == claimed.length && regions.containsAll(claimed)) {
+              blendable = true;
+              break;
+            }
+            if (regions.any(claimed.contains)) {
+              occluded = true;
+              break;
+            }
+          }
+          if (occluded) continue;
+          if (!blendable) claimedSets.add(regions);
           if (s is FullStitch) {
             final thread = threadMap[s.threadId];
             if (thread == null) continue;

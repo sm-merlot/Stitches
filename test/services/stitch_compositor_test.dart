@@ -106,7 +106,7 @@ void main() {
 
   // ─── Multi-layer deduplication ───────────────────────────────────────────────
 
-  test('two layers with FullStitch at same cell → top layer wins (occlusion)', () {
+  test('two layers with FullStitch at same cell → blended (same regions)', () {
     final t1 = _thread('310', const Color(0xFF000000));
     final t2 = _thread('321', const Color(0xFFFF0000));
     final pattern = _pattern(
@@ -118,10 +118,7 @@ void main() {
     );
     final layer = StitchCompositor.computeComposite(pattern);
     expect(layer.fullStitches, hasLength(1));
-    // Top layer occludes bottom — not blended, just the top stitch.
-    final cs = layer.fullStitches[const Cell(0, 0)]!;
-    expect(cs.isBlended, false);
-    expect(cs.stitch.threadId, '321');
+    expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, true);
   });
 
   test('two layers same cell → crossStitchEquiv totals 1.0 (not 2.0)', () {
@@ -179,7 +176,7 @@ void main() {
     expect((cs?.stitch as FullStitch).threadId, '321'); // top layer wins
   });
 
-  test('Add blend layer → top layer still occludes (no blending across overlapping stitches)', () {
+  test('Add blend → bottom stitch wins (symbol identity from base)', () {
     final t1 = _thread('310', const Color(0xFF000000));
     final t2 = _thread('321', const Color(0xFFFF0000));
     final pattern = _pattern(
@@ -195,9 +192,9 @@ void main() {
     );
     final layer = StitchCompositor.computeComposite(pattern);
     final cs = layer.fullStitches[const Cell(0, 0)];
-    // Top layer occludes bottom — region-based occlusion applies regardless of blend mode.
-    expect((cs?.stitch as FullStitch).threadId, '321');
-    expect(cs?.isBlended, false);
+    // Same regions → blended. Add blend → bottom layer provides symbol identity.
+    expect((cs?.stitch as FullStitch).threadId, '310');
+    expect(cs?.isBlended, true);
   });
 
   // ─── Backstitches ────────────────────────────────────────────────────────────
@@ -312,7 +309,7 @@ void main() {
       expect(patched.fullStitches[const Cell(0, 0)]?.resolvedThread.dmcCode, '321');
     });
 
-    test('multi-layer cell: top layer occludes regardless of blend mode', () {
+    test('multi-layer cell: isBlended true, symbol from bottom when Add blend', () {
       final t1 = _thread('310', const Color(0xFF000000));
       final t2 = _thread('321', const Color(0xFFFF0000));
       final old = CompositeLayer(
@@ -334,9 +331,9 @@ void main() {
       );
       final patched = StitchCompositor.patchLayer(old, newPat, 2, 2);
       final cs = patched.fullStitches[const Cell(2, 2)];
-      expect(cs?.isBlended, false);
-      // Top layer occludes bottom.
-      expect((cs?.stitch as FullStitch).threadId, '321');
+      expect(cs?.isBlended, true);
+      // Add blend → symbol winner is bottom layer (thread 310).
+      expect((cs?.stitch as FullStitch).threadId, '310');
     });
 
     test('backstitchesChanged=false: backstitches list carried from old', () {
@@ -490,7 +487,7 @@ void main() {
       expect(layer.fullStitches[const Cell(0, 0)]?.isBlended, false);
     });
 
-    test('CompositeStitch.isBlended is false for multi-layer overlapping cells (occlusion)', () {
+    test('CompositeStitch.isBlended is true for multi-layer same-region cells', () {
       final t1 = _thread('310', const Color(0xFF000000));
       final t2 = _thread('815', const Color(0xFF800000));
       final pattern = _pattern(
@@ -503,9 +500,7 @@ void main() {
       final layer = StitchCompositor.computeComposite(pattern);
       final cs = layer.fullStitches[const Cell(0, 0)];
       expect(cs, isNotNull);
-      // Top layer occludes bottom — no blending.
-      expect(cs!.isBlended, false);
-      expect(cs.stitch.threadId, '815');
+      expect(cs!.isBlended, true);
     });
 
     test('CompositeStitch.isBlended is false for single-layer cells', () {

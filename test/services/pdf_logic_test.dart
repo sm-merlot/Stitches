@@ -123,7 +123,7 @@ void main() {
       expect(r.otherStitches, isEmpty);
     });
 
-    test('two layers, same cell → top layer occludes regardless of blend mode', () {
+    test('two layers, same cell, Add blend → bottom stitch identity; isBlended', () {
       final t1 = _thread('310', 'X');
       final t2 = _thread('321', 'O');
       final pattern = _pattern(
@@ -138,9 +138,9 @@ void main() {
       );
       final r = StitchCompositor.computeComposite(pattern);
       expect(r.fullStitches, hasLength(1));
-      expect(r.fullStitches[const Cell(2, 3)]?.isBlended, false);
+      expect(r.fullStitches[const Cell(2, 3)]?.isBlended, true);
       final winner = r.fullStitches[const Cell(2, 3)]?.stitch as FullStitch;
-      expect(winner.threadId, '321'); // top layer wins
+      expect(winner.threadId, '310');
     });
 
     test('non-FullStitch types go to otherStitches without deduplication', () {
