@@ -59,7 +59,7 @@ void main() {
     expect(cache.store, hasLength(1));
     final bucket = cache.store[const Color(0xFF000000)];
     expect(bucket, isNotNull);
-    expect(bucket!.values.expand((r) => r), hasLength(1));
+    expect(bucket!.values, hasLength(1));
   });
 
   test('rebuild: rect geometry matches FullStitch block (full cell)', () {
@@ -71,15 +71,14 @@ void main() {
     final cache = RenderCache();
     cache.rebuild(_composite(p), cfg, cellSize);
 
-    final rects = cache.store.values
+    final paths = cache.store.values
         .expand((b) => b.values)
-        .expand((r) => r)
         .toList();
-    expect(rects, hasLength(1));
-    expect(rects.first, equals(Rect.fromLTWH(2 * cellSize, 3 * cellSize, cellSize, cellSize)));
+    expect(paths, hasLength(1));
+    expect(paths.first.getBounds(), equals(Rect.fromLTWH(2 * cellSize, 3 * cellSize, cellSize, cellSize)));
   });
 
-  test('rebuild: HalfStitch forward → half-width rect', () {
+  test('rebuild: HalfStitch forward → diagonal parallelogram path', () {
     final t = _thread('310', const Color(0xFF000000));
     final p = _pattern(
       threads: [t],
@@ -88,13 +87,16 @@ void main() {
     final cache = RenderCache();
     cache.rebuild(_composite(p), cfg, cellSize);
 
-    final rects = cache.store.values
+    final paths = cache.store.values
         .expand((b) => b.values)
-        .expand((r) => r)
         .toList();
-    expect(rects, hasLength(1));
-    // HalfStitch forward: right half → x = x+0.5, width = 0.5
-    expect(rects.first.width, closeTo(cellSize * 0.5, 0.001));
+    expect(paths, hasLength(1));
+    // Diagonal band should span the full cell bounds.
+    final bounds = paths.first.getBounds();
+    expect(bounds.left, closeTo(1 * cellSize, 0.001));
+    expect(bounds.top, closeTo(1 * cellSize, 0.001));
+    expect(bounds.width, closeTo(cellSize, 0.001));
+    expect(bounds.height, closeTo(cellSize, 0.001));
   });
 
   test('rebuild: BackStitch not included in block store', () {
@@ -159,13 +161,13 @@ void main() {
     );
     final cache = RenderCache();
     cache.rebuild(_composite(p), cfg, cellSize);
-    expect(cache.store.values.expand((b) => b.values).expand((r) => r).length, 2);
+    expect(cache.store.values.expand((b) => b.values).length, 2);
 
     // Remove (0,0) by updating with a composite that has no stitch there.
     final emptyComposite = _composite(_pattern(threads: [t], stitches: []));
     cache.updateCells({const Cell(0, 0)}, emptyComposite, cfg, cellSize);
 
-    final remaining = cache.store.values.expand((b) => b.values).expand((r) => r).toList();
+    final remaining = cache.store.values.expand((b) => b.values).toList();
     expect(remaining, hasLength(1)); // only (1,1) remains
   });
 

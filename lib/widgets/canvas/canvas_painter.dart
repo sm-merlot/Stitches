@@ -140,12 +140,11 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
 
     for (final colorEntry in renderCache.store.entries) {
       final paint = Paint()..color = colorEntry.key;
-      for (final cellRects in colorEntry.value.values) {
-        for (final rect in cellRects) {
-          if (rect.right <= minPx || rect.left >= maxPx ||
-              rect.bottom <= minPy || rect.top >= maxPy) { continue; }
-          canvas.drawRect(rect, paint);
-        }
+      for (final path in colorEntry.value.values) {
+        final bounds = path.getBounds();
+        if (bounds.right <= minPx || bounds.left >= maxPx ||
+            bounds.bottom <= minPy || bounds.top >= maxPy) { continue; }
+        canvas.drawPath(path, paint);
       }
     }
 
