@@ -54,7 +54,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
             HalfStitch(:final x, :final y) => x < newW && y < newH,
             QuarterStitch(:final x, :final y) => x < newW && y < newH,
             HalfCrossStitch(:final x, :final y) => x < newW && y < newH,
-            QuarterCrossStitch(:final x, :final y) => x < newW && y < newH,
+            ThreeQuarterStitch(:final x, :final y) => x < newW && y < newH,
             // BackStitch uses grid-point coords (0..width inclusive), so the
             // right/bottom boundary is <= not <.
             BackStitch(:final x1, :final y1, :final x2, :final y2) =>
@@ -76,8 +76,8 @@ mixin SnippetsMixin on Notifier<EditorState> {
               QuarterStitch(x: sx(x), y: sy(y), quadrant: quadrant, threadId: threadId),
             HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
               HalfCrossStitch(x: sx(x), y: sy(y), half: half, threadId: threadId),
-            QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
-              QuarterCrossStitch(x: sx(x), y: sy(y), quadrant: quadrant, threadId: threadId),
+            ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward, :final threadId) =>
+              ThreeQuarterStitch(x: sx(x), y: sy(y), quadrant: quadrant, isForward: isForward, threadId: threadId),
             BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
               BackStitch(x1: sdx(x1), y1: sdy(y1), x2: sdx(x2), y2: sdy(y2), threadId: threadId),
           };

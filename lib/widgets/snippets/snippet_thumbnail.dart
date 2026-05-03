@@ -91,10 +91,9 @@ class _SnippetThumbnailPainter extends CustomPainter {
           Rect.fromLTWH(x * cellW, y * cellH, cellW, cellH),
           paint,
         );
-      case QuarterCrossStitch(:final x, :final y):
+      case ThreeQuarterStitch(:final x, :final y):
         canvas.drawRect(
-          Rect.fromLTWH(x * cellW + cellW * 0.25, y * cellH + cellH * 0.25,
-              cellW * 0.5, cellH * 0.5),
+          Rect.fromLTWH(x * cellW, y * cellH, cellW * 0.75, cellH * 0.75),
           paint,
         );
       case BackStitch(:final x1, :final y1, :final x2, :final y2):

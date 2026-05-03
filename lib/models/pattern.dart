@@ -153,7 +153,7 @@ class CrossStitchPattern {
       else if (s is HalfStitch) { cells.add((s.x, s.y)); }
       else if (s is QuarterStitch) { cells.add((s.x, s.y)); }
       else if (s is HalfCrossStitch) { cells.add((s.x, s.y)); }
-      else if (s is QuarterCrossStitch) { cells.add((s.x, s.y)); }
+      else if (s is ThreeQuarterStitch) { cells.add((s.x, s.y)); }
     }
     return cells.length;
   }

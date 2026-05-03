@@ -185,8 +185,8 @@ class EditorState {
         QuarterStitch(x: x + dx, y: y + dy, quadrant: quadrant, threadId: threadId),
     HalfCrossStitch(:final x, :final y, :final half, :final threadId) =>
         HalfCrossStitch(x: x + dx, y: y + dy, half: half, threadId: threadId),
-    QuarterCrossStitch(:final x, :final y, :final quadrant, :final threadId) =>
-        QuarterCrossStitch(x: x + dx, y: y + dy, quadrant: quadrant, threadId: threadId),
+    ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward, :final threadId) =>
+        ThreeQuarterStitch(x: x + dx, y: y + dy, quadrant: quadrant, isForward: isForward, threadId: threadId),
     BackStitch(:final x1, :final y1, :final x2, :final y2, :final threadId) =>
         BackStitch(x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy, threadId: threadId),
   };
@@ -201,8 +201,8 @@ class EditorState {
         QuarterStitch(x: x, y: y, quadrant: quadrant, threadId: newId),
     HalfCrossStitch(:final x, :final y, :final half) =>
         HalfCrossStitch(x: x, y: y, half: half, threadId: newId),
-    QuarterCrossStitch(:final x, :final y, :final quadrant) =>
-        QuarterCrossStitch(x: x, y: y, quadrant: quadrant, threadId: newId),
+    ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward) =>
+        ThreeQuarterStitch(x: x, y: y, quadrant: quadrant, isForward: isForward, threadId: newId),
     BackStitch(:final x1, :final y1, :final x2, :final y2) =>
         BackStitch(x1: x1, y1: y1, x2: x2, y2: y2, threadId: newId),
   };

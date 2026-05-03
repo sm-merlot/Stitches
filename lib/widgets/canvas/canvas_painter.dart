@@ -450,7 +450,7 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       HalfStitch(:final x, :final y)        => Offset((x + 0.5) * cellSize, (y + 0.5) * cellSize),
       QuarterStitch(:final x, :final y, :final quadrant) => _quadrantCenter(x, y, quadrant),
       HalfCrossStitch(:final x, :final y, :final half)   => _halfOrientCenter(x, y, half),
-      QuarterCrossStitch(:final x, :final y, :final quadrant) => _quadrantCenter(x, y, quadrant),
+      ThreeQuarterStitch(:final x, :final y, :final quadrant) => _threeQuarterCenter(x, y, quadrant),
       BackStitch()                           => Offset.zero,
     };
   }
@@ -464,6 +464,18 @@ class CanvasStaticPainter extends CustomPainter with _DrawingMethods {
       QuadrantPosition.topRight    => Offset(l + 3 * q4, t + q4),
       QuadrantPosition.bottomLeft  => Offset(l + q4,     t + 3 * q4),
       QuadrantPosition.bottomRight => Offset(l + 3 * q4, t + 3 * q4),
+    };
+  }
+
+  Offset _threeQuarterCenter(int x, int y, QuadrantPosition q) {
+    final l = x * cellSize;
+    final t = y * cellSize;
+    final e = cellSize * 3 / 8;
+    return switch (q) {
+      QuadrantPosition.topLeft     => Offset(l + e,             t + e),
+      QuadrantPosition.topRight    => Offset(l + cellSize - e,  t + e),
+      QuadrantPosition.bottomLeft  => Offset(l + e,             t + cellSize - e),
+      QuadrantPosition.bottomRight => Offset(l + cellSize - e,  t + cellSize - e),
     };
   }
 

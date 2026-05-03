@@ -502,7 +502,7 @@ class StitchCompositor {
         HalfStitch() => 0.5,
         HalfCrossStitch() => 0.5,
         QuarterStitch() => 0.25,
-        QuarterCrossStitch() => 0.25,
+        ThreeQuarterStitch() => 0.75,
         _ => 0.0,
       };
       if (v > 0) crossStitchEquiv[dmcCode] = (crossStitchEquiv[dmcCode] ?? 0) + v;
