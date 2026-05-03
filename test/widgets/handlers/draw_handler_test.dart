@@ -71,23 +71,41 @@ void main() {
       expect(addedStitches, isEmpty);
     });
 
-    test('adds HalfStitch(forward) for halfForward tool', () {
-      final state = fakeEditState(currentTool: DrawingTool.halfForward);
+    test('adds HalfStitch(forward) for partial diagonalForward', () {
+      final state = fakeEditState(
+        currentTool: DrawingTool.partial,
+        partialSubTool: PartialSubTool.diagonalForward,
+      );
       h.handleDrawAt(const Offset(10, 10), state, vp);
       expect(addedStitches.first, isA<HalfStitch>());
       expect((addedStitches.first as HalfStitch).isForward, isTrue);
     });
 
-    test('adds HalfStitch(backward) for halfBackward tool', () {
-      final state = fakeEditState(currentTool: DrawingTool.halfBackward);
+    test('adds HalfStitch(backward) for partial diagonalBackward', () {
+      final state = fakeEditState(
+        currentTool: DrawingTool.partial,
+        partialSubTool: PartialSubTool.diagonalBackward,
+      );
       h.handleDrawAt(const Offset(10, 10), state, vp);
       expect((addedStitches.first as HalfStitch).isForward, isFalse);
     });
 
-    test('adds QuarterStitch for quarterDiag tool', () {
-      final state = fakeEditState(currentTool: DrawingTool.quarterDiag);
+    test('adds QuarterStitch for partial quarter', () {
+      final state = fakeEditState(
+        currentTool: DrawingTool.partial,
+        partialSubTool: PartialSubTool.quarter,
+      );
       h.handleDrawAt(const Offset(10, 10), state, vp);
       expect(addedStitches.first, isA<QuarterStitch>());
+    });
+
+    test('adds ThreeQuarterStitch for partial threeQuarter', () {
+      final state = fakeEditState(
+        currentTool: DrawingTool.partial,
+        partialSubTool: PartialSubTool.threeQuarter,
+      );
+      h.handleDrawAt(const Offset(10, 10), state, vp);
+      expect(addedStitches.first, isA<ThreeQuarterStitch>());
     });
 
     // ── erase mode ────────────────────────────────────────────────────────────

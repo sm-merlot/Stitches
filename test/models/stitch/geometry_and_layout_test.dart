@@ -50,10 +50,10 @@ void main() {
           equals(const Cell(2, 4)));
     });
 
-    test('QuarterCrossStitch returns (x, y)', () {
+    test('ThreeQuarterStitch returns (x, y)', () {
       expect(
-          stitchXY(const QuarterCrossStitch(
-              x: 0, y: 0, threadId: 'a', quadrant: QuadrantPosition.bottomLeft)),
+          stitchXY(const ThreeQuarterStitch(
+              x: 0, y: 0, threadId: 'a', quadrant: QuadrantPosition.bottomLeft, isForward: true)),
           equals(const Cell(0, 0)));
     });
 

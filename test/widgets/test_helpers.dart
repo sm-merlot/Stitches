@@ -58,6 +58,7 @@ EditorState fakeEditState({
   CrossStitchPattern? pattern,
   DrawingMode drawingMode = DrawingMode.draw,
   DrawingTool currentTool = DrawingTool.fullStitch,
+  PartialSubTool partialSubTool = PartialSubTool.diagonalForward,
   String? selectedThreadId = 'DMC310',
   bool fillEraseActive = false,
   int eraserSize = 1,
@@ -72,6 +73,7 @@ EditorState fakeEditState({
       editSession: EditSessionState(
         drawingMode: drawingMode,
         currentTool: currentTool,
+        partialSubTool: partialSubTool,
         fillEraseActive: fillEraseActive,
         eraserSize: eraserSize,
         backstitchChainMode: backstitchChainMode,

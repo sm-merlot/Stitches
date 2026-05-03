@@ -327,8 +327,8 @@ class FileService {
         buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
       case 'halfcross':
         buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, half: ${m['half']}, thread: $thread}');
-      case 'quartercross':
-        buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, thread: $thread}');
+      case 'threequarter':
+        buf.writeln('$indent- {type: $type, x: ${m['x']}, y: ${m['y']}, quadrant: ${m['quadrant']}, dir: ${m['dir']}, thread: $thread}');
       case 'back':
         buf.writeln('$indent- {type: $type, x1: ${m['x1']}, y1: ${m['y1']}, x2: ${m['x2']}, y2: ${m['y2']}, thread: $thread}');
     }

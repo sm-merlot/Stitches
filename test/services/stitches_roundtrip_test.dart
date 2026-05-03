@@ -55,7 +55,7 @@ void main() {
       expect(layerStitches.whereType<HalfStitch>().single.threadId, equals('666'));
       expect(layerStitches.whereType<QuarterStitch>().single.threadId, equals('820'));
       expect(layerStitches.whereType<HalfCrossStitch>().single.threadId, equals('310'));
-      expect(layerStitches.whereType<QuarterCrossStitch>().single.threadId, equals('666'));
+      expect(layerStitches.whereType<ThreeQuarterStitch>().single.threadId, equals('666'));
       expect(layerStitches.whereType<BackStitch>().single.threadId, equals('820'));
 
       final looseLayer = (parsed.layerItems[1] as LayerLeaf).layer;
@@ -188,7 +188,7 @@ CrossStitchPattern _buildRichPattern() {
       HalfStitch(x: 2, y: 1, isForward: true, threadId: '666'),
       QuarterStitch(x: 3, y: 1, quadrant: QuadrantPosition.topRight, threadId: '820'),
       HalfCrossStitch(x: 1, y: 2, half: HalfOrientation.left, threadId: '310'),
-      QuarterCrossStitch(x: 2, y: 2, quadrant: QuadrantPosition.bottomLeft, threadId: '666'),
+      ThreeQuarterStitch(x: 2, y: 2, quadrant: QuadrantPosition.bottomLeft, isForward: true, threadId: '666'),
       BackStitch(x1: 0.5, y1: 0.5, x2: 1.5, y2: 1.5, threadId: '820'),
     ],
   );
@@ -250,7 +250,7 @@ CrossStitchPattern _buildRichPattern() {
         ],
         stitches: [
           FullStitch(x: 0, y: 0, threadId: '666'),
-          QuarterCrossStitch(x: 1, y: 0, quadrant: QuadrantPosition.topLeft, threadId: '820'),
+          ThreeQuarterStitch(x: 1, y: 0, quadrant: QuadrantPosition.topLeft, isForward: false, threadId: '820'),
         ],
       ),
     ],
