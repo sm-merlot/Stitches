@@ -1,5 +1,414 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- a62fc1a: Step 8: Introduce AidaWidget, replace PatternCanvas
+
+  - `AidaWidget` (`lib/widgets/aida_widget.dart`) is the new canvas widget; owns viewport state, RenderCache, ZoomPanHandler, and mode controllers
+  - `pattern_canvas.dart` reduced to a compat shim (`typedef PatternCanvas = AidaWidget`) for transition; deleted in step 9
+  - `editor_canvas_area.dart` and `snippet_editor_screen.dart` updated to use `AidaWidget` directly
+  - All `PatternCanvas` references in docstrings and comments updated across controllers, handlers, providers, and services
+
+- 6a97ce4: Step 11: Command-based undo for draw operations
+
+  - `AddStitchCommand`, `RemoveStitchesAtCommand`, `RemoveStitchesInBoxCommand` — concrete `Command` subclasses in `lib/utils/command.dart`; each captures pre-mutation state so `undo()` is an exact inverse without a full snapshot.
+  - `addStitchRaw`, `removeStitchRaw`, `removeStitchesAtRaw`, `removeStitchesInBoxRaw` — raw draw variants on `EditorNotifier` that mutate state without pushing to the snapshot undo stack; called by `Command.execute()` and `Command.undo()`.
+  - `EditController` and `SnippetEditController` `attachCanvas` now wrap `DrawHandler.onAddStitch`, `onRemoveAt`, and `onRemoveBox` in the appropriate `Command` and execute via `undoManager.execute(cmd)`.
+  - Undo delegate — `EditorNotifier.registerUndoDelegate` / `unregisterUndoDelegate` / `updateControllerUndoState`: the active controller registers callbacks so `notifier.undo()` / `notifier.redo()` route through the controller's `UndoManager` before falling back to the snapshot stack.
+  - `EditorState.controllerCanUndo` / `controllerCanRedo` — new bool fields; `canUndo` / `canRedo` getters now include them so the toolbar undo button reflects the live command stack.
+  - `test/utils/command_test.dart` — 15 tests: execute/undo round-trips for all three command types; raw variants do not push to snapshot stack; delegate registration, routing, and reset.
+
+- 831032a: PR7: Introduce mode controllers (EditController, StitchController), UndoManager + Command infrastructure
+
+  - `Command` abstract class + `UndoManager` per editing context (edit, stitch, snippet editor)
+  - `EditController` — ShortcutHandler for edit mode; owns all pattern-editing keyboard shortcuts
+  - `StitchController` — ShortcutHandler for stitch mode; owns progress undo/redo, page navigation, mode-switch keys
+  - `EditorScreen` converted from ConsumerWidget → ConsumerStatefulWidget for lifecycle hooks
+  - `WorkspaceScreen` and `SnippetEditorScreen` migrated to push/pop controllers via ShortcutRouter
+  - Removed `editor_key_handler.dart` and all `Focus(onKeyEvent: ...)` wrappers
+  - 39 new unit tests for UndoManager, EditController, StitchController
+
+- dd672bb: Step 10: Introduce SnippetEditController and CanvasEditController interface
+
+  - `SnippetEditController` — distinct controller class for snippet canvas editing. No save/PDF-zoom/shortcuts-dialog callbacks; no stitchMode guard; owns an independent `UndoManager` instance isolated from the parent pattern undo stack.
+  - `CanvasEditController` — abstract interface implemented by both `EditController` and `SnippetEditController`. `AidaWidget.editController` is now typed to the interface rather than the concrete class.
+  - `SnippetEditView` now wires `SnippetEditController` instead of `EditController`.
+  - `patchLayer` unit tests added to `StitchCompositorTest`.
+  - `SnippetEditController` isolation tests verify independent `UndoManager`, absence of save/shortcuts shortcuts, and correct editing shortcut dispatch.
+
+- 0ab1d66: Step 12: Map threads, Cell class, O(1) lookups, undo.onChange
+
+  - `pattern.threads`: `List<Thread>` → `Map<String, Thread>` keyed by `dmcCode` — O(1) lookup replaces `.any()`/`.firstWhere()` scans throughout providers, widgets, services, and screens.
+  - `Cell` value class (`lib/models/cell.dart`) — canonical grid coordinate with `==`/`hashCode`; static `hitStitch`/`hitBox` consolidate duplicated `_hitCell`/`_hitBox` from edit controllers.
+  - `UndoManager.onChange` callback — eliminates separate `_syncUndoState()` calls after every `execute`/`undo`/`redo`.
+  - `Layer._cellIndex` — lazy `Map<String, List<Stitch>>` for O(1) `stitchesAt(x, y)` lookups; `@immutable`/`const` removed (cache field is non-final).
+  - Static YAML parsers: `Thread.mapFromYaml`, `Stitch.listFromYaml`, `Snippet.listFromYaml` — consolidate parse logic out of `pattern.dart`.
+
+- fab1981: **Step 16 — Complete command-based undo + delete snapshot stack**
+
+  All remaining mutation paths now route through `UndoManager` commands instead
+  of the `EditorState` snapshot stacks. The snapshot fields are deleted.
+
+  ### New / changed APIs
+
+  - `UndoManager.replaceLast(cmd)` — replaces the top stack entry; used by
+    `StitchController` to squash a single-tap + double-tap flood-fill into one
+    undo step.
+  - `ProgressSnapshotCommand` — lightweight command that stores only
+    `PatternProgress` before/after (not the full pattern) and applies it via a
+    provided callback, so `progressLog` is intentionally never rolled back.
+  - `EditorNotifier.applyProgressSnapshot(progress)` — restores progress without
+    touching `progressLog`; called by `ProgressSnapshotCommand`.
+  - `registerUndoDelegate` gains `pushProgressSnapshot` — routes direct-UI
+    progress mutations (`markRegion`, `clearProgress`) through the controller's
+    `UndoManager`.
+
+  ### Deleted
+
+  - `EditorState._progressUndoStack` / `_progressRedoStack` and
+    `canUndoProgress` / `canRedoProgress` getters.
+  - `EditorNotifier.undoProgress()` / `redoProgress()`.
+  - `EditorState.progressUndoStack` / `progressRedoStack` `copyWith` params.
+  - Abstract `_buildUndoStack()` from all mixins.
+
+  ### Behaviour changes
+
+  - `StitchController` registers as undo delegate on `attachCanvas`; Cmd+Z in
+    stitch mode undoes the most recent progress mark (toggle or region fill).
+  - `EditController` and `SnippetEditController` wrap `deleteSelection`,
+    `flipSelectionH/V`, `rotateSelectionCW` keyboard shortcuts with
+    `PatternSnapshotCommand` so they are now undoable via Cmd+Z.
+  - `SnippetEditController` wraps `onCommitPaste`, `onFloodFill`,
+    `onMoveSelection` — previously these were not undo-able inside the snippet
+    editor.
+
+- 44dbf5f: Step 20: Stitch type refactor — toolbar consolidation + three-quarter stitch + overlap system
+
+  - `ThreeQuarterStitch` — new stitch type: full diagonal + quarter diagonal to corner. Block mode: half-cell triangle. Realistic: two thread lines.
+  - Removed single-diagonal quarter stitch; old `'quarter'` YAML entries silently dropped on load. Petit point (X in quarter cell) kept as `QuarterStitch` with YAML type `'quartercross'`.
+  - Toolbar: 6 partial stitch buttons consolidated to 1 button with tap-to-open dropdown selector + dropdown arrow indicator. Keyboard shortcuts 2–6 unchanged.
+  - `BlockShape` sealed class (`RectShape` / `PathShape`) replaces raw `Rect` in `RenderCache`. `HalfStitch` renders as thick diagonal parallelogram, `ThreeQuarterStitch` as filled triangle. `drawRect` GPU fast path preserved for rect-based stitch types.
+  - `PartialSubTool` enum + `partialSubTool` field on `EditSessionState`. `DrawingTool` enum consolidated: `halfForward`/`halfBackward`/`halfCross`/`quarterDiag`/`quarterCross` replaced by single `partial` value. Session migration handles old tool names.
+  - Overlap-aware stitch placement via `CellRegion` quadrant system. Non-overlapping partial stitches coexist in the same cell. Overlapping stitch replaces existing.
+  - Cross-layer compositor: same regions → blend, partial overlap → top occludes, no overlap → both visible.
+
+- f685554: Step 9: Introduce EditView, StitchView, SnippetEditView — each owning a single mode controller and its chrome
+
+### Patch Changes
+
+- a239fc1: Introduce CompositeLayer and stateful StitchCompositor
+
+  Adds `CompositeStitch` and `CompositeLayer` types as the rendering-oriented
+  output of layer compositing. `CompositeLayer.fullStitches` maps each occupied
+  cell to a `CompositeStitch` carrying resolved colour, resolved thread, and an
+  `isBlended` flag — no further layer logic required downstream.
+
+  `StitchCompositor` is now instantiable: `StitchCompositor(pattern)` holds the
+  pattern and lazily maintains a cached `CompositeLayer`. Incremental update
+  methods `updateCell`, `updateCells`, `updateLayer`, and `rebuild` invalidate
+  the cache; the next `compositeLayer` access rebuilds only what changed (full
+  rebuild for now; cell-level invalidation follows in the RenderCache step).
+
+  The static `compute()` and `computeLayer()` convenience helpers remain for
+  services and tests that do not need the stateful API. `CompositeResult` is
+  retained unchanged — `CompositeLayer.toCompositeResult()` bridges the two.
+
+  10 new unit tests added covering `CompositeLayer` structure, `isBlended` flag
+  accuracy, and the cache invalidation / lazy-rebuild contract.
+
+- 0dc255a: Complete controller handler composition (PR 7a)
+
+  `EditController` now owns `DrawHandler`, `SelectHandler`, `PasteHandler`, and
+  `HoverHandler`; `StitchController` owns `ProgressHandler`, `PageNavHandler`,
+  and `HoverHandler`. Both controllers expose an `attachCanvas(CanvasCallbacks)`
+  / `detachCanvas()` lifecycle so `PatternCanvas` can inject view-level callbacks
+  at mount time. `PatternCanvas` delegates all pointer events to the active
+  controller and reads overlay state (hover cell, paste origin, selection rect)
+  directly from controller-owned handlers.
+
+- 63f52b2: Extract Draw, Select, Paste, Progress, PageNav, Hover handlers from PatternCanvas
+
+  Introduces six handler classes that own the mutable gesture/interaction state
+  previously scattered across `_PatternCanvasState`. Each handler receives
+  injected callbacks for writes (no direct `EditorNotifier` access) and accepts
+  `EditorState`/`CanvasViewport` as method parameters for reads — fully
+  unit-testable without Riverpod.
+
+  **`DrawHandler`** — stitch drawing and erasing. Owns `_fillFired` (per-tap
+  flood-fill guard) and `_backstitchHoverPoint`. Handles all `DrawingTool` and
+  `DrawingMode` dispatch including backstitch chain mode, layer-visibility
+  warnings, and sub-cell quadrant/half detection.
+
+  **`SelectHandler`** — rubber-band selection and selection-move. Owns anchor,
+  drag rect, move delta, and hasDragged flag. Exposes static helpers
+  `buildSelRect`, `cellInSelRect`, `toSelCell` used by the painter.
+
+  **`PasteHandler`** — paste origin, Ctrl/Shift modifier tracking, ghost-stitch
+  cache, and Shift edge-snapping. Ghost cache avoids re-allocating the offset
+  list when `(dx,dy)` and clipboard identity are unchanged across builds.
+
+  **`ProgressHandler`** — stitch-mode progress marking. Owns anchor, drag rect,
+  double-click detection (DOWN-to-DOWN within 500 ms), and backstitch hit-test.
+  Separate `onPointerMove` (screen-pixel threshold) and `onTouchMove` (rect-size
+  threshold) mirror the original split for stylus/mouse vs touch.
+
+  **`PageNavHandler`** — stateless const helper. `isNavZone` returns true when a
+  screen position falls in an edge/corner guard zone used to suppress canvas
+  input during page navigation.
+
+  **`HoverHandler`** — mouse/stylus hover cell tracking. Discriminates device
+  kinds so stylus-added events update the preview cell without clobbering the
+  mouse position, and vice-versa.
+
+  `PatternCanvas` wires each handler in `initState` with `EditorNotifier`
+  methods as callbacks, and all event methods delegate to the appropriate
+  handler. ~25 individual state fields and ~10 methods removed from
+  `_PatternCanvasState`.
+
+  48 new unit tests added covering all six handlers.
+
+- 55bf621: Stitch mode focus: unfocused stitches show pale colour/symbol instead of flat grey
+
+  **Before:** Focusing a thread in stitch mode turned all other stitches to uniform grey with no symbols — losing context about surrounding pattern.
+
+  **After:** Unfocused stitches retain their identity:
+
+  - **Done + unfocused:** pale version of actual thread colour (hue preserved, desaturated + lightened)
+  - **Undone + unfocused:** pale greyscale with semi-transparent symbol still visible
+  - **Focused stitches:** unchanged (same as before)
+
+  Applies to both cross-stitches (via RenderCache) and backstitches (via painter).
+
+  Colour helpers added: `_paleColor` (HSL desat+lighten), `_paleGreyscale` (greyscale at alpha 128).
+  Removed unused `_muteColor` and `_greyColor` from both files.
+
+- b1f3ca1: Fix various bugs with progress tracking
+- 88ad015: Extract RenderCache and delete CompositeResult — painter receives pre-resolved data
+
+  Introduces `RenderCache` and `RenderViewConfig`:
+
+  - `RenderCache` owns `Map<Color, Map<cellKey, List<Rect>>>` — pre-resolved stitch
+    block rects grouped by colour, with a reverse-index enabling O(1) cell removal.
+    `version` counter replaces object-identity cache-key comparisons.
+  - `RenderViewConfig` is an immutable value object capturing focus thread,
+    stitch/back/cross mode, palette override, progress, and page config.
+
+  `CanvasStaticPainter` gains a `renderCache` field and loses both static caches
+  (`_blockRectsByLayer`, `_occlusionCache`) and all the domain helpers that fed
+  them (`_resolveStitchColor`, `_applyPaletteOverride`, `_bwGreyscale`,
+  `_muteColor`, `_greyColor`, `_nearestThread`, `_getOrBuildBlockRects`,
+  `_drawLayerStitchesAsBlocks`, `_drawLayerBlocksWithPageFilter`,
+  `_getOcclusionSets`). Block rendering is now a simple nested iteration of
+  `renderCache.store`. Symbol rendering iterates `compositeLayer.fullStitches`
+  and `otherStitches` (symbol-winner already applied by `StitchCompositor`) so
+  occlusion sets are no longer needed.
+
+  `PatternCanvas` owns the `RenderCache` and calls `_syncRenderCache` at the
+  top of `build()` — rebuilding only when pattern/composite/view-config identity
+  changes, not on pan/zoom. `rebuildViewConfig` is used for focus/mode changes
+  (recolour only, no geometry recomputation).
+
+  `CompositeResult` deleted in full — `StitchCompositor.compute()`,
+  `CompositeLayer.toCompositeResult()`, and `StitchCompositor.compositeResult`
+  are all removed. All callers now use `StitchCompositor.computeLayer()` and
+  access `CompositeLayer` fields directly (`fullStitches`, `otherStitches`,
+  `backstitches`, `crossStitchEquiv`, `backStitchEquiv`). Migrated files:
+  `EditorState`, all `editor_provider_*` mixins, `canvas_painter.dart`,
+  `pattern_canvas.dart`, `right_sidebar_colours_panel.dart`,
+  `editor_toolbar_color_controls.dart`, `stitch_ops_screen.dart`,
+  `materials_list_screen.dart`, `pdf_service.dart`, `png_export_service.dart`,
+  `page_layout.dart`, and all affected tests.
+
+  15 new unit tests added covering rebuild, incremental `updateCells`, focus
+  greying, B&W stitch mode, version counter, and `RenderViewConfig` equality.
+  All 480 tests pass.
+
+- 399c667: Introduce ShortcutRouter — replace HardwareKeyboard handler in PatternCanvas
+
+  Adds `ShortcutRouter` singleton + `ShortcutHandler` interface as global
+  keyboard-shortcut infrastructure. No Flutter focus dependency — fires
+  regardless of which widget has focus, resolving the focus-stealing issues
+  with AppBar and dialogs.
+
+  `PatternCanvas` now implements `ShortcutHandler` and pushes/pops itself
+  on `ShortcutRouter` in `initState`/`dispose`, replacing the direct
+  `HardwareKeyboard.instance.addHandler` call. The handler behaviour is
+  unchanged: update `PasteHandler` Ctrl/Shift modifier state, return false
+  (do not consume).
+
+  `ShortcutRouter.init()` called once in `main()` after
+  `WidgetsFlutterBinding.ensureInitialized()`.
+
+  `ShortcutRouter.forTesting()` and `dispatchForTesting()` allow pure-Dart
+  unit tests without the Flutter binding.
+
+  8 new unit tests covering dispatch order, consume/propagate, push/pop,
+  and empty-stack safety. All 601 tests pass.
+
+- cc0abe5: Extract ZoomPanHandler into it's own class, to be used with new controllers in on-going refactor.
+- 1144236: Step 14: Architecture thinning, dead code pass, O(1) pipeline bottleneck fixes
+
+  **Dead code removed**
+
+  - `lib/services/ai/` directory deleted — `ai_provider.dart` was an unreferenced duplicate of `ScannedThread`/`ScannedStitch`/`PatternScanResult` already in `lib/services/scan/scan_result.dart`
+  - `changeThreadSymbol`, `removeThread` — 0 callers in production code
+  - `transformSnippet`, `addSnippetPalette`, `deleteSnippetPalette`, `renameSnippetPalette`, `reorderSnippetPalette` — test-only or 0 callers; superseded by `*Local()` variants
+  - `SnippetTransform` enum removed (no remaining callers)
+  - Tests for all removed methods removed
+
+  **Render pipeline: O(n) → O(1) hot-path fixes**
+
+  - `StitchCompositor.patchLayer`: inner loop now calls `layer.stitchesAt(x, y)` (O(1) via `_cellIndex`) instead of scanning all of `layer.stitches`; `BackStitch` exclusion implicit since it has no `cellCoords`
+  - `addStitch` / `addStitchRaw`: `alreadyExists` check uses `stitchesAt` — O(1) for the common case, O(n) fallback only for `BackStitch`
+  - `removeStitchesAt` / `removeStitchesAtRaw`: early-return guard checks `stitchesAt(x,y).isEmpty` first; only scans for backstitch when cell is otherwise empty
+
+  **`StitchCompositor.patchAffectedLayer` — new**
+
+  - Patches only cells that a changed layer touches; used by `toggleLayerVisible` and `setLayerBlendMode`
+  - Previously both called `refreshCompositeCache()` → `computeLayer()` = O(total_stitches)
+  - Now O(cells_in_layer × avg_layers_per_cell) — effectively O(1) for sparse single-layer patterns
+
+  **EditorState field audit**
+
+  - Fields grouped and annotated by mode ownership (edit / stitch / snippet / view / render pipeline) to guide future per-mode state extraction
+
+- 6b28457: Step 15: Layer Map primary storage + O(1) draw hot-path + CompositeLayer version counter
+
+  **`Layer` data structure change**
+
+  - Primary storage is now `Map<Cell, List<Stitch>> stitchesByCell` + `List<BackStitch> backstitches`
+  - `List<Stitch> get stitches` is a computed getter (O(N)) for compatibility — serialisation, bulk transforms, non-hot-path code
+  - `stitchesAt(int x, int y)` is always O(1) — no lazy rebuild, index exists from construction
+  - Immutable update methods for snapshot-undo paths (paste, move, delete, etc.):
+    - `withStitchAdded`, `withStitchReplaced`, `withStitchRemoved`, `withCellCleared` — O(N_cells) map copy
+  - In-place mutation methods for 120 Hz draw hot-path (via UndoManager commands):
+    - `addStitchInPlace`, `replaceStitchInPlace`, `removeStitchInPlace`, `clearCellInPlace` — O(1), zero map copy
+
+  **Draw hot-path: O(N_stitches) → O(1)**
+
+  - `addStitchRaw`: `addStitchInPlace` mutates map directly — no copy
+  - `removeStitchRaw`: `removeStitchInPlace` — no copy
+  - `removeStitchesAtRaw`: `clearCellInPlace` — no copy
+  - `removeStitchesInBoxRaw`: `clearCellInPlace` per box cell — O(box²)
+  - Safe because UndoManager commands reverse mutations exactly (add ↔ remove); snapshot undo always uses immutable methods that create new Layer instances
+
+  **`CompositeLayer` version counter + in-place mutation**
+
+  - `patchLayer`: mutates `old.fullStitches` in-place + bumps `version` — eliminates O(N_cells) `Map.from` copy
+  - `patchCells(old, pattern, cells)`: new method for multi-cell patches (paste, etc.) — O(cells × layers_per_cell)
+  - `patchAffectedLayer`: thin wrapper around `patchCells`, in-place mutation
+  - `_syncRenderCache` detects changes via version counter instead of `identical()`
+
+  **`toggleLayerVisible` / `setLayerBlendMode` → `patchAffectedLayer`**
+
+  - Now that `patchAffectedLayer` is in-place (no Map.from copy), it's faster than `computeComposite` for visibility/blend toggles — resolves only cells the changed layer touches
+
+  **`commitPaste` → `patchCells`**
+
+  - Paste uses `patchCells(dirtyCells)` for incremental composite — only resolves pasted cells instead of full recompute
+
+  **Rename: `computeLayer` → `computeComposite`**
+
+  - Clearer name: computes composite from ALL visible layers, not a single layer
+
+  **Controller hot-path fixes**
+
+  - `EditController` / `SnippetEditController` `onAddStitch` and `onRemoveAt` callbacks use `stitchesAt` (O(1)) instead of `layer.stitches` getter (O(N) allocation)
+  - `draw_handler._checkLayerWarning` uses `stitchesAt` (O(1))
+  - `pickColorAtCell`, `floodFill`: use `stitchesAt` / `stitchesByCell` directly
+
+  **Net effect on 256×224 pattern (~6 300 cells, ~19 000 stitches)**
+
+  - Per draw event: 3×O(19k) → O(1) — zero list copies, zero map copies, zero index rebuilds
+  - Visibility toggle: O(19k) full recompute → O(6.3k cells × ~1 layer) incremental
+  - Paste 50 stitches: O(19k) full recompute → O(50 cells) incremental
+
+- bff8f8a: **Step 17 — EditorState split into grouped value classes**
+
+  The `EditorState` monolith's ~30 flat fields are now grouped into four
+  dedicated value classes. No behaviour change — pure structural refactor.
+
+  ### New types
+
+  - `ViewState` — `panX`, `panY`, `scale` (replaces `viewPanX/Y/viewScale`)
+  - `StitchSessionState` — `crossMode`, `backMode`, `focusThreadId`,
+    `showPageColours`, `currentPage`, `pageLayout`, `pendingFitPage`,
+    `progressRegion`
+  - `EditSessionState` — `currentTool`, `drawingMode`, `backstitchStartPoint`,
+    `backstitchChainMode`, `selectionRect`, `clipboard`, `clipboardThreads`,
+    `clipboardFromSnippet`, `eraserSize`, `fillEraseActive`,
+    `canvasSelectionMode`, `pendingCanvasWarning`, `referenceImage`,
+    `referenceOpacity`, `referenceVisible`, `colourMode`
+  - `SnippetEditorState` — `palettes`, `activePaletteIndex`
+
+  ### EditorState API changes
+
+  Flat fields replaced by grouped accessors:
+
+  ```dart
+  // Before
+  state.viewPanX / state.currentPage / state.currentTool / state.snippetPalettes
+
+  // After
+  state.viewState.panX / state.stitchSession.currentPage
+  state.editSession.currentTool / state.snippetEditorState.palettes
+  ```
+
+  `EditorState.copyWith` now accepts grouped params (`viewState:`,
+  `stitchSession:`, `editSession:`, `snippetEditorState:`) instead of the
+  individual flat params. `dirtyCellKeys` remains a flat field (moving it out
+  requires a new provider↔widget communication channel — deferred).
+
+- e40e8d0: **Step 18 — Polish, bug fixes, and stitch-mode architectural enforcement**
+
+  ### Bug fixes
+
+  - **Canvas blank after addGroup / layer ops** — all 13 layer-mutation methods
+    now call `refreshCompositeCache()` immediately instead of setting
+    `compositeLayer: null` and waiting for the next repaint.
+  - **setLayerOpacity flash** — replaced `compositeLayer: null` + 150 ms debounce
+    with `patchAffectedLayer()` for O(cells) incremental update; no more visible
+    flash on every slider tick.
+  - **Focus-mode mark/frog ignores composite stitches** — `markRegionDone`,
+    `markRegionNotDone`, `floodFillDone`, and the sidebar mark/demo buttons now
+    compare against `resolvedThread.dmcCode` from `compositeLayer` instead of
+    raw `stitch.threadId`, so blended/composite cells respect the focus filter.
+  - **Text field typing blocked in colour picker** — `FocusNode.context.widget`
+    is a `Focus` widget (child of `EditableText`), not `EditableText` itself.
+    Guard now uses `findAncestorStateOfType<EditableTextState>()` to walk the
+    element tree correctly. Colour picker and DMC picker gain `autofocus: true`.
+  - **Reference image visible in stitch mode** — painter now checks `!stitchMode`
+    before drawing the overlay; reference image is edit-mode only.
+  - **Aida colour removed from canvas** — canvas background is always white;
+    aida colour moved to Pattern Info as metadata (still used in PDF / PNG
+    export). Toolbar aida button removed.
+  - **Drive Open modal hid Drive section on first render** — `build()` now
+    returns `DriveState(isConfigured: _auth.isConfigured)` synchronously.
+  - **Stitch demo used pattern aida colour** — demo background is always white
+    (demo shows technique, not pattern colours).
+
+  ### Architecture
+
+  - **`StitchStateView` facade** — read-only projection of `EditorState` for
+    stitch-mode code. Exposes `compositeLayer`, `stitchSession`, `progress`,
+    `progressLog`, `threads`; deliberately omits `pattern.layers`. `ProgressMixin`
+    reads exclusively through `_stitch: StitchStateView`; sidebar stitch-mode
+    helpers (`_regionHasPageStitches`, `_isRegionAllDone`, `_buildTopThread`,
+    `_stitchPool`) accept `StitchStateView` — raw layer access in stitch mode is
+    now a compile error.
+  - **`CompositeLayer` helpers** — `topThreadAt(Cell)` and `hasCrossStitchAt(Cell)`
+    added for O(1) single-cell lookup used by toggle/flood-fill paths.
+
+- 0216700: Consolidate stitch geometry into StitchGeometry extension on Stitch
+
+  Adds `cellCoords`, `bounds`, `blockCells`, and `isInViewport` extension
+  getters/methods, replacing 5 duplicate switch-based geometry helpers scattered
+  across `canvas_painter`, `pattern_canvas`, `editor_state`, and two stitch ops
+  screens. `EditorState.cellCoords` and `stitchXY` free function now delegate to
+  the extension. 16 new unit tests added.
+
 ## 0.9.0
 
 ### Minor Changes
