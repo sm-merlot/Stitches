@@ -1,0 +1,23 @@
+lib/widgets/handlers/draw_handler.dart
+  a0830b4accaa4ae0 4,125-126,177,187-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "3e3d356e1ab357fa6ef454fa63e2949d6baa8864",
+  "prompts": {
+    "a0830b4accaa4ae0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ffcaddac-c966-4091-b98c-78987e10a209",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 29,
+      "total_deletions": 24,
+      "accepted_lines": 29,
+      "overriden_lines": 0
+    }
+  }
+}
