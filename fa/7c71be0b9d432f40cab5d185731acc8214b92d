@@ -1,0 +1,27 @@
+test/services/render_cache_test.dart
+  a0830b4accaa4ae0 62,74,77-78,81,90,93-99,164,170
+lib/widgets/canvas/canvas_painter.dart
+  a0830b4accaa4ae0 143-147
+lib/services/render_cache.dart
+  a0830b4accaa4ae0 1,60-65,70-71,78,81,138,205-207,210,214-303
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fa7c71be0b9d432f40cab5d185731acc8214b92d",
+  "prompts": {
+    "a0830b4accaa4ae0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ffcaddac-c966-4091-b98c-78987e10a209",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 183,
+      "total_deletions": 115,
+      "accepted_lines": 132,
+      "overriden_lines": 0
+    }
+  }
+}
