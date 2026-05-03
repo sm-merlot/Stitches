@@ -4,6 +4,9 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  statuses: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -13,6 +16,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Get PR head SHA
+        id: sha
+        run: |
+          SHA=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }} --jq '.head.sha')
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Set status pending
+        run: |
+          gh api repos/${{ github.repository }}/statuses/${{ steps.sha.outputs.sha }} \
+            -f state=pending -f context="Analyze" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - uses: actions/checkout@v4
         with:
           ref: refs/pull/${{ github.event.issue.number }}/head
@@ -28,3 +47,21 @@ jobs:
 
       - name: Analyze
         run: flutter analyze --fatal-warnings
+
+      - name: Set status success
+        if: success()
+        run: |
+          gh api repos/${{ github.repository }}/statuses/${{ steps.sha.outputs.sha }} \
+            -f state=success -f context="Analyze" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Set status failure
+        if: failure()
+        run: |
+          gh api repos/${{ github.repository }}/statuses/${{ steps.sha.outputs.sha }} \
+            -f state=failure -f context="Analyze" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        env:
+          GH_TOKEN: ${{ github.token }}
