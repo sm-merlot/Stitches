@@ -24,7 +24,7 @@ extension StitchGeometry on Stitch {
         HalfStitch(:final x, :final y) => Cell(x, y),
         HalfCrossStitch(:final x, :final y) => Cell(x, y),
         QuarterStitch(:final x, :final y) => Cell(x, y),
-        QuarterCrossStitch(:final x, :final y) => Cell(x, y),
+        ThreeQuarterStitch(:final x, :final y) => Cell(x, y),
         BackStitch() => null,
       };
 
@@ -42,7 +42,7 @@ extension StitchGeometry on Stitch {
         HalfStitch(:final x, :final y) ||
         QuarterStitch(:final x, :final y) ||
         HalfCrossStitch(:final x, :final y) ||
-        QuarterCrossStitch(:final x, :final y) =>
+        ThreeQuarterStitch(:final x, :final y) =>
           (
             minX: x.toDouble(),
             maxX: x + 1.0,
@@ -59,7 +59,8 @@ extension StitchGeometry on Stitch {
   /// - [FullStitch] → full cell (1×1)
   /// - [HalfStitch] forward `/` → right half; backward `\` → left half
   /// - [HalfCrossStitch] → corresponding left/right/top/bottom half
-  /// - [QuarterStitch] / [QuarterCrossStitch] → corresponding quarter
+  /// - [QuarterStitch] → corresponding quarter
+  /// - [ThreeQuarterStitch] → 3/4 cell rect anchored at quadrant corner
   /// - [BackStitch] → null (no block representation)
   (double left, double top, double width, double height)? get blockCells =>
       switch (this) {
@@ -79,18 +80,25 @@ extension StitchGeometry on Stitch {
         HalfCrossStitch(:final x, :final y, half: HalfOrientation.bottom) =>
           (x.toDouble(), y + 0.5, 1.0, 0.5),
 
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
           (x.toDouble(), y.toDouble(), 0.5, 0.5),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
           (x + 0.5, y.toDouble(), 0.5, 0.5),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
           (x.toDouble(), y + 0.5, 0.5, 0.5),
-        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) ||
-        QuarterCrossStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
+        QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
           (x + 0.5, y + 0.5, 0.5, 0.5),
+
+        // ThreeQuarterStitch: 3/4 of the cell — block representation is the
+        // three-quarter region opposite to the empty corner.
+        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
+          (x.toDouble(), y.toDouble(), 0.75, 0.75),
+        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
+          (x + 0.25, y.toDouble(), 0.75, 0.75),
+        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
+          (x.toDouble(), y + 0.25, 0.75, 0.75),
+        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
+          (x + 0.25, y + 0.25, 0.75, 0.75),
 
         BackStitch() => null,
       };
@@ -105,7 +113,7 @@ extension StitchGeometry on Stitch {
         HalfStitch(:final x, :final y) ||
         QuarterStitch(:final x, :final y) ||
         HalfCrossStitch(:final x, :final y) ||
-        QuarterCrossStitch(:final x, :final y) =>
+        ThreeQuarterStitch(:final x, :final y) =>
           x >= minX && x < maxX && y >= minY && y < maxY,
         BackStitch(:final x1, :final y1, :final x2, :final y2) =>
           math.max(x1, x2) > minX &&

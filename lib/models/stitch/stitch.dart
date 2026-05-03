@@ -22,8 +22,8 @@ sealed class Stitch {
           QuarterStitch(x: x, y: y, quadrant: quadrant, threadId: id),
         HalfCrossStitch(:final x, :final y, :final half) =>
           HalfCrossStitch(x: x, y: y, half: half, threadId: id),
-        QuarterCrossStitch(:final x, :final y, :final quadrant) =>
-          QuarterCrossStitch(x: x, y: y, quadrant: quadrant, threadId: id),
+        ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward) =>
+          ThreeQuarterStitch(x: x, y: y, quadrant: quadrant, isForward: isForward, threadId: id),
         BackStitch(:final x1, :final y1, :final x2, :final y2) =>
           BackStitch(x1: x1, y1: y1, x2: x2, y2: y2, threadId: id),
       };
@@ -35,7 +35,9 @@ sealed class Stitch {
       'half' => HalfStitch.fromYaml(yaml),
       'quarter' => QuarterStitch.fromYaml(yaml),
       'halfcross' => HalfCrossStitch.fromYaml(yaml),
-      'quartercross' => QuarterCrossStitch.fromYaml(yaml),
+      'threequarter' => ThreeQuarterStitch.fromYaml(yaml),
+      // Migration: old quartercross → QuarterStitch at same position.
+      'quartercross' => QuarterStitch.fromYaml(yaml),
       'back' => BackStitch.fromYaml(yaml),
       _ => throw FormatException('Unknown stitch type: $type'),
     };
@@ -199,46 +201,56 @@ final class HalfCrossStitch extends Stitch {
   int get hashCode => Object.hash('halfcross', x, y, half);
 }
 
-/// Full cross stitch (X) placed in a quarter of a cell (petit point).
-/// Four of these fit inside one regular full stitch cell.
+/// Three-quarter stitch: a triangle covering the main diagonal plus
+/// a shorter diagonal into the [quadrant] corner.
+///
+/// [isForward] selects the main diagonal direction: `true` = `/`, `false` = `\`.
+/// [quadrant] selects which corner the triangle points into.
 @immutable
-final class QuarterCrossStitch extends Stitch {
+final class ThreeQuarterStitch extends Stitch {
   final int x;
   final int y;
   final QuadrantPosition quadrant;
 
-  const QuarterCrossStitch({
+  /// Direction of the main diagonal: `true` = forward `/`, `false` = backward `\`.
+  final bool isForward;
+
+  const ThreeQuarterStitch({
     required this.x,
     required this.y,
     required this.quadrant,
+    required this.isForward,
     required super.threadId,
   });
 
   @override
   Map<String, dynamic> toYaml() => {
-        'type': 'quartercross',
+        'type': 'threequarter',
         'x': x,
         'y': y,
         'quadrant': quadrant.name,
+        'dir': isForward ? 'forward' : 'backward',
         'thread': threadId,
       };
 
-  factory QuarterCrossStitch.fromYaml(Map<String, dynamic> yaml) => QuarterCrossStitch(
+  factory ThreeQuarterStitch.fromYaml(Map<String, dynamic> yaml) => ThreeQuarterStitch(
         x: yaml['x'] as int,
         y: yaml['y'] as int,
         quadrant: QuadrantPosition.values.byName(yaml['quadrant'] as String),
+        isForward: (yaml['dir'] as String?) == 'forward',
         threadId: yaml['thread'] as String,
       );
 
   @override
   bool operator ==(Object other) =>
-      other is QuarterCrossStitch &&
+      other is ThreeQuarterStitch &&
       other.x == x &&
       other.y == y &&
-      other.quadrant == quadrant;
+      other.quadrant == quadrant &&
+      other.isForward == isForward;
 
   @override
-  int get hashCode => Object.hash('quartercross', x, y, quadrant);
+  int get hashCode => Object.hash('threequarter', x, y, quadrant, isForward);
 }
 
 /// Backstitch connecting two grid-intersection points (at 0.5-cell increments).
