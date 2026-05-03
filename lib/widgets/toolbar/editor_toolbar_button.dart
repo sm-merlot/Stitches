@@ -8,7 +8,6 @@ class _ToolbarButton extends StatelessWidget {
   final Widget Function(Color contentColor) builder;
   final String tooltip;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
   final Color? activeColor; // defaults to theme primary
 
   const _ToolbarButton({
@@ -16,7 +15,6 @@ class _ToolbarButton extends StatelessWidget {
     required this.builder,
     required this.tooltip,
     this.onTap,
-    this.onLongPress,
     this.activeColor,
   });
 
@@ -41,7 +39,6 @@ class _ToolbarButton extends StatelessWidget {
       message: tooltip,
       child: GestureDetector(
         onTap: onTap,
-        onLongPress: onLongPress,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           width: size,
@@ -279,13 +276,43 @@ class _PartialStitchButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return _ToolbarButton(
-      tooltip: _tt('Partial stitch  [2-6]'),
-      selected: selected,
-      onTap: () => onSelect(subTool),
-      onLongPress: () => _showPopup(context, theme),
-      builder: (c) => CustomPaint(
-        painter: _StitchIconPainter(color: c, draw: _partialSubToolIcon(subTool)),
+    final color = theme.colorScheme.primary;
+    final bgColor = selected ? color : Colors.transparent;
+    final borderColor = selected ? color : Colors.grey.shade300;
+    final contentColor = selected ? Colors.white : Colors.grey.shade600;
+    final size = _isTouchPlatform ? 40.0 : 34.0;
+
+    return Tooltip(
+      message: _tt('Partial stitch  [2-6]'),
+      child: GestureDetector(
+        onTap: () => _showPopup(context, theme),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: size + 10, // wider to fit dropdown arrow
+          height: size,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: borderColor, width: 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 17,
+                height: 17,
+                child: CustomPaint(
+                  painter: _StitchIconPainter(
+                    color: contentColor,
+                    draw: _partialSubToolIcon(subTool),
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, size: 14, color: contentColor),
+            ],
+          ),
+        ),
       ),
     );
   }
