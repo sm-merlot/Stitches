@@ -87,9 +87,9 @@ void main() {
       }
     });
 
-    test('quartercross YAML is silently dropped via fromYamlOrNull', () {
+    test('old quarter (single diagonal) YAML is silently dropped via fromYamlOrNull', () {
       final yaml = {
-        'type': 'quartercross',
+        'type': 'quarter',
         'x': 5,
         'y': 3,
         'quadrant': 'topLeft',
@@ -98,10 +98,10 @@ void main() {
       expect(Stitch.fromYamlOrNull(yaml), isNull);
     });
 
-    test('quartercross stitches are dropped in listFromYaml', () {
+    test('old quarter stitches are dropped in listFromYaml', () {
       final list = Stitch.listFromYaml([
         {'type': 'full', 'x': 0, 'y': 0, 'thread': '310'},
-        {'type': 'quartercross', 'x': 1, 'y': 0, 'quadrant': 'topLeft', 'thread': '310'},
+        {'type': 'quarter', 'x': 1, 'y': 0, 'quadrant': 'topLeft', 'thread': '310'},
         {'type': 'full', 'x': 2, 'y': 0, 'thread': '310'},
       ]);
       expect(list, hasLength(2));

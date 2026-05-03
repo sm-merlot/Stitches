@@ -184,13 +184,17 @@ class PngExportService {
       case HalfStitch(isForward: false):
         lens(Offset(gx, gy), Offset(gx + cs, gy + cs));
       case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-        lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy));
+        lens(Offset(gx, gy), Offset(gx + cs / 2, gy + cs / 2));
+        lens(Offset(gx + cs / 2, gy), Offset(gx, gy + cs / 2));
       case QuarterStitch(quadrant: QuadrantPosition.topRight):
         lens(Offset(gx + cs / 2, gy), Offset(gx + cs, gy + cs / 2));
+        lens(Offset(gx + cs, gy), Offset(gx + cs / 2, gy + cs / 2));
       case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
         lens(Offset(gx, gy + cs / 2), Offset(gx + cs / 2, gy + cs));
+        lens(Offset(gx + cs / 2, gy + cs / 2), Offset(gx, gy + cs));
       case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
-        lens(Offset(gx + cs / 2, gy + cs), Offset(gx + cs, gy + cs / 2));
+        lens(Offset(gx + cs / 2, gy + cs / 2), Offset(gx + cs, gy + cs));
+        lens(Offset(gx + cs, gy + cs / 2), Offset(gx + cs / 2, gy + cs));
       case HalfCrossStitch(half: HalfOrientation.left):
         lens(Offset(gx, gy), Offset(gx + cs / 2, gy + cs));
         lens(Offset(gx, gy + cs), Offset(gx + cs / 2, gy));

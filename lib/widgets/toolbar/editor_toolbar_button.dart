@@ -213,7 +213,7 @@ void _drawHalfCross(Canvas canvas, Size size, Color color) {
   );
 }
 
-void _drawQuarterDiag(Canvas canvas, Size size, Color color) {
+void _drawQuarterCross(Canvas canvas, Size size, Color color) {
   const pad = 5.0;
   final p = Paint()
     ..color = color
@@ -222,7 +222,9 @@ void _drawQuarterDiag(Canvas canvas, Size size, Color color) {
     ..style = PaintingStyle.stroke;
   final cx = size.width / 2;
   final cy = size.height / 2;
-  canvas.drawLine(Offset(pad, pad), Offset(cx, cy), p);
+  // Full X in top-left quarter
+  canvas.drawLine(Offset(pad, pad), Offset(cx - 1, cy - 1), p);
+  canvas.drawLine(Offset(cx - 1, pad), Offset(pad, cy - 1), p);
   final gp = Paint()
     ..color = color.withValues(alpha: 0.25)
     ..strokeWidth = 0.8;
@@ -258,7 +260,7 @@ _DrawFn _partialSubToolIcon(PartialSubTool subTool) => switch (subTool) {
   PartialSubTool.diagonalBackward => _drawHalfBackward,
   PartialSubTool.half             => _drawHalfCross,
   PartialSubTool.threeQuarter     => _drawThreeQuarter,
-  PartialSubTool.quarter          => _drawQuarterDiag,
+  PartialSubTool.quarter          => _drawQuarterCross,
 };
 
 // ─── Partial stitch button with popup ─────────────────────────────────────────
@@ -306,7 +308,7 @@ class _PartialStitchButton extends StatelessWidget {
         _popupItem(PartialSubTool.diagonalBackward, 'Half diagonal \\  [3]', _drawHalfBackward),
         _popupItem(PartialSubTool.half,             'Half-cell cross  [4]', _drawHalfCross),
         _popupItem(PartialSubTool.threeQuarter,     'Three-quarter  [5]', _drawThreeQuarter),
-        _popupItem(PartialSubTool.quarter,          'Quarter  [6]', _drawQuarterDiag),
+        _popupItem(PartialSubTool.quarter,          'Petit point  [6]', _drawQuarterCross),
       ],
     ).then((value) {
       if (value != null) onSelect(value);

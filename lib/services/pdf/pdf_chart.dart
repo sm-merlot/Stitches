@@ -448,13 +448,17 @@ void _drawRealisticStitch(PdfGraphics canvas, Stitch s,
     case HalfStitch(isForward: false):
       lens(gx, gy + cs, gx + cs, gy);
     case QuarterStitch(quadrant: QuadrantPosition.topLeft):
-      lens(gx, gy + cs / 2, gx + cs / 2, gy + cs);
+      lens(gx, gy + cs, gx + cs / 2, gy + cs / 2);
+      lens(gx + cs / 2, gy + cs, gx, gy + cs / 2);
     case QuarterStitch(quadrant: QuadrantPosition.topRight):
       lens(gx + cs / 2, gy + cs, gx + cs, gy + cs / 2);
+      lens(gx + cs, gy + cs, gx + cs / 2, gy + cs / 2);
     case QuarterStitch(quadrant: QuadrantPosition.bottomLeft):
       lens(gx, gy + cs / 2, gx + cs / 2, gy);
+      lens(gx + cs / 2, gy + cs / 2, gx, gy);
     case QuarterStitch(quadrant: QuadrantPosition.bottomRight):
       lens(gx + cs / 2, gy, gx + cs, gy + cs / 2);
+      lens(gx + cs, gy, gx + cs / 2, gy + cs / 2);
     case HalfCrossStitch(half: HalfOrientation.left):
       lens(gx, gy, gx + cs / 2, gy + cs);
       lens(gx, gy + cs, gx + cs / 2, gy);

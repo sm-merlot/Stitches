@@ -33,7 +33,7 @@ sealed class Stitch {
     return switch (type) {
       'full' => FullStitch.fromYaml(yaml),
       'half' => HalfStitch.fromYaml(yaml),
-      'quarter' => QuarterStitch.fromYaml(yaml),
+      'quartercross' => QuarterStitch.fromYaml(yaml),
       'halfcross' => HalfCrossStitch.fromYaml(yaml),
       'threequarter' => ThreeQuarterStitch.fromYaml(yaml),
       'back' => BackStitch.fromYaml(yaml),
@@ -41,10 +41,10 @@ sealed class Stitch {
     };
   }
 
-  /// Returns null for removed stitch types (e.g. old 'quartercross').
+  /// Returns null for removed stitch types (e.g. old single-diagonal 'quarter').
   static Stitch? fromYamlOrNull(Map<String, dynamic> yaml) {
     final type = yaml['type'] as String;
-    if (type == 'quartercross') return null; // removed type — silently drop
+    if (type == 'quarter') return null; // removed type — silently drop
     return fromYaml(yaml);
   }
 
@@ -142,7 +142,7 @@ final class QuarterStitch extends Stitch {
 
   @override
   Map<String, dynamic> toYaml() => {
-        'type': 'quarter',
+        'type': 'quartercross',
         'x': x,
         'y': y,
         'quadrant': quadrant.name,

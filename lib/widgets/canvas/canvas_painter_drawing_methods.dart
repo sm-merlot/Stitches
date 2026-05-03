@@ -103,21 +103,27 @@ mixin _DrawingMethods {
     }
   }
 
+  /// Petit point — full X in a quarter of the cell.
   void _drawQuarterStitch(
       Canvas canvas, int x, int y, QuadrantPosition quadrant, Color color) {
     final left = x * cellSize;
     final top = y * cellSize;
     final right = left + cellSize;
     final bottom = top + cellSize;
-    final cx = left + cellSize / 2;
-    final cy = top + cellSize / 2;
-    final (from, to) = switch (quadrant) {
-      QuadrantPosition.topLeft => (Offset(left, top), Offset(cx, cy)),
-      QuadrantPosition.topRight => (Offset(right, top), Offset(cx, cy)),
-      QuadrantPosition.bottomLeft => (Offset(left, bottom), Offset(cx, cy)),
-      QuadrantPosition.bottomRight => (Offset(right, bottom), Offset(cx, cy)),
+    final midX = left + cellSize / 2;
+    final midY = top + cellSize / 2;
+    final (tl, tr, bl, br) = switch (quadrant) {
+      QuadrantPosition.topLeft => (
+          Offset(left, top), Offset(midX, top), Offset(left, midY), Offset(midX, midY)),
+      QuadrantPosition.topRight => (
+          Offset(midX, top), Offset(right, top), Offset(midX, midY), Offset(right, midY)),
+      QuadrantPosition.bottomLeft => (
+          Offset(left, midY), Offset(midX, midY), Offset(left, bottom), Offset(midX, bottom)),
+      QuadrantPosition.bottomRight => (
+          Offset(midX, midY), Offset(right, midY), Offset(midX, bottom), Offset(right, bottom)),
     };
-    _drawThreadLine(canvas, from, to, color);
+    _drawThreadLine(canvas, tl, br, color);
+    _drawThreadLine(canvas, tr, bl, color);
   }
 
   void _drawHalfCrossStitch(
