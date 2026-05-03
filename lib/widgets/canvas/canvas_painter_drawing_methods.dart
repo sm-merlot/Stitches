@@ -95,9 +95,11 @@ mixin _DrawingMethods {
     final right = left + cellSize;
     final bottom = top + cellSize;
     if (isForward) {
-      _drawThreadLine(canvas, Offset(right, top), Offset(left, bottom), color);
+      _drawThreadLine(canvas, Offset(right, top), Offset(left, bottom), color,
+          widthFactor: 0.18);
     } else {
-      _drawThreadLine(canvas, Offset(left, top), Offset(right, bottom), color);
+      _drawThreadLine(canvas, Offset(left, top), Offset(right, bottom), color,
+          widthFactor: 0.18);
     }
   }
 
@@ -140,26 +142,28 @@ mixin _DrawingMethods {
     _drawThreadLine(canvas, tr, bl, color);
   }
 
-  void _drawQuarterCrossStitch(
-      Canvas canvas, int x, int y, QuadrantPosition quadrant, Color color) {
+  void _drawThreeQuarterStitch(
+      Canvas canvas, int x, int y, QuadrantPosition quadrant, bool isForward, Color color) {
     final left = x * cellSize;
     final top = y * cellSize;
     final right = left + cellSize;
     final bottom = top + cellSize;
-    final midX = left + cellSize / 2;
-    final midY = top + cellSize / 2;
-    final (tl, tr, bl, br) = switch (quadrant) {
-      QuadrantPosition.topLeft => (
-          Offset(left, top), Offset(midX, top), Offset(left, midY), Offset(midX, midY)),
-      QuadrantPosition.topRight => (
-          Offset(midX, top), Offset(right, top), Offset(midX, midY), Offset(right, midY)),
-      QuadrantPosition.bottomLeft => (
-          Offset(left, midY), Offset(midX, midY), Offset(left, bottom), Offset(midX, bottom)),
-      QuadrantPosition.bottomRight => (
-          Offset(midX, midY), Offset(right, midY), Offset(midX, bottom), Offset(right, bottom)),
+    final cx = left + cellSize / 2;
+    final cy = top + cellSize / 2;
+    // Full diagonal
+    if (isForward) {
+      _drawThreadLine(canvas, Offset(right, top), Offset(left, bottom), color);
+    } else {
+      _drawThreadLine(canvas, Offset(left, top), Offset(right, bottom), color);
+    }
+    // Quarter diagonal from quadrant corner to centre
+    final corner = switch (quadrant) {
+      QuadrantPosition.topLeft     => Offset(left, top),
+      QuadrantPosition.topRight    => Offset(right, top),
+      QuadrantPosition.bottomLeft  => Offset(left, bottom),
+      QuadrantPosition.bottomRight => Offset(right, bottom),
     };
-    _drawThreadLine(canvas, tl, br, color);
-    _drawThreadLine(canvas, tr, bl, color);
+    _drawThreadLine(canvas, corner, Offset(cx, cy), color);
   }
 
   void _drawBackstitch(
@@ -183,8 +187,8 @@ mixin _DrawingMethods {
         _drawQuarterStitch(canvas, x, y, quadrant, color);
       case HalfCrossStitch(:final x, :final y, :final half):
         _drawHalfCrossStitch(canvas, x, y, half, color);
-      case QuarterCrossStitch(:final x, :final y, :final quadrant):
-        _drawQuarterCrossStitch(canvas, x, y, quadrant, color);
+      case ThreeQuarterStitch(:final x, :final y, :final quadrant, :final isForward):
+        _drawThreeQuarterStitch(canvas, x, y, quadrant, isForward, color);
       case BackStitch(:final x1, :final y1, :final x2, :final y2):
         _drawBackstitch(canvas, x1, y1, x2, y2, color);
     }
