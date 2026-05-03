@@ -1,5 +1,6 @@
 import 'dart:ui' show Rect;
 import 'package:flutter/material.dart' show Color;
+import 'package:stitches/services/block_shape.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stitches/models/cell.dart';
 import 'package:stitches/models/layer/layer.dart';
@@ -71,14 +72,15 @@ void main() {
     final cache = RenderCache();
     cache.rebuild(_composite(p), cfg, cellSize);
 
-    final paths = cache.store.values
+    final shapes = cache.store.values
         .expand((b) => b.values)
         .toList();
-    expect(paths, hasLength(1));
-    expect(paths.first.getBounds(), equals(Rect.fromLTWH(2 * cellSize, 3 * cellSize, cellSize, cellSize)));
+    expect(shapes, hasLength(1));
+    expect(shapes.first, isA<RectShape>());
+    expect(shapes.first.bounds, equals(Rect.fromLTWH(2 * cellSize, 3 * cellSize, cellSize, cellSize)));
   });
 
-  test('rebuild: HalfStitch forward → diagonal parallelogram path', () {
+  test('rebuild: HalfStitch forward → PathShape (diagonal parallelogram)', () {
     final t = _thread('310', const Color(0xFF000000));
     final p = _pattern(
       threads: [t],
@@ -87,12 +89,13 @@ void main() {
     final cache = RenderCache();
     cache.rebuild(_composite(p), cfg, cellSize);
 
-    final paths = cache.store.values
+    final shapes = cache.store.values
         .expand((b) => b.values)
         .toList();
-    expect(paths, hasLength(1));
+    expect(shapes, hasLength(1));
+    expect(shapes.first, isA<PathShape>());
     // Diagonal band should span the full cell bounds.
-    final bounds = paths.first.getBounds();
+    final bounds = shapes.first.bounds;
     expect(bounds.left, closeTo(1 * cellSize, 0.001));
     expect(bounds.top, closeTo(1 * cellSize, 0.001));
     expect(bounds.width, closeTo(cellSize, 0.001));

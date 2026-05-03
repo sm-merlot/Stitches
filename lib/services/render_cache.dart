@@ -5,6 +5,7 @@ import '../models/page/page_layout.dart';
 import '../models/progress/pattern_progress.dart';
 import '../models/stitch/stitch.dart';
 import '../models/stitch/stitch_geometry.dart';
+import 'block_shape.dart';
 import 'stitch_compositor.dart';
 
 // ─── RenderViewConfig ─────────────────────────────────────────────────────────
@@ -57,17 +58,18 @@ class RenderViewConfig {
 
 // ─── RenderCache ─────────────────────────────────────────────────────────────
 
-/// Maintains a pre-resolved `Map<Color, …Path>` cache of stitch block shapes.
+/// Maintains a pre-resolved `Map<Color, …BlockShape>` cache of stitch blocks.
 ///
-/// Each stitch type produces a [Path]: rectangles for full/half-cross/quarter
-/// stitches, parallelograms for half stitches, triangles for three-quarter
-/// stitches. The painter iterates the store and calls `canvas.drawPath` once
-/// per colour batch.
+/// Each stitch type produces a [BlockShape]: [RectShape] for axis-aligned
+/// blocks (full/half-cross/quarter), [PathShape] for diagonal bands (half
+/// stitch) and triangles (three-quarter stitch). The painter iterates the
+/// store and calls `shape.draw(canvas, paint)` — polymorphic dispatch selects
+/// `drawRect` or `drawPath` as appropriate.
 ///
 /// ## Data structure
 ///
 /// ```
-/// store[color][cellKey]    = path
+/// store[color][cellKey]    = BlockShape
 /// _cellColors[cellKey]     = {color, ...}   ← reverse index
 /// ```
 ///
@@ -75,10 +77,10 @@ class RenderViewConfig {
 /// cell's colours in [_cellColors], then call `Map.remove(key)` on each colour
 /// bucket — no list scanning, no index bookkeeping.
 class RenderCache {
-  /// Nested store: colour → (cellKey → path for this cell).
+  /// Nested store: colour → (cellKey → block shape for this cell).
   ///
   /// Exposed for read-only use by [CanvasStaticPainter]. Do not mutate.
-  final Map<Color, Map<Cell, Path>> store = {};
+  final Map<Color, Map<Cell, BlockShape>> store = {};
 
   /// Reverse index: cell → set of colours contributed by this cell.
   final Map<Cell, Set<Color>> _cellColors = {};
@@ -202,40 +204,39 @@ class RenderCache {
     );
     if (color == null) return;
 
-    // Build the block shape path for this stitch.
-    final path = _buildBlockPath(cs.stitch, cellSize);
-    if (path == null) return;
+    // Build the block shape for this stitch.
+    final shape = _buildBlockShape(cs.stitch, cellSize);
+    if (shape == null) return;
 
     // Insert into store and update reverse index.
-    (store[color] ??= {})[key] = path;
+    (store[color] ??= {})[key] = shape;
     (_cellColors[key] ??= {}).add(color);
   }
 
-  /// Builds the block-mode [Path] for a stitch.
+  /// Builds the block-mode [BlockShape] for a stitch.
   ///
-  /// - [FullStitch], [HalfCrossStitch], [QuarterStitch] → axis-aligned rects
-  /// - [HalfStitch] → thick diagonal parallelogram (stays within cell bounds)
-  /// - [ThreeQuarterStitch] → filled triangle in the quadrant corner
+  /// - [FullStitch], [HalfCrossStitch], [QuarterStitch] → [RectShape]
+  /// - [HalfStitch] → [PathShape] (thick diagonal parallelogram)
+  /// - [ThreeQuarterStitch] → [PathShape] (filled triangle)
   /// - [BackStitch] → null (drawn separately by the painter)
-  static Path? _buildBlockPath(Stitch stitch, double cellSize) {
+  static BlockShape? _buildBlockShape(Stitch stitch, double cellSize) {
     return switch (stitch) {
       HalfStitch(:final x, :final y, :final isForward) =>
-        _halfStitchPath(x, y, isForward, cellSize),
+        PathShape(_halfStitchPath(x, y, isForward, cellSize)),
       ThreeQuarterStitch(:final x, :final y, :final quadrant) =>
-        _threeQuarterPath(x, y, quadrant, cellSize),
+        PathShape(_threeQuarterPath(x, y, quadrant, cellSize)),
       BackStitch() => null,
-      _ => _rectPath(stitch, cellSize),
+      _ => _rectShape(stitch, cellSize),
     };
   }
 
-  /// Axis-aligned rect path for stitches that use standard block geometry.
-  static Path? _rectPath(Stitch stitch, double cellSize) {
+  /// [RectShape] for stitches that use standard axis-aligned block geometry.
+  static RectShape? _rectShape(Stitch stitch, double cellSize) {
     final block = stitch.blockCells;
     if (block == null) return null;
     final (bl, bt, bw, bh) = block;
-    return Path()
-      ..addRect(Rect.fromLTWH(
-          bl * cellSize, bt * cellSize, bw * cellSize, bh * cellSize));
+    return RectShape(Rect.fromLTWH(
+        bl * cellSize, bt * cellSize, bw * cellSize, bh * cellSize));
   }
 
   /// Thick diagonal band (parallelogram) for a [HalfStitch].
