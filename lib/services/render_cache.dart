@@ -270,36 +270,35 @@ class RenderCache {
     }
   }
 
-  /// Filled triangle for a [ThreeQuarterStitch] in the given quadrant corner.
+  /// Half-cell filled triangle for a [ThreeQuarterStitch].
+  /// The triangle occupies the half of the cell that contains the quadrant corner.
   static Path _threeQuarterPath(
       int x, int y, QuadrantPosition quadrant, double cellSize) {
     final left = x * cellSize;
     final top = y * cellSize;
     final right = left + cellSize;
     final bottom = top + cellSize;
-    final midX = left + cellSize / 2;
-    final midY = top + cellSize / 2;
 
     return switch (quadrant) {
       QuadrantPosition.topLeft => (Path()
         ..moveTo(left, top)
-        ..lineTo(midX, top)
-        ..lineTo(left, midY)
-        ..close()),
-      QuadrantPosition.topRight => (Path()
-        ..moveTo(midX, top)
         ..lineTo(right, top)
-        ..lineTo(right, midY)
-        ..close()),
-      QuadrantPosition.bottomLeft => (Path()
-        ..moveTo(left, midY)
-        ..lineTo(midX, bottom)
         ..lineTo(left, bottom)
         ..close()),
-      QuadrantPosition.bottomRight => (Path()
-        ..moveTo(right, midY)
+      QuadrantPosition.topRight => (Path()
+        ..moveTo(left, top)
+        ..lineTo(right, top)
         ..lineTo(right, bottom)
-        ..lineTo(midX, bottom)
+        ..close()),
+      QuadrantPosition.bottomLeft => (Path()
+        ..moveTo(left, top)
+        ..lineTo(left, bottom)
+        ..lineTo(right, bottom)
+        ..close()),
+      QuadrantPosition.bottomRight => (Path()
+        ..moveTo(right, top)
+        ..lineTo(left, bottom)
+        ..lineTo(right, bottom)
         ..close()),
     };
   }

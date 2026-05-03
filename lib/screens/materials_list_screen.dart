@@ -107,7 +107,7 @@ class _MaterialsListScreenState extends State<MaterialsListScreen> {
         HalfStitch() => 0.5,
         HalfCrossStitch() => 0.5,
         QuarterStitch() => 0.25,
-        ThreeQuarterStitch() => 0.75,
+        ThreeQuarterStitch() => 0.5,
         _ => 0.0,
       };
       if (e > 0) equiv[s.threadId] = (equiv[s.threadId] ?? 0) + e;

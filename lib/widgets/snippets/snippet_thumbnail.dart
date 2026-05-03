@@ -91,11 +91,18 @@ class _SnippetThumbnailPainter extends CustomPainter {
           Rect.fromLTWH(x * cellW, y * cellH, cellW, cellH),
           paint,
         );
-      case ThreeQuarterStitch(:final x, :final y):
-        canvas.drawRect(
-          Rect.fromLTWH(x * cellW, y * cellH, cellW * 0.75, cellH * 0.75),
-          paint,
-        );
+      case ThreeQuarterStitch(:final x, :final y, :final quadrant):
+        final l = x * cellW;
+        final t = y * cellH;
+        final r = l + cellW;
+        final b = t + cellH;
+        final path = switch (quadrant) {
+          QuadrantPosition.topLeft     => (Path()..moveTo(l, t)..lineTo(r, t)..lineTo(l, b)..close()),
+          QuadrantPosition.topRight    => (Path()..moveTo(l, t)..lineTo(r, t)..lineTo(r, b)..close()),
+          QuadrantPosition.bottomLeft  => (Path()..moveTo(l, t)..lineTo(l, b)..lineTo(r, b)..close()),
+          QuadrantPosition.bottomRight => (Path()..moveTo(r, t)..lineTo(l, b)..lineTo(r, b)..close()),
+        };
+        canvas.drawPath(path, paint);
       case BackStitch(:final x1, :final y1, :final x2, :final y2):
         final strokePaint = Paint()
           ..color = paint.color

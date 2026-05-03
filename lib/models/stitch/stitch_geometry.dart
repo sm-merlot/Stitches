@@ -89,16 +89,9 @@ extension StitchGeometry on Stitch {
         QuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
           (x + 0.5, y + 0.5, 0.5, 0.5),
 
-        // ThreeQuarterStitch: 3/4 of the cell — block representation is the
-        // three-quarter region opposite to the empty corner.
-        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topLeft) =>
-          (x.toDouble(), y.toDouble(), 0.75, 0.75),
-        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.topRight) =>
-          (x + 0.25, y.toDouble(), 0.75, 0.75),
-        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomLeft) =>
-          (x.toDouble(), y + 0.25, 0.75, 0.75),
-        ThreeQuarterStitch(:final x, :final y, quadrant: QuadrantPosition.bottomRight) =>
-          (x + 0.25, y + 0.25, 0.75, 0.75),
+        // ThreeQuarterStitch: half-cell triangle — bounding rect is the full cell.
+        ThreeQuarterStitch(:final x, :final y) =>
+          (x.toDouble(), y.toDouble(), 1.0, 1.0),
 
         BackStitch() => null,
       };

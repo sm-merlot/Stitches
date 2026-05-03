@@ -101,8 +101,8 @@ Rect? _stitchRect(
       _quadrantRect(x, y, quadrant, offsetX, offsetY, cellSize),
     HalfCrossStitch(:final x, :final y, :final half) =>
       _halfCrossRect(x, y, half, offsetX, offsetY, cellSize),
-    ThreeQuarterStitch(:final x, :final y, :final quadrant) =>
-      _threeQuarterRect(x, y, quadrant, offsetX, offsetY, cellSize),
+    ThreeQuarterStitch(:final x, :final y) =>
+      Rect.fromLTWH(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize),
     BackStitch() => null,
   };
 }
@@ -118,20 +118,6 @@ Rect _quadrantRect(int x, int y, QuadrantPosition q, double offsetX,
     QuadrantPosition.bottomLeft => Rect.fromLTWH(left, top + half, half, half),
     QuadrantPosition.bottomRight =>
       Rect.fromLTWH(left + half, top + half, half, half),
-  };
-}
-
-Rect _threeQuarterRect(int x, int y, QuadrantPosition q, double offsetX,
-    double offsetY, double cellSize) {
-  final left = offsetX + x * cellSize;
-  final top = offsetY + y * cellSize;
-  final tq = cellSize * 0.75;
-  return switch (q) {
-    QuadrantPosition.topLeft => Rect.fromLTWH(left, top, tq, tq),
-    QuadrantPosition.topRight => Rect.fromLTWH(left + cellSize - tq, top, tq, tq),
-    QuadrantPosition.bottomLeft => Rect.fromLTWH(left, top + cellSize - tq, tq, tq),
-    QuadrantPosition.bottomRight =>
-      Rect.fromLTWH(left + cellSize - tq, top + cellSize - tq, tq, tq),
   };
 }
 

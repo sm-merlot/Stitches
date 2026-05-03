@@ -270,13 +270,13 @@ class PngExportService {
       case HalfCrossStitch(half: HalfOrientation.bottom):
         canvas.drawRect(Rect.fromLTWH(gx, gy + half, cs, half), paint);
       case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft):
-        canvas.drawRect(Rect.fromLTWH(gx, gy, cs * 0.75, cs * 0.75), paint);
+        canvas.drawPath(Path()..moveTo(gx, gy)..lineTo(gx + cs, gy)..lineTo(gx, gy + cs)..close(), paint);
       case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight):
-        canvas.drawRect(Rect.fromLTWH(gx + cs * 0.25, gy, cs * 0.75, cs * 0.75), paint);
+        canvas.drawPath(Path()..moveTo(gx, gy)..lineTo(gx + cs, gy)..lineTo(gx + cs, gy + cs)..close(), paint);
       case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft):
-        canvas.drawRect(Rect.fromLTWH(gx, gy + cs * 0.25, cs * 0.75, cs * 0.75), paint);
+        canvas.drawPath(Path()..moveTo(gx, gy)..lineTo(gx, gy + cs)..lineTo(gx + cs, gy + cs)..close(), paint);
       case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight):
-        canvas.drawRect(Rect.fromLTWH(gx + cs * 0.25, gy + cs * 0.25, cs * 0.75, cs * 0.75), paint);
+        canvas.drawPath(Path()..moveTo(gx + cs, gy)..lineTo(gx, gy + cs)..lineTo(gx + cs, gy + cs)..close(), paint);
       case BackStitch():
         break;
     }

@@ -321,19 +321,16 @@ void _fillStitch(
       canvas.drawRect(gx, gy, cs, cs / 2);
       canvas.fillPath();
 
-    // ThreeQuarterStitch: fill 3/4 of the cell anchored at quadrant corner
+    // ThreeQuarterStitch: half-cell triangle in the quadrant corner
+    // PDF Y-axis is inverted (origin at bottom-left), so top/bottom are swapped.
     case ThreeQuarterStitch(quadrant: QuadrantPosition.topLeft):
-      canvas.drawRect(gx, gy + cs * 0.25, cs * 0.75, cs * 0.75);
-      canvas.fillPath();
+      canvas.moveTo(gx, gy + cs); canvas.lineTo(gx + cs, gy + cs); canvas.lineTo(gx, gy); canvas.fillPath();
     case ThreeQuarterStitch(quadrant: QuadrantPosition.topRight):
-      canvas.drawRect(gx + cs * 0.25, gy + cs * 0.25, cs * 0.75, cs * 0.75);
-      canvas.fillPath();
+      canvas.moveTo(gx, gy + cs); canvas.lineTo(gx + cs, gy + cs); canvas.lineTo(gx + cs, gy); canvas.fillPath();
     case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomLeft):
-      canvas.drawRect(gx, gy, cs * 0.75, cs * 0.75);
-      canvas.fillPath();
+      canvas.moveTo(gx, gy + cs); canvas.lineTo(gx, gy); canvas.lineTo(gx + cs, gy); canvas.fillPath();
     case ThreeQuarterStitch(quadrant: QuadrantPosition.bottomRight):
-      canvas.drawRect(gx + cs * 0.25, gy, cs * 0.75, cs * 0.75);
-      canvas.fillPath();
+      canvas.moveTo(gx + cs, gy + cs); canvas.lineTo(gx, gy); canvas.lineTo(gx + cs, gy); canvas.fillPath();
 
     case BackStitch():
       break;
@@ -381,7 +378,7 @@ double _stitchSubRegionSize(Stitch s, double cs) => switch (s) {
       QuarterStitch() ||
       HalfCrossStitch(half: HalfOrientation.left || HalfOrientation.right) =>
         cs / 2,
-      ThreeQuarterStitch() => cs * 0.75,
+      ThreeQuarterStitch() => cs * 0.5,
       HalfCrossStitch() => cs / 2,
       BackStitch() => cs,
     };
