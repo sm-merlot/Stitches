@@ -97,6 +97,13 @@ mixin ProgressMixin on Notifier<EditorState> {
     final focusId = _stitch.stitchSession.focusThreadId;
     if (focusId != null && _topThreadAt(x, y) != focusId) return;
 
+    // In page mode, only interact with cells on the current page.
+    final layout = _stitch.stitchSession.pageLayout;
+    if (layout != null) {
+      final (pageCol, pageRow) = layout.pageCoords(_stitch.stitchSession.currentPage);
+      if (!layout.rawCellOnPage(x, y, pageCol, pageRow)) return;
+    }
+
     final prog = _stitch.progress;
     final cell = Cell(x, y);
     final current = prog.completedStitches;
@@ -106,12 +113,6 @@ mixin ProgressMixin on Notifier<EditorState> {
     } else {
       // Only mark if there is actually a stitch here.
       if (!_hasCrossStitchAt(x, y)) return;
-      // In page mode, only mark cells on the current page.
-      final layout = _stitch.stitchSession.pageLayout;
-      if (layout != null) {
-        final (pageCol, pageRow) = layout.pageCoords(_stitch.stitchSession.currentPage);
-        if (!layout.rawCellOnPage(x, y, pageCol, pageRow)) return;
-      }
       next = {...current, cell};
     }
     final newProg = prog.copyWith(completedStitches: next);
