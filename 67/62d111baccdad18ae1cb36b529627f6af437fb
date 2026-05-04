@@ -1,0 +1,25 @@
+lib/models/page/page_layout.dart
+  4f0807fb3a9e3375 349-419,1245-1266
+test/models/page/page_layout_band_test.dart
+  4f0807fb3a9e3375 383-581
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "6762d111baccdad18ae1cb36b529627f6af437fb",
+  "prompts": {
+    "4f0807fb3a9e3375": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "680aee66-7038-4ee9-8355-3b666b3a57e3",
+        "model": "<synthetic>"
+      },
+      "human_author": "scme0",
+      "messages": [],
+      "total_additions": 307,
+      "total_deletions": 15,
+      "accepted_lines": 292,
+      "overriden_lines": 0
+    }
+  }
+}
