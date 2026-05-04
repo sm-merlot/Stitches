@@ -784,7 +784,7 @@ void main() {
       // 30 cols × 5 rows: A on left, B on right, transition at col 15
       final rows = List.generate(
           5, (_) => List.generate(30, (i) => i < 15 ? A : B));
-      final result = PageLayout.computeBoundaryOffsetsV2(
+      final (result, _, _) = PageLayout.computeBoundaryOffsetsV2(
         nominalBoundary: 15,
         tolerance: 4,
         maxBoundary: 30,
@@ -802,7 +802,7 @@ void main() {
       // Transition at col 17, nominal at 15 → should anchor at δ=+2
       final rows = List.generate(
           5, (_) => List.generate(30, (i) => i < 17 ? A : B));
-      final result = PageLayout.computeBoundaryOffsetsV2(
+      final (result, _, _) = PageLayout.computeBoundaryOffsetsV2(
         nominalBoundary: 15,
         tolerance: 4,
         maxBoundary: 30,
@@ -817,7 +817,7 @@ void main() {
 
     test('uniform colour → fuzz (non-straight)', () {
       final rows = List.generate(50, (_) => List.filled(30, A));
-      final result = PageLayout.computeBoundaryOffsetsV2(
+      final (result, _, _) = PageLayout.computeBoundaryOffsetsV2(
         nominalBoundary: 15,
         tolerance: 4,
         maxBoundary: 30,
@@ -836,7 +836,7 @@ void main() {
         final transition = 15 + (r % 3) - 1; // wobbles 14-16
         return List.generate(30, (c) => c < transition ? A : B);
       });
-      final result = PageLayout.computeBoundaryOffsetsV2(
+      final (result, _, _) = PageLayout.computeBoundaryOffsetsV2(
         nominalBoundary: 15,
         tolerance: 4,
         maxBoundary: 30,
@@ -857,7 +857,7 @@ void main() {
     test('tolerance 0 → all zeros', () {
       final rows = List.generate(
           5, (_) => List.generate(30, (i) => i < 15 ? A : B));
-      final result = PageLayout.computeBoundaryOffsetsV2(
+      final (result, _, _) = PageLayout.computeBoundaryOffsetsV2(
         nominalBoundary: 15,
         tolerance: 0,
         maxBoundary: 30,
@@ -878,7 +878,7 @@ void main() {
           return A;
         });
       });
-      final result = PageLayout.computeBoundaryOffsetsV2(
+      final (result, _, _) = PageLayout.computeBoundaryOffsetsV2(
         nominalBoundary: 15,
         tolerance: 4,
         maxBoundary: 30,
