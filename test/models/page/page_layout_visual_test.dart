@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 // Visual diagnostic test for PageLayout v2 boundary algorithm.
 //
 // Loads sm_test.stitches, computes layout at specified tolerance,
@@ -17,7 +18,6 @@
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stitches/models/page/page_config.dart';
 import 'package:stitches/models/page/page_layout.dart';
 import 'package:stitches/services/file_service.dart';
 import 'package:stitches/services/stitch_compositor.dart';
@@ -151,7 +151,7 @@ void main() {
 
             final lines = <String>[];
             lines.add('');
-            lines.add('${'═' * 60}');
+            lines.add('═' * 60);
             lines.add('PAGE $pageIdx  (col=$px, row=$py)  tolerance=$tol');
 
             // Note adjacent pages for top/left edges
@@ -166,7 +166,7 @@ void main() {
             }
             if (refs.isNotEmpty) lines.add(refs.join('  |  '));
 
-            lines.add('${'═' * 60}');
+            lines.add('═' * 60);
             print(lines.join('\n'));
 
             // Right edge (vertical boundary)

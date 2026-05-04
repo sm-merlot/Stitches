@@ -258,7 +258,9 @@ class PageLayout {
 
     int find(int id) {
       var root = id;
-      while (parent[root] != root) root = parent[root]!;
+      while (parent[root] != root) {
+        root = parent[root]!;
+      }
       var cur = id;
       while (cur != root) {
         final next = parent[cur]!;
@@ -679,8 +681,11 @@ class PageLayout {
         // keepWhole: majority side, tie-break by min displacement.
         int leftCount = 0, rightCount = 0;
         for (final (p, _) in obj) {
-          if (p < nominalBoundary) leftCount++;
-          else rightCount++;
+          if (p < nominalBoundary) {
+            leftCount++;
+          } else {
+            rightCount++;
+          }
         }
         if (leftCount != rightCount) {
           keepLeft = leftCount > rightCount;
@@ -859,8 +864,11 @@ class PageLayout {
       int leftCount = 0, rightCount = 0;
       for (final (p, c) in obj) {
         final actual = nominalBoundary + (offsets[c] ?? 0);
-        if (p < actual) leftCount++;
-        else rightCount++;
+        if (p < actual) {
+          leftCount++;
+        } else {
+          rightCount++;
+        }
       }
 
       // Object is entirely on one side → no split, skip.
@@ -964,8 +972,11 @@ class PageLayout {
             final crossDelta = offsets[entry.key] ?? 0;
             final crossActual = nominalBoundary + crossDelta;
             for (final p in entry.value) {
-              if (p < crossActual) objLeft++;
-              else objRight++;
+              if (p < crossActual) {
+                objLeft++;
+              } else {
+                objRight++;
+              }
             }
           }
           // If majority is on page 2, reclaim stranded cells
@@ -1012,8 +1023,11 @@ class PageLayout {
             final crossDelta = offsets[entry.key] ?? 0;
             final crossActual = nominalBoundary + crossDelta;
             for (final p in entry.value) {
-              if (p < crossActual) objLeft++;
-              else objRight++;
+              if (p < crossActual) {
+                objLeft++;
+              } else {
+                objRight++;
+              }
             }
           }
           // If majority is on page 1, reclaim stranded cells
@@ -1044,27 +1058,6 @@ class PageLayout {
             }
           }
         }
-      }
-    }
-  }
-
-  /// Smooth offsets so adjacent values differ by ≤ 2.
-  /// Two passes: forward then backward, averaging when both constrain.
-  static void _smoothOffsets(Map<int, int> offsets, int maxCross, int tolerance) {
-    // Forward pass
-    for (int i = 1; i < maxCross; i++) {
-      final prev = offsets[i - 1] ?? 0;
-      final curr = offsets[i] ?? 0;
-      if ((curr - prev).abs() > 2) {
-        offsets[i] = (prev + (curr - prev).clamp(-2, 2)).clamp(-tolerance, tolerance);
-      }
-    }
-    // Backward pass
-    for (int i = maxCross - 2; i >= 0; i--) {
-      final next = offsets[i + 1] ?? 0;
-      final curr = offsets[i] ?? 0;
-      if ((curr - next).abs() > 2) {
-        offsets[i] = (next + (curr - next).clamp(-2, 2)).clamp(-tolerance, tolerance);
       }
     }
   }
