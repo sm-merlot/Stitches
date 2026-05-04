@@ -313,6 +313,10 @@ class PageLayout {
   static const int _clNoOp = 0;
   static const int _clKeepWhole = 1;
   static const int _clTooBig = 2;
+
+  /// Max steps keep-whole can shift from the interpolated offset at any cross.
+  /// Beyond this cap, cells are added to override sets instead.
+  static const int _kMaxKeepWholeStep = 2;
   static const int _clKeepLeft = 3;
   static const int _clKeepRight = 4;
 
@@ -648,15 +652,17 @@ class PageLayout {
       nominalBoundary: nominalBoundary,
     );
 
-    // Phase 3 enforcement: keep-whole protection.
-    // Once a cross-index is adjusted by keep-whole, lock it so later
-    // clusters don't override and undo the correction. When a cross IS
-    // locked and a new cluster conflicts, the cluster's cells are added to
-    // override sets instead — these become _includedCells in compute().
-    // Track locked direction per cross: true = locked keepLeft, false = locked
-    // keepRight. Same-direction adjustments can push further; opposite direction
-    // produces overrides.
-    final lockedDirection = <int, bool>{};
+    // Phase 3 enforcement: keep-whole protection (hybrid model).
+    //
+    // Keep-whole shifts boundary offsets to protect objects, but caps the
+    // shift to ±_kMaxKeepWholeStep from the interpolated value at each cross.
+    // When the needed shift exceeds the cap, the remaining cells are added
+    // to override sets (_includedCells) so they appear on the correct page
+    // without creating large boundary jumps.
+    //
+    // This gives smooth boundaries (no >2-step jumps from keep-whole) while
+    // still keeping most objects whole via boundary shifts.
+    final interpolated = Map<int, int>.of(offsets); // snapshot before mutations
     final includeLeftCells = <(int, int)>{};
     final includeRightCells = <(int, int)>{};
 
@@ -691,7 +697,7 @@ class PageLayout {
         }
       }
 
-      // Adjust offsets at each cross-index to keep all cells on chosen side.
+      // Group cells by cross-index.
       final byCross = <int, List<int>>{};
       for (final (p, c) in obj) {
         byCross.putIfAbsent(c, () => []).add(p);
@@ -702,34 +708,45 @@ class PageLayout {
         final primaries = entry.value;
         final currentDelta = offsets[cross] ?? 0;
         final actual = nominalBoundary + currentDelta;
+        final interpDelta = interpolated[cross] ?? 0;
 
-        final locked = lockedDirection[cross];
-        if (locked != null && locked != keepLeft) {
-          // Locked in opposite direction — can't move, add overrides.
-          for (final p in primaries) {
-            if (keepLeft && p >= actual) {
-              includeLeftCells.add((p, cross));
-            } else if (!keepLeft && p < actual) {
-              includeRightCells.add((p, cross));
-            }
-          }
-          continue;
-        }
-
-        // Unlocked or locked in same direction — adjust (push further).
         if (keepLeft) {
           final maxP = primaries.reduce(math.max);
           if (actual <= maxP) {
-            offsets[cross] =
+            // Need to shift right to include maxP on left page.
+            final idealDelta =
                 ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
-            lockedDirection[cross] = true;
+            // Cap: don't exceed ±_kMaxKeepWholeStep from interpolated value.
+            final cappedDelta = idealDelta.clamp(
+                interpDelta - _kMaxKeepWholeStep,
+                interpDelta + _kMaxKeepWholeStep);
+            // Only shift if it actually moves further than current.
+            if (cappedDelta > currentDelta) {
+              offsets[cross] = cappedDelta;
+            }
+            // Any cells still on wrong side after capped shift → override.
+            final newActual = nominalBoundary + (offsets[cross] ?? 0);
+            for (final p in primaries) {
+              if (p >= newActual) includeLeftCells.add((p, cross));
+            }
           }
         } else {
           final minP = primaries.reduce(math.min);
           if (actual > minP) {
-            offsets[cross] =
+            // Need to shift left to include minP on right page.
+            final idealDelta =
                 (minP - nominalBoundary).clamp(-tolerance, tolerance);
-            lockedDirection[cross] = false;
+            final cappedDelta = idealDelta.clamp(
+                interpDelta - _kMaxKeepWholeStep,
+                interpDelta + _kMaxKeepWholeStep);
+            if (cappedDelta < currentDelta) {
+              offsets[cross] = cappedDelta;
+            }
+          }
+          // Any cells still on wrong side after capped shift → override.
+          final newActual = nominalBoundary + (offsets[cross] ?? 0);
+          for (final p in primaries) {
+            if (p < newActual) includeRightCells.add((p, cross));
           }
         }
       }
@@ -737,10 +754,10 @@ class PageLayout {
 
     // Phase 5: Fragment reclamation.
     // After the cut is placed, small object fragments may be stranded on the
-    // wrong side. Respects lockedCrosses — locked crosses produce overrides.
-    final lockedCrosses = lockedDirection.keys.toSet();
+    // wrong side. Shifts offsets (capped) + overrides for remainder.
     _reclaimFragments(
       offsets: offsets,
+      interpolated: interpolated,
       nominalBoundary: nominalBoundary,
       tolerance: tolerance,
       bandMin: bandMin,
@@ -749,7 +766,6 @@ class PageLayout {
       colorAt: colorAt,
       bandColors: bandColors,
       localObjects: localObjects,
-      lockedCrosses: lockedCrosses,
       includeLeftCells: includeLeftCells,
       includeRightCells: includeRightCells,
     );
@@ -761,13 +777,12 @@ class PageLayout {
   ///
   /// For each cross-index, examines the cell immediately left and right of
   /// the cut position. If that cell belongs to a local object that fits
-  /// entirely within [bandMin, bandMax), the boundary is shifted to keep
-  /// the object whole on whichever side it mostly belongs to.
-  ///
-  /// Locked crosses are not shifted; instead, stranded cells are added to
-  /// the override sets for inclusion on the correct page.
+  /// entirely within [bandMin, bandMax), the boundary is shifted (capped at
+  /// ±[_kMaxKeepWholeStep] from interpolated) to keep the object whole.
+  /// Any cells still stranded after the capped shift → override sets.
   static void _reclaimFragments({
     required Map<int, int> offsets,
+    required Map<int, int> interpolated,
     required int nominalBoundary,
     required int tolerance,
     required int bandMin,
@@ -776,7 +791,6 @@ class PageLayout {
     required int? Function(int primary, int cross) colorAt,
     required Map<int, int> bandColors,
     required Map<int, Set<(int, int)>> localObjects,
-    required Set<int> lockedCrosses,
     required Set<(int, int)> includeLeftCells,
     required Set<(int, int)> includeRightCells,
   }) {
@@ -820,6 +834,9 @@ class PageLayout {
       });
     }
 
+    // Track which objects have already been reclaimed to avoid double-processing.
+    final reclaimed = <int>{};
+
     for (int cross = 0; cross < maxCross; cross++) {
       final delta = offsets[cross] ?? 0;
       final actual = nominalBoundary + delta;
@@ -828,7 +845,9 @@ class PageLayout {
       if (actual > bandMin) {
         final leftKey = ((actual - 1) << 16) | cross;
         final leftObjId = cellToObj[leftKey];
-        if (leftObjId != null && fitsInBand(leftObjId)) {
+        if (leftObjId != null &&
+            !reclaimed.contains(leftObjId) &&
+            fitsInBand(leftObjId)) {
           final byCross = getObjByCross(leftObjId);
           int objLeft = 0, objRight = 0;
           for (final entry in byCross.entries) {
@@ -839,22 +858,31 @@ class PageLayout {
               else objRight++;
             }
           }
-          // If majority is on page 2, pull this fragment over
+          // If majority is on page 2, reclaim stranded cells
           if (objRight > objLeft) {
-            if (lockedCrosses.contains(cross)) {
-              // Can't move — add stranded cells as overrides
-              final primaries = byCross[cross];
-              if (primaries != null) {
-                for (final p in primaries) {
-                  if (p < actual) includeRightCells.add((p, cross));
+            reclaimed.add(leftObjId);
+            for (final crossEntry in byCross.entries) {
+              final c = crossEntry.key;
+              final primaries = crossEntry.value;
+              final minP = primaries.reduce(math.min);
+              final currentDelta = offsets[c] ?? 0;
+              final crossActual = nominalBoundary + currentDelta;
+              if (minP < crossActual) {
+                // Try to shift boundary left (capped).
+                final idealDelta =
+                    (minP - nominalBoundary).clamp(-tolerance, tolerance);
+                final interpDelta = interpolated[c] ?? 0;
+                final cappedDelta = idealDelta.clamp(
+                    interpDelta - _kMaxKeepWholeStep,
+                    interpDelta + _kMaxKeepWholeStep);
+                if (cappedDelta < currentDelta) {
+                  offsets[c] = cappedDelta;
                 }
-              }
-            } else {
-              final primaries = byCross[cross];
-              if (primaries != null) {
-                final minP = primaries.reduce(math.min);
-                final needed = minP - nominalBoundary;
-                offsets[cross] = needed.clamp(-tolerance, tolerance);
+                // Override any cells still stranded.
+                final newActual = nominalBoundary + (offsets[c] ?? 0);
+                for (final p in primaries) {
+                  if (p < newActual) includeRightCells.add((p, c));
+                }
               }
             }
           }
@@ -865,7 +893,9 @@ class PageLayout {
       if (actual < bandMax) {
         final rightKey = (actual << 16) | cross;
         final rightObjId = cellToObj[rightKey];
-        if (rightObjId != null && fitsInBand(rightObjId)) {
+        if (rightObjId != null &&
+            !reclaimed.contains(rightObjId) &&
+            fitsInBand(rightObjId)) {
           final byCross = getObjByCross(rightObjId);
           int objLeft = 0, objRight = 0;
           for (final entry in byCross.entries) {
@@ -876,22 +906,31 @@ class PageLayout {
               else objRight++;
             }
           }
-          // If majority is on page 1, pull this fragment over
+          // If majority is on page 1, reclaim stranded cells
           if (objLeft > objRight) {
-            if (lockedCrosses.contains(cross)) {
-              // Can't move — add stranded cells as overrides
-              final primaries = byCross[cross];
-              if (primaries != null) {
-                for (final p in primaries) {
-                  if (p >= actual) includeLeftCells.add((p, cross));
+            reclaimed.add(rightObjId);
+            for (final crossEntry in byCross.entries) {
+              final c = crossEntry.key;
+              final primaries = crossEntry.value;
+              final maxP = primaries.reduce(math.max);
+              final currentDelta = offsets[c] ?? 0;
+              final crossActual = nominalBoundary + currentDelta;
+              if (maxP >= crossActual) {
+                // Try to shift boundary right (capped).
+                final idealDelta =
+                    ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
+                final interpDelta = interpolated[c] ?? 0;
+                final cappedDelta = idealDelta.clamp(
+                    interpDelta - _kMaxKeepWholeStep,
+                    interpDelta + _kMaxKeepWholeStep);
+                if (cappedDelta > currentDelta) {
+                  offsets[c] = cappedDelta;
                 }
-              }
-            } else {
-              final primaries = byCross[cross];
-              if (primaries != null) {
-                final maxP = primaries.reduce(math.max);
-                final needed = (maxP + 1) - nominalBoundary;
-                offsets[cross] = needed.clamp(-tolerance, tolerance);
+                // Override any cells still stranded.
+                final newActual = nominalBoundary + (offsets[c] ?? 0);
+                for (final p in primaries) {
+                  if (p >= newActual) includeLeftCells.add((p, c));
+                }
               }
             }
           }
