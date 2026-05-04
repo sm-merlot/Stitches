@@ -1,6 +1,6 @@
 {
   "name": "stitches",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "scripts": {
     "version": "changeset version && node scripts/sync-pubspec.js",
