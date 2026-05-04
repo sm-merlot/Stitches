@@ -234,6 +234,79 @@ void main() {
           }
         }
       });
+
+      test('check cell page membership', () {
+        void check(int c, int r) {
+          final pages = <String>[];
+          for (int py = 0; py < layout.pagesDown; py++) {
+            for (int px = 0; px < layout.pagesAcross; px++) {
+              if (layout.cellOnPage(c, r, px, py)) {
+                final idx = py * layout.pagesAcross + px;
+                pages.add('PAGE$idx($px,$py)');
+              }
+            }
+          }
+          print('($c,$r) on: ${pages.join(", ")}');
+        }
+
+        // p object at c41,r50 through c39,r56
+        for (final (c,r) in [(41,50),(40,51),(41,52),(41,53),(40,54),(40,55),(39,56)]) {
+          check(c, r);
+        }
+        // (100,51) — should be on page 7
+        check(100, 51);
+        // Also check user's other cells
+        for (final (c,r) in [(91,54),(92,54),(93,53),(94,53)]) {
+          check(c, r);
+        }
+        // Check neighbors of (100,51) to understand the object
+        for (int r = 48; r <= 56; r++) {
+          check(100, r);
+        }
+        // Detailed boundary check
+        void detailed(int c, int r) {
+          print('\nDetailed ($c,$r):');
+          for (int py = 0; py < layout.pagesDown; py++) {
+            for (int px = 0; px < layout.pagesAcross; px++) {
+              final raw = layout.rawCellOnPage(c, r, px, py);
+              final cell = layout.cellOnPage(c, r, px, py);
+              if (raw || cell) {
+                final idx = py * layout.pagesAcross + px;
+                final l = layout.leftBoundaryForRow(px, r);
+                final ri = layout.rightBoundaryForRow(px, r);
+                final t = layout.topBoundaryForCol(py, c);
+                final b = layout.bottomBoundaryForCol(py, c);
+                print('  PAGE$idx($px,$py): raw=$raw cell=$cell  L=$l R=$ri T=$t B=$b');
+              }
+            }
+          }
+        }
+        detailed(97, 50);
+        detailed(100, 53);
+        // 4-corner area: cols 95-103, rows 48-55
+        print('\n4-corner grid:');
+        for (int r = 48; r <= 55; r++) {
+          final buf = StringBuffer('r$r: ');
+          for (int c = 95; c <= 103; c++) {
+            final pages = <String>[];
+            for (int py = 0; py < layout.pagesDown; py++) {
+              for (int px = 0; px < layout.pagesAcross; px++) {
+                if (layout.cellOnPage(c, r, px, py)) {
+                  pages.add('${py * layout.pagesAcross + px}');
+                }
+              }
+            }
+            buf.write('c$c=${pages.join("/")} ');
+          }
+          print(buf);
+        }
+        // Check the 4-corner neighborhood
+        for (int c = 98; c <= 102; c++) {
+          for (int r = 48; r <= 55; r++) {
+            check(c, r);
+          }
+        }
+      });
     });
   }
 }

@@ -344,9 +344,6 @@ class PageLayout {
       if (p == bandMax - 1) touchesBandMax = true;
     }
 
-    // Doesn't span boundary → no-op
-    if (!hasLeft || !hasRight) return _clNoOp;
-
     // Check if clipped at band edges (object continues beyond band)
     bool extendsLeft = false, extendsRight = false;
     if (touchesBandMin || touchesBandMax) {
@@ -370,6 +367,9 @@ class PageLayout {
         }
       }
     }
+
+    // Doesn't span boundary → no-op
+    if (!hasLeft || !hasRight) return _clNoOp;
 
     if (extendsLeft && extendsRight) return _clTooBig;
     if (extendsLeft) return _clKeepLeft;
@@ -595,7 +595,7 @@ class PageLayout {
       return ({for (int i = 0; i < maxCross; i++) i: 0}, emptyLeft, emptyRight);
     }
 
-    // Phase 1: Band extraction
+    // ── Phase 1: Band extraction ──────────────────────────────────────────
     final bandColors = _extractBand(
       nominalBoundary: nominalBoundary,
       tolerance: tolerance,
@@ -606,72 +606,70 @@ class PageLayout {
 
     final (bandMin, bandMax) = _bandBounds(nominalBoundary, tolerance, maxBoundary);
 
-    // Phase 2: Local object detection
+    // ── Phase 2: Local object detection ───────────────────────────────────
     final localObjects = _detectLocalObjects(bandColors);
 
-    // Phase 2b: Filter objects for keep-whole clustering.
-    // Only objects that span the boundary need protection. noOp objects
-    // (entirely one side) and tooBig (extend beyond band on both sides)
+    // ── Phase 2b: Filter spanning objects for keep-whole clustering ───────
+    // noOp (entirely one side) and tooBig (extends beyond band both sides)
     // are excluded so they don't skew the cluster's side decision.
     final spanningObjects = <int, Set<(int, int)>>{};
+    final tooBigObjectIds = <int>{};
     for (final entry in localObjects.entries) {
       final cl = _classifyCluster(
           entry.value, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
-      if (cl != _clNoOp && cl != _clTooBig) {
+      if (cl == _clTooBig) {
+        tooBigObjectIds.add(entry.key);
+      } else if (cl != _clNoOp) {
         spanningObjects[entry.key] = entry.value;
       }
     }
 
-    // Phase 2c: Same-colour clustering for keep-whole (merges nearby
-    // boundary-spanning objects so related objects make a unified side
-    // decision instead of conflicting).
+    // ── Phase 2c: Same-colour clustering (for classification only) ───────
+    // Clustering merges nearby same-colour spanning objects so that
+    // classification (keepWhole vs keepLeft/Right vs tooBig) considers the
+    // group as a whole. But the SIDE DECISION is per local object — each
+    // 8-connected object is atomic and all its cells go to the same side.
     final keepWholeClusters =
         _buildLocalClusters(spanningObjects, bandColors);
 
-    // Phase 4a: Anchor detection
-    // Use ALL objects (including tooBig) for anchor weight calculation —
-    // large objects provide strong edges for cut placement even though
-    // they can't be kept whole.
-    final allClusters = _buildLocalClusters(localObjects, bandColors);
-    final anchors = _detectAnchors(
-      nominalBoundary: nominalBoundary,
-      tolerance: tolerance,
-      bandMin: bandMin,
-      bandMax: bandMax,
-      maxBoundary: maxBoundary,
-      maxCross: maxCross,
-      colorAt: colorAt,
-      localClusters: allClusters,
-    );
+    // Build cell → objectId lookup for spanning objects.
+    final cellToSpanningObj = <(int, int), int>{};
+    for (final entry in spanningObjects.entries) {
+      for (final cell in entry.value) {
+        cellToSpanningObj[cell] = entry.key;
+      }
+    }
 
-    // Phase 4b: Interpolation (connect anchors + fuzz gaps)
-    final offsets = _interpolateAnchors(
-      anchors: anchors,
-      maxCross: maxCross,
-      tolerance: tolerance,
-      nominalBoundary: nominalBoundary,
-    );
+    // Build set of object IDs that belong to keep-whole-eligible clusters
+    // (clusters that aren't noOp or tooBig after clustering).
+    final keepWholeObjectIds = <int>{};
+    for (final cluster in keepWholeClusters.values) {
+      final cl = _classifyCluster(
+          cluster, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
+      if (cl == _clNoOp || cl == _clTooBig) continue;
+      for (final cell in cluster) {
+        final objId = cellToSpanningObj[cell];
+        if (objId != null) keepWholeObjectIds.add(objId);
+      }
+    }
 
-    // Phase 3 enforcement: keep-whole protection (hybrid model).
-    //
-    // Keep-whole shifts boundary offsets to protect objects, but caps the
-    // shift to ±_kMaxKeepWholeStep from the interpolated value at each cross.
-    // When the needed shift exceeds the cap, the remaining cells are added
-    // to override sets (_includedCells) so they appear on the correct page
-    // without creating large boundary jumps.
-    //
-    // This gives smooth boundaries (no >2-step jumps from keep-whole) while
-    // still keeping most objects whole via boundary shifts.
-    final interpolated = Map<int, int>.of(offsets); // snapshot before mutations
+    // ── Phase 3: Side decision + hard constraints ─────────────────────────
+    // Each LOCAL OBJECT (8-connected) picks a side independently based on
+    // where its cells are. Objects are atomic — never split. The required
+    // offset at each cross becomes a HARD CONSTRAINT for interpolation.
+    // Conflicts at the same cross (opposite sides) → _includedCells.
+    final hardConstraints = <int, int>{}; // cross → required offset
+    final constraintDirection = <int, bool>{}; // cross → true=keepLeft
     final includeLeftCells = <(int, int)>{};
     final includeRightCells = <(int, int)>{};
 
-    for (final obj in keepWholeClusters.values) {
+    for (final objId in keepWholeObjectIds) {
+      final obj = spanningObjects[objId]!;
       final cl = _classifyCluster(
           obj, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
       if (cl == _clNoOp || cl == _clTooBig) continue;
 
-      // Determine which side to keep the object on.
+      // Side decision: per-object, based on this object's own cells.
       final bool keepLeft;
       if (cl == _clKeepLeft) {
         keepLeft = true;
@@ -697,7 +695,7 @@ class PageLayout {
         }
       }
 
-      // Group cells by cross-index.
+      // Compute required offset at each cross to keep the object whole.
       final byCross = <int, List<int>>{};
       for (final (p, c) in obj) {
         byCross.putIfAbsent(c, () => []).add(p);
@@ -706,58 +704,106 @@ class PageLayout {
       for (final entry in byCross.entries) {
         final cross = entry.key;
         final primaries = entry.value;
-        final currentDelta = offsets[cross] ?? 0;
-        final actual = nominalBoundary + currentDelta;
-        final interpDelta = interpolated[cross] ?? 0;
+
+        // Check for conflicting constraint at this cross.
+        final existingDir = constraintDirection[cross];
+        if (existingDir != null && existingDir != keepLeft) {
+          // Opposite direction conflict — can't satisfy both with one offset.
+          // This object's cells on the wrong side → overrides.
+          final currentConstraint = hardConstraints[cross]!;
+          final actual = nominalBoundary + currentConstraint;
+          for (final p in primaries) {
+            if (keepLeft && p >= actual) {
+              includeLeftCells.add((p, cross));
+            } else if (!keepLeft && p < actual) {
+              includeRightCells.add((p, cross));
+            }
+          }
+          continue;
+        }
 
         if (keepLeft) {
           final maxP = primaries.reduce(math.max);
-          if (actual <= maxP) {
-            // Need to shift right to include maxP on left page.
-            final idealDelta =
-                ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
-            // Cap: don't exceed ±_kMaxKeepWholeStep from interpolated value.
-            final cappedDelta = idealDelta.clamp(
-                interpDelta - _kMaxKeepWholeStep,
-                interpDelta + _kMaxKeepWholeStep);
-            // Only shift if it actually moves further than current.
-            if (cappedDelta > currentDelta) {
-              offsets[cross] = cappedDelta;
-            }
-            // Any cells still on wrong side after capped shift → override.
-            final newActual = nominalBoundary + (offsets[cross] ?? 0);
-            for (final p in primaries) {
-              if (p >= newActual) includeLeftCells.add((p, cross));
-            }
+          final ideal = ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
+          final capped = ideal.clamp(-_kMaxKeepWholeStep, _kMaxKeepWholeStep);
+          final existing = hardConstraints[cross];
+          if (existing == null || capped > existing) {
+            hardConstraints[cross] = capped;
+            constraintDirection[cross] = true;
+          }
+          // Cells beyond the cap → overrides.
+          final actual = nominalBoundary + (hardConstraints[cross] ?? 0);
+          for (final p in primaries) {
+            if (p >= actual) includeLeftCells.add((p, cross));
           }
         } else {
           final minP = primaries.reduce(math.min);
-          if (actual > minP) {
-            // Need to shift left to include minP on right page.
-            final idealDelta =
-                (minP - nominalBoundary).clamp(-tolerance, tolerance);
-            final cappedDelta = idealDelta.clamp(
-                interpDelta - _kMaxKeepWholeStep,
-                interpDelta + _kMaxKeepWholeStep);
-            if (cappedDelta < currentDelta) {
-              offsets[cross] = cappedDelta;
-            }
+          final ideal = (minP - nominalBoundary).clamp(-tolerance, tolerance);
+          final capped = ideal.clamp(-_kMaxKeepWholeStep, _kMaxKeepWholeStep);
+          final existing = hardConstraints[cross];
+          if (existing == null || capped < existing) {
+            hardConstraints[cross] = capped;
+            constraintDirection[cross] = false;
           }
-          // Any cells still on wrong side after capped shift → override.
-          final newActual = nominalBoundary + (offsets[cross] ?? 0);
+          // Cells beyond the cap → overrides.
+          final actual = nominalBoundary + (hardConstraints[cross] ?? 0);
           for (final p in primaries) {
-            if (p < newActual) includeRightCells.add((p, cross));
+            if (p < actual) includeRightCells.add((p, cross));
           }
         }
       }
     }
 
-    // Phase 5: Fragment reclamation.
+    // ── Phase 4a: Anchor detection (tooBig regions only) ──────────────────
+    // Use ALL objects for anchor weight calculation — large objects provide
+    // strong edges for cut placement.
+    final allClusters = _buildLocalClusters(localObjects, bandColors);
+    final anchors = _detectAnchors(
+      nominalBoundary: nominalBoundary,
+      tolerance: tolerance,
+      bandMin: bandMin,
+      bandMax: bandMax,
+      maxBoundary: maxBoundary,
+      maxCross: maxCross,
+      colorAt: colorAt,
+      localClusters: allClusters,
+    );
+
+    // ── Phase 4b: Merge constraints + anchors, then interpolate ───────────
+    // Hard constraints from keep-whole take priority. Anchors fill in crosses
+    // without constraints. Interpolation connects them smoothly.
+    final fixedPoints = <int, int>{};
+
+    // Hard constraints first (always win).
+    fixedPoints.addAll(hardConstraints);
+
+    // Anchors for unconstrained crosses.
+    for (final entry in anchors.entries) {
+      if (!fixedPoints.containsKey(entry.key)) {
+        fixedPoints[entry.key] = entry.value;
+      }
+    }
+
+    // Interpolate between all fixed points (constraints + anchors).
+    final offsets = _interpolateAnchors(
+      anchors: fixedPoints,
+      maxCross: maxCross,
+      tolerance: tolerance,
+      nominalBoundary: nominalBoundary,
+    );
+
+    // Restore hard constraints (interpolation might have smoothed them).
+    for (final entry in hardConstraints.entries) {
+      offsets[entry.key] = entry.value;
+    }
+
+    // ── Phase 5: Fragment reclamation ─────────────────────────────────────
     // After the cut is placed, small object fragments may be stranded on the
-    // wrong side. Shifts offsets (capped) + overrides for remainder.
+    // wrong side. Shift offsets or add overrides. Hard-constrained crosses
+    // use overrides only.
     _reclaimFragments(
       offsets: offsets,
-      interpolated: interpolated,
+      hardConstraints: hardConstraints,
       nominalBoundary: nominalBoundary,
       tolerance: tolerance,
       bandMin: bandMin,
@@ -770,19 +816,84 @@ class PageLayout {
       includeRightCells: includeRightCells,
     );
 
+    // ── Phase 6: Split-object protection ────────────────────────────────
+    // After the boundary is finalized, scan all local objects. Any object
+    // that is now split by the actual boundary gets override cells so it
+    // appears whole on its majority side. This catches objects that were
+    // noOp relative to nominal but got split by another object's keep-whole
+    // constraint shifting the boundary into them.
+    _protectSplitObjects(
+      offsets: offsets,
+      nominalBoundary: nominalBoundary,
+      tolerance: tolerance,
+      localObjects: localObjects,
+      excludeObjectIds: tooBigObjectIds,
+      includeLeftCells: includeLeftCells,
+      includeRightCells: includeRightCells,
+    );
+
     return (offsets, includeLeftCells, includeRightCells);
+  }
+
+  /// Scan all local objects against the actual boundary. Any object with
+  /// cells on both sides gets override cells for its minority-side cells
+  /// so it appears whole on the majority side.
+  static void _protectSplitObjects({
+    required Map<int, int> offsets,
+    required int nominalBoundary,
+    required int tolerance,
+    required Map<int, Set<(int, int)>> localObjects,
+    required Set<int> excludeObjectIds,
+    required Set<(int, int)> includeLeftCells,
+    required Set<(int, int)> includeRightCells,
+  }) {
+    for (final entry in localObjects.entries) {
+      if (excludeObjectIds.contains(entry.key)) continue;
+      final obj = entry.value;
+
+      // Skip large objects — they span too many cross-indices to keep whole
+      // without creating massive overrides. The band width (2× tolerance)
+      // is a natural size threshold: objects larger than the band area are
+      // effectively tooBig for split protection.
+      if (obj.length > tolerance * 4) continue;
+
+      int leftCount = 0, rightCount = 0;
+      for (final (p, c) in obj) {
+        final actual = nominalBoundary + (offsets[c] ?? 0);
+        if (p < actual) leftCount++;
+        else rightCount++;
+      }
+
+      // Object is entirely on one side → no split, skip.
+      if (leftCount == 0 || rightCount == 0) continue;
+
+      // Object is split — add minority-side cells as overrides.
+      if (leftCount >= rightCount) {
+        // Majority left — add right-side cells to includeLeftCells.
+        for (final (p, c) in obj) {
+          final actual = nominalBoundary + (offsets[c] ?? 0);
+          if (p >= actual) includeLeftCells.add((p, c));
+        }
+      } else {
+        // Majority right — add left-side cells to includeRightCells.
+        for (final (p, c) in obj) {
+          final actual = nominalBoundary + (offsets[c] ?? 0);
+          if (p < actual) includeRightCells.add((p, c));
+        }
+      }
+    }
   }
 
   /// Reclaim small object fragments stranded by the cut.
   ///
   /// For each cross-index, examines the cell immediately left and right of
   /// the cut position. If that cell belongs to a local object that fits
-  /// entirely within [bandMin, bandMax), the boundary is shifted (capped at
-  /// ±[_kMaxKeepWholeStep] from interpolated) to keep the object whole.
-  /// Any cells still stranded after the capped shift → override sets.
+  /// entirely within [bandMin, bandMax), the boundary is shifted to keep
+  /// the object whole. Hard-constrained crosses (from keep-whole) are not
+  /// shifted — stranded cells there become overrides instead.
   static void _reclaimFragments({
     required Map<int, int> offsets,
-    required Map<int, int> interpolated,
+    required Map<int, int> hardConstraints,
     required int nominalBoundary,
     required int tolerance,
     required int bandMin,
@@ -868,20 +979,20 @@ class PageLayout {
               final currentDelta = offsets[c] ?? 0;
               final crossActual = nominalBoundary + currentDelta;
               if (minP < crossActual) {
-                // Try to shift boundary left (capped).
-                final idealDelta =
-                    (minP - nominalBoundary).clamp(-tolerance, tolerance);
-                final interpDelta = interpolated[c] ?? 0;
-                final cappedDelta = idealDelta.clamp(
-                    interpDelta - _kMaxKeepWholeStep,
-                    interpDelta + _kMaxKeepWholeStep);
-                if (cappedDelta < currentDelta) {
-                  offsets[c] = cappedDelta;
-                }
-                // Override any cells still stranded.
-                final newActual = nominalBoundary + (offsets[c] ?? 0);
-                for (final p in primaries) {
-                  if (p < newActual) includeRightCells.add((p, c));
+                if (hardConstraints.containsKey(c)) {
+                  // Hard-constrained — can't shift, add overrides.
+                  for (final p in primaries) {
+                    if (p < crossActual) includeRightCells.add((p, c));
+                  }
+                } else {
+                  final needed =
+                      (minP - nominalBoundary).clamp(-tolerance, tolerance);
+                  offsets[c] = needed;
+                  // Override any cells still stranded.
+                  final newActual = nominalBoundary + needed;
+                  for (final p in primaries) {
+                    if (p < newActual) includeRightCells.add((p, c));
+                  }
                 }
               }
             }
@@ -916,20 +1027,19 @@ class PageLayout {
               final currentDelta = offsets[c] ?? 0;
               final crossActual = nominalBoundary + currentDelta;
               if (maxP >= crossActual) {
-                // Try to shift boundary right (capped).
-                final idealDelta =
-                    ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
-                final interpDelta = interpolated[c] ?? 0;
-                final cappedDelta = idealDelta.clamp(
-                    interpDelta - _kMaxKeepWholeStep,
-                    interpDelta + _kMaxKeepWholeStep);
-                if (cappedDelta > currentDelta) {
-                  offsets[c] = cappedDelta;
-                }
-                // Override any cells still stranded.
-                final newActual = nominalBoundary + (offsets[c] ?? 0);
-                for (final p in primaries) {
-                  if (p >= newActual) includeLeftCells.add((p, c));
+                if (hardConstraints.containsKey(c)) {
+                  // Hard-constrained — can't shift, add overrides.
+                  for (final p in primaries) {
+                    if (p >= crossActual) includeLeftCells.add((p, c));
+                  }
+                } else {
+                  final needed =
+                      ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
+                  offsets[c] = needed;
+                  final newActual = nominalBoundary + needed;
+                  for (final p in primaries) {
+                    if (p >= newActual) includeLeftCells.add((p, c));
+                  }
                 }
               }
             }
@@ -1539,9 +1649,14 @@ class PageLayout {
     // page indices. Vertical: primary=col, cross=row. Horizontal: primary=row,
     // cross=col (transposed by caller).
     final Map<int, Set<int>> includedCells = {};
+    final Map<int, Set<int>> excludedCells = {};
 
     void addIncluded(int pageIdx, int col, int row) {
       includedCells.putIfAbsent(pageIdx, () => {}).add(_encodeCell(col, row));
+    }
+
+    void addExcluded(int pageIdx, int col, int row) {
+      excludedCells.putIfAbsent(pageIdx, () => {}).add(_encodeCell(col, row));
     }
 
     // Helper: find pageRow for a cell via horizontal boundaries.
@@ -1581,35 +1696,103 @@ class PageLayout {
       return (col ~/ config.pageWidth).clamp(0, pagesAcross - 1);
     }
 
+    // Track override target axes per cell for corner fixup.
+    // Key: encoded cell. Value: target page col from V override.
+    final vOverrideCol = <int, int>{};
+    // Key: encoded cell. Value: target page row from H override.
+    final hOverrideRow = <int, int>{};
+
     // Vertical overrides: (primary=col, cross=row)
+    // vIncludeLeft[p-1]: cell was on page col p (right), move to p-1 (left)
     for (final entry in vIncludeLeft.entries) {
-      final targetPageCol = entry.key;
+      final targetPageCol = entry.key; // p - 1
       for (final (col, row) in entry.value) {
+        final key = _encodeCell(col, row);
+        vOverrideCol[key] = targetPageCol;
         final py = findPageRow(col, row);
         addIncluded(py * pagesAcross + targetPageCol, col, row);
+        addExcluded(py * pagesAcross + (targetPageCol + 1), col, row);
       }
     }
+    // vIncludeRight[p]: cell was on page col p-1 (left), move to p (right)
     for (final entry in vIncludeRight.entries) {
-      final targetPageCol = entry.key;
+      final targetPageCol = entry.key; // p
       for (final (col, row) in entry.value) {
+        final key = _encodeCell(col, row);
+        vOverrideCol[key] = targetPageCol;
         final py = findPageRow(col, row);
         addIncluded(py * pagesAcross + targetPageCol, col, row);
+        addExcluded(py * pagesAcross + (targetPageCol - 1), col, row);
       }
     }
 
     // Horizontal overrides: (primary=row, cross=col) — transposed
+    // hIncludeTop[p-1]: cell was on page row p (bottom), move to p-1 (top)
     for (final entry in hIncludeTop.entries) {
-      final targetPageRow = entry.key;
+      final targetPageRow = entry.key; // p - 1
       for (final (row, col) in entry.value) {
+        final key = _encodeCell(col, row);
+        hOverrideRow[key] = targetPageRow;
         final px = findPageCol(col, row);
         addIncluded(targetPageRow * pagesAcross + px, col, row);
+        addExcluded((targetPageRow + 1) * pagesAcross + px, col, row);
       }
     }
+    // hIncludeBottom[p]: cell was on page row p-1 (top), move to p (bottom)
     for (final entry in hIncludeBottom.entries) {
-      final targetPageRow = entry.key;
+      final targetPageRow = entry.key; // p
       for (final (row, col) in entry.value) {
+        final key = _encodeCell(col, row);
+        hOverrideRow[key] = targetPageRow;
         final px = findPageCol(col, row);
         addIncluded(targetPageRow * pagesAcross + px, col, row);
+        addExcluded((targetPageRow - 1) * pagesAcross + px, col, row);
+      }
+    }
+
+    // ── Corner override fixup ────────────────────────────────────────────────
+    // Cells overridden by BOTH a vertical and horizontal boundary got placed
+    // using findPageRow/findPageCol for the other axis, which doesn't account
+    // for the other override. Fix: move them to the page that combines both
+    // override axes.
+    for (final key in vOverrideCol.keys) {
+      final hRow = hOverrideRow[key];
+      if (hRow == null) continue; // only V override — already correct
+
+      final col = key >> 16;
+      final row = key & 0xFFFF;
+      final vCol = vOverrideCol[key]!;
+      final correctIdx = hRow * pagesAcross + vCol;
+
+      // Remove from wherever V and H independently placed it.
+      // V override placed it at (findPageRow, vCol).
+      // H override placed it at (hRow, findPageCol).
+      final vPlacedRow = findPageRow(col, row);
+      final vPlacedIdx = vPlacedRow * pagesAcross + vCol;
+      final hPlacedCol = findPageCol(col, row);
+      final hPlacedIdx = hRow * pagesAcross + hPlacedCol;
+
+      final encoded = _encodeCell(col, row);
+
+      // Remove incorrect placements.
+      if (vPlacedIdx != correctIdx) {
+        includedCells[vPlacedIdx]?.remove(encoded);
+      }
+      if (hPlacedIdx != correctIdx && hPlacedIdx != vPlacedIdx) {
+        includedCells[hPlacedIdx]?.remove(encoded);
+      }
+
+      // Add to correct page.
+      addIncluded(correctIdx, col, row);
+
+      // Exclude from all 4 corner pages except the correct one.
+      for (final py in [vPlacedRow, hRow]) {
+        for (final px in [vCol, hPlacedCol]) {
+          final idx = py * pagesAcross + px;
+          if (idx != correctIdx) {
+            addExcluded(idx, col, row);
+          }
+        }
       }
     }
 
@@ -1645,106 +1828,96 @@ class PageLayout {
       return col >= left && col < right && row >= top && row < bottom;
     }
 
-    final Map<int, Set<int>> excludedCells = {};
-
+    // ── Corner object reconciliation ──────────────────────────────────────
+    // V and H boundaries are independent → at 4-page corners, objects can
+    // be fragmented across 3-4 pages. Fix: detect objects in corner regions,
+    // assign each object to the page with the most of its cells. Minimises
+    // the number of pages an object spans.
     if (config.tolerance > 0) {
       final fa = config.tolerance;
 
-      for (int py = 0; py < pagesDown; py++) {
-        for (int px = 0; px < pagesAcross; px++) {
-          final pageIdx = py * pagesAcross + px;
+      // Resolve which page a cell is currently on.
+      int? pageOf(int col, int row) {
+        final key = _encodeCell(col, row);
+        for (final entry in includedCells.entries) {
+          if (entry.value.contains(key)) return entry.key;
+        }
+        for (int py = 0; py < pagesDown; py++) {
+          for (int px = 0; px < pagesAcross; px++) {
+            if (rawOnPage(col, row, px, py)) {
+              final idx = py * pagesAcross + px;
+              final ex = excludedCells[idx];
+              if (ex == null || !ex.contains(key)) return idx;
+            }
+          }
+        }
+        return null;
+      }
 
-          for (int cx = px; cx <= px + 1; cx++) {
-            if (cx == 0 || cx >= pagesAcross) continue;
-            for (int cy = py; cy <= py + 1; cy++) {
-              if (cy == 0 || cy >= pagesDown) continue;
+      // Move a cell from one page to another.
+      void moveCell(int col, int row, int fromPage, int toPage) {
+        final key = _encodeCell(col, row);
+        includedCells[fromPage]?.remove(key);
+        addExcluded(fromPage, col, row);
+        addIncluded(toPage, col, row);
+        excludedCells[toPage]?.remove(key);
+      }
 
-              final bv = cx * config.pageWidth;
-              final bh = cy * config.pageHeight;
+      // Process each corner (intersection of a V and H boundary).
+      for (int cx = 1; cx < pagesAcross; cx++) {
+        for (int cy = 1; cy < pagesDown; cy++) {
+          final bv = cx * config.pageWidth;
+          final bh = cy * config.pageHeight;
+          final cMinC = (bv - fa).clamp(0, pattern.width);
+          final cMaxC = (bv + fa).clamp(0, pattern.width);
+          final cMinR = (bh - fa).clamp(0, pattern.height);
+          final cMaxR = (bh + fa).clamp(0, pattern.height);
 
-              final cMinC = (bv - fa).clamp(0, pattern.width - 1);
-              final cMaxC = (bv + fa - 1).clamp(0, pattern.width - 1);
-              final cMinR = (bh - fa).clamp(0, pattern.height - 1);
-              final cMaxR = (bh + fa - 1).clamp(0, pattern.height - 1);
+          // Build colour map for corner region (non-null only).
+          final cornerColors = <int, int>{};
+          for (int c = cMinC; c < cMaxC; c++) {
+            for (int r = cMinR; r < cMaxR; r++) {
+              final ci = colorAt(c, r);
+              if (ci != null) cornerColors[(c << 16) | r] = ci;
+            }
+          }
 
-              final Set<int> regionOnPage = {};
-              for (int c = cMinC; c <= cMaxC; c++) {
-                for (int r = cMinR; r <= cMaxR; r++) {
-                  if (rawOnPage(c, r, px, py)) {
-                    regionOnPage.add(_encodeCell(c, r));
-                  }
-                }
+          // Detect 8-connected same-colour objects within the corner.
+          final cornerObjects = _detectLocalObjects(cornerColors);
+
+          // For each object, find the page with the most cells.
+          for (final obj in cornerObjects.values) {
+            if (obj.length <= 1) continue;
+
+            // Count cells per page.
+            final pageCounts = <int, int>{};
+            final cellPages = <(int, int), int>{};
+            for (final (c, r) in obj) {
+              final page = pageOf(c, r);
+              if (page != null) {
+                pageCounts[page] = (pageCounts[page] ?? 0) + 1;
+                cellPages[(c, r)] = page;
               }
+            }
 
-              // Seed _includedCells into the region — these cells are on
-              // this page by override, so they must not be excluded.
-              final pageIncluded = includedCells[pageIdx];
-              if (pageIncluded != null) {
-                for (final key in pageIncluded) {
-                  final c = key >> 16;
-                  final r = key & 0xFFFF;
-                  if (c >= cMinC && c <= cMaxC && r >= cMinR && r <= cMaxR) {
-                    regionOnPage.add(key);
-                  }
-                }
+            // Already all on one page → skip.
+            if (pageCounts.length <= 1) continue;
+
+            // Find majority page.
+            int bestPage = pageCounts.entries.first.key;
+            int bestCount = 0;
+            for (final entry in pageCounts.entries) {
+              if (entry.value > bestCount) {
+                bestCount = entry.value;
+                bestPage = entry.key;
               }
+            }
 
-              if (regionOnPage.isEmpty) continue;
-
-              final Set<int> connected = {};
-              final List<int> queue = [];
-
-              // Included cells are always connected (by override).
-              if (pageIncluded != null) {
-                for (final key in pageIncluded) {
-                  if (regionOnPage.contains(key)) {
-                    connected.add(key);
-                    queue.add(key);
-                  }
-                }
-              }
-
-              for (final key in regionOnPage) {
-                final c = key >> 16;
-                final r = key & 0xFFFF;
-                bool isConnected = false;
-                for (final d in [(-1, 0), (1, 0), (0, -1), (0, 1)]) {
-                  final nc = c + d.$1;
-                  final nr = r + d.$2;
-                  if (nc < cMinC || nc > cMaxC || nr < cMinR || nr > cMaxR) {
-                    if (rawOnPage(nc, nr, px, py)) {
-                      isConnected = true;
-                      break;
-                    }
-                  }
-                }
-                if (isConnected) {
-                  connected.add(key);
-                  queue.add(key);
-                }
-              }
-
-              int qi = 0;
-              while (qi < queue.length) {
-                final key = queue[qi++];
-                final c = key >> 16;
-                final r = key & 0xFFFF;
-                for (final d in [(-1, 0), (1, 0), (0, -1), (0, 1)]) {
-                  final nc = c + d.$1;
-                  final nr = r + d.$2;
-                  final nkey = _encodeCell(nc, nr);
-                  if (regionOnPage.contains(nkey) &&
-                      !connected.contains(nkey)) {
-                    connected.add(nkey);
-                    queue.add(nkey);
-                  }
-                }
-              }
-
-              for (final key in regionOnPage) {
-                if (!connected.contains(key)) {
-                  excludedCells.putIfAbsent(pageIdx, () => {}).add(key);
-                }
+            // Move minority cells to majority page.
+            for (final entry in cellPages.entries) {
+              if (entry.value != bestPage) {
+                final (c, r) = entry.key;
+                moveCell(c, r, entry.value, bestPage);
               }
             }
           }
