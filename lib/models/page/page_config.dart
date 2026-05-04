@@ -29,7 +29,7 @@ class PageConfig {
     enabled: false,
     pageWidth: 50,
     pageHeight: 50,
-    tolerance: 4,
+    tolerance: 5,
   );
 
   PageConfig copyWith({
@@ -57,7 +57,7 @@ class PageConfig {
         pageWidth: yaml['pageWidth'] as int? ?? 50,
         pageHeight: yaml['pageHeight'] as int? ?? 50,
         // Accept both new 'tolerance' key and legacy 'fuzzyAmount' for migration.
-        tolerance: yaml['tolerance'] as int? ?? yaml['fuzzyAmount'] as int? ?? 4,
+        tolerance: yaml['tolerance'] as int? ?? yaml['fuzzyAmount'] as int? ?? 5,
       );
 
   @override

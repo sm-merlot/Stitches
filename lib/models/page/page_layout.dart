@@ -292,15 +292,21 @@ class PageLayout {
   ///
   /// - [noOp]: entirely on one side of nominal — no action needed.
   /// - [keepWhole]: spans boundary but fits within band — keep intact.
-  /// - [tooBig]: clipped by band edge (extends beyond tolerance) — must split.
+  /// - [keepLeft]: extends beyond band on left/top only — keep on left side.
+  /// - [keepRight]: extends beyond band on right/bottom only — keep on right.
+  /// - [tooBig]: extends beyond band on both sides — must split.
   static const int _clNoOp = 0;
   static const int _clKeepWhole = 1;
   static const int _clTooBig = 2;
+  static const int _clKeepLeft = 3;
+  static const int _clKeepRight = 4;
 
   /// Classify a cluster: does it need keep-whole protection or is it too big?
   ///
-  /// A cluster is "clipped" (too-big) if it touches the band edge AND the same
-  /// colour continues just outside the band (peeking one cell via [colorAt]).
+  /// A cluster is "clipped" if it touches a band edge AND the same colour
+  /// continues just outside the band (peeking one cell via [colorAt]).
+  /// If clipped on only one side, the real object edge is on the other side
+  /// and can be protected via keep-whole (keepLeft/keepRight).
   static int _classifyCluster(
     Set<(int, int)> cluster,
     int nominalBoundary,
@@ -323,6 +329,7 @@ class PageLayout {
     if (!hasLeft || !hasRight) return _clNoOp;
 
     // Check if clipped at band edges (object continues beyond band)
+    bool extendsLeft = false, extendsRight = false;
     if (touchesBandMin || touchesBandMax) {
       final (fp, fc) = cluster.first;
       final color = bandColors[(fp << 16) | fc];
@@ -330,19 +337,24 @@ class PageLayout {
       if (touchesBandMin && bandMin > 0) {
         for (final (p, c) in cluster) {
           if (p == bandMin && colorAt(bandMin - 1, c) == color) {
-            return _clTooBig;
+            extendsLeft = true;
+            break;
           }
         }
       }
       if (touchesBandMax) {
         for (final (p, c) in cluster) {
           if (p == bandMax - 1 && colorAt(bandMax, c) == color) {
-            return _clTooBig;
+            extendsRight = true;
+            break;
           }
         }
       }
     }
 
+    if (extendsLeft && extendsRight) return _clTooBig;
+    if (extendsLeft) return _clKeepLeft;
+    if (extendsRight) return _clKeepRight;
     return _clKeepWhole;
   }
 
@@ -376,18 +388,18 @@ class PageLayout {
     }
 
     final anchors = <int, int>{};
+    int prevDelta = 0; // Track previous anchor for continuity tie-break
 
     for (int cross = 0; cross < maxCross; cross++) {
       int bestDelta = 0;
       int bestWeight = 0;
       int bestDist = tolerance + 1;
+      int bestContinuity = tolerance + 1;
 
       for (int p = bandMin; p < bandMax - 1; p++) {
         final cA = colorAt(p, cross);
         final cB = colorAt(p + 1, cross);
         if (cA == null || cB == null || cA == cB) continue;
-
-        if (!_isQualifyingCut(p, p + 1, cross, maxBoundary, colorAt)) continue;
 
         // Weight = max of the two adjacent cluster sizes
         final leftId = cellToCluster[(p << 16) | cross];
@@ -400,17 +412,22 @@ class PageLayout {
 
         final delta = (p + 1) - nominalBoundary;
         final dist = delta.abs();
+        final continuity = (delta - prevDelta).abs();
 
         if (weight > bestWeight ||
-            (weight == bestWeight && dist < bestDist)) {
+            (weight == bestWeight && dist < bestDist) ||
+            (weight == bestWeight && dist == bestDist &&
+                continuity < bestContinuity)) {
           bestDelta = delta;
           bestWeight = weight;
           bestDist = dist;
+          bestContinuity = continuity;
         }
       }
 
       if (bestWeight >= kMinAnchorSize) {
         anchors[cross] = bestDelta;
+        prevDelta = bestDelta;
       }
     }
 
@@ -551,20 +568,18 @@ class PageLayout {
 
     final (bandMin, bandMax) = _bandBounds(nominalBoundary, tolerance, maxBoundary);
 
-    // Phase 2: Local object detection + same-colour clustering
+    // Phase 2: Local object detection
     final localObjects = _detectLocalObjects(bandColors);
-    final clusters = _buildLocalClusters(localObjects, bandColors);
 
-    // Phase 3: Classification — build keep-whole constraints
-    // Keep-whole clusters become constraints: the interpolation must respect
-    // them by ensuring the boundary doesn't cut through them.
-    // We convert keep-whole clusters into anchors at their edges — the anchor
-    // detection will naturally prefer colour transitions at cluster boundaries.
-    //
-    // Too-big clusters are left for anchor detection + interpolation to handle.
-    // No-op clusters don't affect the boundary.
+    // Phase 3: Per-cross keep-whole enforcement operates on all objects
+    // (including tooBig). Even if the full object extends beyond the band,
+    // individual cross-slices may fit within tolerance and deserve protection.
 
     // Phase 4a: Anchor detection
+    // Use ALL objects (including tooBig) for anchor weight calculation —
+    // large objects provide strong edges for cut placement even though
+    // they can't be kept whole.
+    final allClusters = _buildLocalClusters(localObjects, bandColors);
     final anchors = _detectAnchors(
       nominalBoundary: nominalBoundary,
       tolerance: tolerance,
@@ -573,7 +588,7 @@ class PageLayout {
       maxBoundary: maxBoundary,
       maxCross: maxCross,
       colorAt: colorAt,
-      localClusters: clusters,
+      localClusters: allClusters,
     );
 
     // Phase 4b: Interpolation (connect anchors + fuzz gaps)
@@ -584,28 +599,47 @@ class PageLayout {
       nominalBoundary: nominalBoundary,
     );
 
-    // Phase 3 enforcement: adjust offsets to respect keep-whole clusters.
-    // For each keep-whole cluster, ensure the boundary doesn't cut through it.
-    for (final cluster in clusters.values) {
-      final classification = _classifyCluster(
-          cluster, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
-      if (classification != _clKeepWhole) continue;
+    // Phase 3 enforcement: keep-whole protection.
+    // Objects classified as keepWhole, keepLeft, or keepRight get boundary
+    // adjustments to avoid splitting them.
+    //   - keepWhole: fits entirely in band — pick majority side.
+    //   - keepLeft/keepRight: extends beyond band on one side only — the
+    //     real object edge is on the other side, so keep on the extending
+    //     side (boundary moves past the real edge).
+    for (final obj in localObjects.values) {
+      final cl = _classifyCluster(
+          obj, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
+      if (cl == _clNoOp || cl == _clTooBig) continue;
 
-      // Determine which side the cluster belongs to (majority side).
-      int leftCount = 0, rightCount = 0;
-      for (final (p, _) in cluster) {
-        if (p < nominalBoundary) {
-          leftCount++;
+      // Determine which side to keep the object on.
+      final bool keepLeft;
+      if (cl == _clKeepLeft) {
+        keepLeft = true;
+      } else if (cl == _clKeepRight) {
+        keepLeft = false;
+      } else {
+        // keepWhole: majority side, tie-break by min displacement.
+        int leftCount = 0, rightCount = 0;
+        for (final (p, _) in obj) {
+          if (p < nominalBoundary) leftCount++;
+          else rightCount++;
+        }
+        if (leftCount != rightCount) {
+          keepLeft = leftCount > rightCount;
         } else {
-          rightCount++;
+          int maxP = obj.first.$1, minP = obj.first.$1;
+          for (final (p, _) in obj) {
+            if (p > maxP) maxP = p;
+            if (p < minP) minP = p;
+          }
+          keepLeft = ((maxP + 1) - nominalBoundary).abs() <=
+              (nominalBoundary - minP).abs();
         }
       }
-      final keepLeft = leftCount >= rightCount;
 
-      // For each cross-index that has cells in this cluster, ensure the
-      // boundary offset doesn't cut through those cells.
+      // Adjust offsets at each cross-index to keep all cells on chosen side.
       final byCross = <int, List<int>>{};
-      for (final (p, c) in cluster) {
+      for (final (p, c) in obj) {
         byCross.putIfAbsent(c, () => []).add(p);
       }
 
@@ -616,28 +650,158 @@ class PageLayout {
         final actual = nominalBoundary + currentDelta;
 
         if (keepLeft) {
-          // Keep all cells left of boundary: need actual > max(primaries)
           final maxP = primaries.reduce(math.max);
           if (actual <= maxP) {
-            final needed = (maxP + 1) - nominalBoundary;
-            offsets[cross] = needed.clamp(-tolerance, tolerance);
+            offsets[cross] =
+                ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
           }
         } else {
-          // Keep all cells right of boundary: need actual <= min(primaries)
           final minP = primaries.reduce(math.min);
           if (actual > minP) {
-            final needed = minP - nominalBoundary;
-            offsets[cross] = needed.clamp(-tolerance, tolerance);
+            offsets[cross] =
+                (minP - nominalBoundary).clamp(-tolerance, tolerance);
           }
         }
       }
     }
 
-    // Smooth any steps introduced by keep-whole enforcement.
-    // Walk forward and backward, clamping steps to ±2.
-    _smoothOffsets(offsets, maxCross, tolerance);
+    // Phase 5: Fragment reclamation.
+    // After the cut is placed, small object fragments may be stranded on the
+    // wrong side. For each cross-index, check the cell immediately on each
+    // side of the cut. If it belongs to a local object whose full extent
+    // (in the primary axis) fits within the tolerance band, shift the
+    // boundary to include the entire object on the nearer side.
+    _reclaimFragments(
+      offsets: offsets,
+      nominalBoundary: nominalBoundary,
+      tolerance: tolerance,
+      bandMin: bandMin,
+      bandMax: bandMax,
+      maxCross: maxCross,
+      colorAt: colorAt,
+      bandColors: bandColors,
+      localObjects: localObjects,
+    );
 
     return offsets;
+  }
+
+  /// Reclaim small object fragments stranded by the cut.
+  ///
+  /// For each cross-index, examines the cell immediately left and right of
+  /// the cut position. If that cell belongs to a local object that fits
+  /// entirely within [bandMin, bandMax), the boundary is shifted to keep
+  /// the object whole on whichever side it mostly belongs to.
+  static void _reclaimFragments({
+    required Map<int, int> offsets,
+    required int nominalBoundary,
+    required int tolerance,
+    required int bandMin,
+    required int bandMax,
+    required int maxCross,
+    required int? Function(int primary, int cross) colorAt,
+    required Map<int, int> bandColors,
+    required Map<int, Set<(int, int)>> localObjects,
+  }) {
+    // Build cell → objectId lookup
+    final cellToObj = <int, int>{};
+    for (final entry in localObjects.entries) {
+      for (final (p, c) in entry.value) {
+        cellToObj[(p << 16) | c] = entry.key;
+      }
+    }
+
+    // Cache which objects fit in band (don't extend beyond band edges).
+    final objFitsInBand = <int, bool>{};
+    bool fitsInBand(int objId) {
+      return objFitsInBand.putIfAbsent(objId, () {
+        final cells = localObjects[objId]!;
+        final (fp, fc) = cells.first;
+        final color = bandColors[(fp << 16) | fc];
+
+        for (final (p, c) in cells) {
+          if (p == bandMin && bandMin > 0 && colorAt(bandMin - 1, c) == color) {
+            return false;
+          }
+          if (p == bandMax - 1 && colorAt(bandMax, c) == color) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    // Cache object primary-axis extent per cross-index.
+    final objByCross = <int, Map<int, List<int>>>{};
+    Map<int, List<int>> getObjByCross(int objId) {
+      return objByCross.putIfAbsent(objId, () {
+        final byCross = <int, List<int>>{};
+        for (final (p, c) in localObjects[objId]!) {
+          byCross.putIfAbsent(c, () => []).add(p);
+        }
+        return byCross;
+      });
+    }
+
+    for (int cross = 0; cross < maxCross; cross++) {
+      final delta = offsets[cross] ?? 0;
+      final actual = nominalBoundary + delta;
+
+      // Check cell immediately left of cut (stranded on page 1)
+      if (actual > bandMin) {
+        final leftKey = ((actual - 1) << 16) | cross;
+        final leftObjId = cellToObj[leftKey];
+        if (leftObjId != null && fitsInBand(leftObjId)) {
+          final byCross = getObjByCross(leftObjId);
+          // Count cells on each side of current cut across ALL rows
+          int objLeft = 0, objRight = 0;
+          for (final entry in byCross.entries) {
+            final crossDelta = offsets[entry.key] ?? 0;
+            final crossActual = nominalBoundary + crossDelta;
+            for (final p in entry.value) {
+              if (p < crossActual) objLeft++;
+              else objRight++;
+            }
+          }
+          // If majority is on page 2, pull this fragment over
+          if (objRight > objLeft) {
+            final primaries = byCross[cross];
+            if (primaries != null) {
+              final minP = primaries.reduce(math.min);
+              final needed = minP - nominalBoundary;
+              offsets[cross] = needed.clamp(-tolerance, tolerance);
+            }
+          }
+        }
+      }
+
+      // Check cell immediately right of cut (stranded on page 2)
+      if (actual < bandMax) {
+        final rightKey = (actual << 16) | cross;
+        final rightObjId = cellToObj[rightKey];
+        if (rightObjId != null && fitsInBand(rightObjId)) {
+          final byCross = getObjByCross(rightObjId);
+          int objLeft = 0, objRight = 0;
+          for (final entry in byCross.entries) {
+            final crossDelta = offsets[entry.key] ?? 0;
+            final crossActual = nominalBoundary + crossDelta;
+            for (final p in entry.value) {
+              if (p < crossActual) objLeft++;
+              else objRight++;
+            }
+          }
+          // If majority is on page 1, pull this fragment over
+          if (objLeft > objRight) {
+            final primaries = byCross[cross];
+            if (primaries != null) {
+              final maxP = primaries.reduce(math.max);
+              final needed = (maxP + 1) - nominalBoundary;
+              offsets[cross] = needed.clamp(-tolerance, tolerance);
+            }
+          }
+        }
+      }
+    }
   }
 
   /// Smooth offsets so adjacent values differ by ≤ 2.
@@ -1501,4 +1665,6 @@ class PageLayout {
   static const int clNoOp = _clNoOp;
   static const int clKeepWhole = _clKeepWhole;
   static const int clTooBig = _clTooBig;
+  static const int clKeepLeft = _clKeepLeft;
+  static const int clKeepRight = _clKeepRight;
 }

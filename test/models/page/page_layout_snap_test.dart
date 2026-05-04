@@ -516,9 +516,9 @@ void main() {
       expect(cfg.tolerance, equals(5));
     });
 
-    test('missing both keys → default tolerance=4', () {
+    test('missing both keys → default tolerance=5', () {
       final cfg = PageConfig.fromYaml({'enabled': true, 'pageWidth': 50, 'pageHeight': 50});
-      expect(cfg.tolerance, equals(4));
+      expect(cfg.tolerance, equals(5));
     });
 
     test('toYaml writes tolerance, not fuzzyAmount', () {

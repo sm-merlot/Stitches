@@ -307,15 +307,17 @@ void main() {
       expect(result, equals(PageLayout.clKeepWhole));
     });
 
-    test('cluster touches band edge, colour continues outside → tooBig', () {
-      // Cluster at (3,0)-(5,0), band [3,7), colour A continues at col 2
+    test('cluster touches left band edge, colour continues outside → keepLeft',
+        () {
+      // Cluster at (3,0)-(5,0), band [3,7), colour A continues at col 2.
+      // Extends beyond band on left only → keepLeft.
       final cluster = {(3, 0), (4, 0), (5, 0)};
       final band = {enc(3, 0): A, enc(4, 0): A, enc(5, 0): A};
       final result = PageLayout.classifyCluster(
         cluster, 5, 3, 7, (p, c) => A, // colour A everywhere including outside
         band,
       );
-      expect(result, equals(PageLayout.clTooBig));
+      expect(result, equals(PageLayout.clKeepLeft));
     });
 
     test('cluster touches band edge, colour changes outside → keepWhole', () {
@@ -333,13 +335,15 @@ void main() {
       expect(result, equals(PageLayout.clKeepWhole));
     });
 
-    test('cluster touches right band edge, colour continues → tooBig', () {
+    test('cluster touches right band edge, colour continues → keepRight', () {
+      // Cluster at (4,0)-(6,0), band [3,7). Touches bandMax-1=6,
+      // colour continues at 7. Doesn't touch bandMin. → keepRight.
       final cluster = {(4, 0), (5, 0), (6, 0)};
       final band = {enc(4, 0): A, enc(5, 0): A, enc(6, 0): A};
       final result = PageLayout.classifyCluster(
         cluster, 5, 3, 7, (p, c) => A, band,
       );
-      expect(result, equals(PageLayout.clTooBig));
+      expect(result, equals(PageLayout.clKeepRight));
     });
 
     test('cluster touches band edge, empty outside → keepWhole', () {
@@ -366,10 +370,23 @@ void main() {
       expect(result, equals(PageLayout.clKeepWhole));
     });
 
-    test('multi-row cluster: one row clipped → tooBig', () {
+    test('multi-row cluster: one row clipped on left → keepLeft', () {
       // Cluster spans (3,0)-(5,0) and (3,1)-(5,1)
-      // Row 0: col 3 at band edge, colour continues at col 2
+      // Touches bandMin=3, colour continues at col 2. Doesn't touch bandMax.
       final cluster = {(3, 0), (4, 0), (5, 0), (3, 1), (4, 1), (5, 1)};
+      final band = <int, int>{};
+      for (final (p, c) in cluster) {
+        band[enc(p, c)] = A;
+      }
+      final result = PageLayout.classifyCluster(
+        cluster, 5, 3, 7, (p, c) => A, band,
+      );
+      expect(result, equals(PageLayout.clKeepLeft));
+    });
+
+    test('cluster extends both sides → tooBig', () {
+      // Cluster spans full band [3,7), colour continues at both col 2 and 7.
+      final cluster = {(3, 0), (4, 0), (5, 0), (6, 0)};
       final band = <int, int>{};
       for (final (p, c) in cluster) {
         band[enc(p, c)] = A;
@@ -558,9 +575,10 @@ void main() {
       expect(anchors[1], equals(2), reason: 'row 1: transition at +2');
     });
 
-    test('ping-pong pattern rejected by isQualifyingCut → no anchor', () {
-      // [B, A, B, B, ...] — posA=1(A) has ping-pong left B
-      // Band covers the whole thing
+    test('ping-pong pattern still produces anchor (keep-whole handles integrity)', () {
+      // [B, A, B, B, ...] — previously rejected by isQualifyingCut, but
+      // with v2 keep-whole + fragment reclamation, island prevention is
+      // handled post-hoc. Anchor detection accepts all colour transitions.
       final row = [B, A, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B];
       final rows = [row];
       final clusters = clustersFrom2D(rows, 0, 20);
@@ -574,9 +592,8 @@ void main() {
         colorAt: colorMap2D(rows),
         localClusters: clusters,
       );
-      // The B|A transition at 0|1 has ping-pong (B left of A)
-      // The A|B transition at 1|2 has left-run check fail (single A)
-      expect(anchors.containsKey(0), isFalse);
+      // A|B transition at 1|2 — closest to nominal, large B cluster → anchor
+      expect(anchors.containsKey(0), isTrue);
     });
   });
 
