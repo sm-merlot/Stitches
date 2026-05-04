@@ -724,6 +724,8 @@ class PageLayout {
 
         if (keepLeft) {
           final maxP = primaries.reduce(math.max);
+          // Only constrain if cells are on the wrong side (right of nominal).
+          if (maxP < nominalBoundary) continue;
           final ideal = ((maxP + 1) - nominalBoundary).clamp(-tolerance, tolerance);
           final capped = ideal.clamp(-_kMaxKeepWholeStep, _kMaxKeepWholeStep);
           final existing = hardConstraints[cross];
@@ -738,6 +740,8 @@ class PageLayout {
           }
         } else {
           final minP = primaries.reduce(math.min);
+          // Only constrain if cells are on the wrong side (left of nominal).
+          if (minP >= nominalBoundary) continue;
           final ideal = (minP - nominalBoundary).clamp(-tolerance, tolerance);
           final capped = ideal.clamp(-_kMaxKeepWholeStep, _kMaxKeepWholeStep);
           final existing = hardConstraints[cross];
@@ -817,11 +821,6 @@ class PageLayout {
     );
 
     // ── Phase 6: Split-object protection ────────────────────────────────
-    // After the boundary is finalized, scan all local objects. Any object
-    // that is now split by the actual boundary gets override cells so it
-    // appears whole on its majority side. This catches objects that were
-    // noOp relative to nominal but got split by another object's keep-whole
-    // constraint shifting the boundary into them.
     _protectSplitObjects(
       offsets: offsets,
       nominalBoundary: nominalBoundary,
