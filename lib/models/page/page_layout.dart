@@ -346,6 +346,77 @@ class PageLayout {
     return _clKeepWhole;
   }
 
+  // ── Anchor detection ──────────────────────────────────────────────────────
+
+  /// Detect anchor points: high-confidence cut positions at colour transitions
+  /// weighted by adjacent cluster size.
+  ///
+  /// Returns: crossIndex → offset delta from nominal boundary.
+  /// Only rows with a qualifying transition whose largest adjacent cluster
+  /// has ≥ [kMinAnchorSize] cells are included.
+  ///
+  /// At each row, if multiple qualifying transitions exist, the one with the
+  /// highest weight wins (tiebreak: closest to nominal).
+  static Map<int, int> _detectAnchors({
+    required int nominalBoundary,
+    required int tolerance,
+    required int bandMin,
+    required int bandMax,
+    required int maxBoundary,
+    required int maxCross,
+    required int? Function(int primary, int cross) colorAt,
+    required Map<int, Set<(int, int)>> localClusters,
+  }) {
+    // Build cell → clusterId for size lookups
+    final cellToCluster = <int, int>{};
+    for (final entry in localClusters.entries) {
+      for (final (p, c) in entry.value) {
+        cellToCluster[(p << 16) | c] = entry.key;
+      }
+    }
+
+    final anchors = <int, int>{};
+
+    for (int cross = 0; cross < maxCross; cross++) {
+      int bestDelta = 0;
+      int bestWeight = 0;
+      int bestDist = tolerance + 1;
+
+      for (int p = bandMin; p < bandMax - 1; p++) {
+        final cA = colorAt(p, cross);
+        final cB = colorAt(p + 1, cross);
+        if (cA == null || cB == null || cA == cB) continue;
+
+        if (!_isQualifyingCut(p, p + 1, cross, maxBoundary, colorAt)) continue;
+
+        // Weight = max of the two adjacent cluster sizes
+        final leftId = cellToCluster[(p << 16) | cross];
+        final rightId = cellToCluster[((p + 1) << 16) | cross];
+        final leftSize = leftId != null ? localClusters[leftId]!.length : 0;
+        final rightSize = rightId != null ? localClusters[rightId]!.length : 0;
+        final weight = leftSize > rightSize ? leftSize : rightSize;
+
+        if (weight < kMinAnchorSize) continue;
+
+        final delta = (p + 1) - nominalBoundary;
+        final dist = delta.abs();
+
+        if (weight > bestWeight ||
+            (weight == bestWeight && dist < bestDist)) {
+          bestDelta = delta;
+          bestWeight = weight;
+          bestDist = dist;
+        }
+      }
+
+      if (bestWeight >= kMinAnchorSize) {
+        anchors[cross] = bestDelta;
+      }
+    }
+
+    return anchors;
+  }
+
   // ── Phase 1: Object detection (v1, to be replaced) ────────────────────────
 
   /// 8-directional flood-fill: returns objectId → Set of (col, row) cells.
@@ -1170,6 +1241,28 @@ class PageLayout {
   ) =>
       _classifyCluster(
           cluster, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
+
+  @visibleForTesting
+  static Map<int, int> detectAnchors({
+    required int nominalBoundary,
+    required int tolerance,
+    required int bandMin,
+    required int bandMax,
+    required int maxBoundary,
+    required int maxCross,
+    required int? Function(int primary, int cross) colorAt,
+    required Map<int, Set<(int, int)>> localClusters,
+  }) =>
+      _detectAnchors(
+        nominalBoundary: nominalBoundary,
+        tolerance: tolerance,
+        bandMin: bandMin,
+        bandMax: bandMax,
+        maxBoundary: maxBoundary,
+        maxCross: maxCross,
+        colorAt: colorAt,
+        localClusters: localClusters,
+      );
 
   /// Test-visible classification constants.
   static const int clNoOp = _clNoOp;

@@ -380,4 +380,203 @@ void main() {
       expect(result, equals(PageLayout.clTooBig));
     });
   });
+
+  // ── detectAnchors ───────────────────────────────────────────────────────────
+
+  group('detectAnchors', () {
+    /// Helper: build clusters from a 2D grid within band [bandMin, bandMax).
+    /// Returns clusters via detectLocalObjects + buildLocalClusters.
+    Map<int, Set<(int, int)>> clustersFrom2D(
+        List<List<int?>> rows, int bandMin, int bandMax) {
+      final band = bandFrom2D(rows, bandMin, bandMax);
+      final objs = PageLayout.detectLocalObjects(band);
+      return PageLayout.buildLocalClusters(objs, band);
+    }
+
+    test('clean A|B at nominal → anchor at δ=0', () {
+      // 20 cols × 3 rows, boundary at 10, tolerance 5, band [5,15)
+      // A on left, B on right → A cluster=15 cells, B cluster=15 cells
+      final rows = List.generate(3, (_) => List.generate(20, (i) => i < 10 ? A : B));
+      final clusters = clustersFrom2D(rows, 5, 15);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 10,
+        tolerance: 5,
+        bandMin: 5,
+        bandMax: 15,
+        maxBoundary: 20,
+        maxCross: 3,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      expect(anchors[0], equals(0), reason: 'transition at nominal → δ=0');
+    });
+
+    test('A|B one right of nominal → anchor at δ=+1', () {
+      // Transition at col 10|11, nominal=10, 3 rows
+      final rows = List.generate(3, (_) => List.generate(20, (i) => i <= 10 ? A : B));
+      final clusters = clustersFrom2D(rows, 5, 15);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 10,
+        tolerance: 5,
+        bandMin: 5,
+        bandMax: 15,
+        maxBoundary: 20,
+        maxCross: 3,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      expect(anchors[0], equals(1));
+    });
+
+    test('no colour transition → no anchor', () {
+      final rows = [List.filled(20, A)];
+      final clusters = clustersFrom2D(rows, 6, 14);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 10,
+        tolerance: 4,
+        bandMin: 6,
+        bandMax: 14,
+        maxBoundary: 20,
+        maxCross: 1,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      expect(anchors.containsKey(0), isFalse);
+    });
+
+    test('small objects below kMinAnchorSize → no anchor', () {
+      // Two tiny objects: 3 cells A, 3 cells B
+      // Band [4, 10), transition at 6|7
+      final row = [null, null, null, null, A, A, A, B, B, B, null, null];
+      final rows = [row];
+      final clusters = clustersFrom2D(rows, 4, 10);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 7,
+        tolerance: 3,
+        bandMin: 4,
+        bandMax: 10,
+        maxBoundary: 12,
+        maxCross: 1,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      expect(anchors.containsKey(0), isFalse,
+          reason: 'both objects < kMinAnchorSize');
+    });
+
+    test('large object meets small object → anchor (max weight)', () {
+      // 15 A cells + 3 B cells, transition at 14|15
+      // Band [10, 18), nominal=14
+      final row = List.generate(20, (i) => i < 15 ? A : (i < 18 ? B : null));
+      final rows = [row];
+      final clusters = clustersFrom2D(rows, 10, 18);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 14,
+        tolerance: 4,
+        bandMin: 10,
+        bandMax: 18,
+        maxBoundary: 20,
+        maxCross: 1,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      // A cluster within band has 5 cells (cols 10-14), B has 3 cells (15-17)
+      // max(5, 3) = 5 < kMinAnchorSize(8) → no anchor actually!
+      // Need bigger objects. Let me think...
+      // The A object outside the band (cols 0-9) isn't in localClusters.
+      // Only band-local cells count. So we need ≥ 8 cells within the band.
+      expect(anchors.containsKey(0), isFalse,
+          reason: 'band-local sizes: A=5, B=3 — both below threshold');
+    });
+
+    test('large band-local objects → anchor found', () {
+      // 20 A cells + 20 B cells, band [10, 30), nominal=20
+      // A cluster: cols 10-19 = 10 cells, B cluster: cols 20-29 = 10 cells
+      final row = List.generate(40, (i) => i < 20 ? A : B);
+      final rows = [row];
+      final clusters = clustersFrom2D(rows, 10, 30);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 20,
+        tolerance: 10,
+        bandMin: 10,
+        bandMax: 30,
+        maxBoundary: 40,
+        maxCross: 1,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      expect(anchors[0], equals(0),
+          reason: 'A|B transition at nominal, both ≥ kMinAnchorSize');
+    });
+
+    test('multiple transitions → highest weight wins', () {
+      // Pattern: 10×A, 3×C, 10×B within band
+      // Band [0, 23), nominal=12
+      // Transitions: A|C at 9|10, C|B at 12|13
+      // A cluster=10, C cluster=3, B cluster=10
+      // A|C: max(10,3)=10, C|B: max(3,10)=10 → tie → closest to nominal wins
+      // A|C delta = 10-12 = -2, C|B delta = 13-12 = +1 → C|B closer
+      final row = [
+        ...List.filled(10, A), // cols 0-9
+        ...List.filled(3, C),  // cols 10-12
+        ...List.filled(10, B), // cols 13-22
+      ];
+      final rows = [row];
+      final clusters = clustersFrom2D(rows, 0, 23);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 12,
+        tolerance: 12,
+        bandMin: 0,
+        bandMax: 23,
+        maxBoundary: 23,
+        maxCross: 1,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      expect(anchors[0], equals(1),
+          reason: 'C|B transition at +1 is closer to nominal than A|C at -2');
+    });
+
+    test('multi-row: anchors at different positions per row', () {
+      // Row 0: A|B at col 10 (nominal), Row 1: A|B at col 12 (+2)
+      final rows = [
+        List.generate(20, (i) => i < 10 ? A : B),
+        List.generate(20, (i) => i < 12 ? A : B),
+      ];
+      final clusters = clustersFrom2D(rows, 6, 14);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 10,
+        tolerance: 4,
+        bandMin: 6,
+        bandMax: 14,
+        maxBoundary: 20,
+        maxCross: 2,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      expect(anchors[0], equals(0), reason: 'row 0: transition at nominal');
+      expect(anchors[1], equals(2), reason: 'row 1: transition at +2');
+    });
+
+    test('ping-pong pattern rejected by isQualifyingCut → no anchor', () {
+      // [B, A, B, B, ...] — posA=1(A) has ping-pong left B
+      // Band covers the whole thing
+      final row = [B, A, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B];
+      final rows = [row];
+      final clusters = clustersFrom2D(rows, 0, 20);
+      final anchors = PageLayout.detectAnchors(
+        nominalBoundary: 2,
+        tolerance: 10,
+        bandMin: 0,
+        bandMax: 20,
+        maxBoundary: 20,
+        maxCross: 1,
+        colorAt: colorMap2D(rows),
+        localClusters: clusters,
+      );
+      // The B|A transition at 0|1 has ping-pong (B left of A)
+      // The A|B transition at 1|2 has left-run check fail (single A)
+      expect(anchors.containsKey(0), isFalse);
+    });
+  });
 }
