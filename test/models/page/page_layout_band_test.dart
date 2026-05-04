@@ -759,4 +759,123 @@ void main() {
       }
     });
   });
+
+  // ── computeBoundaryOffsetsV2 (end-to-end) ─────────────────────────────────
+
+  group('computeBoundaryOffsetsV2 — end-to-end', () {
+    test('clean A|B boundary → snaps to colour transition', () {
+      // 30 cols × 5 rows: A on left, B on right, transition at col 15
+      final rows = List.generate(
+          5, (_) => List.generate(30, (i) => i < 15 ? A : B));
+      final result = PageLayout.computeBoundaryOffsetsV2(
+        nominalBoundary: 15,
+        tolerance: 4,
+        maxBoundary: 30,
+        maxCross: 5,
+        colorAt: colorMap2D(rows),
+      );
+      // All rows should snap to the colour transition at col 15 → δ=0
+      for (int i = 0; i < 5; i++) {
+        expect(result[i], equals(0),
+            reason: 'row $i should be at nominal (colour transition)');
+      }
+    });
+
+    test('shifted A|B boundary → anchors follow transition', () {
+      // Transition at col 17, nominal at 15 → should anchor at δ=+2
+      final rows = List.generate(
+          5, (_) => List.generate(30, (i) => i < 17 ? A : B));
+      final result = PageLayout.computeBoundaryOffsetsV2(
+        nominalBoundary: 15,
+        tolerance: 4,
+        maxBoundary: 30,
+        maxCross: 5,
+        colorAt: colorMap2D(rows),
+      );
+      for (int i = 0; i < 5; i++) {
+        expect(result[i], equals(2),
+            reason: 'row $i should follow A|B transition at col 17');
+      }
+    });
+
+    test('uniform colour → fuzz (non-straight)', () {
+      final rows = List.generate(50, (_) => List.filled(30, A));
+      final result = PageLayout.computeBoundaryOffsetsV2(
+        nominalBoundary: 15,
+        tolerance: 4,
+        maxBoundary: 30,
+        maxCross: 50,
+        colorAt: colorMap2D(rows),
+      );
+      expect(result.length, equals(50));
+      final distinct = result.values.toSet();
+      expect(distinct.length, greaterThan(1),
+          reason: 'uniform colour should produce fuzz, not straight line');
+    });
+
+    test('all invariants hold: ±tolerance, ±2 step, full coverage', () {
+      // Complex pattern: A left, B right, transition wobbles
+      final rows = List.generate(20, (r) {
+        final transition = 15 + (r % 3) - 1; // wobbles 14-16
+        return List.generate(30, (c) => c < transition ? A : B);
+      });
+      final result = PageLayout.computeBoundaryOffsetsV2(
+        nominalBoundary: 15,
+        tolerance: 4,
+        maxBoundary: 30,
+        maxCross: 20,
+        colorAt: colorMap2D(rows),
+      );
+      expect(result.length, equals(20));
+      for (int i = 0; i < 20; i++) {
+        expect(result[i]!.abs(), lessThanOrEqualTo(4),
+            reason: 'row $i exceeds ±tolerance');
+      }
+      for (int i = 1; i < 20; i++) {
+        expect((result[i]! - result[i - 1]!).abs(), lessThanOrEqualTo(2),
+            reason: 'step $i violates ±2 smoothness');
+      }
+    });
+
+    test('tolerance 0 → all zeros', () {
+      final rows = List.generate(
+          5, (_) => List.generate(30, (i) => i < 15 ? A : B));
+      final result = PageLayout.computeBoundaryOffsetsV2(
+        nominalBoundary: 15,
+        tolerance: 0,
+        maxBoundary: 30,
+        maxCross: 5,
+        colorAt: colorMap2D(rows),
+      );
+      for (final v in result.values) {
+        expect(v, equals(0));
+      }
+    });
+
+    test('keep-whole: small object spanning boundary stays intact', () {
+      // Uniform A background with a small B object spanning the boundary
+      // B at cols 14-16, rows 2-3 (6 cells, spans nominal at 15)
+      final rows = List.generate(10, (r) {
+        return List.generate(30, (c) {
+          if (r >= 2 && r <= 3 && c >= 14 && c <= 16) return B;
+          return A;
+        });
+      });
+      final result = PageLayout.computeBoundaryOffsetsV2(
+        nominalBoundary: 15,
+        tolerance: 4,
+        maxBoundary: 30,
+        maxCross: 10,
+        colorAt: colorMap2D(rows),
+      );
+      // At rows 2-3, the boundary should not cut through the B object.
+      // B spans cols 14-16, so boundary should be at ≤14 or ≥17.
+      for (final r in [2, 3]) {
+        final actual = 15 + result[r]!;
+        final cutsB = actual > 14 && actual <= 16;
+        expect(cutsB, isFalse,
+            reason: 'row $r: boundary at $actual cuts through B object (14-16)');
+      }
+    });
+  });
 }

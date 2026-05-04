@@ -523,6 +523,144 @@ class PageLayout {
     return (h >> 16) % 5 - 2;
   }
 
+  // ── v2 boundary computation (band-local pipeline) ──────────────────────────
+
+  /// Compute boundary offsets using the v2 band-local algorithm.
+  ///
+  /// Pipeline: extract band → local flood fill → same-colour clustering →
+  /// classify clusters → detect anchors → interpolate.
+  static Map<int, int> _computeBoundaryOffsetsV2({
+    required int nominalBoundary,
+    required int tolerance,
+    required int maxBoundary,
+    required int maxCross,
+    required int? Function(int primary, int cross) colorAt,
+  }) {
+    if (tolerance == 0) {
+      return {for (int i = 0; i < maxCross; i++) i: 0};
+    }
+
+    // Phase 1: Band extraction
+    final bandColors = _extractBand(
+      nominalBoundary: nominalBoundary,
+      tolerance: tolerance,
+      maxBoundary: maxBoundary,
+      maxCross: maxCross,
+      colorAt: colorAt,
+    );
+
+    final (bandMin, bandMax) = _bandBounds(nominalBoundary, tolerance, maxBoundary);
+
+    // Phase 2: Local object detection + same-colour clustering
+    final localObjects = _detectLocalObjects(bandColors);
+    final clusters = _buildLocalClusters(localObjects, bandColors);
+
+    // Phase 3: Classification — build keep-whole constraints
+    // Keep-whole clusters become constraints: the interpolation must respect
+    // them by ensuring the boundary doesn't cut through them.
+    // We convert keep-whole clusters into anchors at their edges — the anchor
+    // detection will naturally prefer colour transitions at cluster boundaries.
+    //
+    // Too-big clusters are left for anchor detection + interpolation to handle.
+    // No-op clusters don't affect the boundary.
+
+    // Phase 4a: Anchor detection
+    final anchors = _detectAnchors(
+      nominalBoundary: nominalBoundary,
+      tolerance: tolerance,
+      bandMin: bandMin,
+      bandMax: bandMax,
+      maxBoundary: maxBoundary,
+      maxCross: maxCross,
+      colorAt: colorAt,
+      localClusters: clusters,
+    );
+
+    // Phase 4b: Interpolation (connect anchors + fuzz gaps)
+    final offsets = _interpolateAnchors(
+      anchors: anchors,
+      maxCross: maxCross,
+      tolerance: tolerance,
+      nominalBoundary: nominalBoundary,
+    );
+
+    // Phase 3 enforcement: adjust offsets to respect keep-whole clusters.
+    // For each keep-whole cluster, ensure the boundary doesn't cut through it.
+    for (final cluster in clusters.values) {
+      final classification = _classifyCluster(
+          cluster, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
+      if (classification != _clKeepWhole) continue;
+
+      // Determine which side the cluster belongs to (majority side).
+      int leftCount = 0, rightCount = 0;
+      for (final (p, _) in cluster) {
+        if (p < nominalBoundary) {
+          leftCount++;
+        } else {
+          rightCount++;
+        }
+      }
+      final keepLeft = leftCount >= rightCount;
+
+      // For each cross-index that has cells in this cluster, ensure the
+      // boundary offset doesn't cut through those cells.
+      final byCross = <int, List<int>>{};
+      for (final (p, c) in cluster) {
+        byCross.putIfAbsent(c, () => []).add(p);
+      }
+
+      for (final entry in byCross.entries) {
+        final cross = entry.key;
+        final primaries = entry.value;
+        final currentDelta = offsets[cross] ?? 0;
+        final actual = nominalBoundary + currentDelta;
+
+        if (keepLeft) {
+          // Keep all cells left of boundary: need actual > max(primaries)
+          final maxP = primaries.reduce(math.max);
+          if (actual <= maxP) {
+            final needed = (maxP + 1) - nominalBoundary;
+            offsets[cross] = needed.clamp(-tolerance, tolerance);
+          }
+        } else {
+          // Keep all cells right of boundary: need actual <= min(primaries)
+          final minP = primaries.reduce(math.min);
+          if (actual > minP) {
+            final needed = minP - nominalBoundary;
+            offsets[cross] = needed.clamp(-tolerance, tolerance);
+          }
+        }
+      }
+    }
+
+    // Smooth any steps introduced by keep-whole enforcement.
+    // Walk forward and backward, clamping steps to ±2.
+    _smoothOffsets(offsets, maxCross, tolerance);
+
+    return offsets;
+  }
+
+  /// Smooth offsets so adjacent values differ by ≤ 2.
+  /// Two passes: forward then backward, averaging when both constrain.
+  static void _smoothOffsets(Map<int, int> offsets, int maxCross, int tolerance) {
+    // Forward pass
+    for (int i = 1; i < maxCross; i++) {
+      final prev = offsets[i - 1] ?? 0;
+      final curr = offsets[i] ?? 0;
+      if ((curr - prev).abs() > 2) {
+        offsets[i] = (prev + (curr - prev).clamp(-2, 2)).clamp(-tolerance, tolerance);
+      }
+    }
+    // Backward pass
+    for (int i = maxCross - 2; i >= 0; i--) {
+      final next = offsets[i + 1] ?? 0;
+      final curr = offsets[i] ?? 0;
+      if ((curr - next).abs() > 2) {
+        offsets[i] = (next + (curr - next).clamp(-2, 2)).clamp(-tolerance, tolerance);
+      }
+    }
+  }
+
   // ── Phase 1: Object detection (v1, to be replaced) ────────────────────────
 
   /// 8-directional flood-fill: returns objectId → Set of (col, row) cells.
@@ -876,13 +1014,6 @@ class PageLayout {
         if (_isQualifyingCut(posA, posB, crossIdx, maxBoundary, colorAt)) {
           cost -= 20;
         }
-        // Gentle fuzz: small vertical-coherence bonus; creates slight bumps
-        // when no colour change or object signal is present. Capped low so
-        // it never overrides colour-change decisions.
-        final cA = colorAt(posA, crossIdx);
-        if (cA != null) {
-          cost -= math.min(_verticalRun(posA, crossIdx, cA, maxCross, colorAt), 3);
-        }
       }
 
       return cost;
@@ -1040,27 +1171,6 @@ class PageLayout {
     return true;
   }
 
-  /// Vertical run length of [color] at primary position [pos], centred on
-  /// [crossIndex]. Returns 1 if only the cell itself matches. Capped at 10.
-  static int _verticalRun(
-    int pos,
-    int crossIndex,
-    int color,
-    int maxCross,
-    int? Function(int primary, int cross) colorAt,
-  ) {
-    int run = 1;
-    for (int r = crossIndex - 1; r >= 0 && colorAt(pos, r) == color; r--) {
-      if (++run >= 10) return run;
-    }
-    for (int r = crossIndex + 1;
-        r < maxCross && colorAt(pos, r) == color;
-        r++) {
-      if (++run >= 10) return run;
-    }
-    return run;
-  }
-
   // ── Factory ───────────────────────────────────────────────────────────────
 
   /// Build a [PageLayout] from [config] and the pattern's current stitch data.
@@ -1086,45 +1196,29 @@ class PageLayout {
 
     int? colorAt(int col, int row) => snapColor[(col << 16) | row];
 
-    // Phase 1: Detect individual objects (contiguous same-colour regions).
-    // These are used directly for keep-whole classification. Super-groups
-    // (Phase 2) are intentionally NOT used here because union-find chaining
-    // merges objects transitively into mega-groups that always exceed the
-    // tolerance threshold, effectively disabling keep-whole.
-    final objects = _detectObjects(snapColor, pattern.width, pattern.height);
-
-    // Transposed objects for horizontal boundaries:
-    // (primary=row, cross=col) instead of (primary=col, cross=row).
-    final objectsT = <int, Set<(int, int)>>{
-      for (final e in objects.entries)
-        e.key: e.value.map<(int, int)>((cr) => (cr.$2, cr.$1)).toSet(),
-    };
-
-    // Vertical boundary offsets (column boundaries).
+    // Vertical boundary offsets (column boundaries) — v2 band-local pipeline.
     final Map<int, Map<int, int>> verticalOffsets = {};
     for (int p = 1; p < pagesAcross; p++) {
       final boundaryCol = p * config.pageWidth;
-      verticalOffsets[boundaryCol] = _computeBoundaryOffsets(
+      verticalOffsets[boundaryCol] = _computeBoundaryOffsetsV2(
         nominalBoundary: boundaryCol,
         tolerance: config.tolerance,
         maxBoundary: pattern.width,
         maxCross: pattern.height,
         colorAt: (primary, cross) => colorAt(primary, cross),
-        superGroups: objects,
       );
     }
 
-    // Horizontal boundary offsets (row boundaries).
+    // Horizontal boundary offsets (row boundaries) — v2 band-local pipeline.
     final Map<int, Map<int, int>> horizontalOffsets = {};
     for (int p = 1; p < pagesDown; p++) {
       final boundaryRow = p * config.pageHeight;
-      horizontalOffsets[boundaryRow] = _computeBoundaryOffsets(
+      horizontalOffsets[boundaryRow] = _computeBoundaryOffsetsV2(
         nominalBoundary: boundaryRow,
         tolerance: config.tolerance,
         maxBoundary: pattern.height,
         maxCross: pattern.width,
         colorAt: (primary, cross) => colorAt(cross, primary),
-        superGroups: objectsT,
       );
     }
 
@@ -1386,6 +1480,22 @@ class PageLayout {
 
   @visibleForTesting
   static int fuzzStep(int seed, int index) => _fuzzStep(seed, index);
+
+  @visibleForTesting
+  static Map<int, int> computeBoundaryOffsetsV2({
+    required int nominalBoundary,
+    required int tolerance,
+    required int maxBoundary,
+    required int maxCross,
+    required int? Function(int primary, int cross) colorAt,
+  }) =>
+      _computeBoundaryOffsetsV2(
+        nominalBoundary: nominalBoundary,
+        tolerance: tolerance,
+        maxBoundary: maxBoundary,
+        maxCross: maxCross,
+        colorAt: colorAt,
+      );
 
   /// Test-visible classification constants.
   static const int clNoOp = _clNoOp;
