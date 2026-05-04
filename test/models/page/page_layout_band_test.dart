@@ -579,4 +579,184 @@ void main() {
       expect(anchors.containsKey(0), isFalse);
     });
   });
+
+  // ── interpolateAnchors ──────────────────────────────────────────────────────
+
+  group('interpolateAnchors', () {
+    test('tolerance 0 → all zeros', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {3: 2},
+        maxCross: 10,
+        tolerance: 0,
+        nominalBoundary: 50,
+      );
+      expect(result.length, equals(10));
+      for (final v in result.values) {
+        expect(v, equals(0));
+      }
+    });
+
+    test('no anchors → all indices filled with fuzz', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      expect(result.length, equals(20));
+      for (int i = 0; i < 20; i++) {
+        expect(result.containsKey(i), isTrue, reason: 'index $i missing');
+        expect(result[i], inInclusiveRange(-4, 4));
+      }
+    });
+
+    test('no anchors → fuzz is not a straight line', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {},
+        maxCross: 50,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      // With 50 rows and ±2 steps, should have some variation
+      final distinct = result.values.toSet();
+      expect(distinct.length, greaterThan(1),
+          reason: 'fuzz should produce variation, not a flat line');
+    });
+
+    test('no anchors → fuzz is deterministic', () {
+      final r1 = PageLayout.interpolateAnchors(
+        anchors: {},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      final r2 = PageLayout.interpolateAnchors(
+        anchors: {},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      expect(r1, equals(r2));
+    });
+
+    test('no anchors → different seeds produce different patterns', () {
+      final r1 = PageLayout.interpolateAnchors(
+        anchors: {},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      final r2 = PageLayout.interpolateAnchors(
+        anchors: {},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 100,
+      );
+      // Not guaranteed to differ at every index, but should differ overall
+      expect(r1, isNot(equals(r2)));
+    });
+
+    test('single anchor → anchor value preserved, rest fuzzed', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {10: 3},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      expect(result[10], equals(3), reason: 'anchor value preserved');
+      expect(result.length, equals(20));
+      for (final v in result.values) {
+        expect(v, inInclusiveRange(-4, 4));
+      }
+    });
+
+    test('two anchors → linear interpolation between them', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {0: -4, 20: 4},
+        maxCross: 21,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      expect(result[0], equals(-4));
+      expect(result[20], equals(4));
+      // Middle should be near 0
+      expect(result[10], inInclusiveRange(-2, 2));
+      // Should be monotonically increasing (or near it)
+      for (int i = 1; i <= 20; i++) {
+        expect(result[i]! - result[i - 1]!, inInclusiveRange(-2, 2),
+            reason: 'step $i violates ±2');
+      }
+    });
+
+    test('adjacent values always satisfy ±2 step constraint', () {
+      // Mix of anchors and gaps to stress the constraint
+      final result = PageLayout.interpolateAnchors(
+        anchors: {5: -3, 15: 3, 25: -2},
+        maxCross: 30,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      for (int i = 1; i < 30; i++) {
+        final step = (result[i]! - result[i - 1]!).abs();
+        expect(step, lessThanOrEqualTo(2),
+            reason: 'step at $i: ${result[i-1]} → ${result[i]}');
+      }
+    });
+
+    test('all values within ±tolerance', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {10: 3, 20: -3},
+        maxCross: 30,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      for (int i = 0; i < 30; i++) {
+        expect(result[i]!.abs(), lessThanOrEqualTo(4),
+            reason: 'index $i out of tolerance bounds');
+      }
+    });
+
+    test('anchor value clamped to ±tolerance', () {
+      // Anchor delta exceeds tolerance — should be clamped
+      final result = PageLayout.interpolateAnchors(
+        anchors: {5: 10},
+        maxCross: 10,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      expect(result[5], equals(4), reason: 'anchor clamped to tolerance');
+    });
+
+    test('fuzz before first anchor connects smoothly', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {10: 2},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      // Step from index 9 to anchor at 10 should be ≤ 2
+      expect((result[10]! - result[9]!).abs(), lessThanOrEqualTo(2));
+    });
+
+    test('fuzz after last anchor connects smoothly', () {
+      final result = PageLayout.interpolateAnchors(
+        anchors: {10: 2},
+        maxCross: 20,
+        tolerance: 4,
+        nominalBoundary: 50,
+      );
+      // Step from anchor at 10 to index 11 should be ≤ 2
+      expect((result[11]! - result[10]!).abs(), lessThanOrEqualTo(2));
+    });
+
+    test('fuzzStep produces values in [-2, +2]', () {
+      for (int seed = 0; seed < 100; seed++) {
+        for (int i = 0; i < 100; i++) {
+          final step = PageLayout.fuzzStep(seed, i);
+          expect(step, inInclusiveRange(-2, 2),
+              reason: 'fuzzStep($seed, $i) = $step');
+        }
+      }
+    });
+  });
 }

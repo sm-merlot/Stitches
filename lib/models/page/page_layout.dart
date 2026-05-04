@@ -417,6 +417,112 @@ class PageLayout {
     return anchors;
   }
 
+  // ── Interpolation ─────────────────────────────────────────────────────────
+
+  /// Produce per-cross-index offset deltas for an entire boundary by
+  /// connecting anchor points and filling anchor-free gaps.
+  ///
+  /// - Between two anchors: linear interpolation (step-clamped to ±2).
+  /// - Before first / after last anchor: deterministic fuzz from the
+  ///   nearest anchor.
+  /// - No anchors at all: deterministic fuzz from nominal (δ=0).
+  ///
+  /// All values are clamped to ±[tolerance]. Adjacent values differ by ≤ 2.
+  static Map<int, int> _interpolateAnchors({
+    required Map<int, int> anchors,
+    required int maxCross,
+    required int tolerance,
+    required int nominalBoundary,
+  }) {
+    if (tolerance == 0) {
+      return {for (int i = 0; i < maxCross; i++) i: 0};
+    }
+
+    final result = <int, int>{};
+
+    if (anchors.isEmpty) {
+      _fuzzFill(result, 0, maxCross - 1, 0, tolerance, nominalBoundary);
+      return result;
+    }
+
+    final sorted = anchors.keys.toList()..sort();
+
+    // Set anchor points first
+    for (final key in sorted) {
+      result[key] = anchors[key]!.clamp(-tolerance, tolerance);
+    }
+
+    // Before first anchor: fuzz backward from anchor
+    if (sorted.first > 0) {
+      _fuzzFillReverse(
+          result, 0, sorted.first - 1, result[sorted.first]!, tolerance,
+          nominalBoundary);
+    }
+
+    // Between consecutive anchors: linear interpolation
+    for (int i = 0; i < sorted.length - 1; i++) {
+      final fromCross = sorted[i];
+      final toCross = sorted[i + 1];
+      if (toCross - fromCross <= 1) continue;
+      _linearFill(result, fromCross, toCross, result[fromCross]!,
+          result[toCross]!, tolerance);
+    }
+
+    // After last anchor: fuzz forward from anchor
+    if (sorted.last < maxCross - 1) {
+      _fuzzFill(result, sorted.last + 1, maxCross - 1, result[sorted.last]!,
+          tolerance, nominalBoundary);
+    }
+
+    return result;
+  }
+
+  /// Fill [startCross..endCross] walking forward with deterministic fuzz.
+  /// Each step is ±{0,1,2}, clamped to ±tolerance.
+  static void _fuzzFill(Map<int, int> result, int startCross, int endCross,
+      int startDelta, int tolerance, int seed) {
+    int prev = startDelta;
+    for (int i = startCross; i <= endCross; i++) {
+      final step = _fuzzStep(seed, i);
+      prev = (prev + step).clamp(-tolerance, tolerance);
+      result[i] = prev;
+    }
+  }
+
+  /// Fill [startCross..endCross] walking backward from endDelta.
+  /// Ensures the value at endCross connects to the anchor at endCross+1.
+  static void _fuzzFillReverse(Map<int, int> result, int startCross,
+      int endCross, int endDelta, int tolerance, int seed) {
+    int prev = endDelta;
+    for (int i = endCross; i >= startCross; i--) {
+      final step = _fuzzStep(seed, i);
+      prev = (prev + step).clamp(-tolerance, tolerance);
+      result[i] = prev;
+    }
+  }
+
+  /// Linear interpolation between anchors at [from] and [to].
+  /// Fills (from+1) to (to-1), clamping each step to ±2.
+  static void _linearFill(Map<int, int> result, int from, int to,
+      int deltaFrom, int deltaTo, int tolerance) {
+    int prev = deltaFrom;
+    final span = to - from;
+    for (int i = from + 1; i < to; i++) {
+      final t = (i - from) / span;
+      final target = (deltaFrom + (deltaTo - deltaFrom) * t).round();
+      final step = (target - prev).clamp(-2, 2);
+      prev = (prev + step).clamp(-tolerance, tolerance);
+      result[i] = prev;
+    }
+  }
+
+  /// Deterministic pseudo-random step in [-2, +2] for a given seed and index.
+  /// Uses Knuth multiplicative hash for reproducibility.
+  static int _fuzzStep(int seed, int index) {
+    final h = ((seed + index) * 2654435761) & 0xFFFFFFFF;
+    return (h >> 16) % 5 - 2;
+  }
+
   // ── Phase 1: Object detection (v1, to be replaced) ────────────────────────
 
   /// 8-directional flood-fill: returns objectId → Set of (col, row) cells.
@@ -1263,6 +1369,23 @@ class PageLayout {
         colorAt: colorAt,
         localClusters: localClusters,
       );
+
+  @visibleForTesting
+  static Map<int, int> interpolateAnchors({
+    required Map<int, int> anchors,
+    required int maxCross,
+    required int tolerance,
+    required int nominalBoundary,
+  }) =>
+      _interpolateAnchors(
+        anchors: anchors,
+        maxCross: maxCross,
+        tolerance: tolerance,
+        nominalBoundary: nominalBoundary,
+      );
+
+  @visibleForTesting
+  static int fuzzStep(int seed, int index) => _fuzzStep(seed, index);
 
   /// Test-visible classification constants.
   static const int clNoOp = _clNoOp;
