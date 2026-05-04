@@ -131,7 +131,222 @@ class PageLayout {
 
   static int _encodeCell(int col, int row) => (col << 16) | row;
 
-  // ── Phase 1: Object detection ──────────────────────────────────────────────
+  // ── Band-local analysis (v2) ──────────────────────────────────────────────
+
+  /// Minimum object size (cells) for a colour transition to qualify as an
+  /// anchor point. Exposed as a named constant for easy tuning.
+  static const int kMinAnchorSize = 8;
+
+  /// Extract band cells: all stitched cells within
+  /// [nominal−tolerance, nominal+tolerance) along the primary axis.
+  ///
+  /// Returns encoded cell → colour index (null-colour cells omitted).
+  static Map<int, int> _extractBand({
+    required int nominalBoundary,
+    required int tolerance,
+    required int maxBoundary,
+    required int maxCross,
+    required int? Function(int primary, int cross) colorAt,
+  }) {
+    final bandMin = (nominalBoundary - tolerance).clamp(0, maxBoundary);
+    final bandMax = (nominalBoundary + tolerance).clamp(0, maxBoundary);
+    final band = <int, int>{};
+    for (int p = bandMin; p < bandMax; p++) {
+      for (int c = 0; c < maxCross; c++) {
+        final color = colorAt(p, c);
+        if (color != null) {
+          band[(p << 16) | c] = color;
+        }
+      }
+    }
+    return band;
+  }
+
+  /// Band min/max primary coordinate for a given boundary.
+  static (int, int) _bandBounds(int nominal, int tolerance, int maxBoundary) => (
+        (nominal - tolerance).clamp(0, maxBoundary),
+        (nominal + tolerance).clamp(0, maxBoundary),
+      );
+
+  /// 8-directional flood-fill within a set of band cells.
+  /// Returns objectId → Set of (primary, cross) cells.
+  ///
+  /// Unlike [_detectObjects], this iterates only over the provided cells rather
+  /// than a full grid — objects that extend outside the band are naturally
+  /// clipped at band edges.
+  static Map<int, Set<(int, int)>> _detectLocalObjects(
+    Map<int, int> bandColors,
+  ) {
+    final visited = <int>{};
+    final objects = <int, Set<(int, int)>>{};
+    int nextId = 0;
+
+    for (final entry in bandColors.entries) {
+      final key = entry.key;
+      if (visited.contains(key)) continue;
+      visited.add(key);
+      final color = entry.value;
+
+      final cells = <(int, int)>{};
+      final queue = [key];
+      int qi = 0;
+      while (qi < queue.length) {
+        final k = queue[qi++];
+        final p = k >> 16;
+        final c = k & 0xFFFF;
+        cells.add((p, c));
+        for (final (dp, dc) in const [
+          (-1, -1), (-1, 0), (-1, 1),
+          (0, -1),           (0, 1),
+          (1, -1),  (1, 0),  (1, 1),
+        ]) {
+          final nk = ((p + dp) << 16) | (c + dc);
+          if (visited.contains(nk)) continue;
+          if (bandColors[nk] != color) continue;
+          visited.add(nk);
+          queue.add(nk);
+        }
+      }
+      objects[nextId++] = cells;
+    }
+    return objects;
+  }
+
+  /// Same-colour proximity grouping within band. Objects of the same colour
+  /// within Chebyshev distance ≤ 2 (1-cell gap) are merged into clusters.
+  ///
+  /// Different-colour objects remain separate — their boundary is a potential
+  /// anchor point for cut placement, not a merge point.
+  static Map<int, Set<(int, int)>> _buildLocalClusters(
+    Map<int, Set<(int, int)>> localObjects,
+    Map<int, int> bandColors,
+  ) {
+    if (localObjects.isEmpty) return {};
+
+    // Build cell → objectId lookup
+    final cellToObj = <int, int>{};
+    for (final entry in localObjects.entries) {
+      for (final (p, c) in entry.value) {
+        cellToObj[(p << 16) | c] = entry.key;
+      }
+    }
+
+    // Determine colour of each object (all cells same colour by construction)
+    final objColor = <int, int>{};
+    for (final entry in localObjects.entries) {
+      final (p, c) = entry.value.first;
+      objColor[entry.key] = bandColors[(p << 16) | c]!;
+    }
+
+    // Union-Find with path compression
+    final parent = <int, int>{for (final id in localObjects.keys) id: id};
+
+    int find(int id) {
+      var root = id;
+      while (parent[root] != root) root = parent[root]!;
+      var cur = id;
+      while (cur != root) {
+        final next = parent[cur]!;
+        parent[cur] = root;
+        cur = next;
+      }
+      return root;
+    }
+
+    void union(int a, int b) {
+      final ra = find(a);
+      final rb = find(b);
+      if (ra != rb) parent[ra] = rb;
+    }
+
+    // Merge same-colour objects within Chebyshev distance ≤ 2
+    for (final entry in localObjects.entries) {
+      final objId = entry.key;
+      final color = objColor[objId];
+      for (final (p, c) in entry.value) {
+        for (int dp = -2; dp <= 2; dp++) {
+          for (int dc = -2; dc <= 2; dc++) {
+            if (dp == 0 && dc == 0) continue;
+            final nk = ((p + dp) << 16) | (c + dc);
+            final neighborObj = cellToObj[nk];
+            if (neighborObj != null &&
+                neighborObj != objId &&
+                objColor[neighborObj] == color) {
+              union(objId, neighborObj);
+            }
+          }
+        }
+      }
+    }
+
+    // Collect into clusters
+    final clusters = <int, Set<(int, int)>>{};
+    for (final entry in localObjects.entries) {
+      final root = find(entry.key);
+      clusters.putIfAbsent(root, () => {}).addAll(entry.value);
+    }
+    return clusters;
+  }
+
+  /// Classification result for a cluster relative to a page boundary.
+  ///
+  /// - [noOp]: entirely on one side of nominal — no action needed.
+  /// - [keepWhole]: spans boundary but fits within band — keep intact.
+  /// - [tooBig]: clipped by band edge (extends beyond tolerance) — must split.
+  static const int _clNoOp = 0;
+  static const int _clKeepWhole = 1;
+  static const int _clTooBig = 2;
+
+  /// Classify a cluster: does it need keep-whole protection or is it too big?
+  ///
+  /// A cluster is "clipped" (too-big) if it touches the band edge AND the same
+  /// colour continues just outside the band (peeking one cell via [colorAt]).
+  static int _classifyCluster(
+    Set<(int, int)> cluster,
+    int nominalBoundary,
+    int bandMin,
+    int bandMax,
+    int? Function(int primary, int cross) colorAt,
+    Map<int, int> bandColors,
+  ) {
+    bool hasLeft = false, hasRight = false;
+    bool touchesBandMin = false, touchesBandMax = false;
+
+    for (final (p, _) in cluster) {
+      if (p < nominalBoundary) hasLeft = true;
+      if (p >= nominalBoundary) hasRight = true;
+      if (p == bandMin) touchesBandMin = true;
+      if (p == bandMax - 1) touchesBandMax = true;
+    }
+
+    // Doesn't span boundary → no-op
+    if (!hasLeft || !hasRight) return _clNoOp;
+
+    // Check if clipped at band edges (object continues beyond band)
+    if (touchesBandMin || touchesBandMax) {
+      final (fp, fc) = cluster.first;
+      final color = bandColors[(fp << 16) | fc];
+
+      if (touchesBandMin && bandMin > 0) {
+        for (final (p, c) in cluster) {
+          if (p == bandMin && colorAt(bandMin - 1, c) == color) {
+            return _clTooBig;
+          }
+        }
+      }
+      if (touchesBandMax) {
+        for (final (p, c) in cluster) {
+          if (p == bandMax - 1 && colorAt(bandMax, c) == color) {
+            return _clTooBig;
+          }
+        }
+      }
+    }
+
+    return _clKeepWhole;
+  }
+
+  // ── Phase 1: Object detection (v1, to be replaced) ────────────────────────
 
   /// 8-directional flood-fill: returns objectId → Set of (col, row) cells.
   /// Each object is a contiguous group of same-colour stitched cells.
@@ -908,4 +1123,56 @@ class PageLayout {
     int? Function(int primary, int cross) colorAt,
   ) =>
       _isQualifyingCut(posA, posB, crossIndex, maxBoundary, colorAt);
+
+  // ── Band-local test-visible helpers ────────────────────────────────────────
+
+  @visibleForTesting
+  static Map<int, int> extractBand({
+    required int nominalBoundary,
+    required int tolerance,
+    required int maxBoundary,
+    required int maxCross,
+    required int? Function(int primary, int cross) colorAt,
+  }) =>
+      _extractBand(
+        nominalBoundary: nominalBoundary,
+        tolerance: tolerance,
+        maxBoundary: maxBoundary,
+        maxCross: maxCross,
+        colorAt: colorAt,
+      );
+
+  @visibleForTesting
+  static (int, int) bandBounds(int nominal, int tolerance, int maxBoundary) =>
+      _bandBounds(nominal, tolerance, maxBoundary);
+
+  @visibleForTesting
+  static Map<int, Set<(int, int)>> detectLocalObjects(
+    Map<int, int> bandColors,
+  ) =>
+      _detectLocalObjects(bandColors);
+
+  @visibleForTesting
+  static Map<int, Set<(int, int)>> buildLocalClusters(
+    Map<int, Set<(int, int)>> localObjects,
+    Map<int, int> bandColors,
+  ) =>
+      _buildLocalClusters(localObjects, bandColors);
+
+  @visibleForTesting
+  static int classifyCluster(
+    Set<(int, int)> cluster,
+    int nominalBoundary,
+    int bandMin,
+    int bandMax,
+    int? Function(int primary, int cross) colorAt,
+    Map<int, int> bandColors,
+  ) =>
+      _classifyCluster(
+          cluster, nominalBoundary, bandMin, bandMax, colorAt, bandColors);
+
+  /// Test-visible classification constants.
+  static const int clNoOp = _clNoOp;
+  static const int clKeepWhole = _clKeepWhole;
+  static const int clTooBig = _clTooBig;
 }
