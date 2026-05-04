@@ -2,7 +2,7 @@
 //
 // One-shot diagnostic test: loads the real .stitches file, builds the
 // snap-colour map exactly as PageLayout.compute() does (topmost layer wins),
-// and prints the boundary region + per-row computeOffset() result.
+// and prints the boundary region + per-row DP offsets.
 //
 // Run with:
 //   flutter test test/debug_snap_test.dart --reporter=expanded
@@ -19,7 +19,7 @@ import '../../test_fixtures.dart';
 void main() {
   final filePath = testFixturePath('sm_test.stitches');
 
-  test('debug: snap simulation rows 17–32 at first vertical boundary',
+  test('debug: DP boundary offsets rows 17–45 at first vertical boundary',
       skip: 'diagnostic only — run manually to inspect snap output',
       () async {
     // ── Load pattern
@@ -30,7 +30,7 @@ void main() {
     printOnFailure('Pattern: ${pattern.width}×${pattern.height}, '
         '${pattern.threads.length} threads, ${pattern.layers.length} layers');
     printOnFailure('Page config: ${config.pageWidth}×${config.pageHeight} '
-        'fuzzyAmount=${config.fuzzyAmount} enabled=${config.enabled}');
+        'tolerance=${config.tolerance} enabled=${config.enabled}');
 
     // ── Build snap-colour map via StitchCompositor (mirrors PageLayout.compute)
     final composite = StitchCompositor.computeComposite(pattern);
@@ -79,59 +79,18 @@ void main() {
       sb.writeln();
     }
 
-    // Wider view
-    final wideStart = nominal - 15;
-    final wideEnd = nominal + 15;
-    sb.writeln('\nWide view cols $wideStart–${wideEnd - 1}:');
-    sb.write('row  ');
-    for (int c = wideStart; c < wideEnd; c++) {
-      sb.write(c == nominal ? '|' : (c % 10).toString());
-    }
-    sb.writeln();
-    for (int row = startRow; row < endRow; row++) {
-      sb.write(' ${row.toString().padLeft(2)}: ');
-      for (int col = wideStart; col < wideEnd; col++) {
-        sb.write(symAt(col, row));
-      }
-      sb.writeln();
-    }
+    // ── Compute full layout for DP offsets
+    final layout = PageLayout.compute(config, pattern);
+    final offsets = layout.verticalOffsets[nominal]!;
 
-    // ── Thread index values
-    sb.writeln('\nThread index values cols ${nominal - 5}–${nominal + 5}:');
-    sb.write('row  ');
-    for (int c = nominal - 5; c <= nominal + 5; c++) {
-      sb.write(' ${c.toString().padLeft(4)}');
-    }
-    sb.writeln();
+    sb.writeln('\nDP offsets — boundary=$nominal tolerance=${config.tolerance}:');
     for (int row = startRow; row < endRow; row++) {
-      sb.write(' ${row.toString().padLeft(2)}: ');
-      for (int c = nominal - 5; c <= nominal + 5; c++) {
-        final idx = colorAt(c, row);
-        sb.write(' ${(idx?.toString() ?? 'N').padLeft(4)}');
-      }
-      sb.writeln();
-    }
-
-    // ── computeOffset simulation (using real seed, same as PageLayout.compute)
-    sb.writeln('\ncomputeOffset results — boundary=$nominal '
-        'fuzzyAmount=${config.fuzzyAmount} snapRange=${PageLayout.snapRange}:');
-    for (int row = startRow; row < endRow; row++) {
-      final seed = PageLayout.makeSeed(
-          pattern.width, pattern.height, config, nominal * 100003 + row);
-      final offset = PageLayout.computeOffset(
-        nominalBoundary: nominal,
-        crossIndex: row,
-        fuzzyAmount: config.fuzzyAmount,
-        maxBoundary: pattern.width,
-        maxCross: pattern.height,
-        colorAt: colorAt,
-        seed: seed,
-      );
+      final offset = offsets[row] ?? 0;
       final cutCol = nominal + offset;
       final leftSym = symAt(cutCol - 1, row);
       final rightSym = symAt(cutCol, row);
       sb.writeln('  row $row: offset=${offset.toString().padLeft(3)} → '
-          'cut at col $cutCol  ($leftSym | $rightSym)  seed=$seed');
+          'cut at col $cutCol  ($leftSym | $rightSym)');
     }
 
     printOnFailure(sb.toString());

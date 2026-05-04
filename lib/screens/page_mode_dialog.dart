@@ -27,7 +27,7 @@ class _PageModeDialogState extends State<_PageModeDialog> {
   late bool _enabled;
   late int _pageWidth;
   late int _pageHeight;
-  late int _fuzzyAmount;
+  late bool _fuzzyEdges;
 
   final _widthCtrl = TextEditingController();
   final _heightCtrl = TextEditingController();
@@ -38,7 +38,7 @@ class _PageModeDialogState extends State<_PageModeDialog> {
     _enabled = widget.initial.enabled;
     _pageWidth = widget.initial.pageWidth;
     _pageHeight = widget.initial.pageHeight;
-    _fuzzyAmount = widget.initial.fuzzyAmount;
+    _fuzzyEdges = widget.initial.tolerance > 0;
     _widthCtrl.text = '$_pageWidth';
     _heightCtrl.text = '$_pageHeight';
   }
@@ -106,38 +106,28 @@ class _PageModeDialogState extends State<_PageModeDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                const Text('Edge fuzziness', style: TextStyle(fontSize: 14)),
-                const SizedBox(width: 8),
-                Tooltip(
-                  message:
-                      'How many stitches the page boundary can shift to align\n'
-                      'with a nearby colour change. 0 = straight edge.',
-                  child: Icon(Icons.info_outline,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                const Text('0', style: TextStyle(fontSize: 12)),
-                Expanded(
-                  child: Slider(
-                    value: _fuzzyAmount.toDouble(),
-                    min: 0,
-                    max: 3,
-                    divisions: 3,
-                    label: '$_fuzzyAmount stitches',
-                    onChanged: _enabled
-                        ? (v) => setState(() => _fuzzyAmount = v.round())
-                        : null,
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Row(
+                children: [
+                  const Text('Fuzzy edges'),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message:
+                        'Shifts page boundaries to follow colour edges,\n'
+                        'keeping stitch objects whole where possible.\n'
+                        'Off = straight page edges.',
+                    child: Icon(Icons.info_outline,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
-                ),
-                const Text('3', style: TextStyle(fontSize: 12)),
-              ],
+                ],
+              ),
+              value: _fuzzyEdges,
+              onChanged: _enabled
+                  ? (v) => setState(() => _fuzzyEdges = v)
+                  : null,
             ),
           ],
         ),
@@ -153,7 +143,7 @@ class _PageModeDialogState extends State<_PageModeDialog> {
               enabled: _enabled,
               pageWidth: _pageWidth.clamp(1, 9999),
               pageHeight: _pageHeight.clamp(1, 9999),
-              fuzzyAmount: _fuzzyAmount,
+              tolerance: _fuzzyEdges ? 5 : 0,
             ),
           ),
           child: const Text('Apply'),

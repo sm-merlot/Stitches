@@ -72,7 +72,7 @@ void main() {
       expect(parsed.compositeSymbols, equals({'310': '#', '666': '@'}));
       expect(
         parsed.pageConfig,
-        equals(const PageConfig(enabled: true, pageWidth: 12, pageHeight: 8, fuzzyAmount: 1)),
+        equals(const PageConfig(enabled: true, pageWidth: 12, pageHeight: 8, tolerance: 1)),
       );
       expect(
         parsed.progress,
@@ -259,7 +259,7 @@ CrossStitchPattern _buildRichPattern() {
       enabled: true,
       pageWidth: 12,
       pageHeight: 8,
-      fuzzyAmount: 1,
+      tolerance: 1,
     ),
     progress: PatternProgress(
       completedStitches: {const Cell(1, 1), const Cell(2, 2)},
