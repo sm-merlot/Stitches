@@ -109,9 +109,11 @@ void printBoundaryStrip({
 
 void main() {
   final fixturePath = testFixturePath('sm-layers-test.stitches');
+  final fixtureExists = File(fixturePath).existsSync();
 
   for (final tol in [5, 6]) {
-    group('Visual diagnostic — tolerance=$tol', () {
+    group('Visual diagnostic — tolerance=$tol',
+        skip: fixtureExists ? null : 'fixture sm-layers-test.stitches not found — clone stitches-test-fixtures repo as a sibling directory', () {
       late PageLayout layout;
       late int patternWidth, patternHeight;
       late Map<int, int?> snapColor;

@@ -19,8 +19,12 @@ import '../../test_fixtures.dart';
 
 void main() {
   final fixturePath = testFixturePath('sm_test.stitches');
+  final fixtureExists = File(fixturePath).existsSync();
   const nominal = 50; // First vertical boundary at col 50.
 
+  group('PageLayout integration — sm_test.stitches',
+      skip: fixtureExists ? null : 'fixture sm_test.stitches not found — clone stitches-test-fixtures repo as a sibling directory',
+      () {
   late PageLayout layout;
   late int patternHeight;
   late int tolerance;
@@ -141,4 +145,5 @@ void main() {
       }
     }
   });
+  }); // group
 }
