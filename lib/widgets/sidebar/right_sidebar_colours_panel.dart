@@ -5,6 +5,7 @@ import '../../data/symbols.dart';
 import '../../models/cell.dart';
 import '../../models/stitch/stitch.dart';
 import '../../models/thread.dart';
+import '../../models/page/page_layout.dart';
 import '../../providers/editor/editor_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../screens/stitch_demo_screen.dart';
@@ -306,9 +307,19 @@ void _autoFixSymbols(EditorNotifier notifier, List<Thread> allThreads) {
 }
 
 /// Counts how many completed-progress stitches (cross + back) belong to each thread.
-Map<String, int> _countDoneStitches(EditorState state) {
+/// When [pageLayout], [pageCol], and [pageRow] are provided, only counts stitches
+/// on the current page (matching the page-filtered stitch counts).
+Map<String, int> _countDoneStitches(
+  EditorState state, {
+  PageLayout? pageLayout,
+  int? pageCol,
+  int? pageRow,
+}) {
   final progress = state.pattern.progress;
   final counts = <String, int>{};
+
+  bool onPage(int x, int y) =>
+      pageLayout == null || pageLayout.cellOnPage(x, y, pageCol!, pageRow!);
 
   // FullStitches: use composite cache (topmost thread per cell) to match
   // _countStitchesComposite — avoids double-counting overlapping layers.
@@ -317,6 +328,7 @@ Map<String, int> _countDoneStitches(EditorState state) {
     for (final entry in layer.fullStitches.entries) {
       final x = entry.key.x;
       final y = entry.key.y;
+      if (!onPage(x, y)) continue;
       if (progress.completedStitches.contains(Cell(x, y))) {
         final id = entry.value.resolvedThread.dmcCode;
         counts[id] = (counts[id] ?? 0) + 1;
@@ -328,6 +340,7 @@ Map<String, int> _countDoneStitches(EditorState state) {
     for (final layer in state.pattern.layers) {
       for (final stitch in layer.stitches) {
         if (stitch is! FullStitch) continue;
+        if (!onPage(stitch.x, stitch.y)) continue;
         final cell = Cell(stitch.x, stitch.y);
         if (!seen.add(cell)) continue; // already counted from earlier layer
         if (progress.completedStitches.contains(cell)) {
@@ -341,13 +354,15 @@ Map<String, int> _countDoneStitches(EditorState state) {
   for (final stitch in state.pattern.stitches) {
     if (stitch is FullStitch) continue;
     if (stitch is BackStitch) {
+      if (!onPage(stitch.x1.floor(), stitch.y1.floor())) continue;
       if (progress.isBackstitchDone(
           stitch.x1, stitch.y1, stitch.x2, stitch.y2)) {
         counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
       }
     } else {
       final c = EditorState.cellCoords(stitch);
-      if (c != null && progress.completedStitches.contains(c)) {
+      if (c != null && onPage(c.x, c.y) &&
+          progress.completedStitches.contains(c)) {
         counts[stitch.threadId] = (counts[stitch.threadId] ?? 0) + 1;
       }
     }
@@ -479,7 +494,15 @@ class _StitchColoursPanel extends ConsumerWidget {
 
     final progress = state.pattern.progress;
     final doneCounts = !progress.isEmpty
-        ? _countDoneStitches(state)
+        ? () {
+            if (showPageColours) {
+              final (pageCol, pageRow) =
+                  pageLayout.pageCoords(state.stitchSession.currentPage);
+              return _countDoneStitches(state,
+                  pageLayout: pageLayout, pageCol: pageCol, pageRow: pageRow);
+            }
+            return _countDoneStitches(state);
+          }()
         : null;
 
     // Only show the stitch focus row when both types of stitch are present.

@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart' show Offset, Rect;
-import '../../providers/editor/editor_provider.dart' show kLayerHint, kWarnNothingToMove;
 import '../canvas/canvas_viewport.dart';
 
 /// Handles rubber-band region selection and selection-move drag.
@@ -76,30 +75,15 @@ class SelectHandler {
     CanvasViewport viewport,
     int patW,
     int patH, {
-    required Rect? currentSelectionRect,
-    required bool hasSelectedStitches,
-    required bool canvasSelectionMode,
     required bool isOnCanvas,
   }) {
     final cell = toSelCell(screenPos, viewport, patW, patH);
-    final sel = currentSelectionRect;
-    if (sel != null && cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), sel)) {
-      if (!hasSelectedStitches) {
-        onWarning(kWarnNothingToMove + (canvasSelectionMode ? '' : kLayerHint));
-      } else {
-        _isMoving = true;
-        _moveStartCell = cell;
-        _moveDelta = Offset.zero;
-        scheduleRebuild();
-      }
-    } else {
-      onSetSelectionRect(null);
-      if (isOnCanvas) {
-        _anchor = cell;
-        _isMoving = false;
-        _hasDragged = false;
-        scheduleRebuild();
-      }
+    onSetSelectionRect(null);
+    if (isOnCanvas) {
+      _anchor = cell;
+      _isMoving = false;
+      _hasDragged = false;
+      scheduleRebuild();
     }
   }
 

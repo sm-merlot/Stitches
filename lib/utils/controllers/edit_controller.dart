@@ -268,9 +268,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
       if (mode == DrawingMode.select) {
         _select!.onPointerDown(
           localPos, vp, p.width, p.height,
-          currentSelectionRect: state.editSession.selectionRect,
-          hasSelectedStitches: state.selectedStitches.isNotEmpty,
-          canvasSelectionMode: state.editSession.canvasSelectionMode,
           isOnCanvas: isOnCanvas,
         );
         return;
@@ -293,9 +290,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
     if (mode == DrawingMode.select) {
       _select!.onPointerDown(
         localPos, vp, p.width, p.height,
-        currentSelectionRect: state.editSession.selectionRect,
-        hasSelectedStitches: state.selectedStitches.isNotEmpty,
-        canvasSelectionMode: state.editSession.canvasSelectionMode,
         isOnCanvas: isOnCanvas,
       );
       return;

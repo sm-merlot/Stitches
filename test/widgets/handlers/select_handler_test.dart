@@ -76,12 +76,9 @@ void main() {
 
     // ── pointer down ──────────────────────────────────────────────────────────
 
-    test('onPointerDown outside selection starts rubber-band', () {
+    test('onPointerDown starts rubber-band', () {
       h.onPointerDown(
         const Offset(25, 45), vp, patW, patH,
-        currentSelectionRect: null,
-        hasSelectedStitches: false,
-        canvasSelectionMode: false,
         isOnCanvas: true,
       );
       expect(h.anchor, isNotNull);
@@ -92,36 +89,19 @@ void main() {
     test('onPointerDown not on canvas does nothing', () {
       h.onPointerDown(
         const Offset(25, 45), vp, patW, patH,
-        currentSelectionRect: null,
-        hasSelectedStitches: false,
-        canvasSelectionMode: false,
         isOnCanvas: false,
       );
       expect(h.anchor, isNull);
     });
 
-    test('onPointerDown inside selection with stitches starts move', () {
-      final sel = Rect.fromLTRB(0, 0, 5, 5);
+    test('onPointerDown inside existing selection starts new rubber-band', () {
       h.onPointerDown(
-        const Offset(25, 25), vp, patW, patH, // cell (1,1) inside sel
-        currentSelectionRect: sel,
-        hasSelectedStitches: true,
-        canvasSelectionMode: false,
+        const Offset(25, 25), vp, patW, patH, // cell (1,1)
         isOnCanvas: true,
       );
-      expect(h.isMoving, isTrue);
-    });
-
-    test('onPointerDown inside selection without stitches warns', () {
-      final sel = Rect.fromLTRB(0, 0, 5, 5);
-      h.onPointerDown(
-        const Offset(25, 25), vp, patW, patH,
-        currentSelectionRect: sel,
-        hasSelectedStitches: false,
-        canvasSelectionMode: false,
-        isOnCanvas: true,
-      );
-      expect(warnCalls, isNotEmpty);
+      expect(h.isMoving, isFalse);
+      expect(h.anchor, isNotNull);
+      expect(setRectCalls, [null]); // clears selection
     });
 
     // ── pointer move ──────────────────────────────────────────────────────────
@@ -129,9 +109,6 @@ void main() {
     test('onPointerMove updates dragRect', () {
       h.onPointerDown(
         const Offset(25, 25), vp, patW, patH,
-        currentSelectionRect: null,
-        hasSelectedStitches: false,
-        canvasSelectionMode: false,
         isOnCanvas: true,
       );
       h.onPointerMove(const Offset(65, 65), vp, patW, patH);
@@ -139,14 +116,22 @@ void main() {
       expect(h.dragRect!.width, greaterThan(1));
     });
 
+    test('drag from inside prior selection creates new selection rect', () {
+      h.onPointerDown(
+        const Offset(25, 25), vp, patW, patH, // cell (1,1)
+        isOnCanvas: true,
+      );
+      h.onPointerMove(const Offset(65, 25), vp, patW, patH); // drag right
+      h.onPointerUp(const Offset(65, 25), vp, patW, patH);
+      expect(setRectCalls.last, isNotNull); // new selection committed
+      expect(moveCalls, isEmpty);           // no move triggered
+    });
+
     // ── pointer up ────────────────────────────────────────────────────────────
 
     test('onPointerUp after drag commits non-null rect', () {
       h.onPointerDown(
         const Offset(25, 25), vp, patW, patH,
-        currentSelectionRect: null,
-        hasSelectedStitches: false,
-        canvasSelectionMode: false,
         isOnCanvas: true,
       );
       h.onPointerMove(const Offset(65, 65), vp, patW, patH);
@@ -158,27 +143,10 @@ void main() {
     test('onPointerUp without drag commits null (bare click deselects)', () {
       h.onPointerDown(
         const Offset(25, 25), vp, patW, patH,
-        currentSelectionRect: null,
-        hasSelectedStitches: false,
-        canvasSelectionMode: false,
         isOnCanvas: true,
       );
       h.onPointerUp(const Offset(25, 25), vp, patW, patH);
       expect(setRectCalls.last, isNull);
-    });
-
-    test('onPointerUp after move commits movement delta', () {
-      final sel = Rect.fromLTRB(0, 0, 5, 5);
-      h.onPointerDown(
-        const Offset(25, 25), vp, patW, patH, // cell (1,1)
-        currentSelectionRect: sel,
-        hasSelectedStitches: true,
-        canvasSelectionMode: false,
-        isOnCanvas: true,
-      );
-      h.onPointerMove(const Offset(65, 25), vp, patW, patH); // cell (3,1) → Δx=2
-      h.onPointerUp(const Offset(65, 25), vp, patW, patH);
-      expect(moveCalls, [(2, 0)]);
     });
 
     // ── cancel ────────────────────────────────────────────────────────────────
@@ -186,9 +154,6 @@ void main() {
     test('cancel clears all state', () {
       h.onPointerDown(
         const Offset(25, 25), vp, patW, patH,
-        currentSelectionRect: null,
-        hasSelectedStitches: false,
-        canvasSelectionMode: false,
         isOnCanvas: true,
       );
       h.cancel();
