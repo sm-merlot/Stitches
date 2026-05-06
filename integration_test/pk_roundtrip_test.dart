@@ -51,11 +51,12 @@ void main() {
         Directory.systemTemp.createTemp('pdfrx_cache').then((d) => d.path);
   });
 
-  group('PK PDF full round-trip (integration)', () {
+  final stitchesPath = testFixturePath('sm_test.stitches');
+
+  group('PK PDF full round-trip (integration)',
+      skip: File(stitchesPath).existsSync() ? null : 'fixture sm_test.stitches not found — clone stitches-test-fixtures repo as a sibling directory',
+      () {
     test('.stitches fixture → PK PDF → parse → same stitches', () async {
-      final stitchesPath = testFixturePath('sm_test.stitches');
-      expect(File(stitchesPath).existsSync(), isTrue,
-          reason: 'fixture not found: $stitchesPath');
 
       // 1. Load fixture.
       final (original, _, _) = await FileService.openFileFromPath(stitchesPath);
