@@ -67,6 +67,47 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
 
+          // ── Stitching Timer ───────────────────────────────────────────────
+          const _SectionHeader('Stitching Timer'),
+          SwitchListTile(
+            title: const Text('Ask to start timer when marking done'),
+            subtitle: const Text(
+              'When you mark a region done and the timer is off, show a prompt to start it.',
+            ),
+            secondary: const Icon(Icons.timer_outlined),
+            value: !settings.disableTimerStartPrompt,
+            onChanged: (v) => notifier.setDisableTimerStartPrompt(!v),
+          ),
+          SwitchListTile(
+            title: const Text('Warn when timer runs without stitching'),
+            subtitle: const Text(
+              'Show a prompt if the timer is running but no activity is detected for a while.',
+            ),
+            secondary: const Icon(Icons.timer_off_outlined),
+            value: settings.inactivityCheckEnabled,
+            onChanged: (v) => notifier.setInactivityCheckEnabled(v),
+          ),
+          if (settings.inactivityCheckEnabled)
+            ListTile(
+              leading: const Icon(Icons.hourglass_empty_outlined),
+              title: const Text('Inactivity timeout'),
+              subtitle: const Text('Minutes before the inactivity prompt appears.'),
+              trailing: DropdownButton<int>(
+                value: settings.inactivityThresholdMinutes,
+                underline: const SizedBox.shrink(),
+                items: [5, 10, 15, 20, 30]
+                    .map((m) => DropdownMenuItem(
+                          value: m,
+                          child: Text('$m min'),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) notifier.setInactivityThresholdMinutes(v);
+                },
+              ),
+            ),
+          const Divider(),
+
           // ── Thread Colours ────────────────────────────────────────────────
           const _SectionHeader('Thread Colours'),
           SwitchListTile(
