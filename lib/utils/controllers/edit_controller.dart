@@ -189,15 +189,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
     );
     _select = SelectHandler(
       onSetSelectionRect: n.setSelectionRect,
-      onMoveSelection: (dx, dy) {
-        final before = (_getState().pattern, _getState().snippetEditorState.palettes);
-        n.moveSelection(dx, dy);
-        final after = (_getState().pattern, _getState().snippetEditorState.palettes);
-        if (before.$1 != after.$1) {
-          undoManager.push(PatternSnapshotCommand(notifier: n, before: before, after: after));
-        }
-      },
-      onWarning: cb.onWarning,
       scheduleRebuild: cb.scheduleRebuild,
     );
     // Register as undo delegate so notifier.undo() routes here first.

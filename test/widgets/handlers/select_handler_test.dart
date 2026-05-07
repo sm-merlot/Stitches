@@ -6,20 +6,14 @@ import '../test_helpers.dart';
 void main() {
   group('SelectHandler', () {
     late List<Rect?> setRectCalls;
-    late List<(int, int)> moveCalls;
-    late List<String> warnCalls;
     late int rebuildCount;
     late SelectHandler h;
 
     setUp(() {
       setRectCalls = [];
-      moveCalls = [];
-      warnCalls = [];
       rebuildCount = 0;
       h = SelectHandler(
         onSetSelectionRect: (r) => setRectCalls.add(r),
-        onMoveSelection: (dx, dy) => moveCalls.add((dx, dy)),
-        onWarning: (m) => warnCalls.add(m),
         scheduleRebuild: () => rebuildCount++,
       );
     });
@@ -69,7 +63,6 @@ void main() {
 
     test('initial state', () {
       expect(h.isActive, isFalse);
-      expect(h.isMoving, isFalse);
       expect(h.anchor, isNull);
       expect(h.dragRect, isNull);
     });
@@ -82,7 +75,6 @@ void main() {
         isOnCanvas: true,
       );
       expect(h.anchor, isNotNull);
-      expect(h.isMoving, isFalse);
       expect(setRectCalls, [null]); // clears existing selection
     });
 
@@ -99,7 +91,6 @@ void main() {
         const Offset(25, 25), vp, patW, patH, // cell (1,1)
         isOnCanvas: true,
       );
-      expect(h.isMoving, isFalse);
       expect(h.anchor, isNotNull);
       expect(setRectCalls, [null]); // clears selection
     });
@@ -124,7 +115,6 @@ void main() {
       h.onPointerMove(const Offset(65, 25), vp, patW, patH); // drag right
       h.onPointerUp(const Offset(65, 25), vp, patW, patH);
       expect(setRectCalls.last, isNotNull); // new selection committed
-      expect(moveCalls, isEmpty);           // no move triggered
     });
 
     // ── pointer up ────────────────────────────────────────────────────────────

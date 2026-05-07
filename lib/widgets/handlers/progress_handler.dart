@@ -4,41 +4,35 @@ import '../../models/cell.dart';
 import '../../models/stitch/stitch.dart';
 import '../../providers/editor/editor_provider.dart' show EditorState;
 import '../canvas/canvas_viewport.dart';
+import 'gesture_handler.dart';
 
 /// Handles stitch-mode progress marking: tap-to-toggle, double-tap flood fill,
 /// and drag-to-mark region.
 ///
-/// Owns all progress-gesture state (anchor, drag rect, double-click timing)
-/// and backstitch hit-test logic.  Writes back via injected callbacks —
-/// no direct [EditorNotifier] access, so this handler is unit-testable
-/// without Riverpod.
+/// Composes [GestureHandler] for gesture recognition and wires the outcomes
+/// to the appropriate callbacks. Backstitch hit-testing is handled here as a
+/// pre-interception at pointer-down, suppressing double-click for backstitch
+/// taps so the normal flood-fill path is not triggered.
+///
+/// Writes back via injected callbacks — no direct [EditorNotifier] access,
+/// so this handler is unit-testable without Riverpod.
 ///
 /// [AidaWidget] calls the appropriate method on pointer events and reads
 /// [dragRect] / [isActive] to drive the overlay painter.
 class ProgressHandler {
-  // ── Gesture state ─────────────────────────────────────────────────────────────
-  Offset? _anchor;               // cell coords where the gesture started
-  Offset? _anchorScreen;         // screen pixels (for drag-threshold check)
-  bool _hasDragged = false;
-  Rect? _dragRect;
-  BackStitch? _pendingBackstitch; // backstitch hit at pointer-down; tapped on pointer-up
+  // ── State ─────────────────────────────────────────────────────────────────────
 
-  // ── Double-click / double-tap detection (DOWN-to-DOWN) ────────────────────────
-  DateTime? _lastDownTime;
-  (int, int)? _lastDownCell;
-  bool _pendingDoubleClick = false;
-  bool? _wasProgressCellDone; // cell state BEFORE the last single toggle
+  BackStitch? _pendingBackstitch; // backstitch hit at pointer-down; tapped on pointer-up
+  bool? _wasProgressCellDone;    // cell state BEFORE the last single toggle
+  EditorState? _lastState;       // state captured at pointer-down / pointer-up
 
   // ── Constants ─────────────────────────────────────────────────────────────────
-  static const int _kDoubleClickMs = 500;
-
-  /// Minimum pointer movement (screen pixels) before a drag is registered.
-  static const double kDragThreshold = 10.0;
 
   /// Hit radius in cell units for backstitch tapping.
   static const double kBackstitchHitRadius = 0.3;
 
   // ── Callbacks ─────────────────────────────────────────────────────────────────
+
   final void Function(int x, int y) onToggleStitchDone;
   final void Function(double x1, double y1, double x2, double y2)
       onToggleBackstitchDone;
@@ -51,51 +45,49 @@ class ProgressHandler {
   final void Function(Rect? rect) onSetProgressRegion;
   final void Function() scheduleRebuild;
 
+  late final GestureHandler _gesture;
+
   ProgressHandler({
     required this.onToggleStitchDone,
     required this.onToggleBackstitchDone,
     required this.onFloodFillDone,
     required this.onSetProgressRegion,
     required this.scheduleRebuild,
-  });
-
-  // ── Getters ──────────────────────────────────────────────────────────────────
-
-  Offset? get anchor => _anchor;
-  bool get hasDragged => _hasDragged;
-  Rect? get dragRect => _dragRect;
-  bool get isActive => _anchor != null;
-
-  // ── Coordinate helpers ────────────────────────────────────────────────────────
-
-  static Offset _toSelCell(
-    Offset screenPos,
-    CanvasViewport viewport,
-    int patW,
-    int patH,
-  ) {
-    final c = viewport.screenToCanvas(screenPos);
-    final (x, y) = viewport.canvasToCell(c);
-    return Offset(
-      x.clamp(0, patW - 1).toDouble(),
-      y.clamp(0, patH - 1).toDouble(),
+  }) {
+    _gesture = GestureHandler(
+      onTap: (x, y) {
+        _wasProgressCellDone = _lastState?.pattern.progress.completedStitches
+            .contains(Cell(x, y));
+        onToggleStitchDone(x, y);
+        onSetProgressRegion(null);
+      },
+      onDoubleTap: (x, y) {
+        onFloodFillDone(x, y,
+            originalStartIsDone: _wasProgressCellDone, afterSingleTap: true);
+        _wasProgressCellDone = null;
+        onSetProgressRegion(null);
+      },
+      onDragComplete: (rect) {
+        if (rect.width > 1 || rect.height > 1) onSetProgressRegion(rect);
+      },
+      scheduleRebuild: scheduleRebuild,
     );
   }
 
-  static Rect _buildSelRect(Offset a, Offset b) => Rect.fromLTRB(
-        math.min(a.dx, b.dx),
-        math.min(a.dy, b.dy),
-        math.max(a.dx, b.dx) + 1,
-        math.max(a.dy, b.dy) + 1,
-      );
+  // ── Getters ───────────────────────────────────────────────────────────────────
+
+  Offset? get anchor => _gesture.anchor;
+  bool get hasDragged => _gesture.hasDragged;
+  Rect? get dragRect => _gesture.dragRect;
+  bool get isActive => _gesture.isActive;
 
   // ── Backstitch hit test ───────────────────────────────────────────────────────
 
   /// Returns the topmost visible [BackStitch] within [kBackstitchHitRadius]
   /// cell units of [screenPos], or `null` if none qualifies.
   ///
-  /// Returns `null` when [state.stitchSession.crossMode] is active (cross-stitch focus
-  /// mode suppresses backstitch taps so normal cross-stitch taps work).
+  /// Returns `null` when [state.stitchSession.crossMode] is active (cross-stitch
+  /// focus mode suppresses backstitch taps so normal cross-stitch taps work).
   BackStitch? getBackstitchHit(
     Offset screenPos,
     CanvasViewport viewport,
@@ -134,30 +126,6 @@ class ProgressHandler {
     return result;
   }
 
-  // ── Double-click detection ────────────────────────────────────────────────────
-
-  void _checkDoubleClick(Offset screenPos, CanvasViewport viewport) {
-    final now = DateTime.now();
-    final canvas = viewport.screenToCanvas(screenPos);
-    final (cx, cy) = viewport.canvasToCell(canvas);
-    final last = _lastDownTime;
-    final lastCell = _lastDownCell;
-    if (last != null &&
-        lastCell != null &&
-        now.difference(last).inMilliseconds < _kDoubleClickMs &&
-        lastCell.$1 == cx &&
-        lastCell.$2 == cy) {
-      _pendingDoubleClick = true;
-      // Reset so a triple-click doesn't fire a second flood fill.
-      _lastDownTime = null;
-      _lastDownCell = null;
-    } else {
-      _pendingDoubleClick = false;
-      _lastDownTime = now;
-      _lastDownCell = (cx, cy);
-    }
-  }
-
   // ── Pointer events ────────────────────────────────────────────────────────────
 
   /// Call on pointer down in progress-marking mode (stitch mode).
@@ -168,61 +136,22 @@ class ProgressHandler {
     int patH,
     EditorState state,
   ) {
-    final cell = _toSelCell(screenPos, viewport, patW, patH);
+    _lastState = state;
     final bs = getBackstitchHit(screenPos, viewport, state);
-    if (bs == null) _checkDoubleClick(screenPos, viewport);
-    _anchor = cell;
-    _anchorScreen = screenPos;
     _pendingBackstitch = bs;
-    _hasDragged = false;
-    _dragRect = null;
-    scheduleRebuild();
+    _gesture.pointerDown(screenPos, viewport, patW, patH,
+        suppressDoubleClick: bs != null);
   }
 
   /// Call on pointer move in progress-marking mode (stylus/mouse).
-  ///
-  /// Only registers as a drag once the pointer moves more than [kDragThreshold]
-  /// screen pixels from the anchor, to prevent jitter from triggering the
-  /// drag path on a tap.
   void onPointerMove(
-    Offset screenPos,
-    CanvasViewport viewport,
-    int patW,
-    int patH,
-  ) {
-    if (_anchor == null) return;
-    final cell = _toSelCell(screenPos, viewport, patW, patH);
-    final newRect = _buildSelRect(_anchor!, cell);
-    if (!_hasDragged &&
-        _anchorScreen != null &&
-        (screenPos - _anchorScreen!).distance > kDragThreshold) {
-      _hasDragged = true;
-    }
-    if (newRect != _dragRect) {
-      _dragRect = newRect;
-      scheduleRebuild();
-    }
-  }
+          Offset screenPos, CanvasViewport viewport, int patW, int patH) =>
+      _gesture.pointerMove(screenPos, viewport, patW, patH);
 
   /// Call on pointer move in progress-marking mode for touch input.
-  ///
-  /// Touch uses rect size instead of screen-pixel distance to detect a drag,
-  /// since touch events are less precise.
   void onTouchMove(
-    Offset screenPos,
-    CanvasViewport viewport,
-    int patW,
-    int patH,
-  ) {
-    if (_anchor == null) return;
-    final cell = _toSelCell(screenPos, viewport, patW, patH);
-    final newRect = _buildSelRect(_anchor!, cell);
-    if (newRect != _dragRect) {
-      if (newRect.width > 1 || newRect.height > 1) _hasDragged = true;
-      _dragRect = newRect;
-      scheduleRebuild();
-    }
-  }
+          Offset screenPos, CanvasViewport viewport, int patW, int patH) =>
+      _gesture.touchMove(screenPos, viewport, patW, patH);
 
   /// Call on pointer up in progress-marking mode (stitch mode).
   void onPointerUp(
@@ -232,47 +161,19 @@ class ProgressHandler {
     int patH,
     EditorState state,
   ) {
-    if (_anchor == null) return;
-    final cell = _toSelCell(screenPos, viewport, patW, patH);
-    if (_hasDragged) {
-      final rect = _dragRect ?? _buildSelRect(_anchor!, cell);
-      if (rect.width > 1 || rect.height > 1) {
-        onSetProgressRegion(rect);
-      }
-    } else {
-      final bs = _pendingBackstitch;
-      if (bs != null) {
-        // Backstitch tap — always single toggle, no flood fill.
-        onToggleBackstitchDone(bs.x1, bs.y1, bs.x2, bs.y2);
-      } else {
-        final cx = _anchor!.dx.toInt();
-        final cy = _anchor!.dy.toInt();
-        if (_pendingDoubleClick) {
-          onFloodFillDone(cx, cy,
-              originalStartIsDone: _wasProgressCellDone, afterSingleTap: true);
-          _pendingDoubleClick = false;
-          _wasProgressCellDone = null;
-        } else {
-          _wasProgressCellDone = state.pattern.progress.completedStitches
-              .contains(Cell(cx, cy));
-          onToggleStitchDone(cx, cy);
-        }
-      }
-      // Clear any committed progress region on a tap.
+    if (_pendingBackstitch != null && !_gesture.hasDragged) {
+      final bs = _pendingBackstitch!;
+      _pendingBackstitch = null;
+      onToggleBackstitchDone(bs.x1, bs.y1, bs.x2, bs.y2);
       onSetProgressRegion(null);
+      _gesture.cancel();
+    } else {
+      _pendingBackstitch = null;
+      _lastState = state;
+      _gesture.pointerUp(screenPos, viewport, patW, patH);
     }
-    _reset();
   }
 
   /// Cancels all gesture state (e.g. when multi-touch starts).
-  void cancel() => _reset();
-
-  void _reset() {
-    _anchor = null;
-    _anchorScreen = null;
-    _pendingBackstitch = null;
-    _hasDragged = false;
-    _dragRect = null;
-    scheduleRebuild();
-  }
+  void cancel() => _gesture.cancel();
 }
