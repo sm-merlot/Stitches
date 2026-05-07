@@ -1667,26 +1667,25 @@ class MarkDoneButton extends ConsumerWidget {
                     notifier.markRegionNotDone(region);
                   } else {
                     notifier.markRegionDone(region);
-                    // Keep the region selected so the user can act again.
-                    // Show the start-timer prompt if appropriate.
-                    final timerNotifier =
-                        ref.read(stitchingTimerProvider.notifier);
-                    if (timerNotifier.shouldShowStartPrompt()) {
-                      if (!context.mounted) return;
-                      final result = await showTimerStartDialog(context);
-                      if (!context.mounted) return;
-                      switch (result) {
-                        case TimerStartResult.start:
-                          timerNotifier.start();
-                        case TimerStartResult.snooze:
-                          timerNotifier.snoozeStartPrompt();
-                        case TimerStartResult.mute:
-                          ref
-                              .read(settingsProvider.notifier)
-                              .setDisableTimerStartPrompt(true);
-                        case null:
-                          break; // tapped outside — dismiss once
-                      }
+                  }
+                  // Show the start-timer prompt if appropriate (marking or frogging
+                  // both count as stitching activity).
+                  final timerNotifier = ref.read(stitchingTimerProvider.notifier);
+                  if (timerNotifier.shouldShowStartPrompt()) {
+                    if (!context.mounted) return;
+                    final result = await showTimerStartDialog(context);
+                    if (!context.mounted) return;
+                    switch (result) {
+                      case TimerStartResult.start:
+                        timerNotifier.start();
+                      case TimerStartResult.snooze:
+                        timerNotifier.snoozeStartPrompt();
+                      case TimerStartResult.mute:
+                        ref
+                            .read(settingsProvider.notifier)
+                            .setDisableTimerStartPrompt(true);
+                      case null:
+                        break; // tapped outside — dismiss once
                     }
                   }
                 }

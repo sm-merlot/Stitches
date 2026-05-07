@@ -70,9 +70,9 @@ class SettingsScreen extends ConsumerWidget {
           // ── Stitching Timer ───────────────────────────────────────────────
           const _SectionHeader('Stitching Timer'),
           SwitchListTile(
-            title: const Text('Ask to start timer when marking done'),
+            title: const Text('Ask to start the timer when marking stitches as done'),
             subtitle: const Text(
-              'When you mark a region done and the timer is off, show a prompt to start it.',
+              'When you mark stitches as done and the timer is off, show a prompt to start it.',
             ),
             secondary: const Icon(Icons.timer_outlined),
             value: !settings.disableTimerStartPrompt,
