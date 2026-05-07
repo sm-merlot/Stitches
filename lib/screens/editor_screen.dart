@@ -10,6 +10,8 @@ import '../providers/editor/editor_provider.dart';
 import '../providers/files/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/stitching_timer_provider.dart';
+import '../widgets/dialogs/timer_inactivity_dialog.dart';
 import '../models/page/page_config.dart';
 import '../models/progress/pattern_progress.dart';
 import '../models/storage_location.dart';
@@ -41,7 +43,43 @@ class EditorScreen extends ConsumerStatefulWidget {
   ConsumerState<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends ConsumerState<EditorScreen> {
+class _EditorScreenState extends ConsumerState<EditorScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed) {
+      ref.read(stitchingTimerProvider.notifier).checkInactivityNow();
+    }
+  }
+
+  Future<void> _handleInactivityPrompt() async {
+    final timerNotifier = ref.read(stitchingTimerProvider.notifier);
+    timerNotifier.acknowledgeInactivityPrompt();
+    if (!mounted) return;
+    final result = await showInactivityDialog(context);
+    if (!mounted) return;
+    switch (result) {
+      case InactivityResult.keepRunning:
+        timerNotifier.recordInteraction();
+      case InactivityResult.stopAtLastActivity:
+        timerNotifier.stop(stopAt: timerNotifier.lastInteractionAt);
+      case InactivityResult.stopKeepAll:
+        timerNotifier.stop();
+    }
+  }
+
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     try {
@@ -331,7 +369,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, WidgetRef ref, EditorState state) {
     if (state.stitchMode) {
-      return StitchView(onSave: () => _save(context, ref));
+      return Listener(
+        onPointerDown: (_) =>
+            ref.read(stitchingTimerProvider.notifier).recordInteraction(),
+        child: StitchView(onSave: () => _save(context, ref)),
+      );
     }
     if (state.isNativeFormat) {
       return EditView(onSave: () => _save(context, ref));
@@ -439,6 +481,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
     // In edit or stitch mode, back exits to view mode instead of leaving.
     if (state.editMode || state.stitchMode) {
+      if (state.stitchMode) {
+        ref.read(stitchingTimerProvider.notifier).stop();
+      }
       ref.read(editorProvider.notifier).setMode(AppMode.view);
       return false;
     }
@@ -488,6 +533,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final state = ref.watch(editorProvider);
     final driveState = ref.watch(googleDriveProvider);
 
+    ref.listen<StitchingTimerState>(stitchingTimerProvider, (prev, next) {
+      if (next.showInactivityPrompt &&
+          !(prev?.showInactivityPrompt ?? false)) {
+        _handleInactivityPrompt();
+      }
+    });
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -510,8 +562,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
               : IconButton(
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Back to view',
-                  onPressed: () =>
-                      ref.read(editorProvider.notifier).setMode(AppMode.view),
+                  onPressed: () {
+                    if (ref.read(editorProvider).stitchMode) {
+                      ref.read(stitchingTimerProvider.notifier).stop();
+                    }
+                    ref.read(editorProvider.notifier).setMode(AppMode.view);
+                  },
                 ),
           titleSpacing: 0,
           title: Row(
