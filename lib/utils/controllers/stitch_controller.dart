@@ -147,7 +147,6 @@ class StitchController implements ShortcutHandler {
     if (state.editSession.drawingMode == DrawingMode.select) {
       if (state.stitchSession.progressRegion != null) {
         _notifier.setProgressRegion(null);
-        return;
       }
       if (isOnCanvas && !isNavZone) {
         _progress!.onPointerDown(localPos, vp, p.width, p.height, state);

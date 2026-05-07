@@ -683,11 +683,6 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
           Offset(state.pattern.width / 2.0, state.pattern.height / 2.0);
       final (dx, dy) = paste.effectiveOffset(origin, state.editSession.clipboard!, state.pattern);
       ghostStitches = paste.buildGhostStitches(dx, dy, state.editSession.clipboard!, EditorState.offsetStitch);
-    } else if (select?.isMoving == true && state.editSession.selectionRect != null) {
-      final dx = select!.moveDelta.dx.round();
-      final dy = select.moveDelta.dy.round();
-      ghostStitches =
-          state.selectedStitches.map((s) => EditorState.offsetStitch(s, dx, dy)).toList();
     }
 
     final pageModeActive = state.stitchMode &&

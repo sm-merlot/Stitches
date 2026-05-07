@@ -164,16 +164,6 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
     );
     _select = SelectHandler(
       onSetSelectionRect: n.setSelectionRect,
-      onMoveSelection: (dx, dy) {
-        final before = (_getState().pattern, _getState().snippetEditorState.palettes);
-        n.moveSelection(dx, dy);
-        final after = (_getState().pattern, _getState().snippetEditorState.palettes);
-        if (before.$1 != after.$1) {
-          undoManager.push(PatternSnapshotCommand(
-              notifier: n, before: before, after: after));
-        }
-      },
-      onWarning: cb.onWarning,
       scheduleRebuild: cb.scheduleRebuild,
     );
     // Register as undo delegate so notifier.undo() routes here first.
@@ -239,9 +229,6 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
       if (mode == DrawingMode.select) {
         _select!.onPointerDown(
           localPos, vp, p.width, p.height,
-          currentSelectionRect: state.editSession.selectionRect,
-          hasSelectedStitches: state.selectedStitches.isNotEmpty,
-          canvasSelectionMode: state.editSession.canvasSelectionMode,
           isOnCanvas: isOnCanvas,
         );
         return;
@@ -264,9 +251,6 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
     if (mode == DrawingMode.select) {
       _select!.onPointerDown(
         localPos, vp, p.width, p.height,
-        currentSelectionRect: state.editSession.selectionRect,
-        hasSelectedStitches: state.selectedStitches.isNotEmpty,
-        canvasSelectionMode: state.editSession.canvasSelectionMode,
         isOnCanvas: isOnCanvas,
       );
       return;
