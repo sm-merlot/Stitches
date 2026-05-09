@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/progress/progress_log.dart';
+import '../services/file_service.dart';
 import 'editor/editor_provider.dart';
 import 'settings_provider.dart';
 
@@ -430,12 +432,88 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     return currentFilePath != timerFilePath;
   }
 
-  /// Stops the current timer (time for the old pattern is not logged — it
-  /// cannot be saved while a different file is open) and starts a fresh
+  /// Stops the current timer, logs its time directly to the old pattern's file
+  /// (background read-modify-write — no UI change), then starts a fresh
   /// session for the currently open pattern.
   void swapTimer() {
-    stop(); // cross-pattern: _logTime skips logging, time is not saved
-    start();
+    if (!state.isRunning) return;
+
+    // Capture everything before stop() resets the stopwatch and clears state.
+    final sessionStart = state.sessionStart!;
+    final oldFilePath = state.timerFilePath;
+    final effectiveStop = now();
+    final totalMinutes = _stopwatch.elapsed > Duration.zero
+        ? _stopwatch.elapsed.inMinutes
+        : effectiveStop.difference(sessionStart).inMinutes;
+
+    stop();   // skips _logTime (paths differ) — we log manually below
+    start();  // start fresh for the currently open pattern
+
+    if (oldFilePath != null && totalMinutes > 0) {
+      unawaited(
+        _logTimeToFile(oldFilePath, sessionStart, effectiveStop, totalMinutes),
+      );
+    }
+  }
+
+  /// Loads [filePath] from disk, appends [totalMinutes] to its progress log
+  /// (splitting across midnight if the session crossed a day boundary), and
+  /// saves the file back. Fire-and-forget — errors are logged but not thrown.
+  Future<void> _logTimeToFile(
+    String filePath,
+    DateTime sessionStart,
+    DateTime effectiveStop,
+    int totalMinutes,
+  ) async {
+    try {
+      final (pattern, _, wasCompressed) =
+          await FileService.openFileFromPath(filePath);
+
+      final startDate =
+          DateTime(sessionStart.year, sessionStart.month, sessionStart.day);
+      final stopDate =
+          DateTime(effectiveStop.year, effectiveStop.month, effectiveStop.day);
+
+      var log = pattern.progressLog;
+      if (startDate == stopDate) {
+        log = _appendMinutes(log, totalMinutes, _isoDate(effectiveStop));
+      } else {
+        final midnight = stopDate;
+        final prevMins = midnight.difference(sessionStart).inMinutes;
+        final stopMins = effectiveStop.difference(midnight).inMinutes;
+        if (prevMins > 0) {
+          log = _appendMinutes(log, prevMins, _isoDate(sessionStart));
+        }
+        if (stopMins > 0) {
+          log = _appendMinutes(log, stopMins, _isoDate(effectiveStop));
+        }
+      }
+
+      final updated = pattern.copyWith(progressLog: log);
+      await FileService.saveFile(updated, filePath, compress: wasCompressed);
+    } catch (e) {
+      debugPrint('[Timer] swapTimer: could not log time to $filePath: $e');
+    }
+  }
+
+  /// Returns a new log list with [minutes] added to the entry for [isoDate].
+  /// Uses 0 for stitchCount/backstitchCount when creating a new entry — the
+  /// old pattern's current counts are in its own file, not the open editor.
+  static List<ProgressLogEntry> _appendMinutes(
+    List<ProgressLogEntry> log,
+    int minutes,
+    String isoDate,
+  ) {
+    final existing = log.where((e) => e.isoDate == isoDate).firstOrNull;
+    final updated = existing != null
+        ? existing.copyWith(minutesSpent: existing.minutesSpent + minutes)
+        : ProgressLogEntry(
+            isoDate: isoDate,
+            stitchCount: 0,
+            backstitchCount: 0,
+            minutesSpent: minutes,
+          );
+    return [...log.where((e) => e.isoDate != isoDate), updated];
   }
 
   /// Snoozes the start-timer prompt for 10 minutes.
