@@ -31,6 +31,7 @@ import 'page_mode_dialog.dart';
 import 'pattern_info_dialog.dart';
 import 'reference_image_sheet.dart';
 import 'resize_canvas_dialog.dart';
+import 'settings_screen.dart';
 import 'stitch_ops_screen.dart';
 
 
@@ -774,6 +775,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               const EditorScreenLockButton(),
               const SizedBox(width: 8),
             ],
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
+            ),
           ],
         ),
         body: Row(

@@ -49,6 +49,7 @@ import '../widgets/pdf_page_picker.dart';
 import '../widgets/image_viewer_panel.dart';
 import '../widgets/pdf_viewer_panel.dart';
 import 'new_pattern_dialog.dart';
+import 'settings_screen.dart';
 import 'scan/pattern_scan_cell_screen.dart';
 import 'scan/pattern_scan_crop_screen.dart';
 import 'scan/pattern_scan_preview.dart';
@@ -1674,6 +1675,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               const EditorScreenLockButton(),
               const SizedBox(width: 8),
             ],
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
+            ),
           ],
         ),
         body: Stack(

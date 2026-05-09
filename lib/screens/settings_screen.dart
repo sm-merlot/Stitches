@@ -39,10 +39,20 @@ class SettingsScreen extends ConsumerWidget {
                   )
                 : null,
             trailing: driveState.status == DriveStatus.connecting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => driveNotifier.cancelConnect(),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
                   )
                 : driveState.status == DriveStatus.connected
                     ? TextButton(

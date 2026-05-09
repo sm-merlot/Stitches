@@ -14,6 +14,48 @@ import '../services/drive/google_drive_service.dart';
 
 enum DriveStatus { disconnected, connecting, connected, error }
 
+// ---------------------------------------------------------------------------
+// Auth-revocation intercepting HTTP client
+// ---------------------------------------------------------------------------
+
+/// Wraps an auth HTTP client and fires [onRevoked] if any request returns a
+/// 401 or throws an auth-related exception (e.g. expired refresh token).
+/// All requests are still passed through / rethrown so callers handle them
+/// normally.
+class _RevokeDetectingClient extends http.BaseClient {
+  final http.Client _inner;
+  final void Function() _onRevoked;
+
+  _RevokeDetectingClient(this._inner, this._onRevoked);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    try {
+      final response = await _inner.send(request);
+      if (response.statusCode == 401) _onRevoked();
+      return response;
+    } catch (e) {
+      if (_isAuthException(e)) _onRevoked();
+      rethrow;
+    }
+  }
+
+  @override
+  void close() {
+    _inner.close();
+    super.close();
+  }
+
+  static bool _isAuthException(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('invalid_grant') ||
+        s.contains('token has been expired') ||
+        s.contains('token has been revoked') ||
+        s.contains('invalidcredentials') ||
+        s.contains('authexception');
+  }
+}
+
 @immutable
 class DriveState {
   final DriveStatus status;
@@ -22,6 +64,10 @@ class DriveState {
   final String? error;
   /// False when the app was built without --dart-define-from-file credentials.
   final bool isConfigured;
+  /// True for one frame after auth is revoked mid-session (token expired /
+  /// access revoked). Consumers should show a dialog then call
+  /// [DriveNotifier.clearRevokedFlag].
+  final bool wasRevoked;
 
   const DriveState({
     this.status = DriveStatus.disconnected,
@@ -29,6 +75,7 @@ class DriveState {
     this.isSyncing = false,
     this.error,
     this.isConfigured = false,
+    this.wasRevoked = false,
   });
 
   DriveState copyWith({
@@ -37,6 +84,7 @@ class DriveState {
     bool? isSyncing,
     Object? error = _sentinel,
     bool? isConfigured,
+    bool? wasRevoked,
   }) {
     return DriveState(
       status: status ?? this.status,
@@ -44,6 +92,7 @@ class DriveState {
       isSyncing: isSyncing ?? this.isSyncing,
       error: error == _sentinel ? this.error : error as String?,
       isConfigured: isConfigured ?? this.isConfigured,
+      wasRevoked: wasRevoked ?? this.wasRevoked,
     );
   }
 
@@ -106,15 +155,26 @@ class DriveNotifier extends Notifier<DriveState> {
     try {
       await _auth.signIn();
       if (!ref.mounted) return;
+      if (state.status != DriveStatus.connecting) return; // cancelled
       // Re-check connection so all state (email, status, isConfigured) is
       // refreshed from the auth service after a successful sign-in.
       await checkConnection();
     } catch (e) {
       if (!ref.mounted) return;
+      if (state.status != DriveStatus.connecting) return; // cancelled
       state = state.copyWith(
         status: DriveStatus.error,
         error: 'Sign-in failed: $e',
       );
+    }
+  }
+
+  /// Cancels an in-progress sign-in, resetting state to disconnected.
+  /// The underlying OAuth future is orphaned but guarded — it will no-op
+  /// if it eventually completes.
+  void cancelConnect() {
+    if (state.status == DriveStatus.connecting) {
+      state = state.copyWith(status: DriveStatus.disconnected, error: null);
     }
   }
 
@@ -129,6 +189,23 @@ class DriveNotifier extends Notifier<DriveState> {
     state = DriveState(isConfigured: _auth.isConfigured);
   }
 
+  /// Called when a Drive request detects an auth failure mid-session
+  /// (e.g. refresh token revoked). Signs out locally and sets [wasRevoked]
+  /// so the UI can show a dialog. No-op if already disconnected.
+  void _handleRevoked() {
+    if (state.status != DriveStatus.connected) return;
+    _auth.signOut().ignore();
+    state = DriveState(
+      isConfigured: _auth.isConfigured,
+      wasRevoked: true,
+    );
+  }
+
+  /// Clears the [wasRevoked] flag after the UI has shown its dialog.
+  void clearRevokedFlag() {
+    state = state.copyWith(wasRevoked: false);
+  }
+
   /// Returns a [GoogleDriveService] if connected, null otherwise.
   Future<GoogleDriveService?> getService() async {
     final client = await getAuthClient();
@@ -136,9 +213,12 @@ class DriveNotifier extends Notifier<DriveState> {
     return GoogleDriveService(client);
   }
 
-  /// Returns an auto-refreshing HTTP client, or null if not connected.
+  /// Returns an auto-refreshing HTTP client wrapped with revocation detection,
+  /// or null if not connected.
   Future<http.Client?> getAuthClient() async {
-    return await _auth.authClient();
+    final inner = await _auth.authClient();
+    if (inner == null) return null;
+    return _RevokeDetectingClient(inner, _handleRevoked);
   }
 
   /// Serialises and uploads a pattern to Drive.
