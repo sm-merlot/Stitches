@@ -63,6 +63,7 @@ class StitchingTimerButton extends ConsumerWidget {
       final result = await showConflictTimerDialog(
         context,
         timerFilePath: timer.timerFilePath!,
+        timerPatternName: timer.timerPatternName,
         sessionStart: timer.sessionStart!,
         lastInteractionAt: notifier.lastInteractionAt,
       );

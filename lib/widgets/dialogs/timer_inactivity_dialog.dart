@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'timer_dialog_utils.dart';
 
 enum InactivityResult { keepRunning, stopAtLastActivity, stopKeepAll }
 
@@ -54,20 +55,10 @@ class _InactivityDialogState extends State<_InactivityDialog> {
     super.dispose();
   }
 
-  String _fmt(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) return '${h}h ${m}m ${s}s';
-    if (m > 0) return '${m}m ${s}s';
-    return '${s}s';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final elapsed = _now.difference(widget.sessionStart);
-    final lastAt = widget.lastInteractionAt;
-    final sinceActivity = lastAt != null ? _now.difference(lastAt) : null;
+    final activity = fmtLastActivity(widget.lastInteractionAt, _now);
+    final session = fmtDuration(_now.difference(widget.sessionStart));
 
     return AlertDialog(
       title: const Text('Are you still stitching?'),
@@ -75,9 +66,8 @@ class _InactivityDialogState extends State<_InactivityDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Timer running for: ${_fmt(elapsed)}'),
-          if (sinceActivity != null)
-            Text('Last activity: ${_fmt(sinceActivity)} ago'),
+          if (activity.isNotEmpty) Text(activity),
+          Text('Session: $session'),
         ],
       ),
       actions: [

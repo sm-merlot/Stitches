@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'timer_dialog_utils.dart';
 
 enum ConflictTimerResult { openOther, stopDiscard, keepRunning }
 
@@ -15,6 +16,7 @@ enum ConflictTimerResult { openOther, stopDiscard, keepRunning }
 Future<ConflictTimerResult> showConflictTimerDialog(
   BuildContext context, {
   required String timerFilePath,
+  String? timerPatternName,
   required DateTime sessionStart,
   DateTime? lastInteractionAt,
 }) async {
@@ -23,6 +25,7 @@ Future<ConflictTimerResult> showConflictTimerDialog(
     barrierDismissible: false,
     builder: (_) => _ConflictTimerDialog(
       timerFilePath: timerFilePath,
+      timerPatternName: timerPatternName,
       sessionStart: sessionStart,
       lastInteractionAt: lastInteractionAt,
     ),
@@ -32,11 +35,13 @@ Future<ConflictTimerResult> showConflictTimerDialog(
 
 class _ConflictTimerDialog extends StatefulWidget {
   final String timerFilePath;
+  final String? timerPatternName;
   final DateTime sessionStart;
   final DateTime? lastInteractionAt;
 
   const _ConflictTimerDialog({
     required this.timerFilePath,
+    this.timerPatternName,
     required this.sessionStart,
     this.lastInteractionAt,
   });
@@ -52,8 +57,7 @@ class _ConflictTimerDialogState extends State<_ConflictTimerDialog> {
   @override
   void initState() {
     super.initState();
-    _ticker =
-        Timer.periodic(const Duration(seconds: 1), (_) {
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => _now = DateTime.now());
     });
   }
@@ -64,22 +68,13 @@ class _ConflictTimerDialogState extends State<_ConflictTimerDialog> {
     super.dispose();
   }
 
-  String _fmt(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) return '${h}h ${m}m ${s}s';
-    if (m > 0) return '${m}m ${s}s';
-    return '${s}s';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final fileName = p.basename(widget.timerFilePath);
+    final displayName =
+        widget.timerPatternName ?? p.basenameWithoutExtension(widget.timerFilePath);
     final fileExists = File(widget.timerFilePath).existsSync();
-    final elapsed = _now.difference(widget.sessionStart);
-    final lastAt = widget.lastInteractionAt;
-    final sinceActivity = lastAt != null ? _now.difference(lastAt) : null;
+    final activity = fmtLastActivity(widget.lastInteractionAt, _now);
+    final session = fmtDuration(_now.difference(widget.sessionStart));
 
     return AlertDialog(
       title: const Text('Timer running for another pattern'),
@@ -87,12 +82,11 @@ class _ConflictTimerDialogState extends State<_ConflictTimerDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(fileName,
+          Text(displayName,
               style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('Running for: ${_fmt(elapsed)}'),
-          if (sinceActivity != null)
-            Text('Last activity: ${_fmt(sinceActivity)} ago'),
+          if (activity.isNotEmpty) Text(activity),
+          Text('Session: $session'),
           const SizedBox(height: 12),
           const Text(
             'Stop & discard will not log any time — open the pattern in '
@@ -116,7 +110,7 @@ class _ConflictTimerDialogState extends State<_ConflictTimerDialog> {
           FilledButton(
             onPressed: () =>
                 Navigator.pop(context, ConflictTimerResult.openOther),
-            child: Text('Open $fileName'),
+            child: Text('Open $displayName'),
           ),
       ],
     );

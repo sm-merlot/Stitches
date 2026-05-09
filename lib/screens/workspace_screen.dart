@@ -23,6 +23,7 @@ import '../providers/settings_provider.dart';
 import '../providers/stitching_timer_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../widgets/dialogs/timer_inactivity_dialog.dart';
+import '../widgets/dialogs/timer_dialog_utils.dart';
 import '../services/file_service.dart';
 import '../services/pattern_thumbnail.dart';
 import '../services/thumbnail_cache.dart';

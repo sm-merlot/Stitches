@@ -18,44 +18,39 @@ class _TimerBanner extends StatelessWidget {
     required this.onOpen,
   });
 
-  String _fmt(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) return '${h}h ${m}m ${s}s';
-    if (m > 0) return '${m}m ${s}s';
-    return '${s}s';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final filePath = timerState.timerFilePath!;
-    final fileName = filePath.split(Platform.pathSeparator).last;
-    final elapsed = timerState.elapsed;
+    final displayName = timerState.timerPatternName ??
+        timerState.timerFilePath!.split(Platform.pathSeparator).last;
+    final session = fmtDuration(timerState.elapsed);
     final colorScheme = Theme.of(context).colorScheme;
+    final fg = colorScheme.onSecondaryContainer;
 
-    return MaterialBanner(
-      backgroundColor: colorScheme.secondaryContainer,
-      leading: Icon(Icons.timer_outlined,
-          color: colorScheme.onSecondaryContainer),
-      content: Text(
-        'Timer running for $fileName — ${_fmt(elapsed)}',
-        style: TextStyle(color: colorScheme.onSecondaryContainer),
+    return ColoredBox(
+      color: colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Icon(Icons.timer_outlined, size: 18, color: fg),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$displayName — $session',
+                style: TextStyle(color: fg),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
+            TextButton(
+                onPressed: onStop, child: const Text('Stop & discard')),
+            const SizedBox(width: 4),
+            FilledButton(
+                onPressed: onOpen,
+                child: const Text('Open in stitch mode')),
+          ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: onDismiss,
-          child: const Text('Dismiss'),
-        ),
-        TextButton(
-          onPressed: onStop,
-          child: const Text('Stop & discard'),
-        ),
-        FilledButton(
-          onPressed: onOpen,
-          child: const Text('Open in stitch mode'),
-        ),
-      ],
     );
   }
 }

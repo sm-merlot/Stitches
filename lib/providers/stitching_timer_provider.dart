@@ -8,9 +8,10 @@ import 'settings_provider.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const _kSessionStartKey = 'stitching_timer_session_start_ms';
-const _kSessionFileKey  = 'stitching_timer_session_file';
-const _kLastInteractionKey = 'stitching_timer_last_interaction_ms';
+const _kSessionStartKey       = 'stitching_timer_session_start_ms';
+const _kSessionFileKey        = 'stitching_timer_session_file';
+const _kSessionPatternNameKey = 'stitching_timer_session_pattern_name';
+const _kLastInteractionKey    = 'stitching_timer_last_interaction_ms';
 const _kPauseReminderUntilKey = 'stitching_timer_pause_reminder_until_ms';
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -35,6 +36,10 @@ class StitchingTimerState {
   /// Null when timer is not running.
   final String? timerFilePath;
 
+  /// Human-readable name of the pattern (from [CrossStitchPattern.name]).
+  /// Null when timer is not running.
+  final String? timerPatternName;
+
   const StitchingTimerState({
     this.isRunning = false,
     this.sessionStart,
@@ -42,6 +47,7 @@ class StitchingTimerState {
     this.showInactivityPrompt = false,
     this.pauseReminderUntil,
     this.timerFilePath,
+    this.timerPatternName,
   });
 
   /// Elapsed duration of the current session (wall-clock, for display only).
@@ -60,6 +66,8 @@ class StitchingTimerState {
     bool clearPauseReminderUntil = false,
     String? timerFilePath,
     bool clearTimerFilePath = false,
+    String? timerPatternName,
+    bool clearTimerPatternName = false,
   }) =>
       StitchingTimerState(
         isRunning: isRunning ?? this.isRunning,
@@ -73,6 +81,9 @@ class StitchingTimerState {
             : (pauseReminderUntil ?? this.pauseReminderUntil),
         timerFilePath:
             clearTimerFilePath ? null : (timerFilePath ?? this.timerFilePath),
+        timerPatternName: clearTimerPatternName
+            ? null
+            : (timerPatternName ?? this.timerPatternName),
       );
 }
 
@@ -149,12 +160,15 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
         ? DateTime.fromMillisecondsSinceEpoch(pauseMs)
         : null;
 
+    final savedPatternName = prefs.getString(_kSessionPatternNameKey);
+
     state = StitchingTimerState(
       isRunning: true,
       sessionStart: savedStart,
       tickCount: 0,
       pauseReminderUntil: pauseUntil,
       timerFilePath: savedFile,
+      timerPatternName: savedPatternName,
     );
 
     // Stopwatch is NOT started for restored sessions — stop() detects this
@@ -162,7 +176,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       state = state.copyWith(tickCount: state.tickCount + 1);
     });
-    _inactivityChecker = Timer.periodic(const Duration(minutes: 1), (_) {
+    _inactivityChecker = Timer.periodic(const Duration(seconds: 5), (_) { // TEST
       _checkInactivity();
     });
   }
@@ -170,6 +184,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   Future<void> _clearPersistedSession(SharedPreferences prefs) async {
     await prefs.remove(_kSessionStartKey);
     await prefs.remove(_kSessionFileKey);
+    await prefs.remove(_kSessionPatternNameKey);
     await prefs.remove(_kLastInteractionKey);
   }
 
@@ -177,11 +192,16 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   void start() async {
     if (state.isRunning) return;
     final now = this.now();
-    final filePath = ref.read(editorProvider).filePath;
+    final editorState = ref.read(editorProvider);
+    final filePath = editorState.filePath;
+    final patternName = editorState.pattern.name;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kSessionStartKey, now.millisecondsSinceEpoch);
     if (filePath != null) {
       await prefs.setString(_kSessionFileKey, filePath);
+    }
+    if (patternName.isNotEmpty) {
+      await prefs.setString(_kSessionPatternNameKey, patternName);
     }
 
     _lastInteractionAt = now;
@@ -195,12 +215,13 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
       sessionStart: now,
       showInactivityPrompt: false,
       timerFilePath: filePath,
+      timerPatternName: patternName.isNotEmpty ? patternName : null,
     );
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       state = state.copyWith(tickCount: state.tickCount + 1);
     });
-    _inactivityChecker = Timer.periodic(const Duration(minutes: 1), (_) {
+    _inactivityChecker = Timer.periodic(const Duration(seconds: 5), (_) { // TEST
       _checkInactivity();
     });
   }
@@ -253,11 +274,13 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
       tickCount: 0,
       showInactivityPrompt: false,
       clearTimerFilePath: true,
+      clearTimerPatternName: true,
     );
 
     SharedPreferences.getInstance().then((p) {
       p.remove(_kSessionStartKey);
       p.remove(_kSessionFileKey);
+      p.remove(_kSessionPatternNameKey);
       p.remove(_kLastInteractionKey);
     });
 
@@ -347,8 +370,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     if (!state.isRunning || state.showInactivityPrompt) return;
     final settings = ref.read(settingsProvider);
     if (!settings.inactivityCheckEnabled) return;
-    final threshold =
-        Duration(minutes: settings.inactivityThresholdMinutes);
+    const threshold = Duration(seconds: 10); // TEST
     final last = _lastInteractionAt ?? state.sessionStart;
     if (last == null) return;
     if (now().difference(last) >= threshold) {
