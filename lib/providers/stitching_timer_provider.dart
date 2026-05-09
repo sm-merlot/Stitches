@@ -7,6 +7,7 @@ import '../models/progress/progress_log.dart';
 import '../services/file_service.dart';
 import 'editor/editor_provider.dart';
 import 'settings_provider.dart';
+import 'workspace_provider.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -126,6 +127,16 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
       _debounceTimer?.cancel();
       _stopwatch.stop();
     });
+
+    // Stop the timer whenever the workspace changes. This listener lives in the
+    // provider (not a screen) so it fires even when a new WorkspaceScreen is
+    // pushed for a different workspace, which would reset any screen-level listener.
+    ref.listen<WorkspaceState>(workspaceProvider, (prev, next) {
+      if (prev?.workspace != next.workspace && state.isRunning) {
+        stop();
+      }
+    });
+
     _restorePersistedSession();
     return const StitchingTimerState();
   }
