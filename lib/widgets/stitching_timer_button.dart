@@ -15,8 +15,12 @@ class StitchingTimerButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final timer = ref.watch(stitchingTimerProvider);
+    final currentFilePath = ref.watch(editorProvider).filePath;
     final colorScheme = Theme.of(context).colorScheme;
-    final isRunning = timer.isRunning;
+
+    // Timer is only "running for this pattern" when the file paths match.
+    final isTimingThis = timer.isRunning &&
+        (timer.timerFilePath == null || timer.timerFilePath == currentFilePath);
 
     // Format elapsed HH:MM:SS (or MM:SS when < 1 hour).
     final elapsed = timer.elapsed;
@@ -31,18 +35,18 @@ class StitchingTimerButton extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       child: FilledButton.icon(
         icon: Icon(
-          isRunning ? Icons.stop_circle_outlined : Icons.timer_outlined,
+          isTimingThis ? Icons.stop_circle_outlined : Icons.timer_outlined,
           size: 16,
         ),
         label: Text(
-          isRunning ? timeLabel : 'Timer',
+          isTimingThis ? timeLabel : 'Timer',
           style: const TextStyle(fontSize: 13),
         ),
         style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 36),
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          backgroundColor: isRunning ? colorScheme.tertiaryContainer : null,
-          foregroundColor: isRunning ? colorScheme.onTertiaryContainer : null,
+          backgroundColor: isTimingThis ? colorScheme.tertiaryContainer : null,
+          foregroundColor: isTimingThis ? colorScheme.onTertiaryContainer : null,
         ),
         onPressed: () => _onPressed(context, ref, timer),
       ),

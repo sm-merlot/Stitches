@@ -342,6 +342,12 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   /// continuous activity. Worst-case OS-kill drift: ~1 minute.
   void recordInteraction() {
     if (!state.isRunning) return;
+    // Ignore interactions on a different pattern — don't corrupt the inactivity
+    // clock for the pattern that is actually being timed.
+    if (state.timerFilePath != null) {
+      final currentFile = ref.read(editorProvider).filePath;
+      if (currentFile != state.timerFilePath) return;
+    }
     _lastInteractionAt = now();
 
     final lastPersisted = _lastPersistedAt;
@@ -370,7 +376,14 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     if (!state.isRunning || state.showInactivityPrompt) return;
     // Only check while the user is actively in stitch mode — no false positives
     // when they step away to view a reference image or PDF.
-    if (!ref.read(editorProvider).stitchMode) return;
+    final editorState = ref.read(editorProvider);
+    if (!editorState.stitchMode) return;
+    // Don't prompt if the user is stitching a *different* pattern from the one
+    // the timer belongs to — they're active, just on another file.
+    if (state.timerFilePath != null &&
+        editorState.filePath != state.timerFilePath) {
+      return;
+    }
     final settings = ref.read(settingsProvider);
     if (!settings.inactivityCheckEnabled) return;
     const threshold = Duration(seconds: 10); // TEST
