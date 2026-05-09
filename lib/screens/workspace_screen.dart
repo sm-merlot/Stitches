@@ -1482,6 +1482,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 const SizedBox(width: 8),
                 _TimerChip(
                   timerState: timerState,
+                  isStitchMode: editorState.stitchMode,
                   onStop: (stopAt) =>
                       ref.read(stitchingTimerProvider.notifier).stop(stopAt: stopAt),
                   onOpen: timerState.timerFilePath != null &&

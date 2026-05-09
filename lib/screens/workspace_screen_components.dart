@@ -8,6 +8,7 @@ part of 'workspace_screen.dart';
 /// via ref.watch every second).
 class _TimerChip extends StatelessWidget {
   final StitchingTimerState timerState;
+  final bool isStitchMode;
   final void Function(DateTime? stopAt) onStop;
 
   /// Non-null when the running timer belongs to a *different* pattern than the
@@ -16,6 +17,7 @@ class _TimerChip extends StatelessWidget {
 
   const _TimerChip({
     required this.timerState,
+    required this.isStitchMode,
     required this.onStop,
     this.onOpen,
   });
@@ -37,17 +39,17 @@ class _TimerChip extends StatelessWidget {
     final elapsed = fmtDuration(timerState.elapsed);
     final label = name != null ? '$name — $elapsed' : elapsed;
     final cs = Theme.of(context).colorScheme;
+    final bg = isStitchMode
+        ? cs.onPrimaryContainer.withValues(alpha: 0.15)
+        : cs.secondaryContainer;
+    final fg = isStitchMode ? cs.onPrimaryContainer : cs.onSecondaryContainer;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 200),
       child: ActionChip(
-        avatar: Icon(Icons.timer_outlined, size: 16, color: cs.onSecondaryContainer),
-        label: Text(
-          label,
-          style: TextStyle(color: cs.onSecondaryContainer),
-          overflow: TextOverflow.ellipsis,
-        ),
-        backgroundColor: cs.secondaryContainer,
+        avatar: Icon(Icons.timer_outlined, size: 16, color: fg),
+        label: Text(label, style: TextStyle(color: fg), overflow: TextOverflow.ellipsis),
+        backgroundColor: bg,
         side: BorderSide.none,
         onPressed: () => _showOptions(context),
       ),
