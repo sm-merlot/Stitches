@@ -1366,6 +1366,18 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       }
     });
 
+    // ── Stop timer on workspace change ────────────────────────────────────
+    // The timer is tied to a specific file. If the user loads a different
+    // workspace, the timed file belongs to the old context — stop and log.
+    ref.listen<WorkspaceState>(workspaceProvider, (prev, next) {
+      if (prev != null && prev.workspace != next.workspace) {
+        final timer = ref.read(stitchingTimerProvider);
+        if (timer.isRunning) {
+          ref.read(stitchingTimerProvider.notifier).stop();
+        }
+      }
+    });
+
     // ── Auto-save listener ────────────────────────────────────────────────
     ref.listen<EditorState>(editorProvider, (prev, next) {
       // Cancel a pending timer whenever the active file changes — the stale
