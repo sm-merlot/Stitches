@@ -1482,8 +1482,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 const SizedBox(width: 8),
                 _TimerChip(
                   timerState: timerState,
-                  lastInteractionAt:
-                      ref.read(stitchingTimerProvider.notifier).lastInteractionAt,
                   onStop: (stopAt) =>
                       ref.read(stitchingTimerProvider.notifier).stop(stopAt: stopAt),
                   onOpen: timerState.timerFilePath != null &&

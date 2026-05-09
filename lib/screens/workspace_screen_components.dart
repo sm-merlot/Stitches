@@ -8,7 +8,6 @@ part of 'workspace_screen.dart';
 /// via ref.watch every second).
 class _TimerChip extends StatelessWidget {
   final StitchingTimerState timerState;
-  final DateTime? lastInteractionAt;
   final void Function(DateTime? stopAt) onStop;
 
   /// Non-null when the running timer belongs to a *different* pattern than the
@@ -17,7 +16,6 @@ class _TimerChip extends StatelessWidget {
 
   const _TimerChip({
     required this.timerState,
-    required this.lastInteractionAt,
     required this.onStop,
     this.onOpen,
   });
@@ -57,62 +55,36 @@ class _TimerChip extends StatelessWidget {
   }
 
   void _showOptions(BuildContext context) {
-    if (timerState.sessionStart == null) return;
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => _TimerChipSheet(
-        sessionStart: timerState.sessionStart!,
-        timerPatternName: timerState.timerPatternName,
-        lastInteractionAt: lastInteractionAt,
-        onStop: onStop,
-        onOpen: onOpen,
-      ),
+      builder: (_) => _TimerChipSheet(onStop: onStop, onOpen: onOpen),
     );
   }
 }
 
 // ─── Live-updating bottom sheet ───────────────────────────────────────────────
 
-class _TimerChipSheet extends StatefulWidget {
-  final DateTime sessionStart;
-  final String? timerPatternName;
-  final DateTime? lastInteractionAt;
+/// Watches [stitchingTimerProvider] so it rebuilds every second (tickCount),
+/// keeping "Last activity" and "Session" times live without a separate Timer.
+class _TimerChipSheet extends ConsumerWidget {
   final void Function(DateTime? stopAt) onStop;
   final VoidCallback? onOpen;
 
   const _TimerChipSheet({
-    required this.sessionStart,
-    required this.timerPatternName,
-    required this.lastInteractionAt,
     required this.onStop,
     this.onOpen,
   });
 
   @override
-  State<_TimerChipSheet> createState() => _TimerChipSheetState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final timerState = ref.watch(stitchingTimerProvider);
+    final lastInteractionAt =
+        ref.read(stitchingTimerProvider.notifier).lastInteractionAt;
+    final now = DateTime.now();
+    final elapsed = timerState.sessionStart != null
+        ? fmtDuration(now.difference(timerState.sessionStart!))
+        : fmtDuration(Duration.zero);
 
-class _TimerChipSheetState extends State<_TimerChipSheet> {
-  late Timer _ticker;
-  DateTime _now = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() => _now = DateTime.now());
-    });
-  }
-
-  @override
-  void dispose() {
-    _ticker.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final elapsed = fmtDuration(_now.difference(widget.sessionStart));
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -129,10 +101,10 @@ class _TimerChipSheetState extends State<_TimerChipSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (widget.timerPatternName != null)
-                        Text(widget.timerPatternName!,
+                      if (timerState.timerPatternName != null)
+                        Text(timerState.timerPatternName!,
                             style: Theme.of(context).textTheme.titleMedium),
-                      Text(fmtLastActivity(widget.lastInteractionAt, _now),
+                      Text(fmtLastActivity(lastInteractionAt, now),
                           style: Theme.of(context).textTheme.bodySmall),
                       Text('Session: $elapsed',
                           style: Theme.of(context).textTheme.bodySmall),
@@ -143,22 +115,22 @@ class _TimerChipSheetState extends State<_TimerChipSheet> {
             ),
           ),
           const Divider(height: 1),
-          if (widget.onOpen != null)
+          if (onOpen != null)
             ListTile(
               leading: const Icon(Icons.open_in_new_outlined),
               title: const Text('Open in stitch mode'),
               onTap: () {
                 Navigator.of(context).pop();
-                widget.onOpen!();
+                onOpen!();
               },
             ),
-          if (widget.lastInteractionAt != null)
+          if (lastInteractionAt != null)
             ListTile(
               leading: const Icon(Icons.history),
               title: const Text('Stop at last activity'),
               onTap: () {
                 Navigator.of(context).pop();
-                widget.onStop(widget.lastInteractionAt);
+                onStop(lastInteractionAt);
               },
             ),
           ListTile(
@@ -166,7 +138,7 @@ class _TimerChipSheetState extends State<_TimerChipSheet> {
             title: const Text('Stop, keep all time'),
             onTap: () {
               Navigator.of(context).pop();
-              widget.onStop(null);
+              onStop(null);
             },
           ),
           ListTile(
