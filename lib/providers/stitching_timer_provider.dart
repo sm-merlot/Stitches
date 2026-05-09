@@ -416,6 +416,28 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     return true;
   }
 
+  /// Whether a "swap timer to this pattern?" prompt should be shown.
+  ///
+  /// True when a timer is running for a *different* pattern than the one
+  /// currently open, and the start-prompt setting is not disabled.
+  bool shouldShowSwapPrompt() {
+    if (!state.isRunning) return false;
+    final settings = ref.read(settingsProvider);
+    if (settings.disableTimerStartPrompt) return false;
+    final timerFilePath = state.timerFilePath;
+    if (timerFilePath == null) return false;
+    final currentFilePath = ref.read(editorProvider).filePath;
+    return currentFilePath != timerFilePath;
+  }
+
+  /// Stops the current timer (time for the old pattern is not logged — it
+  /// cannot be saved while a different file is open) and starts a fresh
+  /// session for the currently open pattern.
+  void swapTimer() {
+    stop(); // cross-pattern: _logTime skips logging, time is not saved
+    start();
+  }
+
   /// Snoozes the start-timer prompt for 10 minutes.
   Future<void> snoozeStartPrompt() async {
     final until = now().add(const Duration(minutes: 10));

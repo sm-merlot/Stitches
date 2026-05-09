@@ -7,6 +7,7 @@ import '../../utils/commands/shortcut_router.dart';
 import '../../utils/controllers/stitch_controller.dart';
 import '../canvas/aida_widget.dart';
 import '../dialogs/timer_start_dialog.dart';
+import '../dialogs/timer_swap_dialog.dart';
 import '../editor_shared_widgets.dart';
 import '../toolbar/editor_toolbar.dart';
 
@@ -46,8 +47,22 @@ class _StitchViewState extends ConsumerState<StitchView> {
 
   Future<void> _onAnyProgressAction() async {
     final timerNotifier = ref.read(stitchingTimerProvider.notifier);
-    if (!timerNotifier.shouldShowStartPrompt()) return;
     if (!mounted) return;
+
+    if (timerNotifier.shouldShowSwapPrompt()) {
+      final timerState = ref.read(stitchingTimerProvider);
+      final currentName = ref.read(editorProvider).pattern.name;
+      final result = await showTimerSwapDialog(
+        context,
+        timerPatternName: timerState.timerPatternName,
+        currentPatternName: currentName,
+      );
+      if (!mounted) return;
+      if (result == TimerSwapResult.swap) timerNotifier.swapTimer();
+      return;
+    }
+
+    if (!timerNotifier.shouldShowStartPrompt()) return;
     final result = await showTimerStartDialog(context);
     if (!mounted) return;
     switch (result) {

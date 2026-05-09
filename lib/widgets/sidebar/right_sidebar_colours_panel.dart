@@ -12,6 +12,7 @@ import '../../providers/stitching_timer_provider.dart';
 import '../../screens/stitch_demo_screen.dart';
 import '../color_select_dialog.dart';
 import '../dialogs/timer_start_dialog.dart';
+import '../dialogs/timer_swap_dialog.dart';
 import '../../screens/stitch_ops_screen.dart';
 
 enum ColoursPanelMode { design, stitch, snippet }
@@ -1668,10 +1669,21 @@ class MarkDoneButton extends ConsumerWidget {
                   } else {
                     notifier.markRegionDone(region);
                   }
-                  // Show the start-timer prompt if appropriate (marking or frogging
-                  // both count as stitching activity).
+                  // Show the appropriate timer prompt after a mark/frog action.
                   final timerNotifier = ref.read(stitchingTimerProvider.notifier);
-                  if (timerNotifier.shouldShowStartPrompt()) {
+                  if (timerNotifier.shouldShowSwapPrompt()) {
+                    if (!context.mounted) return;
+                    final timerState = ref.read(stitchingTimerProvider);
+                    final currentName = ref.read(editorProvider).pattern.name;
+                    final swapResult = await showTimerSwapDialog(
+                      context,
+                      timerPatternName: timerState.timerPatternName,
+                      currentPatternName: currentName,
+                    );
+                    if (swapResult == TimerSwapResult.swap) {
+                      timerNotifier.swapTimer();
+                    }
+                  } else if (timerNotifier.shouldShowStartPrompt()) {
                     if (!context.mounted) return;
                     final result = await showTimerStartDialog(context);
                     if (!context.mounted) return;
