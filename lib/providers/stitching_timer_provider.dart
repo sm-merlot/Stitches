@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,291 +12,328 @@ import 'workspace_provider.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const _kSessionStartKey       = 'stitching_timer_session_start_ms';
-const _kSessionFileKey        = 'stitching_timer_session_file';
-const _kSessionPatternNameKey = 'stitching_timer_session_pattern_name';
-const _kLastInteractionKey    = 'stitching_timer_last_interaction_ms';
-const _kPauseReminderUntilKey = 'stitching_timer_pause_reminder_until_ms';
+/// SharedPreferences key for the per-workspace session map (v2 multi-timer).
+const _kSessionsKey = 'stitching_timer_sessions_v2';
 
-// ─── State ────────────────────────────────────────────────────────────────────
+/// Map key used when no workspace is open (standalone file).
+const _kStandaloneKey = '_standalone';
 
-class StitchingTimerState {
-  /// Whether a session is currently running.
+/// Exposed for tests that need to inject session state directly.
+@visibleForTesting
+const kTimerStandaloneKey = _kStandaloneKey;
+
+String _wsKey(String? workspaceId) => workspaceId ?? _kStandaloneKey;
+
+// ─── Per-session state ────────────────────────────────────────────────────────
+
+class TimerSession {
   final bool isRunning;
-
-  /// When the current session started (null when not running).
   final DateTime? sessionStart;
-
-  /// Increments every second while running — drives widget rebuilds.
   final int tickCount;
-
-  /// When true, EditorScreen / WorkspaceScreen should show the inactivity dialog.
   final bool showInactivityPrompt;
+  final String? filePath;
+  final String? patternName;
 
-  /// When non-null, the start-timer prompt is snoozed until this time.
-  final DateTime? pauseReminderUntil;
-
-  /// File path of the pattern this timer session belongs to.
-  /// Null when timer is not running.
-  final String? timerFilePath;
-
-  /// Human-readable name of the pattern (from [CrossStitchPattern.name]).
-  /// Null when timer is not running.
-  final String? timerPatternName;
-
-  const StitchingTimerState({
+  const TimerSession({
     this.isRunning = false,
     this.sessionStart,
     this.tickCount = 0,
     this.showInactivityPrompt = false,
-    this.pauseReminderUntil,
-    this.timerFilePath,
-    this.timerPatternName,
+    this.filePath,
+    this.patternName,
   });
 
-  /// Elapsed duration of the current session (wall-clock, for display only).
   Duration get elapsed =>
       isRunning && sessionStart != null
           ? DateTime.now().difference(sessionStart!)
           : Duration.zero;
 
-  StitchingTimerState copyWith({
+  TimerSession copyWith({
     bool? isRunning,
     DateTime? sessionStart,
     bool clearSessionStart = false,
     int? tickCount,
     bool? showInactivityPrompt,
-    DateTime? pauseReminderUntil,
-    bool clearPauseReminderUntil = false,
-    String? timerFilePath,
-    bool clearTimerFilePath = false,
-    String? timerPatternName,
-    bool clearTimerPatternName = false,
+    String? filePath,
+    bool clearFilePath = false,
+    String? patternName,
+    bool clearPatternName = false,
   }) =>
-      StitchingTimerState(
+      TimerSession(
         isRunning: isRunning ?? this.isRunning,
         sessionStart:
             clearSessionStart ? null : (sessionStart ?? this.sessionStart),
         tickCount: tickCount ?? this.tickCount,
         showInactivityPrompt:
             showInactivityPrompt ?? this.showInactivityPrompt,
-        pauseReminderUntil: clearPauseReminderUntil
-            ? null
-            : (pauseReminderUntil ?? this.pauseReminderUntil),
-        timerFilePath:
-            clearTimerFilePath ? null : (timerFilePath ?? this.timerFilePath),
-        timerPatternName: clearTimerPatternName
-            ? null
-            : (timerPatternName ?? this.timerPatternName),
+        filePath: clearFilePath ? null : (filePath ?? this.filePath),
+        patternName:
+            clearPatternName ? null : (patternName ?? this.patternName),
       );
+}
+
+// ─── Top-level state ──────────────────────────────────────────────────────────
+
+class StitchingTimerState {
+  /// Active sessions keyed by workspace ID (or [_kStandaloneKey] for null).
+  final Map<String, TimerSession> sessions;
+
+  const StitchingTimerState({this.sessions = const {}});
+
+  /// Session for [workspaceId], or null if none exists.
+  TimerSession? sessionFor(String? workspaceId) =>
+      sessions[_wsKey(workspaceId)];
+
+  bool get anyRunning => sessions.values.any((s) => s.isRunning);
+
+  StitchingTimerState _withSession(String? workspaceId, TimerSession session) =>
+      StitchingTimerState(
+        sessions: {...sessions, _wsKey(workspaceId): session},
+      );
+
+  StitchingTimerState _withoutSession(String? workspaceId) {
+    final updated = Map<String, TimerSession>.from(sessions);
+    updated.remove(_wsKey(workspaceId));
+    return StitchingTimerState(sessions: updated);
+  }
 }
 
 // ─── Notifier ─────────────────────────────────────────────────────────────────
 
 class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
-  Timer? _ticker;
-  Timer? _inactivityChecker;
-  Timer? _debounceTimer;
+  // Per-workspace infrastructure — keyed by _wsKey(workspaceId).
+  final Map<String, Timer> _tickers = {};
+  final Map<String, Timer> _inactivityCheckers = {};
+  final Map<String, Timer> _debounceTimers = {};
+  final Map<String, Stopwatch> _stopwatches = {};
+  final Map<String, DateTime?> _lastInteractionAt = {};
+  final Map<String, DateTime?> _lastPersistedAt = {};
 
-  /// Monotonic clock for elapsed calculation — immune to DST and wall-clock
-  /// adjustments. Only valid for the current active session; not restored
-  /// after an app kill (falls back to wall-clock diff in that case).
-  final Stopwatch _stopwatch = Stopwatch();
-
-  /// Last interaction time. Stored as a private field (not in Riverpod state)
-  /// to avoid triggering widget rebuilds on every touch event.
-  DateTime? _lastInteractionAt;
-
-  /// Timestamp of the most recent SharedPreferences write for interaction.
-  DateTime? _lastPersistedAt;
+  /// Per-workspace start-prompt snooze. Separate from session state so it
+  /// survives stop() without creating a ghost session entry.
+  final Map<String, DateTime> _snoozeUntil = {};
 
   static const _debounceDelay = Duration(seconds: 10);
   static const _maxWait = Duration(minutes: 1);
 
-  /// Exposes last interaction time for callers (e.g. stop(stopAt:)).
-  DateTime? get lastInteractionAt => _lastInteractionAt;
+  /// Last interaction for a specific workspace (used by the timer chip sheet).
+  DateTime? lastInteractionForWorkspace(String? workspaceId) =>
+      _lastInteractionAt[_wsKey(workspaceId)];
 
-  /// Returns the current wall-clock time. Override in tests to control time.
+  /// Convenience: last interaction for the current workspace.
+  DateTime? get lastInteractionAt {
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    return _lastInteractionAt[_wsKey(workspaceId)];
+  }
+
   @visibleForTesting
   DateTime now() => DateTime.now();
 
   @override
   StitchingTimerState build() {
     ref.onDispose(() {
-      _ticker?.cancel();
-      _inactivityChecker?.cancel();
-      _debounceTimer?.cancel();
-      _stopwatch.stop();
+      for (final t in _tickers.values) { t.cancel(); }
+      for (final t in _inactivityCheckers.values) { t.cancel(); }
+      for (final t in _debounceTimers.values) { t.cancel(); }
+      for (final sw in _stopwatches.values) { sw.stop(); }
     });
 
-    // Stop the timer whenever the workspace changes. This listener lives in the
-    // provider (not a screen) so it fires even when a new WorkspaceScreen is
-    // pushed for a different workspace, which would reset any screen-level listener.
-    ref.listen<WorkspaceState>(workspaceProvider, (prev, next) {
-      if (prev?.workspace != next.workspace && state.isRunning) {
-        stop();
-      }
-    });
-
-    _restorePersistedSession();
+    _restorePersistedSessions();
     return const StitchingTimerState();
   }
 
-  Future<void> _restorePersistedSession() async {
+Future<void> _restorePersistedSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    final ms = prefs.getInt(_kSessionStartKey);
-    if (ms == null) return;
+    final json = prefs.getString(_kSessionsKey);
+    if (json == null) return;
 
-    // Stale session (> 24 h) — discard.
-    final savedStart = DateTime.fromMillisecondsSinceEpoch(ms);
-    if (now().difference(savedStart).inHours > 24) {
-      await _clearPersistedSession(prefs);
+    final Map<String, dynamic> map;
+    try {
+      map = jsonDecode(json) as Map<String, dynamic>;
+    } catch (_) {
       return;
     }
 
-    // If the file no longer exists, discard the session silently.
-    final savedFile = prefs.getString(_kSessionFileKey);
-    if (savedFile != null && !File(savedFile).existsSync()) {
-      await _clearPersistedSession(prefs);
-      return;
+    final now = this.now();
+    var nextState = const StitchingTimerState();
+
+    for (final entry in map.entries) {
+      final key = entry.key;
+      final data = entry.value as Map<String, dynamic>?;
+      if (data == null) continue;
+
+      final workspaceId = data['workspaceId'] as String?;
+
+      // Restore snooze (may exist even without a running session).
+      final pauseMs = data['pauseReminderUntilMs'] as int?;
+      if (pauseMs != null) {
+        final until = DateTime.fromMillisecondsSinceEpoch(pauseMs);
+        if (now.isBefore(until)) _snoozeUntil[key] = until;
+      }
+
+      final startMs = data['sessionStartMs'] as int?;
+      if (startMs == null) continue; // snooze-only entry — nothing else to restore
+
+      final sessionStart = DateTime.fromMillisecondsSinceEpoch(startMs);
+      if (now.difference(sessionStart).inHours > 24) continue; // stale
+
+      final filePath = data['filePath'] as String?;
+      if (filePath != null && !File(filePath).existsSync()) continue;
+
+      final lastMs = data['lastInteractionMs'] as int?;
+      final lastInteraction = lastMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(lastMs)
+          : sessionStart;
+      _lastInteractionAt[key] = lastInteraction;
+      _lastPersistedAt[key] = lastInteraction;
+
+      final session = TimerSession(
+        isRunning: true,
+        sessionStart: sessionStart,
+        tickCount: 0,
+        filePath: filePath,
+        patternName: data['patternName'] as String?,
+      );
+      nextState = nextState._withSession(workspaceId, session);
+      _startTimersForWorkspace(key, workspaceId);
     }
 
-    // Restore last interaction (fall back to session start if not persisted).
-    final lastMs = prefs.getInt(_kLastInteractionKey);
-    _lastInteractionAt = lastMs != null
-        ? DateTime.fromMillisecondsSinceEpoch(lastMs)
-        : savedStart;
-    _lastPersistedAt = _lastInteractionAt;
+    if (nextState.sessions.isNotEmpty) {
+      state = nextState;
+    }
+  }
 
-    // Restore snooze state.
-    final pauseMs = prefs.getInt(_kPauseReminderUntilKey);
-    final pauseUntil = pauseMs != null
-        ? DateTime.fromMillisecondsSinceEpoch(pauseMs)
-        : null;
+  /// Serialises all running sessions (plus active snoozes) to SharedPreferences.
+  Future<void> _persistAllSessions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = this.now();
+    final map = <String, dynamic>{};
 
-    final savedPatternName = prefs.getString(_kSessionPatternNameKey);
+    // Collect all keys that have either a running session or an active snooze.
+    final allKeys = {
+      ...state.sessions.keys,
+      ..._snoozeUntil.keys,
+    };
 
-    state = StitchingTimerState(
-      isRunning: true,
-      sessionStart: savedStart,
-      tickCount: 0,
-      pauseReminderUntil: pauseUntil,
-      timerFilePath: savedFile,
-      timerPatternName: savedPatternName,
-    );
+    for (final key in allKeys) {
+      final session = state.sessions[key];
+      final snooze = _snoozeUntil[key];
+      final hasActiveSnooze = snooze != null && now.isBefore(snooze);
 
-    // Stopwatch is NOT started for restored sessions — stop() detects this
-    // and falls back to wall-clock diff (accepting the rare DST risk).
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      state = state.copyWith(tickCount: state.tickCount + 1);
+      if (session?.isRunning != true && !hasActiveSnooze) continue;
+
+      final workspaceId = key == _kStandaloneKey ? null : key;
+      map[key] = {
+        if (session?.isRunning == true && session?.sessionStart != null)
+          'sessionStartMs': session!.sessionStart!.millisecondsSinceEpoch,
+        if (session?.isRunning == true)
+          'lastInteractionMs': _lastInteractionAt[key]?.millisecondsSinceEpoch,
+        if (session?.filePath != null) 'filePath': session!.filePath,
+        if (session?.patternName != null) 'patternName': session!.patternName,
+        'workspaceId': workspaceId,
+        if (hasActiveSnooze) 'pauseReminderUntilMs': snooze.millisecondsSinceEpoch,
+      };
+    }
+
+    if (map.isEmpty) {
+      await prefs.remove(_kSessionsKey);
+    } else {
+      await prefs.setString(_kSessionsKey, jsonEncode(map));
+    }
+  }
+
+  void _startTimersForWorkspace(String key, String? workspaceId) {
+    _tickers[key]?.cancel();
+    _tickers[key] = Timer.periodic(const Duration(seconds: 1), (_) {
+      final session = state.sessions[key];
+      if (session == null) return;
+      state = state._withSession(
+          workspaceId, session.copyWith(tickCount: session.tickCount + 1));
     });
-    _inactivityChecker = Timer.periodic(const Duration(seconds: 5), (_) { // TEST
-      _checkInactivity();
+    _inactivityCheckers[key]?.cancel();
+    _inactivityCheckers[key] =
+        Timer.periodic(const Duration(seconds: 5), (_) { // TEST
+      _checkInactivityForWorkspace(key, workspaceId);
     });
   }
 
-  Future<void> _clearPersistedSession(SharedPreferences prefs) async {
-    await prefs.remove(_kSessionStartKey);
-    await prefs.remove(_kSessionFileKey);
-    await prefs.remove(_kSessionPatternNameKey);
-    await prefs.remove(_kLastInteractionKey);
-  }
+  // ── Start / stop ───────────────────────────────────────────────────────────
 
-  /// Start the timer. No-op if already running.
   void start() async {
-    if (state.isRunning) return;
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(workspaceId);
+
+    if (state.sessions[key]?.isRunning == true) return;
+
     final now = this.now();
     final editorState = ref.read(editorProvider);
     final filePath = editorState.filePath;
     final patternName = editorState.pattern.name;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kSessionStartKey, now.millisecondsSinceEpoch);
-    if (filePath != null) {
-      await prefs.setString(_kSessionFileKey, filePath);
-    }
-    if (patternName.isNotEmpty) {
-      await prefs.setString(_kSessionPatternNameKey, patternName);
-    }
 
-    _lastInteractionAt = now;
-    _lastPersistedAt = now;
-    _stopwatch
+    _lastInteractionAt[key] = now;
+    _lastPersistedAt[key] = now;
+    (_stopwatches[key] ??= Stopwatch())
       ..reset()
       ..start();
 
-    state = state.copyWith(
-      isRunning: true,
-      sessionStart: now,
-      showInactivityPrompt: false,
-      timerFilePath: filePath,
-      timerPatternName: patternName.isNotEmpty ? patternName : null,
+    state = state._withSession(
+      workspaceId,
+      TimerSession(
+        isRunning: true,
+        sessionStart: now,
+        showInactivityPrompt: false,
+        filePath: filePath,
+        patternName: patternName.isNotEmpty ? patternName : null,
+      ),
     );
 
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      state = state.copyWith(tickCount: state.tickCount + 1);
-    });
-    _inactivityChecker = Timer.periodic(const Duration(seconds: 5), (_) { // TEST
-      _checkInactivity();
-    });
+    _startTimersForWorkspace(key, workspaceId);
+    await _persistAllSessions();
   }
 
-  /// Stop the timer and persist elapsed minutes to the progress log.
-  ///
-  /// [stopAt] backdates the stop time (e.g. to last interaction). When null,
-  /// uses the monotonic stopwatch elapsed for active sessions (DST-safe), or
-  /// falls back to wall-clock diff for sessions restored after an app kill.
-  ///
-  /// Returns the total number of whole minutes recorded.
-  int stop({DateTime? stopAt}) {
-    if (!state.isRunning) return 0;
+  /// Stops the timer for [workspaceId] (defaults to current workspace).
+  int stop({DateTime? stopAt, String? workspaceId}) {
+    final effectiveWorkspaceId =
+        workspaceId ?? ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(effectiveWorkspaceId);
 
-    _ticker?.cancel();
-    _ticker = null;
-    _inactivityChecker?.cancel();
-    _inactivityChecker = null;
-    _debounceTimer?.cancel();
-    _debounceTimer = null;
+    final session = state.sessions[key];
+    if (session == null || !session.isRunning) return 0;
 
-    final sessionStart = state.sessionStart!;
-    final timerFilePath = state.timerFilePath; // capture before state cleared
+    _tickers[key]?.cancel();
+    _tickers.remove(key);
+    _inactivityCheckers[key]?.cancel();
+    _inactivityCheckers.remove(key);
+    _debounceTimers[key]?.cancel();
+    _debounceTimers.remove(key);
+
+    final sessionStart = session.sessionStart!;
+    final timerFilePath = session.filePath;
+
     int totalMinutes;
     DateTime effectiveStop;
 
     if (stopAt != null) {
-      // Backdate: calculate from session start to the given stop time.
       effectiveStop = stopAt;
       totalMinutes = stopAt.difference(sessionStart).inMinutes;
-    } else if (_stopwatch.elapsed > Duration.zero) {
-      // Active session: use monotonic stopwatch (immune to DST/NTP changes).
-      effectiveStop = now();
-      totalMinutes = _stopwatch.elapsed.inMinutes;
     } else {
-      // Restored session: stopwatch was reset on kill — fall back to wall clock.
-      effectiveStop = now();
-      totalMinutes = effectiveStop.difference(sessionStart).inMinutes;
+      final sw = _stopwatches[key];
+      if (sw != null && sw.elapsed > Duration.zero) {
+        effectiveStop = now();
+        totalMinutes = sw.elapsed.inMinutes;
+      } else {
+        effectiveStop = now();
+        totalMinutes = effectiveStop.difference(sessionStart).inMinutes;
+      }
     }
 
-    _stopwatch
-      ..stop()
-      ..reset();
-    _lastInteractionAt = null;
-    _lastPersistedAt = null;
+    _stopwatches[key]?.stop();
+    _stopwatches[key]?.reset();
+    _lastInteractionAt.remove(key);
+    _lastPersistedAt.remove(key);
 
-    state = state.copyWith(
-      isRunning: false,
-      clearSessionStart: true,
-      tickCount: 0,
-      showInactivityPrompt: false,
-      clearTimerFilePath: true,
-      clearTimerPatternName: true,
-    );
-
-    SharedPreferences.getInstance().then((p) {
-      p.remove(_kSessionStartKey);
-      p.remove(_kSessionFileKey);
-      p.remove(_kSessionPatternNameKey);
-      p.remove(_kLastInteractionKey);
-    });
+    state = state._withoutSession(effectiveWorkspaceId);
+    unawaited(_persistAllSessions());
 
     if (totalMinutes <= 0) return 0;
 
@@ -310,8 +348,6 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     int totalMinutes, {
     String? timerFilePath,
   }) {
-    // If the timer was for a different file than what's currently open, skip
-    // logging — better to lose time than log it to the wrong pattern.
     final currentFilePath = ref.read(editorProvider).filePath;
     if (timerFilePath != null && currentFilePath != timerFilePath) return;
 
@@ -325,7 +361,6 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     if (startDate == stopDate) {
       notifier.addTimeToLog(totalMinutes, isoDate: stopIso);
     } else {
-      // Session crossed midnight — split at the day boundary.
       final midnight = stopDate;
       final minutesPrevDay = midnight.difference(sessionStart).inMinutes;
       final minutesStopDay = effectiveStop.difference(midnight).inMinutes;
@@ -342,123 +377,130 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   static String _isoDate(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
-  /// Toggle between running and stopped.
-  void toggle() => state.isRunning ? stop() : start();
+  void toggle() {
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    if (state.sessions[_wsKey(workspaceId)]?.isRunning == true) {
+      stop();
+    } else {
+      start();
+    }
+  }
 
   // ── Interaction tracking ───────────────────────────────────────────────────
 
-  /// Records that the user interacted with stitch mode right now.
-  ///
-  /// Updates the in-memory [lastInteractionAt] immediately. Persists to
-  /// SharedPreferences using a debounce+maxWait strategy: writes within 10
-  /// seconds of activity stopping, or force-writes every 1 minute during
-  /// continuous activity. Worst-case OS-kill drift: ~1 minute.
   void recordInteraction() {
-    if (!state.isRunning) return;
-    // Ignore interactions on a different pattern — don't corrupt the inactivity
-    // clock for the pattern that is actually being timed.
-    if (state.timerFilePath != null) {
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(workspaceId);
+    final session = state.sessions[key];
+    if (session == null || !session.isRunning) return;
+    if (session.filePath != null) {
       final currentFile = ref.read(editorProvider).filePath;
-      if (currentFile != state.timerFilePath) return;
+      if (currentFile != session.filePath) return;
     }
-    _lastInteractionAt = now();
+    _lastInteractionAt[key] = now();
 
-    final lastPersisted = _lastPersistedAt;
-    if (lastPersisted == null ||
-        now().difference(lastPersisted) >= _maxWait) {
-      _persistInteraction();
+    final lastPersisted = _lastPersistedAt[key];
+    if (lastPersisted == null || now().difference(lastPersisted) >= _maxWait) {
+      _persistInteractionForWorkspace(key);
       return;
     }
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(_debounceDelay, _persistInteraction);
+    _debounceTimers[key]?.cancel();
+    _debounceTimers[key] =
+        Timer(_debounceDelay, () => _persistInteractionForWorkspace(key));
   }
 
-  void _persistInteraction() {
-    _debounceTimer?.cancel();
-    _debounceTimer = null;
-    _lastPersistedAt = _lastInteractionAt;
-    final ts = _lastInteractionAt?.millisecondsSinceEpoch;
-    if (ts == null) return;
-    SharedPreferences.getInstance()
-        .then((p) => p.setInt(_kLastInteractionKey, ts));
+  void _persistInteractionForWorkspace(String key) {
+    _debounceTimers[key]?.cancel();
+    _debounceTimers.remove(key);
+    _lastPersistedAt[key] = _lastInteractionAt[key];
+    unawaited(_persistAllSessions());
   }
 
   // ── Inactivity prompt ──────────────────────────────────────────────────────
 
-  void _checkInactivity() {
-    if (!state.isRunning || state.showInactivityPrompt) return;
-    // Only check while the user is actively in stitch mode — no false positives
-    // when they step away to view a reference image or PDF.
+  void _checkInactivityForWorkspace(String key, String? workspaceId) {
+    final session = state.sessions[key];
+    if (session == null || !session.isRunning || session.showInactivityPrompt) {
+      return;
+    }
+    // Only prompt when the user is currently in this workspace.
+    final currentWorkspaceId = ref.read(workspaceProvider).workspace?.id;
+    if (currentWorkspaceId != workspaceId) return;
+
     final editorState = ref.read(editorProvider);
     if (!editorState.stitchMode) return;
-    // Don't prompt if the user is stitching a *different* pattern from the one
-    // the timer belongs to — they're active, just on another file.
-    if (state.timerFilePath != null &&
-        editorState.filePath != state.timerFilePath) {
+    if (session.filePath != null && editorState.filePath != session.filePath) {
       return;
     }
     final settings = ref.read(settingsProvider);
     if (!settings.inactivityCheckEnabled) return;
     const threshold = Duration(seconds: 10); // TEST
-    final last = _lastInteractionAt ?? state.sessionStart;
+    final last = _lastInteractionAt[key] ?? session.sessionStart;
     if (last == null) return;
     if (now().difference(last) >= threshold) {
-      state = state.copyWith(showInactivityPrompt: true);
+      state = state._withSession(
+          workspaceId, session.copyWith(showInactivityPrompt: true));
     }
   }
 
-  /// Immediately checks inactivity without waiting for the next periodic tick.
-  /// Called on app resume to handle the "left timer running overnight" scenario.
-  void checkInactivityNow() => _checkInactivity();
-
-  /// Clears the inactivity prompt flag. Call immediately before showing the
-  /// dialog to prevent a rapid double-fire from triggering two dialogs.
-  void acknowledgeInactivityPrompt() {
-    state = state.copyWith(showInactivityPrompt: false);
+  void checkInactivityNow() {
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(workspaceId);
+    _checkInactivityForWorkspace(key, workspaceId);
   }
 
-  // ── Start prompt ───────────────────────────────────────────────────────────
+  void acknowledgeInactivityPrompt() {
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(workspaceId);
+    final session = state.sessions[key];
+    if (session == null) return;
+    state = state._withSession(
+        workspaceId, session.copyWith(showInactivityPrompt: false));
+  }
 
-  /// Whether the "start a timer?" prompt should be shown right now.
+  // ── Start / swap prompt ────────────────────────────────────────────────────
+
+  /// Whether to show "start a timer?" for the current workspace.
   bool shouldShowStartPrompt() {
-    if (state.isRunning) return false;
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(workspaceId);
+    if (state.sessions[key]?.isRunning == true) return false;
     final settings = ref.read(settingsProvider);
     if (settings.disableTimerStartPrompt) return false;
-    final snoozeUntil = state.pauseReminderUntil;
-    if (snoozeUntil != null && now().isBefore(snoozeUntil)) return false;
+    final snooze = _snoozeUntil[key];
+    if (snooze != null && now().isBefore(snooze)) return false;
     return true;
   }
 
-  /// Whether a "swap timer to this pattern?" prompt should be shown.
-  ///
-  /// True when a timer is running for a *different* pattern than the one
-  /// currently open, and the start-prompt setting is not disabled.
+  /// Whether to show "swap timer?" — only when the SAME workspace's timer is
+  /// running for a different pattern than the one currently open.
   bool shouldShowSwapPrompt() {
-    if (!state.isRunning) return false;
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final session = state.sessionFor(workspaceId);
+    if (session?.isRunning != true) return false;
     final settings = ref.read(settingsProvider);
     if (settings.disableTimerStartPrompt) return false;
-    final timerFilePath = state.timerFilePath;
+    final timerFilePath = session!.filePath;
     if (timerFilePath == null) return false;
-    final currentFilePath = ref.read(editorProvider).filePath;
-    return currentFilePath != timerFilePath;
+    return ref.read(editorProvider).filePath != timerFilePath;
   }
 
-  /// Stops the current timer, logs its time directly to the old pattern's file
-  /// (background read-modify-write — no UI change), then starts a fresh
-  /// session for the currently open pattern.
   void swapTimer() {
-    if (!state.isRunning) return;
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(workspaceId);
+    final session = state.sessions[key];
+    if (session?.isRunning != true) return;
 
-    // Capture everything before stop() resets the stopwatch and clears state.
-    final sessionStart = state.sessionStart!;
-    final oldFilePath = state.timerFilePath;
+    final sessionStart = session!.sessionStart!;
+    final oldFilePath = session.filePath;
     final effectiveStop = now();
-    final totalMinutes = _stopwatch.elapsed > Duration.zero
-        ? _stopwatch.elapsed.inMinutes
+    final sw = _stopwatches[key];
+    final totalMinutes = sw != null && sw.elapsed > Duration.zero
+        ? sw.elapsed.inMinutes
         : effectiveStop.difference(sessionStart).inMinutes;
 
-    stop();   // skips _logTime (paths differ) — we log manually below
-    start();  // start fresh for the currently open pattern
+    stop(); // _logTime skips — paths differ; we log manually below
+    start();
 
     if (oldFilePath != null && totalMinutes > 0) {
       unawaited(
@@ -467,9 +509,6 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     }
   }
 
-  /// Loads [filePath] from disk, appends [totalMinutes] to its progress log
-  /// (splitting across midnight if the session crossed a day boundary), and
-  /// saves the file back. Fire-and-forget — errors are logged but not thrown.
   Future<void> _logTimeToFile(
     String filePath,
     DateTime sessionStart,
@@ -492,12 +531,8 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
         final midnight = stopDate;
         final prevMins = midnight.difference(sessionStart).inMinutes;
         final stopMins = effectiveStop.difference(midnight).inMinutes;
-        if (prevMins > 0) {
-          log = _appendMinutes(log, prevMins, _isoDate(sessionStart));
-        }
-        if (stopMins > 0) {
-          log = _appendMinutes(log, stopMins, _isoDate(effectiveStop));
-        }
+        if (prevMins > 0) log = _appendMinutes(log, prevMins, _isoDate(sessionStart));
+        if (stopMins > 0) log = _appendMinutes(log, stopMins, _isoDate(effectiveStop));
       }
 
       final updated = pattern.copyWith(progressLog: log);
@@ -507,9 +542,6 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     }
   }
 
-  /// Returns a new log list with [minutes] added to the entry for [isoDate].
-  /// Uses 0 for stitchCount/backstitchCount when creating a new entry — the
-  /// old pattern's current counts are in its own file, not the open editor.
   static List<ProgressLogEntry> _appendMinutes(
     List<ProgressLogEntry> log,
     int minutes,
@@ -527,12 +559,11 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     return [...log.where((e) => e.isoDate != isoDate), updated];
   }
 
-  /// Snoozes the start-timer prompt for 10 minutes.
   Future<void> snoozeStartPrompt() async {
-    final until = now().add(const Duration(minutes: 10));
-    state = state.copyWith(pauseReminderUntil: until);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kPauseReminderUntilKey, until.millisecondsSinceEpoch);
+    final workspaceId = ref.read(workspaceProvider).workspace?.id;
+    final key = _wsKey(workspaceId);
+    _snoozeUntil[key] = now().add(const Duration(minutes: 10));
+    await _persistAllSessions();
   }
 }
 

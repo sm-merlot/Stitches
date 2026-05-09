@@ -84,11 +84,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       return;
     }
 
-    final timerState = ref.read(stitchingTimerProvider);
+    // editor_screen is phone-only — no workspace, so workspaceId is always null.
+    final session = ref.read(stitchingTimerProvider).sessionFor(null);
+    final lastInteraction = timerNotifier.lastInteractionForWorkspace(null);
     final result = await showInactivityDialog(
       context,
-      sessionStart: timerState.sessionStart!,
-      lastInteractionAt: timerNotifier.lastInteractionAt,
+      sessionStart: session!.sessionStart!,
+      lastInteractionAt: lastInteraction,
     );
     _inactivityDialogShowing = false;
     if (!mounted) return;
@@ -97,7 +99,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       case InactivityResult.keepRunning:
         timerNotifier.recordInteraction();
       case InactivityResult.stopAtLastActivity:
-        timerNotifier.stop(stopAt: timerNotifier.lastInteractionAt);
+        timerNotifier.stop(stopAt: lastInteraction);
       case InactivityResult.stopKeepAll:
         timerNotifier.stop();
     }
@@ -554,8 +556,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final driveState = ref.watch(googleDriveProvider);
 
     ref.listen<StitchingTimerState>(stitchingTimerProvider, (prev, next) {
-      if (next.showInactivityPrompt &&
-          !(prev?.showInactivityPrompt ?? false)) {
+      // editor_screen is phone-only — no workspace, workspaceId is always null.
+      if (next.sessionFor(null)?.showInactivityPrompt == true &&
+          prev?.sessionFor(null)?.showInactivityPrompt != true) {
         _handleInactivityPrompt();
       }
     });

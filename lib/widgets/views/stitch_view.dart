@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/editor/editor_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/stitching_timer_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../utils/commands/shortcut_router.dart';
 import '../../utils/controllers/stitch_controller.dart';
 import '../canvas/aida_widget.dart';
@@ -50,11 +51,12 @@ class _StitchViewState extends ConsumerState<StitchView> {
     if (!mounted) return;
 
     if (timerNotifier.shouldShowSwapPrompt()) {
-      final timerState = ref.read(stitchingTimerProvider);
+      final workspaceId = ref.read(workspaceProvider).workspace?.id;
+      final session = ref.read(stitchingTimerProvider).sessionFor(workspaceId);
       final currentName = ref.read(editorProvider).pattern.name;
       final result = await showTimerSwapDialog(
         context,
-        timerPatternName: timerState.timerPatternName,
+        timerPatternName: session?.patternName,
         currentPatternName: currentName,
       );
       if (!mounted) return;

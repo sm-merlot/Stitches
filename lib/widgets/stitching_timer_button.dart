@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/file_service.dart';
 import '../providers/editor/editor_provider.dart';
 import '../providers/stitching_timer_provider.dart';
+import '../providers/workspace_provider.dart';
 import 'dialogs/timer_conflict_dialog.dart';
 
 /// A compact play/stop button that shows elapsed session time while running.
@@ -14,16 +15,18 @@ class StitchingTimerButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timer = ref.watch(stitchingTimerProvider);
+    final timerState = ref.watch(stitchingTimerProvider);
     final currentFilePath = ref.watch(editorProvider).filePath;
+    final workspaceId = ref.watch(workspaceProvider).workspace?.id;
+    final session = timerState.sessionFor(workspaceId);
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Timer is only "running for this pattern" when the file paths match.
-    final isTimingThis = timer.isRunning &&
-        (timer.timerFilePath == null || timer.timerFilePath == currentFilePath);
+    // Timer is only "running for this pattern" when file paths match.
+    final isTimingThis = session?.isRunning == true &&
+        (session?.filePath == null || session?.filePath == currentFilePath);
 
     // Format elapsed HH:MM:SS (or MM:SS when < 1 hour).
-    final elapsed = timer.elapsed;
+    final elapsed = session?.elapsed ?? Duration.zero;
     final h = elapsed.inHours;
     final m = elapsed.inMinutes.remainder(60);
     final s = elapsed.inSeconds.remainder(60);
@@ -48,35 +51,39 @@ class StitchingTimerButton extends ConsumerWidget {
           backgroundColor: isTimingThis ? colorScheme.tertiaryContainer : null,
           foregroundColor: isTimingThis ? colorScheme.onTertiaryContainer : null,
         ),
-        onPressed: () => _onPressed(context, ref, timer),
+        onPressed: () => _onPressed(context, ref, session, workspaceId),
       ),
     );
   }
 
   Future<void> _onPressed(
-      BuildContext context, WidgetRef ref, StitchingTimerState timer) async {
+    BuildContext context,
+    WidgetRef ref,
+    TimerSession? session,
+    String? workspaceId,
+  ) async {
     final notifier = ref.read(stitchingTimerProvider.notifier);
     final currentFilePath = ref.read(editorProvider).filePath;
 
-    // If the running timer belongs to a different pattern, intercept and show
-    // the conflict dialog instead of blindly stopping.
-    if (timer.isRunning &&
-        timer.timerFilePath != null &&
-        timer.timerFilePath != currentFilePath) {
+    // If this workspace's timer is running for a different pattern, intercept
+    // and show the conflict dialog instead of blindly stopping.
+    if (session?.isRunning == true &&
+        session?.filePath != null &&
+        session?.filePath != currentFilePath) {
       if (!context.mounted) return;
       final result = await showConflictTimerDialog(
         context,
-        timerFilePath: timer.timerFilePath!,
-        timerPatternName: timer.timerPatternName,
-        sessionStart: timer.sessionStart!,
-        lastInteractionAt: notifier.lastInteractionAt,
+        timerFilePath: session!.filePath!,
+        timerPatternName: session.patternName,
+        sessionStart: session.sessionStart!,
+        lastInteractionAt: notifier.lastInteractionForWorkspace(workspaceId),
       );
       if (!context.mounted) return;
       switch (result) {
         case ConflictTimerResult.stopDiscard:
-          notifier.stop(); // _logTime skips logging — paths differ
+          notifier.stop(workspaceId: workspaceId);
         case ConflictTimerResult.openOther:
-          await _openInStitchMode(context, ref, timer.timerFilePath!);
+          await _openInStitchMode(context, ref, session.filePath!);
         case ConflictTimerResult.keepRunning:
           break;
       }

@@ -69,7 +69,7 @@ void main() {
       // Manually inject the session start so we bypass start()'s async prefs write.
       final timerNotifier = c.read(stitchingTimerProvider.notifier);
       c.read(stitchingTimerProvider.notifier).state =
-          StitchingTimerState(isRunning: true, sessionStart: sessionStart);
+          StitchingTimerState(sessions: {kTimerStandaloneKey: TimerSession(isRunning: true, sessionStart: sessionStart)});
 
       // Advance "now" to 45 minutes later and stop.
       final stopTime = DateTime(2026, 4, 29, 10, 45, 0);
@@ -85,7 +85,7 @@ void main() {
     test('stop() returns 0 and logs nothing for sub-minute sessions', () {
       final sessionStart = DateTime(2026, 4, 29, 10, 0, 0);
       c.read(stitchingTimerProvider.notifier).state =
-          StitchingTimerState(isRunning: true, sessionStart: sessionStart);
+          StitchingTimerState(sessions: {kTimerStandaloneKey: TimerSession(isRunning: true, sessionStart: sessionStart)});
 
       // Only 30 seconds elapsed — inMinutes truncates to 0.
       nowFn = () => sessionStart.add(const Duration(seconds: 30));
@@ -116,7 +116,7 @@ void main() {
       final stopTime = DateTime(2026, 4, 29, 0, 15, 0);
 
       c.read(stitchingTimerProvider.notifier).state =
-          StitchingTimerState(isRunning: true, sessionStart: sessionStart);
+          StitchingTimerState(sessions: {kTimerStandaloneKey: TimerSession(isRunning: true, sessionStart: sessionStart)});
       nowFn = () => stopTime;
 
       final totalMinutes = c.read(stitchingTimerProvider.notifier).stop();
@@ -139,7 +139,7 @@ void main() {
       final stopTime = DateTime(2026, 4, 29, 0, 0, 0); // exact midnight
 
       c.read(stitchingTimerProvider.notifier).state =
-          StitchingTimerState(isRunning: true, sessionStart: sessionStart);
+          StitchingTimerState(sessions: {kTimerStandaloneKey: TimerSession(isRunning: true, sessionStart: sessionStart)});
       nowFn = () => stopTime;
 
       c.read(stitchingTimerProvider.notifier).stop();
@@ -157,7 +157,7 @@ void main() {
       final stopTime = DateTime(2026, 4, 29, 0, 30, 0);
 
       c.read(stitchingTimerProvider.notifier).state =
-          StitchingTimerState(isRunning: true, sessionStart: sessionStart);
+          StitchingTimerState(sessions: {kTimerStandaloneKey: TimerSession(isRunning: true, sessionStart: sessionStart)});
       nowFn = () => stopTime;
 
       c.read(stitchingTimerProvider.notifier).stop();

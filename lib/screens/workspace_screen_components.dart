@@ -4,10 +4,14 @@ part of 'workspace_screen.dart';
 
 /// Compact chip placed in the AppBar title row whenever a timer is running.
 /// Tapping opens a live-updating bottom sheet with stop / open options.
-/// Elapsed label is driven by [StitchingTimerState.tickCount] (parent rebuilds
+/// Elapsed label is driven by [TimerSession.tickCount] (parent rebuilds
 /// via ref.watch every second).
 class _TimerChip extends StatelessWidget {
-  final StitchingTimerState timerState;
+  final TimerSession session;
+
+  /// Workspace ID this chip belongs to — forwarded to [_TimerChipSheet] for
+  /// scoped provider reads.
+  final String? workspaceId;
   final bool isStitchMode;
   final void Function(DateTime? stopAt) onStop;
 
@@ -16,7 +20,8 @@ class _TimerChip extends StatelessWidget {
   final VoidCallback? onOpen;
 
   const _TimerChip({
-    required this.timerState,
+    required this.session,
+    required this.workspaceId,
     required this.isStitchMode,
     required this.onStop,
     this.onOpen,
@@ -25,8 +30,8 @@ class _TimerChip extends StatelessWidget {
   /// Pattern name, stripping the `.stitches` extension from the file-path
   /// fallback so a bare GDrive cache filename is at least extension-free.
   String? _displayName() {
-    if (timerState.timerPatternName != null) return timerState.timerPatternName;
-    final base = timerState.timerFilePath?.split(Platform.pathSeparator).last;
+    if (session.patternName != null) return session.patternName;
+    final base = session.filePath?.split(Platform.pathSeparator).last;
     if (base == null) return null;
     return base.endsWith('.stitches')
         ? base.substring(0, base.length - '.stitches'.length)
@@ -36,7 +41,7 @@ class _TimerChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = _displayName();
-    final elapsed = fmtDuration(timerState.elapsed);
+    final elapsed = fmtDuration(session.elapsed);
     final label = name != null ? '$name — $elapsed' : elapsed;
     final cs = Theme.of(context).colorScheme;
     final bg = isStitchMode
@@ -59,7 +64,11 @@ class _TimerChip extends StatelessWidget {
   void _showOptions(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => _TimerChipSheet(onStop: onStop, onOpen: onOpen),
+      builder: (_) => _TimerChipSheet(
+        workspaceId: workspaceId,
+        onStop: onStop,
+        onOpen: onOpen,
+      ),
     );
   }
 }
@@ -69,10 +78,12 @@ class _TimerChip extends StatelessWidget {
 /// Watches [stitchingTimerProvider] so it rebuilds every second (tickCount),
 /// keeping "Last activity" and "Session" times live without a separate Timer.
 class _TimerChipSheet extends ConsumerWidget {
+  final String? workspaceId;
   final void Function(DateTime? stopAt) onStop;
   final VoidCallback? onOpen;
 
   const _TimerChipSheet({
+    required this.workspaceId,
     required this.onStop,
     this.onOpen,
   });
@@ -80,11 +91,13 @@ class _TimerChipSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final timerState = ref.watch(stitchingTimerProvider);
-    final lastInteractionAt =
-        ref.read(stitchingTimerProvider.notifier).lastInteractionAt;
+    final session = timerState.sessionFor(workspaceId);
+    final lastInteractionAt = ref
+        .read(stitchingTimerProvider.notifier)
+        .lastInteractionForWorkspace(workspaceId);
     final now = DateTime.now();
-    final elapsed = timerState.sessionStart != null
-        ? fmtDuration(now.difference(timerState.sessionStart!))
+    final elapsed = session?.sessionStart != null
+        ? fmtDuration(now.difference(session!.sessionStart!))
         : fmtDuration(Duration.zero);
 
     return SafeArea(
@@ -103,8 +116,8 @@ class _TimerChipSheet extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (timerState.timerPatternName != null)
-                        Text(timerState.timerPatternName!,
+                      if (session?.patternName != null)
+                        Text(session!.patternName!,
                             style: Theme.of(context).textTheme.titleMedium),
                       Text(fmtLastActivity(lastInteractionAt, now),
                           style: Theme.of(context).textTheme.bodySmall),

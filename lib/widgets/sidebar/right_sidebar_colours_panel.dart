@@ -9,6 +9,7 @@ import '../../models/page/page_layout.dart';
 import '../../providers/editor/editor_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/stitching_timer_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../screens/stitch_demo_screen.dart';
 import '../color_select_dialog.dart';
 import '../dialogs/timer_start_dialog.dart';
@@ -1673,11 +1674,14 @@ class MarkDoneButton extends ConsumerWidget {
                   final timerNotifier = ref.read(stitchingTimerProvider.notifier);
                   if (timerNotifier.shouldShowSwapPrompt()) {
                     if (!context.mounted) return;
-                    final timerState = ref.read(stitchingTimerProvider);
+                    final workspaceId =
+                        ref.read(workspaceProvider).workspace?.id;
+                    final session =
+                        ref.read(stitchingTimerProvider).sessionFor(workspaceId);
                     final currentName = ref.read(editorProvider).pattern.name;
                     final swapResult = await showTimerSwapDialog(
                       context,
-                      timerPatternName: timerState.timerPatternName,
+                      timerPatternName: session?.patternName,
                       currentPatternName: currentName,
                     );
                     if (swapResult == TimerSwapResult.swap) {
