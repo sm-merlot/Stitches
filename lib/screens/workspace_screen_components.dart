@@ -1,18 +1,18 @@
 part of 'workspace_screen.dart';
 
-// ─── Running-timer chip (AppBar) ──────────────────────────────────────────────
+// ─── Running-timer chip (AppBar title area) ───────────────────────────────────
 
-/// Compact AppBar chip shown whenever a timer is running.
-/// Tapping opens a bottom sheet with stop / open options.
-/// Live-updates every second driven by [StitchingTimerState.tickCount]
-/// (parent rebuilds via ref.watch).
+/// Compact chip placed in the AppBar title row whenever a timer is running.
+/// Tapping opens a live-updating bottom sheet with stop / open options.
+/// Elapsed label is driven by [StitchingTimerState.tickCount] (parent rebuilds
+/// via ref.watch every second).
 class _TimerChip extends StatelessWidget {
   final StitchingTimerState timerState;
   final DateTime? lastInteractionAt;
   final void Function(DateTime? stopAt) onStop;
 
-  /// Non-null when the running timer is for a *different* pattern than the one
-  /// currently open — tapping "Open in stitch mode" calls this.
+  /// Non-null when the running timer belongs to a *different* pattern than the
+  /// one currently open — "Open in stitch mode" calls this.
   final VoidCallback? onOpen;
 
   const _TimerChip({
@@ -22,101 +22,160 @@ class _TimerChip extends StatelessWidget {
     this.onOpen,
   });
 
+  /// Pattern name, stripping the `.stitches` extension from the file-path
+  /// fallback so a bare GDrive cache filename is at least extension-free.
+  String? _displayName() {
+    if (timerState.timerPatternName != null) return timerState.timerPatternName;
+    final base = timerState.timerFilePath?.split(Platform.pathSeparator).last;
+    if (base == null) return null;
+    return base.endsWith('.stitches')
+        ? base.substring(0, base.length - '.stitches'.length)
+        : base;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final name = timerState.timerPatternName ??
-        timerState.timerFilePath?.split(Platform.pathSeparator).last;
+    final name = _displayName();
     final elapsed = fmtDuration(timerState.elapsed);
     final label = name != null ? '$name — $elapsed' : elapsed;
     final cs = Theme.of(context).colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 260),
-        child: ActionChip(
-          avatar: Icon(Icons.timer_outlined, size: 16, color: cs.onSecondaryContainer),
-          label: Text(
-            label,
-            style: TextStyle(color: cs.onSecondaryContainer),
-            overflow: TextOverflow.ellipsis,
-          ),
-          backgroundColor: cs.secondaryContainer,
-          side: BorderSide.none,
-          onPressed: () => _showOptions(context),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 200),
+      child: ActionChip(
+        avatar: Icon(Icons.timer_outlined, size: 16, color: cs.onSecondaryContainer),
+        label: Text(
+          label,
+          style: TextStyle(color: cs.onSecondaryContainer),
+          overflow: TextOverflow.ellipsis,
         ),
+        backgroundColor: cs.secondaryContainer,
+        side: BorderSide.none,
+        onPressed: () => _showOptions(context),
       ),
     );
   }
 
   void _showOptions(BuildContext context) {
-    final now = DateTime.now();
+    if (timerState.sessionStart == null) return;
     showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Icon(Icons.timer_outlined,
-                      color: Theme.of(ctx).colorScheme.secondary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (timerState.timerPatternName != null)
-                          Text(timerState.timerPatternName!,
-                              style: Theme.of(ctx).textTheme.titleMedium),
-                        Text(fmtLastActivity(lastInteractionAt, now),
-                            style: Theme.of(ctx).textTheme.bodySmall),
-                        Text('Session: ${fmtDuration(timerState.elapsed)}',
-                            style: Theme.of(ctx).textTheme.bodySmall),
-                      ],
-                    ),
+      builder: (_) => _TimerChipSheet(
+        sessionStart: timerState.sessionStart!,
+        timerPatternName: timerState.timerPatternName,
+        lastInteractionAt: lastInteractionAt,
+        onStop: onStop,
+        onOpen: onOpen,
+      ),
+    );
+  }
+}
+
+// ─── Live-updating bottom sheet ───────────────────────────────────────────────
+
+class _TimerChipSheet extends StatefulWidget {
+  final DateTime sessionStart;
+  final String? timerPatternName;
+  final DateTime? lastInteractionAt;
+  final void Function(DateTime? stopAt) onStop;
+  final VoidCallback? onOpen;
+
+  const _TimerChipSheet({
+    required this.sessionStart,
+    required this.timerPatternName,
+    required this.lastInteractionAt,
+    required this.onStop,
+    this.onOpen,
+  });
+
+  @override
+  State<_TimerChipSheet> createState() => _TimerChipSheetState();
+}
+
+class _TimerChipSheetState extends State<_TimerChipSheet> {
+  late Timer _ticker;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final elapsed = fmtDuration(_now.difference(widget.sessionStart));
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Icon(Icons.timer_outlined,
+                    color: Theme.of(context).colorScheme.secondary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (widget.timerPatternName != null)
+                        Text(widget.timerPatternName!,
+                            style: Theme.of(context).textTheme.titleMedium),
+                      Text(fmtLastActivity(widget.lastInteractionAt, _now),
+                          style: Theme.of(context).textTheme.bodySmall),
+                      Text('Session: $elapsed',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const Divider(height: 1),
-            if (onOpen != null)
-              ListTile(
-                leading: const Icon(Icons.open_in_new_outlined),
-                title: const Text('Open in stitch mode'),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  onOpen!();
-                },
-              ),
-            if (lastInteractionAt != null)
-              ListTile(
-                leading: const Icon(Icons.history),
-                title: const Text('Stop at last activity'),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  onStop(lastInteractionAt);
-                },
-              ),
+          ),
+          const Divider(height: 1),
+          if (widget.onOpen != null)
             ListTile(
-              leading: const Icon(Icons.stop_circle_outlined),
-              title: const Text('Stop, keep all time'),
+              leading: const Icon(Icons.open_in_new_outlined),
+              title: const Text('Open in stitch mode'),
               onTap: () {
-                Navigator.of(ctx).pop();
-                onStop(null);
+                Navigator.of(context).pop();
+                widget.onOpen!();
               },
             ),
+          if (widget.lastInteractionAt != null)
             ListTile(
-              leading: const Icon(Icons.close),
-              title: const Text('Dismiss'),
-              onTap: () => Navigator.of(ctx).pop(),
+              leading: const Icon(Icons.history),
+              title: const Text('Stop at last activity'),
+              onTap: () {
+                Navigator.of(context).pop();
+                widget.onStop(widget.lastInteractionAt);
+              },
             ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ListTile(
+            leading: const Icon(Icons.stop_circle_outlined),
+            title: const Text('Stop, keep all time'),
+            onTap: () {
+              Navigator.of(context).pop();
+              widget.onStop(null);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.close),
+            title: const Text('Dismiss'),
+            onTap: () => Navigator.of(context).pop(),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

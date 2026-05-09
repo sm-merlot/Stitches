@@ -1478,25 +1478,26 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                       showWorkspaceStitchOps(context, wsState.workspace!),
                 ),
               ],
+              if (timerState.isRunning) ...[
+                const SizedBox(width: 8),
+                _TimerChip(
+                  timerState: timerState,
+                  lastInteractionAt:
+                      ref.read(stitchingTimerProvider.notifier).lastInteractionAt,
+                  onStop: (stopAt) =>
+                      ref.read(stitchingTimerProvider.notifier).stop(stopAt: stopAt),
+                  onOpen: timerState.timerFilePath != null &&
+                          timerState.timerFilePath != editorState.filePath
+                      ? () => _openTimerPattern(context, timerState.timerFilePath!)
+                      : null,
+                ),
+              ],
             ],
           ),
           backgroundColor: editorState.mode == AppMode.stitch
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
-            // ── Running-timer chip (always visible when timer is running) ──
-            if (timerState.isRunning)
-              _TimerChip(
-                timerState: timerState,
-                lastInteractionAt:
-                    ref.read(stitchingTimerProvider.notifier).lastInteractionAt,
-                onStop: (stopAt) =>
-                    ref.read(stitchingTimerProvider.notifier).stop(stopAt: stopAt),
-                onOpen: timerState.timerFilePath != null &&
-                        timerState.timerFilePath != editorState.filePath
-                    ? () => _openTimerPattern(context, timerState.timerFilePath!)
-                    : null,
-              ),
             // PDF viewer actions
             if (openPdf != null) ...[
               IconButton(
