@@ -64,12 +64,35 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  bool _inactivityDialogShowing = false;
+
   Future<void> _handleInactivityPrompt() async {
     final timerNotifier = ref.read(stitchingTimerProvider.notifier);
+
+    final editorState = ref.read(editorProvider);
+    if (!editorState.stitchMode) {
+      timerNotifier.acknowledgeInactivityPrompt();
+      return;
+    }
+
+    if (_inactivityDialogShowing) return;
+    _inactivityDialogShowing = true;
     timerNotifier.acknowledgeInactivityPrompt();
+
+    if (!mounted) {
+      _inactivityDialogShowing = false;
+      return;
+    }
+
+    final timerState = ref.read(stitchingTimerProvider);
+    final result = await showInactivityDialog(
+      context,
+      sessionStart: timerState.sessionStart!,
+      lastInteractionAt: timerNotifier.lastInteractionAt,
+    );
+    _inactivityDialogShowing = false;
     if (!mounted) return;
-    final result = await showInactivityDialog(context);
-    if (!mounted) return;
+
     switch (result) {
       case InactivityResult.keepRunning:
         timerNotifier.recordInteraction();

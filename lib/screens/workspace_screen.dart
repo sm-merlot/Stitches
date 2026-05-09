@@ -20,7 +20,9 @@ import '../providers/google_drive_provider.dart';
 import '../providers/viewers/image_viewer_provider.dart';
 import '../providers/viewers/pdf_viewer_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/stitching_timer_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../widgets/dialogs/timer_inactivity_dialog.dart';
 import '../services/file_service.dart';
 import '../services/pattern_thumbnail.dart';
 import '../services/thumbnail_cache.dart';
@@ -75,6 +77,78 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   // Phone-only: right sidebar starts collapsed; coordinates with folder sidebar.
   bool _rightSidebarCollapsed = true;
+
+  bool _inactivityDialogShowing = false;
+
+  // ── Running-timer banner ─────────────────────────────────────────────────
+  // Session-level dismissal: resets when WorkspaceScreen reinitialises (app
+  // restart). Does NOT persist to SharedPreferences.
+  bool _bannerDismissed = false;
+
+  bool _showTimerBanner(StitchingTimerState timerState, EditorState editorState) {
+    if (!timerState.isRunning) return false;
+    if (_bannerDismissed) return false;
+    final timerFile = timerState.timerFilePath;
+    if (timerFile == null) return false;
+    // Hide when the user is already on the timer's pattern (normal inactivity
+    // dialog takes over from there).
+    if (timerFile == editorState.filePath) return false;
+    return true;
+  }
+
+  Future<void> _openTimerPattern(BuildContext context, String filePath) async {
+    try {
+      final (pattern, path, wasCompressed) =
+          await FileService.openFileFromPath(filePath);
+      ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: path,
+            compressOnSave: wasCompressed,
+          );
+      ref.read(editorProvider.notifier).setMode(AppMode.stitch);
+    } catch (e) {
+      if (context.mounted) showError(context, 'Could not open file: $e');
+    }
+  }
+
+  Future<void> _handleInactivityPrompt() async {
+    final timerNotifier = ref.read(stitchingTimerProvider.notifier);
+
+    // Only show in stitch mode — if user is elsewhere, clear the flag so
+    // _checkInactivity can re-fire when they return to stitch mode.
+    final editorState = ref.read(editorProvider);
+    if (!editorState.stitchMode) {
+      timerNotifier.acknowledgeInactivityPrompt();
+      return;
+    }
+
+    if (_inactivityDialogShowing) return;
+    _inactivityDialogShowing = true;
+    timerNotifier.acknowledgeInactivityPrompt();
+
+    if (!mounted) {
+      _inactivityDialogShowing = false;
+      return;
+    }
+
+    final timerState = ref.read(stitchingTimerProvider);
+    final result = await showInactivityDialog(
+      context,
+      sessionStart: timerState.sessionStart!,
+      lastInteractionAt: timerNotifier.lastInteractionAt,
+    );
+    _inactivityDialogShowing = false;
+    if (!mounted) return;
+
+    switch (result) {
+      case InactivityResult.keepRunning:
+        timerNotifier.recordInteraction();
+      case InactivityResult.stopAtLastActivity:
+        timerNotifier.stop(stopAt: timerNotifier.lastInteractionAt);
+      case InactivityResult.stopKeepAll:
+        timerNotifier.stop();
+    }
+  }
 
   bool _isPhone(BuildContext context) =>
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -715,7 +789,11 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, EditorState editorState) {
     if (editorState.stitchMode) {
-      return const StitchView();
+      return Listener(
+        onPointerDown: (_) =>
+            ref.read(stitchingTimerProvider.notifier).recordInteraction(),
+        child: const StitchView(),
+      );
     }
     if (editorState.isNativeFormat) {
       return EditView(
@@ -1293,6 +1371,15 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final isFileLoading = ref.watch(fileLoadingProvider);
     final openPdf = ref.watch(pdfViewerProvider);
     final openImage = ref.watch(imageViewerProvider);
+    final timerState = ref.watch(stitchingTimerProvider);
+
+    // ── Inactivity prompt ─────────────────────────────────────────────────
+    ref.listen<StitchingTimerState>(stitchingTimerProvider, (prev, next) {
+      if (next.showInactivityPrompt &&
+          !(prev?.showInactivityPrompt ?? false)) {
+        _handleInactivityPrompt();
+      }
+    });
 
     // ── Auto-save listener ────────────────────────────────────────────────
     ref.listen<EditorState>(editorProvider, (prev, next) {
@@ -1576,9 +1663,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             ],
           ],
         ),
-        body: Stack(
+        body: Column(
           children: [
-            Row(
+            if (_showTimerBanner(timerState, editorState))
+              _TimerBanner(
+                timerState: timerState,
+                onDismiss: () => setState(() => _bannerDismissed = true),
+                onStop: () => ref.read(stitchingTimerProvider.notifier).stop(),
+                onOpen: () => _openTimerPattern(context, timerState.timerFilePath!),
+              ),
+            Expanded(
+              child: Stack(
+                children: [
+                  Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Editor, PDF viewer, image viewer, or empty state
@@ -1667,6 +1764,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   ),
                 ),
               ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

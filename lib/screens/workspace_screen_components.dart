@@ -1,5 +1,65 @@
 part of 'workspace_screen.dart';
 
+// ─── Running-timer banner ─────────────────────────────────────────────────────
+
+/// Banner shown at the top of the workspace when a timer is running for a
+/// pattern that is not currently open. Live-updates elapsed time every second
+/// (driven by [StitchingTimerState.tickCount] via the parent's ref.watch).
+class _TimerBanner extends StatelessWidget {
+  final StitchingTimerState timerState;
+  final VoidCallback onDismiss;
+  final VoidCallback onStop;
+  final VoidCallback onOpen;
+
+  const _TimerBanner({
+    required this.timerState,
+    required this.onDismiss,
+    required this.onStop,
+    required this.onOpen,
+  });
+
+  String _fmt(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) return '${h}h ${m}m ${s}s';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filePath = timerState.timerFilePath!;
+    final fileName = filePath.split(Platform.pathSeparator).last;
+    final elapsed = timerState.elapsed;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return MaterialBanner(
+      backgroundColor: colorScheme.secondaryContainer,
+      leading: Icon(Icons.timer_outlined,
+          color: colorScheme.onSecondaryContainer),
+      content: Text(
+        'Timer running for $fileName — ${_fmt(elapsed)}',
+        style: TextStyle(color: colorScheme.onSecondaryContainer),
+      ),
+      actions: [
+        TextButton(
+          onPressed: onDismiss,
+          child: const Text('Dismiss'),
+        ),
+        TextButton(
+          onPressed: onStop,
+          child: const Text('Stop & discard'),
+        ),
+        FilledButton(
+          onPressed: onOpen,
+          child: const Text('Open in stitch mode'),
+        ),
+      ],
+    );
+  }
+}
+
 // ─── Resize divider ───────────────────────────────────────────────────────────
 
 class _ResizeDivider extends StatelessWidget {

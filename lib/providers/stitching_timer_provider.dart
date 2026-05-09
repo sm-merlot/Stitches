@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +9,7 @@ import 'settings_provider.dart';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const _kSessionStartKey = 'stitching_timer_session_start_ms';
+const _kSessionFileKey  = 'stitching_timer_session_file';
 const _kLastInteractionKey = 'stitching_timer_last_interaction_ms';
 const _kPauseReminderUntilKey = 'stitching_timer_pause_reminder_until_ms';
 
@@ -23,11 +25,15 @@ class StitchingTimerState {
   /// Increments every second while running — drives widget rebuilds.
   final int tickCount;
 
-  /// When true, EditorScreen should show the inactivity dialog.
+  /// When true, EditorScreen / WorkspaceScreen should show the inactivity dialog.
   final bool showInactivityPrompt;
 
   /// When non-null, the start-timer prompt is snoozed until this time.
   final DateTime? pauseReminderUntil;
+
+  /// File path of the pattern this timer session belongs to.
+  /// Null when timer is not running.
+  final String? timerFilePath;
 
   const StitchingTimerState({
     this.isRunning = false,
@@ -35,6 +41,7 @@ class StitchingTimerState {
     this.tickCount = 0,
     this.showInactivityPrompt = false,
     this.pauseReminderUntil,
+    this.timerFilePath,
   });
 
   /// Elapsed duration of the current session (wall-clock, for display only).
@@ -51,6 +58,8 @@ class StitchingTimerState {
     bool? showInactivityPrompt,
     DateTime? pauseReminderUntil,
     bool clearPauseReminderUntil = false,
+    String? timerFilePath,
+    bool clearTimerFilePath = false,
   }) =>
       StitchingTimerState(
         isRunning: isRunning ?? this.isRunning,
@@ -62,6 +71,8 @@ class StitchingTimerState {
         pauseReminderUntil: clearPauseReminderUntil
             ? null
             : (pauseReminderUntil ?? this.pauseReminderUntil),
+        timerFilePath:
+            clearTimerFilePath ? null : (timerFilePath ?? this.timerFilePath),
       );
 }
 
@@ -110,10 +121,18 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     final prefs = await SharedPreferences.getInstance();
     final ms = prefs.getInt(_kSessionStartKey);
     if (ms == null) return;
+
+    // Stale session (> 24 h) — discard.
     final savedStart = DateTime.fromMillisecondsSinceEpoch(ms);
     if (now().difference(savedStart).inHours > 24) {
-      await prefs.remove(_kSessionStartKey);
-      await prefs.remove(_kLastInteractionKey);
+      await _clearPersistedSession(prefs);
+      return;
+    }
+
+    // If the file no longer exists, discard the session silently.
+    final savedFile = prefs.getString(_kSessionFileKey);
+    if (savedFile != null && !File(savedFile).existsSync()) {
+      await _clearPersistedSession(prefs);
       return;
     }
 
@@ -135,6 +154,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
       sessionStart: savedStart,
       tickCount: 0,
       pauseReminderUntil: pauseUntil,
+      timerFilePath: savedFile,
     );
 
     // Stopwatch is NOT started for restored sessions — stop() detects this
@@ -147,12 +167,22 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     });
   }
 
+  Future<void> _clearPersistedSession(SharedPreferences prefs) async {
+    await prefs.remove(_kSessionStartKey);
+    await prefs.remove(_kSessionFileKey);
+    await prefs.remove(_kLastInteractionKey);
+  }
+
   /// Start the timer. No-op if already running.
   void start() async {
     if (state.isRunning) return;
     final now = this.now();
+    final filePath = ref.read(editorProvider).filePath;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kSessionStartKey, now.millisecondsSinceEpoch);
+    if (filePath != null) {
+      await prefs.setString(_kSessionFileKey, filePath);
+    }
 
     _lastInteractionAt = now;
     _lastPersistedAt = now;
@@ -164,6 +194,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
       isRunning: true,
       sessionStart: now,
       showInactivityPrompt: false,
+      timerFilePath: filePath,
     );
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -192,6 +223,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
     _debounceTimer = null;
 
     final sessionStart = state.sessionStart!;
+    final timerFilePath = state.timerFilePath; // capture before state cleared
     int totalMinutes;
     DateTime effectiveStop;
 
@@ -220,21 +252,33 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
       clearSessionStart: true,
       tickCount: 0,
       showInactivityPrompt: false,
+      clearTimerFilePath: true,
     );
 
     SharedPreferences.getInstance().then((p) {
       p.remove(_kSessionStartKey);
+      p.remove(_kSessionFileKey);
       p.remove(_kLastInteractionKey);
     });
 
     if (totalMinutes <= 0) return 0;
 
-    _logTime(sessionStart, effectiveStop, totalMinutes);
+    _logTime(sessionStart, effectiveStop, totalMinutes,
+        timerFilePath: timerFilePath);
     return totalMinutes;
   }
 
   void _logTime(
-      DateTime sessionStart, DateTime effectiveStop, int totalMinutes) {
+    DateTime sessionStart,
+    DateTime effectiveStop,
+    int totalMinutes, {
+    String? timerFilePath,
+  }) {
+    // If the timer was for a different file than what's currently open, skip
+    // logging — better to lose time than log it to the wrong pattern.
+    final currentFilePath = ref.read(editorProvider).filePath;
+    if (timerFilePath != null && currentFilePath != timerFilePath) return;
+
     final notifier = ref.read(editorProvider.notifier);
     final startDate =
         DateTime(sessionStart.year, sessionStart.month, sessionStart.day);
@@ -313,8 +357,7 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
   }
 
   /// Immediately checks inactivity without waiting for the next periodic tick.
-  /// Called by EditorScreen on app resume to handle the "left timer running
-  /// overnight" scenario.
+  /// Called on app resume to handle the "left timer running overnight" scenario.
   void checkInactivityNow() => _checkInactivity();
 
   /// Clears the inactivity prompt flag. Call immediately before showing the
