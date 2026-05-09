@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/file_service.dart';
+import '../providers/editor/editor_provider.dart';
 import '../providers/stitching_timer_provider.dart';
+import '../providers/workspace_provider.dart';
+import 'dialogs/timer_conflict_dialog.dart';
 
 /// A compact play/stop button that shows elapsed session time while running.
 ///
@@ -11,12 +15,18 @@ class StitchingTimerButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timer = ref.watch(stitchingTimerProvider);
+    final timerState = ref.watch(stitchingTimerProvider);
+    final currentFilePath = ref.watch(editorProvider).filePath;
+    final workspaceId = ref.watch(workspaceProvider).workspace?.id;
+    final session = timerState.sessionFor(workspaceId);
     final colorScheme = Theme.of(context).colorScheme;
-    final isRunning = timer.isRunning;
+
+    // Timer is only "running for this pattern" when file paths match.
+    final isTimingThis = session?.isRunning == true &&
+        (session?.filePath == null || session?.filePath == currentFilePath);
 
     // Format elapsed HH:MM:SS (or MM:SS when < 1 hour).
-    final elapsed = timer.elapsed;
+    final elapsed = session?.elapsed ?? Duration.zero;
     final h = elapsed.inHours;
     final m = elapsed.inMinutes.remainder(60);
     final s = elapsed.inSeconds.remainder(60);
@@ -28,27 +38,78 @@ class StitchingTimerButton extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       child: FilledButton.icon(
         icon: Icon(
-          isRunning ? Icons.stop_circle_outlined : Icons.timer_outlined,
+          isTimingThis ? Icons.stop_circle_outlined : Icons.timer_outlined,
           size: 16,
         ),
         label: Text(
-          isRunning ? timeLabel : 'Timer',
+          isTimingThis ? timeLabel : 'Timer',
           style: const TextStyle(fontSize: 13),
         ),
         style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 36),
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          backgroundColor: isRunning
-              ? colorScheme.tertiaryContainer
-              : null,
-          foregroundColor: isRunning
-              ? colorScheme.onTertiaryContainer
-              : null,
+          backgroundColor: isTimingThis ? colorScheme.tertiaryContainer : null,
+          foregroundColor: isTimingThis ? colorScheme.onTertiaryContainer : null,
         ),
-        onPressed: () =>
-            ref.read(stitchingTimerProvider.notifier).toggle(),
+        onPressed: () => _onPressed(context, ref, session, workspaceId),
       ),
     );
   }
-}
 
+  Future<void> _onPressed(
+    BuildContext context,
+    WidgetRef ref,
+    TimerSession? session,
+    String? workspaceId,
+  ) async {
+    final notifier = ref.read(stitchingTimerProvider.notifier);
+    final currentFilePath = ref.read(editorProvider).filePath;
+
+    // If this workspace's timer is running for a different pattern, intercept
+    // and show the conflict dialog instead of blindly stopping.
+    if (session?.isRunning == true &&
+        session?.filePath != null &&
+        session?.filePath != currentFilePath) {
+      if (!context.mounted) return;
+      final result = await showConflictTimerDialog(
+        context,
+        timerFilePath: session!.filePath!,
+        timerPatternName: session.patternName,
+        sessionStart: session.sessionStart!,
+        lastInteractionAt: notifier.lastInteractionForWorkspace(workspaceId),
+      );
+      if (!context.mounted) return;
+      switch (result) {
+        case ConflictTimerResult.stopDiscard:
+          notifier.stop(workspaceId: workspaceId);
+        case ConflictTimerResult.openOther:
+          await _openInStitchMode(context, ref, session.filePath!);
+        case ConflictTimerResult.keepRunning:
+          break;
+      }
+      return;
+    }
+
+    notifier.toggle();
+  }
+
+  Future<void> _openInStitchMode(
+      BuildContext context, WidgetRef ref, String filePath) async {
+    try {
+      final (pattern, path, wasCompressed) =
+          await FileService.openFileFromPath(filePath);
+      ref.read(editorProvider.notifier).loadPattern(
+            pattern,
+            filePath: path,
+            compressOnSave: wasCompressed,
+          );
+      ref.read(editorProvider.notifier).setMode(AppMode.stitch);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open file: $e')),
+        );
+      }
+    }
+  }
+}

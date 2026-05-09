@@ -8,8 +8,12 @@ import '../../models/thread.dart';
 import '../../models/page/page_layout.dart';
 import '../../providers/editor/editor_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../providers/stitching_timer_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../screens/stitch_demo_screen.dart';
 import '../color_select_dialog.dart';
+import '../dialogs/timer_start_dialog.dart';
+import '../dialogs/timer_swap_dialog.dart';
 import '../../screens/stitch_ops_screen.dart';
 
 enum ColoursPanelMode { design, stitch, snippet }
@@ -1658,7 +1662,7 @@ class MarkDoneButton extends ConsumerWidget {
             backgroundColor: allDone ? Colors.orange.shade700 : null,
           ),
           onPressed: enabled
-              ? () {
+              ? () async {
                   final notifier = ref.read(editorProvider.notifier);
                   final region = state.stitchSession.progressRegion!;
                   if (allDone) {
@@ -1666,7 +1670,40 @@ class MarkDoneButton extends ConsumerWidget {
                   } else {
                     notifier.markRegionDone(region);
                   }
-                  // Keep the region selected so the user can act again
+                  // Show the appropriate timer prompt after a mark/frog action.
+                  final timerNotifier = ref.read(stitchingTimerProvider.notifier);
+                  if (timerNotifier.shouldShowSwapPrompt()) {
+                    if (!context.mounted) return;
+                    final workspaceId =
+                        ref.read(workspaceProvider).workspace?.id;
+                    final session =
+                        ref.read(stitchingTimerProvider).sessionFor(workspaceId);
+                    final currentName = ref.read(editorProvider).pattern.name;
+                    final swapResult = await showTimerSwapDialog(
+                      context,
+                      timerPatternName: session?.patternName,
+                      currentPatternName: currentName,
+                    );
+                    if (swapResult == TimerSwapResult.swap) {
+                      timerNotifier.swapTimer();
+                    }
+                  } else if (timerNotifier.shouldShowStartPrompt()) {
+                    if (!context.mounted) return;
+                    final result = await showTimerStartDialog(context);
+                    if (!context.mounted) return;
+                    switch (result) {
+                      case TimerStartResult.start:
+                        timerNotifier.start();
+                      case TimerStartResult.snooze:
+                        timerNotifier.snoozeStartPrompt();
+                      case TimerStartResult.mute:
+                        ref
+                            .read(settingsProvider.notifier)
+                            .setDisableTimerStartPrompt(true);
+                      case null:
+                        break; // tapped outside — dismiss once
+                    }
+                  }
                 }
               : null,
         ),

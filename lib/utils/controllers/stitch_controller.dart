@@ -31,6 +31,7 @@ class StitchController implements ShortcutHandler {
     required EditorNotifier notifier,
     required EditorState Function() getState,
     this.onSave,
+    this.onAnyProgressAction,
   })  : _notifier = notifier,
         _getState = getState;
 
@@ -39,6 +40,10 @@ class StitchController implements ShortcutHandler {
 
   /// Called for Cmd/Ctrl+S in stitch mode.
   final VoidCallback? onSave;
+
+  /// Called whenever any canvas progress action (mark, frog, flood fill)
+  /// results in an actual progress change. Used to trigger the timer prompt.
+  final VoidCallback? onAnyProgressAction;
 
   /// Undo stack scoped to progress marks only.
   final UndoManager undoManager = UndoManager();
@@ -71,6 +76,7 @@ class StitchController implements ShortcutHandler {
           _pendingSquashBefore = before;
           undoManager.push(ProgressSnapshotCommand(
             before: before, after: after, apply: n.applyProgressSnapshot));
+          onAnyProgressAction?.call();
         } else {
           _pendingSquashBefore = null;
         }
@@ -83,6 +89,7 @@ class StitchController implements ShortcutHandler {
         if (before != after) {
           undoManager.push(ProgressSnapshotCommand(
             before: before, after: after, apply: n.applyProgressSnapshot));
+          onAnyProgressAction?.call();
         }
       },
       onFloodFillDone: (x, y, {bool? originalStartIsDone, bool afterSingleTap = false}) {
@@ -95,6 +102,7 @@ class StitchController implements ShortcutHandler {
           if (realBefore != after) {
             undoManager.replaceLast(ProgressSnapshotCommand(
               before: realBefore, after: after, apply: n.applyProgressSnapshot));
+            onAnyProgressAction?.call();
           }
         } else {
           _pendingSquashBefore = null;
@@ -105,6 +113,7 @@ class StitchController implements ShortcutHandler {
           if (before != after) {
             undoManager.push(ProgressSnapshotCommand(
               before: before, after: after, apply: n.applyProgressSnapshot));
+            onAnyProgressAction?.call();
           }
         }
       },

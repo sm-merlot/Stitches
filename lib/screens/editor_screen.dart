@@ -10,6 +10,8 @@ import '../providers/editor/editor_provider.dart';
 import '../providers/files/folder_contents_provider.dart';
 import '../providers/google_drive_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/stitching_timer_provider.dart';
+import '../widgets/dialogs/timer_inactivity_dialog.dart';
 import '../models/page/page_config.dart';
 import '../models/progress/pattern_progress.dart';
 import '../models/storage_location.dart';
@@ -41,7 +43,68 @@ class EditorScreen extends ConsumerStatefulWidget {
   ConsumerState<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends ConsumerState<EditorScreen> {
+class _EditorScreenState extends ConsumerState<EditorScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed) {
+      ref.read(stitchingTimerProvider.notifier).checkInactivityNow();
+    }
+  }
+
+  bool _inactivityDialogShowing = false;
+
+  Future<void> _handleInactivityPrompt() async {
+    final timerNotifier = ref.read(stitchingTimerProvider.notifier);
+
+    final editorState = ref.read(editorProvider);
+    if (!editorState.stitchMode) {
+      timerNotifier.acknowledgeInactivityPrompt();
+      return;
+    }
+
+    if (_inactivityDialogShowing) return;
+    _inactivityDialogShowing = true;
+    timerNotifier.acknowledgeInactivityPrompt();
+
+    if (!mounted) {
+      _inactivityDialogShowing = false;
+      return;
+    }
+
+    // editor_screen is phone-only — no workspace, so workspaceId is always null.
+    final session = ref.read(stitchingTimerProvider).sessionFor(null);
+    final lastInteraction = timerNotifier.lastInteractionForWorkspace(null);
+    final result = await showInactivityDialog(
+      context,
+      sessionStart: session!.sessionStart!,
+      lastInteractionAt: lastInteraction,
+    );
+    _inactivityDialogShowing = false;
+    if (!mounted) return;
+
+    switch (result) {
+      case InactivityResult.keepRunning:
+        timerNotifier.recordInteraction();
+      case InactivityResult.stopAtLastActivity:
+        timerNotifier.stop(stopAt: lastInteraction);
+      case InactivityResult.stopKeepAll:
+        timerNotifier.stop();
+    }
+  }
+
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final state = ref.read(editorProvider);
     try {
@@ -331,7 +394,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Builds the canvas area, wiring up the import banner callbacks.
   Widget _buildCanvasArea(BuildContext context, WidgetRef ref, EditorState state) {
     if (state.stitchMode) {
-      return StitchView(onSave: () => _save(context, ref));
+      return Listener(
+        onPointerDown: (_) =>
+            ref.read(stitchingTimerProvider.notifier).recordInteraction(),
+        child: StitchView(onSave: () => _save(context, ref)),
+      );
     }
     if (state.isNativeFormat) {
       return EditView(onSave: () => _save(context, ref));
@@ -487,6 +554,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(editorProvider);
     final driveState = ref.watch(googleDriveProvider);
+
+    ref.listen<StitchingTimerState>(stitchingTimerProvider, (prev, next) {
+      // editor_screen is phone-only — no workspace, workspaceId is always null.
+      if (next.sessionFor(null)?.showInactivityPrompt == true &&
+          prev?.sessionFor(null)?.showInactivityPrompt != true) {
+        _handleInactivityPrompt();
+      }
+    });
 
     return PopScope(
       canPop: false,

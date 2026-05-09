@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/editor/editor_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../../providers/stitching_timer_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../utils/commands/shortcut_router.dart';
 import '../../utils/controllers/stitch_controller.dart';
 import '../canvas/aida_widget.dart';
+import '../dialogs/timer_start_dialog.dart';
+import '../dialogs/timer_swap_dialog.dart';
 import '../editor_shared_widgets.dart';
 import '../toolbar/editor_toolbar.dart';
 
@@ -36,8 +41,42 @@ class _StitchViewState extends ConsumerState<StitchView> {
       notifier: ref.read(editorProvider.notifier),
       getState: () => ref.read(editorProvider),
       onSave: widget.onSave,
+      onAnyProgressAction: _onAnyProgressAction,
     );
     ShortcutRouter.instance.push(_stitchController);
+  }
+
+  Future<void> _onAnyProgressAction() async {
+    final timerNotifier = ref.read(stitchingTimerProvider.notifier);
+    if (!mounted) return;
+
+    if (timerNotifier.shouldShowSwapPrompt()) {
+      final workspaceId = ref.read(workspaceProvider).workspace?.id;
+      final session = ref.read(stitchingTimerProvider).sessionFor(workspaceId);
+      final currentName = ref.read(editorProvider).pattern.name;
+      final result = await showTimerSwapDialog(
+        context,
+        timerPatternName: session?.patternName,
+        currentPatternName: currentName,
+      );
+      if (!mounted) return;
+      if (result == TimerSwapResult.swap) timerNotifier.swapTimer();
+      return;
+    }
+
+    if (!timerNotifier.shouldShowStartPrompt()) return;
+    final result = await showTimerStartDialog(context);
+    if (!mounted) return;
+    switch (result) {
+      case TimerStartResult.start:
+        timerNotifier.start();
+      case TimerStartResult.snooze:
+        timerNotifier.snoozeStartPrompt();
+      case TimerStartResult.mute:
+        ref.read(settingsProvider.notifier).setDisableTimerStartPrompt(true);
+      case null:
+        break;
+    }
   }
 
   @override

@@ -1,5 +1,173 @@
 part of 'workspace_screen.dart';
 
+// ─── Running-timer chip (AppBar title area) ───────────────────────────────────
+
+/// Compact chip placed in the AppBar title row whenever a timer is running.
+/// Tapping opens a live-updating bottom sheet with stop / open options.
+/// Elapsed label is driven by [TimerSession.tickCount] (parent rebuilds
+/// via ref.watch every second).
+class _TimerChip extends StatelessWidget {
+  final TimerSession session;
+
+  /// Workspace ID this chip belongs to — forwarded to [_TimerChipSheet] for
+  /// scoped provider reads.
+  final String? workspaceId;
+  final bool isStitchMode;
+  final void Function(DateTime? stopAt) onStop;
+
+  /// Non-null when the running timer belongs to a *different* pattern than the
+  /// one currently open — "Open in stitch mode" calls this.
+  final VoidCallback? onOpen;
+
+  const _TimerChip({
+    required this.session,
+    required this.workspaceId,
+    required this.isStitchMode,
+    required this.onStop,
+    this.onOpen,
+  });
+
+  /// Pattern name, stripping the `.stitches` extension from the file-path
+  /// fallback so a bare GDrive cache filename is at least extension-free.
+  String? _displayName() {
+    if (session.patternName != null) return session.patternName;
+    final base = session.filePath?.split(Platform.pathSeparator).last;
+    if (base == null) return null;
+    return base.endsWith('.stitches')
+        ? base.substring(0, base.length - '.stitches'.length)
+        : base;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _displayName();
+    final elapsed = fmtDuration(session.elapsed);
+    final label = name != null ? '$name — $elapsed' : elapsed;
+    final cs = Theme.of(context).colorScheme;
+    final bg = isStitchMode
+        ? cs.onPrimaryContainer.withValues(alpha: 0.15)
+        : cs.secondaryContainer;
+    final fg = isStitchMode ? cs.onPrimaryContainer : cs.onSecondaryContainer;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 200),
+      child: ActionChip(
+        avatar: Icon(Icons.timer_outlined, size: 16, color: fg),
+        label: Text(label, style: TextStyle(color: fg), overflow: TextOverflow.ellipsis),
+        backgroundColor: bg,
+        side: BorderSide.none,
+        onPressed: () => _showOptions(context),
+      ),
+    );
+  }
+
+  void _showOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => _TimerChipSheet(
+        workspaceId: workspaceId,
+        onStop: onStop,
+        onOpen: onOpen,
+      ),
+    );
+  }
+}
+
+// ─── Live-updating bottom sheet ───────────────────────────────────────────────
+
+/// Watches [stitchingTimerProvider] so it rebuilds every second (tickCount),
+/// keeping "Last activity" and "Session" times live without a separate Timer.
+class _TimerChipSheet extends ConsumerWidget {
+  final String? workspaceId;
+  final void Function(DateTime? stopAt) onStop;
+  final VoidCallback? onOpen;
+
+  const _TimerChipSheet({
+    required this.workspaceId,
+    required this.onStop,
+    this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final timerState = ref.watch(stitchingTimerProvider);
+    final session = timerState.sessionFor(workspaceId);
+    final lastInteractionAt = ref
+        .read(stitchingTimerProvider.notifier)
+        .lastInteractionForWorkspace(workspaceId);
+    final now = DateTime.now();
+    final elapsed = session?.sessionStart != null
+        ? fmtDuration(now.difference(session!.sessionStart!))
+        : fmtDuration(Duration.zero);
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Icon(Icons.timer_outlined,
+                    color: Theme.of(context).colorScheme.secondary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (session?.patternName != null)
+                        Text(session!.patternName!,
+                            style: Theme.of(context).textTheme.titleMedium),
+                      Text(fmtLastActivity(lastInteractionAt, now),
+                          style: Theme.of(context).textTheme.bodySmall),
+                      Text('Session: $elapsed',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (onOpen != null)
+            ListTile(
+              leading: const Icon(Icons.open_in_new_outlined),
+              title: const Text('Open in stitch mode'),
+              onTap: () {
+                Navigator.of(context).pop();
+                onOpen!();
+              },
+            ),
+          if (lastInteractionAt != null)
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('Stop at last activity'),
+              onTap: () {
+                Navigator.of(context).pop();
+                onStop(lastInteractionAt);
+              },
+            ),
+          ListTile(
+            leading: const Icon(Icons.stop_circle_outlined),
+            title: const Text('Stop, keep all time'),
+            onTap: () {
+              Navigator.of(context).pop();
+              onStop(null);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.close),
+            title: const Text('Dismiss'),
+            onTap: () => Navigator.of(context).pop(),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Resize divider ───────────────────────────────────────────────────────────
 
 class _ResizeDivider extends StatelessWidget {

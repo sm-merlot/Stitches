@@ -25,6 +25,17 @@ class AppSettings {
   /// When true, fully-completed colours sink to the bottom of the list.
   final bool completedColoursLast;
 
+  /// When true, suppress the "start a timer?" prompt after marking done.
+  final bool disableTimerStartPrompt;
+
+  /// When true, show an inactivity prompt when the timer runs without any
+  /// stitch-mode activity for [inactivityThresholdMinutes] minutes.
+  final bool inactivityCheckEnabled;
+
+  /// Minutes of stitch-mode inactivity before the "are you still stitching?"
+  /// prompt is shown. Only used when [inactivityCheckEnabled] is true.
+  final int inactivityThresholdMinutes;
+
   const AppSettings({
     this.useDmc = true,
     this.keepScreenOn = false,
@@ -32,6 +43,9 @@ class AppSettings {
     this.compressNewFiles = true,
     this.colourSortMode = ColourSortMode.byId,
     this.completedColoursLast = false,
+    this.disableTimerStartPrompt = false,
+    this.inactivityCheckEnabled = true,
+    this.inactivityThresholdMinutes = 15,
   });
 
   AppSettings copyWith({
@@ -41,6 +55,9 @@ class AppSettings {
     bool? compressNewFiles,
     ColourSortMode? colourSortMode,
     bool? completedColoursLast,
+    bool? disableTimerStartPrompt,
+    bool? inactivityCheckEnabled,
+    int? inactivityThresholdMinutes,
   }) {
     return AppSettings(
       useDmc: useDmc ?? this.useDmc,
@@ -49,6 +66,9 @@ class AppSettings {
       compressNewFiles: compressNewFiles ?? this.compressNewFiles,
       colourSortMode: colourSortMode ?? this.colourSortMode,
       completedColoursLast: completedColoursLast ?? this.completedColoursLast,
+      disableTimerStartPrompt: disableTimerStartPrompt ?? this.disableTimerStartPrompt,
+      inactivityCheckEnabled: inactivityCheckEnabled ?? this.inactivityCheckEnabled,
+      inactivityThresholdMinutes: inactivityThresholdMinutes ?? this.inactivityThresholdMinutes,
     );
   }
 }
@@ -60,6 +80,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
   static const _keyCompressNewFiles = 'compress_new_files';
   static const _keyColourSortMode = 'colour_sort_mode';
   static const _keyCompletedColoursLast = 'completed_colours_last';
+  static const _keyDisableTimerStartPrompt = 'disable_timer_start_prompt';
+  static const _keyInactivityCheckEnabled = 'inactivity_check_enabled';
+  static const _keyInactivityThresholdMinutes = 'inactivity_threshold_minutes';
 
   @override
   AppSettings build() {
@@ -79,8 +102,10 @@ class SettingsNotifier extends Notifier<AppSettings> {
       colourSortMode: sortIdx < ColourSortMode.values.length
           ? ColourSortMode.values[sortIdx]
           : ColourSortMode.byId,
-      completedColoursLast:
-          prefs.getBool(_keyCompletedColoursLast) ?? false,
+      completedColoursLast: prefs.getBool(_keyCompletedColoursLast) ?? false,
+      disableTimerStartPrompt: prefs.getBool(_keyDisableTimerStartPrompt) ?? false,
+      inactivityCheckEnabled: prefs.getBool(_keyInactivityCheckEnabled) ?? true,
+      inactivityThresholdMinutes: prefs.getInt(_keyInactivityThresholdMinutes) ?? 15,
     );
   }
 
@@ -118,6 +143,24 @@ class SettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(completedColoursLast: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyCompletedColoursLast, value);
+  }
+
+  Future<void> setDisableTimerStartPrompt(bool value) async {
+    state = state.copyWith(disableTimerStartPrompt: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyDisableTimerStartPrompt, value);
+  }
+
+  Future<void> setInactivityCheckEnabled(bool value) async {
+    state = state.copyWith(inactivityCheckEnabled: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyInactivityCheckEnabled, value);
+  }
+
+  Future<void> setInactivityThresholdMinutes(int value) async {
+    state = state.copyWith(inactivityThresholdMinutes: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyInactivityThresholdMinutes, value);
   }
 
 }
