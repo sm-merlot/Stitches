@@ -368,6 +368,9 @@ class StitchingTimerNotifier extends Notifier<StitchingTimerState> {
 
   void _checkInactivity() {
     if (!state.isRunning || state.showInactivityPrompt) return;
+    // Only check while the user is actively in stitch mode — no false positives
+    // when they step away to view a reference image or PDF.
+    if (!ref.read(editorProvider).stitchMode) return;
     final settings = ref.read(settingsProvider);
     if (!settings.inactivityCheckEnabled) return;
     const threshold = Duration(seconds: 10); // TEST

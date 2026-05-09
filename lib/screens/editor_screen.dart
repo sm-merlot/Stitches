@@ -504,9 +504,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     // In edit or stitch mode, back exits to view mode instead of leaving.
     if (state.editMode || state.stitchMode) {
-      if (state.stitchMode) {
-        ref.read(stitchingTimerProvider.notifier).stop();
-      }
       ref.read(editorProvider.notifier).setMode(AppMode.view);
       return false;
     }
@@ -585,12 +582,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               : IconButton(
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Back to view',
-                  onPressed: () {
-                    if (ref.read(editorProvider).stitchMode) {
-                      ref.read(stitchingTimerProvider.notifier).stop();
-                    }
-                    ref.read(editorProvider.notifier).setMode(AppMode.view);
-                  },
+                  onPressed: () =>
+                      ref.read(editorProvider.notifier).setMode(AppMode.view),
                 ),
           titleSpacing: 0,
           title: Row(

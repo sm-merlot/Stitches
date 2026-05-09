@@ -1,53 +1,120 @@
 part of 'workspace_screen.dart';
 
-// ─── Running-timer banner ─────────────────────────────────────────────────────
+// ─── Running-timer chip (AppBar) ──────────────────────────────────────────────
 
-/// Banner shown at the top of the workspace when a timer is running for a
-/// pattern that is not currently open. Live-updates elapsed time every second
-/// (driven by [StitchingTimerState.tickCount] via the parent's ref.watch).
-class _TimerBanner extends StatelessWidget {
+/// Compact AppBar chip shown whenever a timer is running.
+/// Tapping opens a bottom sheet with stop / open options.
+/// Live-updates every second driven by [StitchingTimerState.tickCount]
+/// (parent rebuilds via ref.watch).
+class _TimerChip extends StatelessWidget {
   final StitchingTimerState timerState;
-  final VoidCallback onDismiss;
-  final VoidCallback onStop;
-  final VoidCallback onOpen;
+  final DateTime? lastInteractionAt;
+  final void Function(DateTime? stopAt) onStop;
 
-  const _TimerBanner({
+  /// Non-null when the running timer is for a *different* pattern than the one
+  /// currently open — tapping "Open in stitch mode" calls this.
+  final VoidCallback? onOpen;
+
+  const _TimerChip({
     required this.timerState,
-    required this.onDismiss,
+    required this.lastInteractionAt,
     required this.onStop,
-    required this.onOpen,
+    this.onOpen,
   });
 
   @override
   Widget build(BuildContext context) {
-    final displayName = timerState.timerPatternName ??
-        timerState.timerFilePath!.split(Platform.pathSeparator).last;
-    final session = fmtDuration(timerState.elapsed);
-    final colorScheme = Theme.of(context).colorScheme;
-    final fg = colorScheme.onSecondaryContainer;
+    final name = timerState.timerPatternName ??
+        timerState.timerFilePath?.split(Platform.pathSeparator).last;
+    final elapsed = fmtDuration(timerState.elapsed);
+    final label = name != null ? '$name — $elapsed' : elapsed;
+    final cs = Theme.of(context).colorScheme;
 
-    return ColoredBox(
-      color: colorScheme.secondaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: Row(
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: ActionChip(
+          avatar: Icon(Icons.timer_outlined, size: 16, color: cs.onSecondaryContainer),
+          label: Text(
+            label,
+            style: TextStyle(color: cs.onSecondaryContainer),
+            overflow: TextOverflow.ellipsis,
+          ),
+          backgroundColor: cs.secondaryContainer,
+          side: BorderSide.none,
+          onPressed: () => _showOptions(context),
+        ),
+      ),
+    );
+  }
+
+  void _showOptions(BuildContext context) {
+    final now = DateTime.now();
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(Icons.timer_outlined, size: 18, color: fg),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '$displayName — $session',
-                style: TextStyle(color: fg),
-                overflow: TextOverflow.ellipsis,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.timer_outlined,
+                      color: Theme.of(ctx).colorScheme.secondary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (timerState.timerPatternName != null)
+                          Text(timerState.timerPatternName!,
+                              style: Theme.of(ctx).textTheme.titleMedium),
+                        Text(fmtLastActivity(lastInteractionAt, now),
+                            style: Theme.of(ctx).textTheme.bodySmall),
+                        Text('Session: ${fmtDuration(timerState.elapsed)}',
+                            style: Theme.of(ctx).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
-            TextButton(
-                onPressed: onStop, child: const Text('Stop & discard')),
-            const SizedBox(width: 4),
-            FilledButton(
-                onPressed: onOpen,
-                child: const Text('Open in stitch mode')),
+            const Divider(height: 1),
+            if (onOpen != null)
+              ListTile(
+                leading: const Icon(Icons.open_in_new_outlined),
+                title: const Text('Open in stitch mode'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  onOpen!();
+                },
+              ),
+            if (lastInteractionAt != null)
+              ListTile(
+                leading: const Icon(Icons.history),
+                title: const Text('Stop at last activity'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  onStop(lastInteractionAt);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.stop_circle_outlined),
+              title: const Text('Stop, keep all time'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                onStop(null);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Dismiss'),
+              onTap: () => Navigator.of(ctx).pop(),
+            ),
+            const SizedBox(height: 8),
           ],
         ),
       ),

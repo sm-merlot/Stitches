@@ -81,22 +81,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
 
   bool _inactivityDialogShowing = false;
 
-  // ── Running-timer banner ─────────────────────────────────────────────────
-  // Session-level dismissal: resets when WorkspaceScreen reinitialises (app
-  // restart). Does NOT persist to SharedPreferences.
-  bool _bannerDismissed = false;
-
-  bool _showTimerBanner(StitchingTimerState timerState, EditorState editorState) {
-    if (!timerState.isRunning) return false;
-    if (_bannerDismissed) return false;
-    final timerFile = timerState.timerFilePath;
-    if (timerFile == null) return false;
-    // Hide when the user is already on the timer's pattern (normal inactivity
-    // dialog takes over from there).
-    if (timerFile == editorState.filePath) return false;
-    return true;
-  }
-
   Future<void> _openTimerPattern(BuildContext context, String filePath) async {
     try {
       final (pattern, path, wasCompressed) =
@@ -1500,6 +1484,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
           actions: [
+            // ── Running-timer chip (always visible when timer is running) ──
+            if (timerState.isRunning)
+              _TimerChip(
+                timerState: timerState,
+                lastInteractionAt:
+                    ref.read(stitchingTimerProvider.notifier).lastInteractionAt,
+                onStop: (stopAt) =>
+                    ref.read(stitchingTimerProvider.notifier).stop(stopAt: stopAt),
+                onOpen: timerState.timerFilePath != null &&
+                        timerState.timerFilePath != editorState.filePath
+                    ? () => _openTimerPattern(context, timerState.timerFilePath!)
+                    : null,
+              ),
             // PDF viewer actions
             if (openPdf != null) ...[
               IconButton(
@@ -1664,19 +1661,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             ],
           ],
         ),
-        body: Column(
+        body: Stack(
           children: [
-            if (_showTimerBanner(timerState, editorState))
-              _TimerBanner(
-                timerState: timerState,
-                onDismiss: () => setState(() => _bannerDismissed = true),
-                onStop: () => ref.read(stitchingTimerProvider.notifier).stop(),
-                onOpen: () => _openTimerPattern(context, timerState.timerFilePath!),
-              ),
-            Expanded(
-              child: Stack(
-                children: [
-                  Row(
+            Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Editor, PDF viewer, image viewer, or empty state
@@ -1765,9 +1752,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   ),
                 ),
               ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
