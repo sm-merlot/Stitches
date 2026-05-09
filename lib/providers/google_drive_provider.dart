@@ -155,15 +155,26 @@ class DriveNotifier extends Notifier<DriveState> {
     try {
       await _auth.signIn();
       if (!ref.mounted) return;
+      if (state.status != DriveStatus.connecting) return; // cancelled
       // Re-check connection so all state (email, status, isConfigured) is
       // refreshed from the auth service after a successful sign-in.
       await checkConnection();
     } catch (e) {
       if (!ref.mounted) return;
+      if (state.status != DriveStatus.connecting) return; // cancelled
       state = state.copyWith(
         status: DriveStatus.error,
         error: 'Sign-in failed: $e',
       );
+    }
+  }
+
+  /// Cancels an in-progress sign-in, resetting state to disconnected.
+  /// The underlying OAuth future is orphaned but guarded — it will no-op
+  /// if it eventually completes.
+  void cancelConnect() {
+    if (state.status == DriveStatus.connecting) {
+      state = state.copyWith(status: DriveStatus.disconnected, error: null);
     }
   }
 

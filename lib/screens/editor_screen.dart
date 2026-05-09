@@ -777,7 +777,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             ],
             IconButton(
               tooltip: 'Settings',
-              icon: const Icon(Icons.settings_outlined),
+              icon: const Icon(Icons.settings),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               ),

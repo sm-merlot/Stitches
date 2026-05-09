@@ -1677,7 +1677,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             ],
             IconButton(
               tooltip: 'Settings',
-              icon: const Icon(Icons.settings_outlined),
+              icon: const Icon(Icons.settings),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               ),

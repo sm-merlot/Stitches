@@ -718,7 +718,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           appBar: AppBar(
             actions: [
               IconButton(
-                icon: const Icon(Icons.settings_outlined),
+                icon: const Icon(Icons.settings),
                 tooltip: 'Settings',
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SettingsScreen()),
