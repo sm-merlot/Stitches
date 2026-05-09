@@ -1,15 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'timer_dialog_utils.dart';
 
 enum ConflictTimerResult { openOther, stopDiscard, keepRunning }
-
-String _basenameWithoutExtension(String path) {
-  final base = path.split(Platform.pathSeparator).last;
-  final dot = base.lastIndexOf('.');
-  return dot > 0 ? base.substring(0, dot) : base;
-}
 
 /// Shows a blocking dialog when the user interacts with the timer button while
 /// a timer is already running for a *different* pattern.
@@ -76,7 +71,7 @@ class _ConflictTimerDialogState extends State<_ConflictTimerDialog> {
   @override
   Widget build(BuildContext context) {
     final displayName =
-        widget.timerPatternName ?? _basenameWithoutExtension(widget.timerFilePath);
+        widget.timerPatternName ?? p.basenameWithoutExtension(widget.timerFilePath);
     final fileExists = File(widget.timerFilePath).existsSync();
     final activity = fmtLastActivity(widget.lastInteractionAt, _now);
     final session = fmtDuration(_now.difference(widget.sessionStart));
