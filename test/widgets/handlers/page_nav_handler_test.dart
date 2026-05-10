@@ -31,27 +31,68 @@ void main() {
       );
     });
 
-    test('left edge hit', () {
+    test('left edge hit when hasLeft is true', () {
       expect(
         h.isNavZone(const Offset(10, 300), size,
-            stitchMode: true, pageEnabled: true, hasPageLayout: true),
+            stitchMode: true, pageEnabled: true, hasPageLayout: true,
+            hasLeft: true),
         isTrue,
       );
     });
 
-    test('right edge hit', () {
+    test('left edge not a nav zone when hasLeft is false', () {
+      expect(
+        h.isNavZone(const Offset(10, 300), size,
+            stitchMode: true, pageEnabled: true, hasPageLayout: true,
+            hasLeft: false),
+        isFalse,
+      );
+    });
+
+    test('right edge hit when hasRight is true', () {
       expect(
         h.isNavZone(Offset(size.width - 10, 300), size,
-            stitchMode: true, pageEnabled: true, hasPageLayout: true),
+            stitchMode: true, pageEnabled: true, hasPageLayout: true,
+            hasRight: true),
         isTrue,
       );
     });
 
-    test('top edge hit', () {
+    test('right edge not a nav zone when hasRight is false', () {
       expect(
-        h.isNavZone(const Offset(200, 10), size,
-            stitchMode: true, pageEnabled: true, hasPageLayout: true),
+        h.isNavZone(Offset(size.width - 10, 300), size,
+            stitchMode: true, pageEnabled: true, hasPageLayout: true,
+            hasRight: false),
+        isFalse,
+      );
+    });
+
+    test('top centre hit when hasUp is true', () {
+      // Centre of the up-arrow button strip (width/2, within button height)
+      expect(
+        h.isNavZone(Offset(size.width / 2, 10), size,
+            stitchMode: true, pageEnabled: true, hasPageLayout: true,
+            hasUp: true),
         isTrue,
+      );
+    });
+
+    test('top centre not a nav zone when hasUp is false', () {
+      expect(
+        h.isNavZone(Offset(size.width / 2, 10), size,
+            stitchMode: true, pageEnabled: true, hasPageLayout: true,
+            hasUp: false),
+        isFalse,
+      );
+    });
+
+    test('top edge outside up-button strip is not a nav zone', () {
+      // Far left of canvas top — no left button on this row, no up button
+      expect(
+        h.isNavZone(const Offset(10, 10), size,
+            stitchMode: true, pageEnabled: true, hasPageLayout: true,
+            hasLeft: false, hasUp: true),
+        isFalse,
       );
     });
 

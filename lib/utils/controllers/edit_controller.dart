@@ -1,4 +1,4 @@
-import 'package:flutter/gestures.dart' show PointerDeviceKind, kMiddleMouseButton;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart' hide UndoManager;
 import 'package:flutter/widgets.dart' show EditableTextState, FocusManager;
 import '../../models/cell.dart';
@@ -238,7 +238,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
   void onPointerDown(
     Offset localPos,
     PointerDeviceKind kind,
-    int buttons,
     CanvasViewport vp,
     EditorState state, {
     required bool isOnCanvas,
@@ -253,7 +252,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
     final p = state.pattern;
 
     if (isStylusMouse) {
-      if (buttons == kMiddleMouseButton) return;
       if (mode == DrawingMode.pan) return;
 
       if (mode == DrawingMode.select) {
@@ -300,7 +298,6 @@ class EditController implements CanvasEditController, ShortcutHandler {
   void onPointerMove(
     Offset localPos,
     PointerDeviceKind kind,
-    int buttons,
     CanvasViewport vp,
     EditorState state,
   ) {
@@ -314,7 +311,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
     if (isStylusMouse) {
       _hover!.onPointerMove(localPos, vp, p.width, p.height);
-      if (mode == DrawingMode.pan || buttons == kMiddleMouseButton) return;
+      if (mode == DrawingMode.pan) return;
 
       if (mode == DrawingMode.select) {
         _select!.onPointerMove(localPos, vp, p.width, p.height);

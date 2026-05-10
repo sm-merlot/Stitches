@@ -124,6 +124,9 @@ class EditorNotifier extends Notifier<EditorState>
     double viewPanY = 0;
     double viewScale = 0;
     int? stitchPage = 0;
+    // True when the session contained an explicit saved page.  When false we
+    // auto-select the first unfinished page instead of defaulting to page 0.
+    bool hasSessionPage = false;
 
     // True when the parsed YAML contained a legacy `editor:` section that
     // is no longer written by toYamlString.  We mark the file dirty so the
@@ -143,6 +146,7 @@ class EditorNotifier extends Notifier<EditorState>
       viewPanY = session.viewPanY;
       viewScale = session.viewScale;
       stitchPage = session.stitchPage;
+      hasSessionPage = session.stitchPage != null;
     } else {
       // First open after migration: read legacy YAML fields as a one-time seed.
       hasLegacyEditorSection =
@@ -261,9 +265,16 @@ class EditorNotifier extends Notifier<EditorState>
     // when the user actually switches to stitch mode.
     if (withSymbols.pageConfig.enabled) {
       final layout = PageLayout.compute(withSymbols.pageConfig, withSymbols);
+      // If no saved page exists for this session, auto-select the first page
+      // that has not been marked as fully done, so users start stitching where
+      // they left off rather than always landing on page 1.
+      final autoPage = !hasSessionPage
+          ? _firstUnfinishedPage(layout, withSymbols.progress.completedPages)
+          : state.stitchSession.currentPage;
       state = state.copyWith(
         stitchSession: state.stitchSession.copyWith(
           pageLayout: layout,
+          currentPage: autoPage,
         ),
       );
     }
@@ -287,6 +298,15 @@ class EditorNotifier extends Notifier<EditorState>
       viewState: ViewState(panX: panX, panY: panY, scale: scale),
     );
     _saveSession();
+  }
+
+  /// Returns the index of the first page not in [completedPages], or 0 if all
+  /// pages are marked done (so the user restarts from the beginning).
+  static int _firstUnfinishedPage(PageLayout layout, Set<int> completedPages) {
+    for (int i = 0; i < layout.totalPages; i++) {
+      if (!completedPages.contains(i)) return i;
+    }
+    return 0;
   }
 
   // ─── Session helpers ─────────────────────────────────────────────────────────

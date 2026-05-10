@@ -229,14 +229,28 @@ class StitchController implements ShortcutHandler {
     double canvasWidth,
     double canvasHeight,
     EditorState state,
-  ) =>
-      _pageNav.isNavZone(
-        screenPos,
-        Size(canvasWidth, canvasHeight),
-        stitchMode: true,
-        pageEnabled: state.pattern.pageConfig.enabled,
-        hasPageLayout: state.stitchSession.pageLayout != null,
-      );
+  ) {
+    final layout = state.stitchSession.pageLayout;
+    bool hasLeft = true, hasRight = true, hasUp = false, hasDown = false;
+    if (layout != null) {
+      final (col, row) = layout.pageCoords(state.stitchSession.currentPage);
+      hasLeft  = col > 0;
+      hasRight = col < layout.pagesAcross - 1;
+      hasUp    = row > 0;
+      hasDown  = row < layout.pagesDown - 1;
+    }
+    return _pageNav.isNavZone(
+      screenPos,
+      Size(canvasWidth, canvasHeight),
+      stitchMode: true,
+      pageEnabled: state.pattern.pageConfig.enabled,
+      hasPageLayout: layout != null,
+      hasLeft: hasLeft,
+      hasRight: hasRight,
+      hasUp: hasUp,
+      hasDown: hasDown,
+    );
+  }
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
 

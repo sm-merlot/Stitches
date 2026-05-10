@@ -1,4 +1,4 @@
-import 'package:flutter/gestures.dart' show PointerDeviceKind, kMiddleMouseButton;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart' hide UndoManager;
 import '../../models/cell.dart';
 import '../../models/stitch/stitch.dart';
@@ -208,7 +208,6 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
   void onPointerDown(
     Offset localPos,
     PointerDeviceKind kind,
-    int buttons,
     CanvasViewport vp,
     EditorState state, {
     required bool isOnCanvas,
@@ -223,7 +222,6 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
     final p = state.pattern;
 
     if (isStylusMouse) {
-      if (buttons == kMiddleMouseButton) return;
       if (mode == DrawingMode.pan) return;
 
       if (mode == DrawingMode.select) {
@@ -270,7 +268,6 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
   void onPointerMove(
     Offset localPos,
     PointerDeviceKind kind,
-    int buttons,
     CanvasViewport vp,
     EditorState state,
   ) {
@@ -284,7 +281,7 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
 
     if (isStylusMouse) {
       _hover!.onPointerMove(localPos, vp, p.width, p.height);
-      if (mode == DrawingMode.pan || buttons == kMiddleMouseButton) return;
+      if (mode == DrawingMode.pan) return;
 
       if (mode == DrawingMode.select) {
         _select!.onPointerMove(localPos, vp, p.width, p.height);

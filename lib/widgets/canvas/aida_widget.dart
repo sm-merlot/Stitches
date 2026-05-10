@@ -447,12 +447,15 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         event.kind == PointerDeviceKind.mouse;
 
     if (isStylusMouse) {
+      // Middle mouse button pans (handled by ZoomPanHandler on pointer-move).
+      // Filter here so no controller needs to import or check kMiddleMouseButton.
+      if (event.buttons == kMiddleMouseButton) return;
       switch (state.mode) {
         case AppMode.view:
           break; // pan handled by ZoomPanHandler
         case AppMode.edit:
           _edit?.onPointerDown(
-            localPos, event.kind, event.buttons, vp, state,
+            localPos, event.kind, vp, state,
             isOnCanvas: _screenOnCanvas(localPos),
             pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
           );
@@ -473,7 +476,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
           break; // pan handled by ZoomPanHandler
         case AppMode.edit:
           _edit?.onPointerDown(
-            localPos, event.kind, event.buttons, vp, state,
+            localPos, event.kind, vp, state,
             isOnCanvas: _screenOnCanvas(localPos),
             pencilPasteConfirm: ref.read(settingsProvider).pencilPasteConfirm,
           );
@@ -517,7 +520,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
         case AppMode.view:
           break;
         case AppMode.edit:
-          _edit?.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+          _edit?.onPointerMove(localPos, event.kind, vp, state);
         case AppMode.stitch:
           _stitch?.onPointerMove(localPos, event.kind, vp, state);
       }
@@ -546,7 +549,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
           case AppMode.view:
             break;
           case AppMode.edit:
-            _edit?.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+            _edit?.onPointerMove(localPos, event.kind, vp, state);
           case AppMode.stitch:
             _stitch?.onPointerMove(localPos, event.kind, vp, state);
         }
@@ -555,7 +558,7 @@ class _AidaWidgetState extends ConsumerState<AidaWidget>
 
     // ── Kind-agnostic fallback (iPadOS Pencil unknown-kind events) ───────────
     if (_edit?.select?.isActive == true && state.editMode) {
-      _edit?.onPointerMove(localPos, event.kind, event.buttons, vp, state);
+      _edit?.onPointerMove(localPos, event.kind, vp, state);
     } else if (_stitch?.progress?.isActive == true && state.stitchMode) {
       _stitch!.onPointerMove(localPos, event.kind, vp, state);
     }
