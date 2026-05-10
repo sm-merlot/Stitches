@@ -541,8 +541,8 @@ class _StitchColoursPanel extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
             child: SegmentedButton<bool>(
               segments: const [
-                ButtonSegment(value: false, label: Text('All')),
                 ButtonSegment(value: true, label: Text('Page')),
+                ButtonSegment(value: false, label: Text('All')),
               ],
               selected: {state.stitchSession.showPageColours},
               onSelectionChanged: (s) => notifier.setStitchShowPageColours(s.first),

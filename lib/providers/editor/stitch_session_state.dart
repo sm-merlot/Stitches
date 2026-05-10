@@ -14,7 +14,7 @@ class StitchSessionState {
   final String? focusThreadId;
 
   /// When true and page mode is active, the stitch-mode colour list shows only
-  /// threads present on the current page. Defaults to false (show all colours).
+  /// threads present on the current page. Defaults to true (page colours).
   final bool showPageColours;
 
   /// Current page index (0-based) in page mode. Session-only, not persisted.
@@ -37,7 +37,7 @@ class StitchSessionState {
     this.crossMode = false,
     this.backMode = false,
     this.focusThreadId,
-    this.showPageColours = false,
+    this.showPageColours = true,
     this.currentPage = 0,
     this.pageLayout,
     this.pendingFitPage,
