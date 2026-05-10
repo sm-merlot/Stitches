@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- a9aa943: Add global settings access and Google Drive sign-out safety
+
+  - **Settings access**: settings icon added to workspace and editor AppBars; `Ctrl+,` shortcut on Windows/Linux; macOS app menu gains Preferences… item (`Cmd+,`) with full standard menu items
+  - **Drive sign-out**: signing out automatically closes any open Drive workspace or file, pops to home, and shows a snackbar
+  - **Drive revocation**: mid-session token revocation shows a blocking dialog over the open workspace (keeping it loaded); "Sign in again" transitions to a spinner and re-auths inline; on success the folder listing and open file are refreshed automatically; Cancel/Dismiss closes the workspace and returns to home
+  - **Sign-in cancel**: a Cancel button appears next to the spinner in Settings during OAuth so users can abort a stuck sign-in flow
+  - **Recent items**: Drive recent items already grey out and disable tap when signed out or signed in as a different account — this now also triggers correctly when a session expires mid-use
+
+### Patch Changes
+
+- 2a375a9: Fix page-mode bugs and middle-click marking; centralise mouse-button filtering
+
+  - **Auto-select page**: opening stitch mode now lands on the first unfinished page (not marked done) instead of always defaulting to page 1
+  - **Page colours default**: stitch-mode colour panel now defaults to "Page" filter instead of "All"; segment order swapped so Page is on the left and All on the right
+  - **Top-row tap**: tapping or starting a selection in the top rows of a page-mode pattern now works correctly; the nav-zone guard is precise to each button's actual footprint rather than a blanket 56 px strip, so cells alongside or below nav arrows are no longer blocked
+  - **Middle-click**: middle mouse button no longer marks stitches in stitch mode or draws in edit mode; the `kMiddleMouseButton` guard is now enforced once in `AidaWidget._onPointerDown` and removed from individual controllers (`EditController`, `SnippetEditController`, `StitchController`), eliminating a class of per-controller omission bugs
+
+- f8829db: Fix selection drag starting new selection, and fix page colour done counts
+
+  - **Selection**: clicking or dragging inside an existing selection now always starts a new rubber-band selection instead of entering move mode
+  - **Page colours**: done stitch counts in the page-filtered colour panel now reflect only stitches on the current page, instead of showing global totals against page-scoped totals
+  - **Refactor**: gesture recognition (tap, double-tap, drag) is now a shared `GestureHandler` layer; double-tap window reduced from 500 ms to 300 ms to match mobile standard
+
 ## 0.11.0
 
 ### Minor Changes
