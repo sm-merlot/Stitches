@@ -30,7 +30,6 @@ abstract class CanvasEditController {
   void onPointerDown(
     Offset localPos,
     PointerDeviceKind kind,
-    int buttons,
     CanvasViewport vp,
     EditorState state, {
     required bool isOnCanvas,
@@ -40,7 +39,6 @@ abstract class CanvasEditController {
   void onPointerMove(
     Offset localPos,
     PointerDeviceKind kind,
-    int buttons,
     CanvasViewport vp,
     EditorState state,
   );
