@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.1
+
+### Patch Changes
+
+- 5672d72: Add debug-marker lint script and fix two debug values left in timer and PDF scanner code.
+
 ## 0.12.0
 
 ### Minor Changes
