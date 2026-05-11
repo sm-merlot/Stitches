@@ -180,6 +180,7 @@ case "$cmd" in
       fi
     }
 
+    run_step "debug markers"    bash scripts/check-debug-markers.sh
     run_step "pub get"          $FLUTTER pub get
     run_step "analyze"          $FLUTTER analyze --fatal-warnings
     run_step "unit tests"       $FLUTTER test --reporter=expanded

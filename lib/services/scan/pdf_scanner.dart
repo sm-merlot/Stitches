@@ -1,7 +1,6 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 /// Rasterises a single page of a PDF file to PNG bytes at ~300 DPI.
@@ -48,19 +47,6 @@ class PdfScanner {
           throw Exception('Failed to encode page $pageNumber as PNG.');
         }
         final bytes = byteData.buffer.asUint8List();
-
-        // DEBUG: save rasterised pages to disk for inspection.
-        if (kDebugMode) {
-          try {
-            const debugDir = '/tmp/stitches_pages';
-            await Directory(debugDir).create(recursive: true);
-            final pageNum = pageNumber.toString().padLeft(2, '0');
-            await File('$debugDir/page_$pageNum.png').writeAsBytes(bytes);
-            debugPrint('[PdfScanner] debug image saved: $debugDir/page_$pageNum.png');
-          } catch (e) {
-            debugPrint('[PdfScanner] debug save failed: $e');
-          }
-        }
 
         results.add(bytes);
       }
