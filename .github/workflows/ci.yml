@@ -38,14 +38,14 @@ jobs:
         with:
           ref: refs/pull/${{ github.event.issue.number }}/head
 
+      - name: Check debug markers
+        run: bash scripts/check-debug-markers.sh
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
-
-      - name: Check debug markers
-        run: bash scripts/check-debug-markers.sh
 
       - name: Install dependencies
         run: flutter pub get
