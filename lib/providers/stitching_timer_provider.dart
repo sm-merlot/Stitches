@@ -252,7 +252,7 @@ Future<void> _restorePersistedSessions() async {
     });
     _inactivityCheckers[key]?.cancel();
     _inactivityCheckers[key] =
-        Timer.periodic(const Duration(seconds: 5), (_) { // TEST
+        Timer.periodic(const Duration(minutes: 1), (_) {
       _checkInactivityForWorkspace(key, workspaceId);
     });
   }
@@ -434,7 +434,7 @@ Future<void> _restorePersistedSessions() async {
     }
     final settings = ref.read(settingsProvider);
     if (!settings.inactivityCheckEnabled) return;
-    const threshold = Duration(seconds: 10); // TEST
+    final threshold = Duration(minutes: settings.inactivityThresholdMinutes);
     final last = _lastInteractionAt[key] ?? session.sessionStart;
     if (last == null) return;
     if (now().difference(last) >= threshold) {
