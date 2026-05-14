@@ -12,6 +12,7 @@
 #   cli              Run the CLI via dart run (interpreted); pass args after --
 #                      e.g.  ./run cli -- -p "╳ ▞\n▚ ╳" -o out.gif
 #   build            Build the macOS release app
+#   install          Build macOS release app and install to /Applications
 #   build-ipad       Build and install the iOS release app on a connected iPad
 #   build-cli        Compile the CLI to a standalone binary
 #   animate [--push] Generate GIF animations from test/fixtures/*.pattern into
@@ -71,6 +72,26 @@ case "$cmd" in
   build)
     $FLUTTER build macos --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH" "$@"
     echo "Built: build/macos/Build/Products/Release/stitches.app"
+    ;;
+
+  install)
+    $FLUTTER build macos --release --dart-define-from-file=secrets.json --dart-define=GIT_HASH="$GIT_HASH"
+    APP_SRC="build/macos/Build/Products/Release/stitches.app"
+    APP_DEST="/Applications/stitches.app"
+    was_running=0
+    if pgrep -x "stitches" > /dev/null 2>&1; then
+      echo "App running — killing..."
+      pkill -x "stitches"
+      was_running=1
+    fi
+    echo "Installing to $APP_DEST..."
+    rm -rf "$APP_DEST"
+    cp -R "$APP_SRC" "$APP_DEST"
+    echo "Installed: $APP_DEST"
+    if [[ $was_running -eq 1 ]]; then
+      echo "Restarting..."
+      open "$APP_DEST"
+    fi
     ;;
 
   build-ipad)
