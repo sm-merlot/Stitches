@@ -21,7 +21,7 @@ dependencies:
   args: ^2.5.0
   wakelock_plus: ^1.5.2
   googleapis: ^16.0.0
-  googleapis_auth: ^2.3.0
+  googleapis_auth: ^2.3.1
   url_launcher: ^6.3.1
   http: ^1.2.0
   font_awesome_flutter: ^11.0.0
