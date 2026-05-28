@@ -116,6 +116,62 @@ mixin SelectionMixin on Notifier<EditorState> {
     );
   }
 
+  /// Synchronous copy-to-paste for drag-to-paste from selection.
+  ///
+  /// Populates the clipboard with stitches in the current selection rect
+  /// (respecting [canvasSelectionMode]) and enters paste mode immediately,
+  /// without writing to the system clipboard. Returns `true` on success,
+  /// `false` when the selection is empty or contains no stitches.
+  bool copySelectionForDrag() {
+    final rect = state.editSession.selectionRect;
+    if (rect == null) return false;
+
+    final List<Stitch> inSel;
+    if (state.editSession.canvasSelectionMode) {
+      final layer = state.compositeLayer;
+      if (layer != null) {
+        inSel = [
+          ...layer.fullStitches.values.map((cs) => cs.stitch)
+              .where((s) => EditorState.isStitchInRect(s, rect)),
+          ...layer.otherStitches.map((cs) => cs.stitch)
+              .where((s) => EditorState.isStitchInRect(s, rect)),
+          ...layer.backstitches
+              .where((s) => EditorState.isStitchInRect(s, rect)),
+        ];
+      } else {
+        inSel = state.pattern.layers
+            .where((l) => l.visible)
+            .expand((l) => l.stitches.where((s) => EditorState.isStitchInRect(s, rect)))
+            .toList();
+      }
+    } else {
+      inSel = state.activeLayer.stitches
+          .where((s) => EditorState.isStitchInRect(s, rect))
+          .toList();
+    }
+
+    if (inSel.isEmpty) return false;
+
+    final clips = inSel
+        .map((s) => EditorState.offsetStitch(s, -rect.left.round(), -rect.top.round()))
+        .toList();
+    final threadIds = clips.map((s) => s.threadId).toSet();
+    final threads = state.pattern.threads.values
+        .where((t) => threadIds.contains(t.dmcCode))
+        .toList();
+
+    state = state.copyWith(
+      editSession: state.editSession.copyWith(
+        clipboard: clips,
+        clipboardThreads: threads,
+        drawingMode: DrawingMode.paste,
+        selectionRect: null,
+        clipboardFromSnippet: false,
+      ),
+    );
+    return true;
+  }
+
   /// Reads the system clipboard and enters paste mode if valid stitches data is found.
   /// Falls back to the in-memory clipboard if the system clipboard has other content.
   Future<void> enterPasteMode() async {
