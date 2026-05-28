@@ -1,0 +1,36 @@
+lib/services/render_cache.dart
+  s_0f06810fe59d54::t_e37cdc8dbe9382 222
+  s_0f06810fe59d54::t_62fa44e8f13c14 208
+lib/utils/controllers/edit_controller.dart
+  s_0f06810fe59d54::t_63a2bec1c02aa0 493
+  s_0f06810fe59d54::t_44527a3d6045bb 477
+  s_0f06810fe59d54::t_cfbc06c1af145b 373-374,377-378,380-385,387-390
+  s_0f06810fe59d54::t_ca6ff15dab0436 102-103
+  s_0f06810fe59d54::t_57cec475e33651 386
+lib/widgets/canvas/canvas_painter_drawing_methods.dart
+  s_0f06810fe59d54::t_70b970280da31d 256-262
+lib/providers/editor/editor_provider_selection.dart
+  s_0f06810fe59d54::t_27a6a099e8bdb6 327-357
+lib/utils/controllers/snippet_edit_controller.dart
+  s_0f06810fe59d54::t_539b70d728bdaf 441
+  s_0f06810fe59d54::t_9ffd7303d93409 453
+  s_0f06810fe59d54::t_d420a36fab800d 351
+  s_0f06810fe59d54::t_589b9d8e1ad516 77
+  s_0f06810fe59d54::t_88abd338503975 339,342-343,345-350,352-355
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8e08c2eb9d0ebb98a7b3796d9ca6f22a5c6c6a21",
+  "prompts": {},
+  "sessions": {
+    "s_0f06810fe59d54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3b4f308-c191-487b-b040-d532e0050fe1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>"
+    }
+  }
+}
