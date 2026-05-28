@@ -205,7 +205,7 @@ class RenderCache {
     if (color == null) return;
 
     // Build the block shape for this stitch.
-    final shape = _buildBlockShape(cs.stitch, cellSize);
+    final shape = buildBlockShape(cs.stitch, cellSize);
     if (shape == null) return;
 
     // Insert into store and update reverse index.
@@ -219,7 +219,7 @@ class RenderCache {
   /// - [HalfStitch] → [PathShape] (thick diagonal parallelogram)
   /// - [ThreeQuarterStitch] → [PathShape] (filled triangle)
   /// - [BackStitch] → null (drawn separately by the painter)
-  static BlockShape? _buildBlockShape(Stitch stitch, double cellSize) {
+  static BlockShape? buildBlockShape(Stitch stitch, double cellSize) {
     return switch (stitch) {
       HalfStitch(:final x, :final y, :final isForward) =>
         PathShape(_halfStitchPath(x, y, isForward, cellSize)),

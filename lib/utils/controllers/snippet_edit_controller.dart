@@ -74,6 +74,7 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
 
   // ── Drag-to-paste tracking ─────────────────────────────────────────────────
   bool _dragToPasteActive = false;
+  Rect? _dragMoveSourceRect;
 
   // ── Snapshot helper ────────────────────────────────────────────────────────
 
@@ -335,12 +336,23 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
 
     _draw!.onPointerUp();
 
-    // Drag-to-paste: commit paste on release after dragging from a selection.
+    // Drag-to-move: commit paste and erase source region as one undo step.
     if (_dragToPasteActive) {
       _dragToPasteActive = false;
+      final sourceRect = _dragMoveSourceRect;
+      _dragMoveSourceRect = null;
       if (state.editSession.drawingMode == DrawingMode.paste) {
-        _paste!.commit(state.pattern, state.editSession.clipboard);
-        _paste!.clearOrigin();
+        final origin = _paste!.pasteOrigin;
+        final clipboard = state.editSession.clipboard;
+        if (origin != null && clipboard != null) {
+          final (dx, dy) = _paste!.effectiveOffset(origin, clipboard, state.pattern);
+          _withSnapshot(() {
+            if (sourceRect != null) _notifier.deleteStitchesInRect(sourceRect);
+            _notifier.commitPaste(dx, dy);
+          });
+          _paste!.clearOrigin();
+          if (!_paste!.ctrlHeld) _notifier.cancelSelection();
+        }
       }
       return;
     }
@@ -426,6 +438,7 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
   void cancelActiveGestures() {
     _select?.cancel();
     _dragToPasteActive = false;
+    _dragMoveSourceRect = null;
   }
 
   bool _tryStartDragToPaste(
@@ -437,6 +450,7 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
     final cell = SelectHandler.toSelCell(localPos, vp, patW, patH);
     if (!SelectHandler.cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), selRect)) return false;
     if (!_notifier.copySelectionForDrag()) return false;
+    _dragMoveSourceRect = selRect;
     _paste!.setOrigin(localPos, vp);
     _dragToPasteActive = true;
     return true;

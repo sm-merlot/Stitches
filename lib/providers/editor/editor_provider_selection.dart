@@ -324,6 +324,37 @@ mixin SelectionMixin on Notifier<EditorState> {
     refreshCompositeCache();
   }
 
+  /// Deletes all stitches within [rect], respecting canvas/active-layer mode.
+  /// Used internally by drag-to-move to erase the source region after paste.
+  void deleteStitchesInRect(Rect rect) {
+    if (state.editSession.canvasSelectionMode) {
+      final newPattern = _pruneUnusedThreads(state.pattern.mapLayers((layer) {
+        if (!layer.visible) return layer;
+        return layer.copyWith(
+          stitches: layer.stitches.where((s) => !EditorState.isStitchInRect(s, rect)).toList(),
+        );
+      }));
+      state = state.copyWith(
+        pattern: newPattern,
+        compositeLayer: null,
+        isDirty: true,
+      );
+      refreshCompositeCache();
+      return;
+    }
+    final remaining = state.activeLayer.stitches
+        .where((s) => !EditorState.isStitchInRect(s, rect))
+        .toList();
+    final newPattern = _pruneUnusedThreads(
+        _patternWithActiveLayerStitches(state.pattern, remaining));
+    state = state.copyWith(
+      pattern: newPattern,
+      compositeLayer: null,
+      isDirty: true,
+    );
+    refreshCompositeCache();
+  }
+
   void deleteSelection() {
     final rect = state.editSession.selectionRect;
     if (rect == null) return;

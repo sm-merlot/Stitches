@@ -99,6 +99,8 @@ class EditController implements CanvasEditController, ShortcutHandler {
   // existing selection — the paste is committed on pointer-up rather than the
   // next pointer-down (which is how regular paste mode works).
   bool _dragToPasteActive = false;
+  // Source selection rect captured at drag start; cleared after move commits.
+  Rect? _dragMoveSourceRect;
 
   // ── Snapshot helper ────────────────────────────────────────────────────────
 
@@ -368,13 +370,24 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
     _draw!.onPointerUp();
 
-    // Drag-to-paste: commit the paste when the user releases after dragging
-    // from inside a selection. This path is taken for both mouse and touch.
+    // Drag-to-move: commit the paste and erase the source region atomically
+    // so the operation undoes as a single step.
     if (_dragToPasteActive) {
       _dragToPasteActive = false;
+      final sourceRect = _dragMoveSourceRect;
+      _dragMoveSourceRect = null;
       if (state.editSession.drawingMode == DrawingMode.paste) {
-        _paste!.commit(state.pattern, state.editSession.clipboard);
-        _paste!.clearOrigin();
+        final origin = _paste!.pasteOrigin;
+        final clipboard = state.editSession.clipboard;
+        if (origin != null && clipboard != null) {
+          final (dx, dy) = _paste!.effectiveOffset(origin, clipboard, state.pattern);
+          _withSnapshot(() {
+            if (sourceRect != null) _notifier.deleteStitchesInRect(sourceRect);
+            _notifier.commitPaste(dx, dy);
+          });
+          _paste!.clearOrigin();
+          if (!_paste!.ctrlHeld) _notifier.cancelSelection();
+        }
       }
       return;
     }
@@ -461,6 +474,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
   void cancelActiveGestures() {
     _select?.cancel();
     _dragToPasteActive = false;
+    _dragMoveSourceRect = null;
   }
 
   /// If [localPos] is inside the existing selection rect, copies the selection
@@ -476,6 +490,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     final cell = SelectHandler.toSelCell(localPos, vp, patW, patH);
     if (!SelectHandler.cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), selRect)) return false;
     if (!_notifier.copySelectionForDrag()) return false;
+    _dragMoveSourceRect = selRect;
     _paste!.setOrigin(localPos, vp);
     _dragToPasteActive = true;
     return true;
