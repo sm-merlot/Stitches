@@ -1,0 +1,21 @@
+ios/Podfile.lock
+  ai_agent 124
+ios/Podfile
+  s_0f06810fe59d54::t_788ccd41c4b7c3 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e54439c24f963fca9747335bfc281d420236284c",
+  "prompts": {},
+  "sessions": {
+    "s_0f06810fe59d54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3b4f308-c191-487b-b040-d532e0050fe1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>"
+    }
+  }
+}
