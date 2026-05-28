@@ -846,6 +846,131 @@ void main() {
     });
   });
 
+  // ─── Progress — flood fill done ──────────────────────────────────────────────
+
+  group('EditorNotifier — floodFillDone', () {
+    late ProviderContainer c;
+    setUp(() {
+      c = makeContainer();
+      loadEmpty(c);
+    });
+    tearDown(() => c.dispose());
+
+    test('marks connected same-thread stitches done', () {
+      // Three horizontally adjacent cells in edit mode, then switch to stitch mode.
+      notifier(c).setMode(AppMode.edit);
+      for (int x = 0; x < 3; x++) {
+        notifier(c).addStitch(FullStitch(x: x, y: 0, threadId: '310'));
+      }
+      // Isolated cell — same thread but not adjacent to the group.
+      notifier(c).addStitch(const FullStitch(x: 8, y: 8, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).floodFillDone(0, 0);
+
+      final prog = editorState(c).pattern.progress;
+      expect(prog.isStitchDone(0, 0), isTrue);
+      expect(prog.isStitchDone(1, 0), isTrue);
+      expect(prog.isStitchDone(2, 0), isTrue);
+      expect(prog.isStitchDone(8, 8), isFalse,
+          reason: 'isolated cell must not be flood-filled');
+    });
+
+    test('un-marks (frogs) connected done stitches when starting cell is done', () {
+      notifier(c).setMode(AppMode.edit);
+      for (int x = 0; x < 3; x++) {
+        notifier(c).addStitch(FullStitch(x: x, y: 0, threadId: '310'));
+      }
+      notifier(c).setMode(AppMode.stitch);
+
+      // Mark all three done first.
+      notifier(c).markRegionDone(const Rect.fromLTRB(0, 0, 3, 1));
+      expect(editorState(c).pattern.progress.isStitchDone(0, 0), isTrue);
+
+      // Flood-fill from a done cell → should frog the whole group.
+      notifier(c).floodFillDone(0, 0, originalStartIsDone: true);
+
+      final prog = editorState(c).pattern.progress;
+      expect(prog.isStitchDone(0, 0), isFalse);
+      expect(prog.isStitchDone(1, 0), isFalse);
+      expect(prog.isStitchDone(2, 0), isFalse);
+    });
+
+    test('stops at different-thread boundary', () {
+      notifier(c).setMode(AppMode.edit);
+      // Black cells (0,0)→(1,0), red cell (2,0).
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      notifier(c).addStitch(const FullStitch(x: 1, y: 0, threadId: '310'));
+      notifier(c).addStitch(const FullStitch(x: 2, y: 0, threadId: '666'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).floodFillDone(0, 0);
+
+      final prog = editorState(c).pattern.progress;
+      expect(prog.isStitchDone(0, 0), isTrue);
+      expect(prog.isStitchDone(1, 0), isTrue);
+      expect(prog.isStitchDone(2, 0), isFalse,
+          reason: 'red cell is a different thread; flood fill must stop at boundary');
+    });
+  });
+
+  // ─── Progress — backstitch toggle ─────────────────────────────────────────────
+
+  group('EditorNotifier — toggleBackstitchDone', () {
+    late ProviderContainer c;
+    setUp(() {
+      c = makeContainer();
+      loadEmpty(c);
+    });
+    tearDown(() => c.dispose());
+
+    test('marks a backstitch done', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(
+          const BackStitch(x1: 0.0, y1: 0.0, x2: 1.0, y2: 0.0, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).toggleBackstitchDone(0.0, 0.0, 1.0, 0.0);
+
+      expect(
+        editorState(c).pattern.progress.isBackstitchDone(0.0, 0.0, 1.0, 0.0),
+        isTrue,
+      );
+    });
+
+    test('un-marks (frogs) an already-done backstitch', () {
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(
+          const BackStitch(x1: 0.0, y1: 0.0, x2: 1.0, y2: 0.0, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).toggleBackstitchDone(0.0, 0.0, 1.0, 0.0);
+      expect(editorState(c).pattern.progress.isBackstitchDone(0.0, 0.0, 1.0, 0.0), isTrue);
+
+      notifier(c).toggleBackstitchDone(0.0, 0.0, 1.0, 0.0);
+      expect(
+        editorState(c).pattern.progress.isBackstitchDone(0.0, 0.0, 1.0, 0.0),
+        isFalse,
+        reason: 'second toggle must frog the backstitch',
+      );
+    });
+
+    test('normalised endpoint order: reverse direction marks same backstitch done', () {
+      // (0,0)→(1,0) and (1,0)→(0,0) should refer to the same backstitch.
+      notifier(c).setMode(AppMode.edit);
+      notifier(c).addStitch(
+          const BackStitch(x1: 0.0, y1: 0.0, x2: 1.0, y2: 0.0, threadId: '310'));
+      notifier(c).setMode(AppMode.stitch);
+
+      notifier(c).toggleBackstitchDone(1.0, 0.0, 0.0, 0.0); // reversed
+      expect(
+        editorState(c).pattern.progress.isBackstitchDone(0.0, 0.0, 1.0, 0.0),
+        isTrue,
+        reason: 'normalised order must unify both directions',
+      );
+    });
+  });
+
   // ─── Pattern metadata ──────────────────────────────────────────────────────
 
   group('EditorNotifier — metadata', () {
