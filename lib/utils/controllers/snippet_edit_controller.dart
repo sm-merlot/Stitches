@@ -72,6 +72,10 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
 
+  // ── Drag-to-paste tracking ─────────────────────────────────────────────────
+  bool _dragToPasteActive = false;
+  Rect? _dragMoveSourceRect;
+
   // ── Snapshot helper ────────────────────────────────────────────────────────
 
   /// Calls [action], then pushes a [PatternSnapshotCommand] if the pattern changed.
@@ -186,6 +190,7 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
     _paste = null;
     _lastTouchUpTime = null;
     _lastTouchUpPos = null;
+    _dragToPasteActive = false;
   }
 
   // ── Pointer event dispatch ─────────────────────────────────────────────────
@@ -225,6 +230,7 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
       if (mode == DrawingMode.pan) return;
 
       if (mode == DrawingMode.select) {
+        if (_tryStartDragToPaste(localPos, vp, p.width, p.height, isOnCanvas)) return;
         _select!.onPointerDown(
           localPos, vp, p.width, p.height,
           isOnCanvas: isOnCanvas,
@@ -247,6 +253,7 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
 
     // ── Touch ──────────────────────────────────────────────────────────────
     if (mode == DrawingMode.select) {
+      if (_tryStartDragToPaste(localPos, vp, p.width, p.height, isOnCanvas)) return;
       _select!.onPointerDown(
         localPos, vp, p.width, p.height,
         isOnCanvas: isOnCanvas,
@@ -329,6 +336,27 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
 
     _draw!.onPointerUp();
 
+    // Drag-to-move: commit paste and erase source region as one undo step.
+    if (_dragToPasteActive) {
+      _dragToPasteActive = false;
+      final sourceRect = _dragMoveSourceRect;
+      _dragMoveSourceRect = null;
+      if (state.editSession.drawingMode == DrawingMode.paste) {
+        final origin = _paste!.pasteOrigin;
+        final clipboard = state.editSession.clipboard;
+        if (origin != null && clipboard != null) {
+          final (dx, dy) = _paste!.effectiveOffset(origin, clipboard, state.pattern);
+          _withSnapshot(() {
+            if (sourceRect != null) _notifier.deleteStitchesInRect(sourceRect);
+            _notifier.commitPaste(dx, dy);
+          });
+          _paste!.clearOrigin();
+          if (!_paste!.ctrlHeld) _notifier.cancelSelection();
+        }
+      }
+      return;
+    }
+
     // Touch paste — commit at current origin.
     if (kind == PointerDeviceKind.touch &&
         state.editSession.drawingMode == DrawingMode.paste &&
@@ -409,6 +437,23 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
   @override
   void cancelActiveGestures() {
     _select?.cancel();
+    _dragToPasteActive = false;
+    _dragMoveSourceRect = null;
+  }
+
+  bool _tryStartDragToPaste(
+    Offset localPos, CanvasViewport vp, int patW, int patH, bool isOnCanvas,
+  ) {
+    if (!isOnCanvas) return false;
+    final selRect = _getState().editSession.selectionRect;
+    if (selRect == null) return false;
+    final cell = SelectHandler.toSelCell(localPos, vp, patW, patH);
+    if (!SelectHandler.cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), selRect)) return false;
+    if (!_notifier.copySelectionForDrag()) return false;
+    _dragMoveSourceRect = selRect;
+    _paste!.setOrigin(localPos, vp);
+    _dragToPasteActive = true;
+    return true;
   }
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────

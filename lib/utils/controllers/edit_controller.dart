@@ -94,6 +94,14 @@ class EditController implements CanvasEditController, ShortcutHandler {
   DateTime? _lastTouchUpTime;
   Offset? _lastTouchUpPos;
 
+  // ── Drag-to-paste tracking ─────────────────────────────────────────────────
+  // True when the current pointer gesture was initiated by clicking inside an
+  // existing selection — the paste is committed on pointer-up rather than the
+  // next pointer-down (which is how regular paste mode works).
+  bool _dragToPasteActive = false;
+  // Source selection rect captured at drag start; cleared after move commits.
+  Rect? _dragMoveSourceRect;
+
   // ── Snapshot helper ────────────────────────────────────────────────────────
 
   /// Calls [action], then pushes a [PatternSnapshotCommand] if the pattern changed.
@@ -212,6 +220,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
     _paste = null;
     _lastTouchUpTime = null;
     _lastTouchUpPos = null;
+    _dragToPasteActive = false;
   }
 
   // ── Pointer event dispatch ─────────────────────────────────────────────────
@@ -255,6 +264,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
       if (mode == DrawingMode.pan) return;
 
       if (mode == DrawingMode.select) {
+        if (_tryStartDragToPaste(localPos, vp, p.width, p.height, isOnCanvas)) return;
         _select!.onPointerDown(
           localPos, vp, p.width, p.height,
           isOnCanvas: isOnCanvas,
@@ -277,6 +287,7 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
     // ── Touch ──────────────────────────────────────────────────────────────
     if (mode == DrawingMode.select) {
+      if (_tryStartDragToPaste(localPos, vp, p.width, p.height, isOnCanvas)) return;
       _select!.onPointerDown(
         localPos, vp, p.width, p.height,
         isOnCanvas: isOnCanvas,
@@ -359,6 +370,28 @@ class EditController implements CanvasEditController, ShortcutHandler {
 
     _draw!.onPointerUp();
 
+    // Drag-to-move: commit the paste and erase the source region atomically
+    // so the operation undoes as a single step.
+    if (_dragToPasteActive) {
+      _dragToPasteActive = false;
+      final sourceRect = _dragMoveSourceRect;
+      _dragMoveSourceRect = null;
+      if (state.editSession.drawingMode == DrawingMode.paste) {
+        final origin = _paste!.pasteOrigin;
+        final clipboard = state.editSession.clipboard;
+        if (origin != null && clipboard != null) {
+          final (dx, dy) = _paste!.effectiveOffset(origin, clipboard, state.pattern);
+          _withSnapshot(() {
+            if (sourceRect != null) _notifier.deleteStitchesInRect(sourceRect);
+            _notifier.commitPaste(dx, dy);
+          });
+          _paste!.clearOrigin();
+          if (!_paste!.ctrlHeld) _notifier.cancelSelection();
+        }
+      }
+      return;
+    }
+
     // Touch paste — commit at current origin.
     if (kind == PointerDeviceKind.touch &&
         state.editSession.drawingMode == DrawingMode.paste &&
@@ -440,6 +473,27 @@ class EditController implements CanvasEditController, ShortcutHandler {
   @override
   void cancelActiveGestures() {
     _select?.cancel();
+    _dragToPasteActive = false;
+    _dragMoveSourceRect = null;
+  }
+
+  /// If [localPos] is inside the existing selection rect, copies the selection
+  /// into the clipboard synchronously, enters paste mode, and sets the paste
+  /// origin so the ghost follows the pointer. Returns true when the drag-to-paste
+  /// gesture was initiated and the caller should skip the normal rubber-band path.
+  bool _tryStartDragToPaste(
+    Offset localPos, CanvasViewport vp, int patW, int patH, bool isOnCanvas,
+  ) {
+    if (!isOnCanvas) return false;
+    final selRect = _getState().editSession.selectionRect;
+    if (selRect == null) return false;
+    final cell = SelectHandler.toSelCell(localPos, vp, patW, patH);
+    if (!SelectHandler.cellInSelRect(cell.dx.toInt(), cell.dy.toInt(), selRect)) return false;
+    if (!_notifier.copySelectionForDrag()) return false;
+    _dragMoveSourceRect = selRect;
+    _paste!.setOrigin(localPos, vp);
+    _dragToPasteActive = true;
+    return true;
   }
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────

@@ -253,7 +253,13 @@ mixin _DrawingMethods {
     for (final stitch in stitches) {
       final thread = threadMap[stitch.threadId];
       if (thread == null) continue;
-      _drawSingleStitch(canvas, stitch, thread.color);
+      final shape = RenderCache.buildBlockShape(stitch, cellSize);
+      if (shape != null) {
+        shape.draw(canvas, Paint()..color = thread.color);
+      } else {
+        // BackStitch — no block shape, fall back to line rendering.
+        _drawSingleStitch(canvas, stitch, thread.color);
+      }
     }
     canvas.restore();
   }
