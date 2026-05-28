@@ -1,12 +1,8 @@
-// Tests for copySelectionForDrag, deleteStitchesInRect, and drag-to-move.
-//
-// These tests FAIL TO COMPILE on main — they target methods added in the
-// fix/canvas-refresh-bugs branch. Once that PR merges all tests should pass.
-
 import 'package:flutter/widgets.dart' show Rect;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stitches/models/pattern.dart';
 import 'package:stitches/models/stitch/stitch.dart';
 import 'package:stitches/providers/editor/editor_provider.dart';
 import 'package:stitches/providers/settings_provider.dart';
@@ -153,17 +149,17 @@ void main() {
     });
 
     test('clips stitches that would land outside pattern bounds', () {
-      // Pattern is 20×20. Stitch at (0,0); paste at (18,18) → (18,18) in bounds.
-      // A second stitch at (2,0) → offset (2,0) + (18,18) = (20,18) out of bounds.
+      // Pattern is 30×30 (default). Stitch at (0,0); paste at (28,28) → (28,28) in bounds.
+      // A second stitch at (2,0) → offset (2,0) + (28,28) = (30,28) out of bounds.
       _n(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
       _n(c).addStitch(const FullStitch(x: 2, y: 0, threadId: '310'));
       _n(c).setSelectionRect(const Rect.fromLTWH(0, 0, 5, 5));
       _n(c).copySelectionForDrag();
-      _n(c).commitPaste(18, 18);
+      _n(c).commitPaste(28, 28);
       final stitches = _s(c).pattern.stitches.whereType<FullStitch>();
-      expect(stitches.any((s) => s.x == 18 && s.y == 18), isTrue);
-      expect(stitches.any((s) => s.x == 20), isFalse,
-          reason: 'stitch at x=20 is out of bounds and must be dropped');
+      expect(stitches.any((s) => s.x == 28 && s.y == 28), isTrue);
+      expect(stitches.any((s) => s.x == 30), isFalse,
+          reason: 'stitch at x=30 is out of bounds and must be dropped');
     });
 
     test('replaces existing stitch at destination cell', () {
@@ -272,10 +268,11 @@ void main() {
       expect(stitches.whereType<HalfCrossStitch>().any((s) => s.y == 5), isTrue);
       expect(stitches.whereType<ThreeQuarterStitch>().any((s) => s.y == 5), isTrue);
       // Nothing left at y=0.
-      expect(stitches.where((s) {
-        final c = s.cellCoords;
-        return c != null && c.y == 0;
-      }), isEmpty);
+      expect(stitches.whereType<FullStitch>().any((s) => s.y == 0), isFalse);
+      expect(stitches.whereType<HalfStitch>().any((s) => s.y == 0), isFalse);
+      expect(stitches.whereType<QuarterStitch>().any((s) => s.y == 0), isFalse);
+      expect(stitches.whereType<HalfCrossStitch>().any((s) => s.y == 0), isFalse);
+      expect(stitches.whereType<ThreeQuarterStitch>().any((s) => s.y == 0), isFalse);
     });
   });
 }
