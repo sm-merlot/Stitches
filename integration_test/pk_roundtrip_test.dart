@@ -46,9 +46,9 @@ Map<(int, int), String> _scanStitchMap(dynamic result) => {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  setUpAll(() {
-    Pdfrx.getCacheDirectory = () async =>
-        Directory.systemTemp.createTemp('pdfrx_cache').then((d) => d.path);
+  setUpAll(() async {
+    Pdfrx.cacheDirectoryPath =
+        (await Directory.systemTemp.createTemp('pdfrx_cache')).path;
   });
 
   final stitchesPath = testFixturePath('sm_test.stitches');

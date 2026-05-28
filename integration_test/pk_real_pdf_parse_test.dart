@@ -26,9 +26,9 @@ import 'package:stitches/services/pdf_pattern_keeper_parser.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  setUpAll(() {
-    Pdfrx.getCacheDirectory = () async =>
-        Directory.systemTemp.createTemp('pdfrx_cache').then((d) => d.path);
+  setUpAll(() async {
+    Pdfrx.cacheDirectoryPath =
+        (await Directory.systemTemp.createTemp('pdfrx_cache')).path;
   });
 
   group('PK parser — real-world PDFs', () {

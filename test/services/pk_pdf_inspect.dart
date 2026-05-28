@@ -19,9 +19,9 @@ const kPdfPaths = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 void main() {
-  setUpAll(() {
-    Pdfrx.getCacheDirectory = () async =>
-        Directory.systemTemp.createTemp('pdfrx_cache').then((d) => d.path);
+  setUpAll(() async {
+    Pdfrx.cacheDirectoryPath =
+        (await Directory.systemTemp.createTemp('pdfrx_cache')).path;
   });
 
   for (final path in kPdfPaths) {

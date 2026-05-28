@@ -50,8 +50,7 @@ void main(List<String> args) async {
     WidgetsFlutterBinding.ensureInitialized();
 
     // pdfrx requires a cache directory before opening any document.
-    Pdfrx.getCacheDirectory = () async =>
-        (await getTemporaryDirectory()).path;
+    Pdfrx.cacheDirectoryPath = (await getTemporaryDirectory()).path;
 
     if (inspectIdx >= 0 && inspectIdx + 1 < args.length) {
       await _cliInspectPdf(args[inspectIdx + 1]);
