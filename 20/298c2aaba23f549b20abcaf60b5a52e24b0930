@@ -1,0 +1,35 @@
+lib/providers/editor/editor_provider_selection.dart
+  s_bc90d40685901b::t_a96e9d7b3c9302 119-174
+lib/utils/controllers/snippet_edit_controller.dart
+  s_bc90d40685901b::t_25db832c782107 232
+  s_bc90d40685901b::t_1dab6a66b5401d 255
+  s_bc90d40685901b::t_9df94f7c7b81d4 75-77
+  s_bc90d40685901b::t_681d061ee15fe3 338-347
+  s_bc90d40685901b::t_b026911da18b7d 192
+  s_bc90d40685901b::t_a6aa097f37525b 428-431,433-436,438-442
+  s_bc90d40685901b::t_b9fc71e6e586e0 432,437
+lib/utils/controllers/edit_controller.dart
+  s_bc90d40685901b::t_f2ab392a51d281 288
+  s_bc90d40685901b::t_ea91eaae67293d 265
+  s_bc90d40685901b::t_1cd338169a8058 463-470,472-475,477-481
+  s_bc90d40685901b::t_a8d222858918ea 97-102
+  s_bc90d40685901b::t_f1b4b9e828ffae 221
+  s_bc90d40685901b::t_03334cfa2267e6 371-381
+  s_bc90d40685901b::t_1bb9ec23439d70 471,476
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "20298c2aaba23f549b20abcaf60b5a52e24b0930",
+  "prompts": {},
+  "sessions": {
+    "s_bc90d40685901b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "489b59ec-a338-4ad4-ac22-7809275c6618",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>"
+    }
+  }
+}
