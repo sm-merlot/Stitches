@@ -1,0 +1,19 @@
+.changeset/deps-multi-wakelock-pkginfo-share-filepicker.md
+  s_0f06810fe59d54::t_1d74ea4986b9b3 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "be0a6afc7292ab1fee5d08cbee61e00760115d87",
+  "prompts": {},
+  "sessions": {
+    "s_0f06810fe59d54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3b4f308-c191-487b-b040-d532e0050fe1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "scme0 <scott.merchant@octopus.com>"
+    }
+  }
+}
