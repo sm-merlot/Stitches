@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -591,8 +592,9 @@ class EditorNotifier extends Notifier<EditorState>
       pattern: restored,
       snippetEditorState: state.snippetEditorState.copyWith(palettes: palettes),
       isDirty: true,
-      compositeLayer: StitchCompositor.computeComposite(restored),
+      compositeLayer: null,
     );
+    refreshCompositeCache();
   }
 
   /// Restores [progress] as the current progress without touching [progressLog].

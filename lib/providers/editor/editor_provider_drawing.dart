@@ -767,12 +767,12 @@ mixin DrawingMixin on Notifier<EditorState> {
     bool matches(int x, int y) => occupied[key(x, y)] == seedThreadId;
 
     final visited = <int>{};
-    final queue = <(int, int)>[(startX, startY)];
+    final queue = Queue<(int, int)>()..add((startX, startY));
     visited.add(key(startX, startY));
     final toChange = <(int, int)>[];
 
     while (queue.isNotEmpty) {
-      final (cx, cy) = queue.removeAt(0);
+      final (cx, cy) = queue.removeFirst();
       toChange.add((cx, cy));
       for (var dy = -1; dy <= 1; dy++) {
         for (var dx = -1; dx <= 1; dx++) {
@@ -872,8 +872,10 @@ mixin DrawingMixin on Notifier<EditorState> {
 
     state = state.copyWith(
       pattern: newPattern,
+      compositeLayer: null,
       isDirty: true,
     );
+    refreshCompositeCache();
   }
 
   /// Resizes the current pattern using snippet resize semantics (clip / scale /
@@ -954,8 +956,10 @@ mixin DrawingMixin on Notifier<EditorState> {
         old.copyWith(width: newW, height: newH),
         (_) => newStitches,
       ),
+      compositeLayer: null,
       isDirty: true,
     );
+    refreshCompositeCache();
   }
 
   // ─── Colour mode (stitch mode: B&W vs colour) ──────────────────────────────
