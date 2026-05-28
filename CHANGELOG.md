@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.13.0
+
+### Minor Changes
+
+- ec953dd: Drag from selection to copy-stamp stitches in edit mode
+
+  In select mode, clicking inside an existing rubber-band selection and dragging now copies the selected stitches into the clipboard, enters paste mode, and shows a ghost that follows the pointer. Releasing stamps the stitches at the current position. Respects the layer/canvas toggle in the select toolbar. Works in both the main editor and snippet editor.
+
+### Patch Changes
+
+- 050e658: chore(deps): bump googleapis_auth from 2.3.0 to 2.3.1
+- 1f6b5f6: chore(deps): bump wakelock_plus, package_info_plus, share_plus and file_picker
+- 66e8338: chore(deps): bump pdfrx from 2.2.24 to 2.4.1
+- ec953dd: Fix canvas not refreshing after flood fill, resize, and undo
+
+  - Flood fill BFS: replace `List.removeAt(0)` (O(n)) with `Queue.removeFirst()` (O(1)), eliminating the main-thread freeze that blocked vsync delivery on large patterns
+  - `resizePattern` / `resizeEditorPatternAsSnippet`: were updating `pattern` but not `compositeLayer`, so the canvas rebuilt from the stale composite showing stitches at wrong positions; now clears composite and calls `refreshCompositeCache()`
+  - `applyPatternSnapshot` (used by undo/redo for paste and flood fill): was computing composite inline without `refreshCompositeCache()`, leaving `pattern.compositeSymbols` stale; now does a full cache refresh so the canvas correctly reflects the restored state
+
+- 9a03f03: fix: update pdfrx cache directory API after bump to 2.4.x
+
 ## 0.12.1
 
 ### Patch Changes
