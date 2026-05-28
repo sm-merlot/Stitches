@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.1
+
+### Patch Changes
+
+- 8ec28d4: fix(ios): bump minimum iOS deployment target to 14.0 for file_picker compatibility
+
 ## 0.13.0
 
 ### Minor Changes
