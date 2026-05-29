@@ -15,7 +15,8 @@ env:
 jobs:
   analyze:
     if: github.event.issue.pull_request != null && contains(github.event.comment.body, '/ci') && github.event.comment.user.login == 'scme0'
-    runs-on: ubuntu-latest
+    runs-on: home-k8s
+    container: scottyjoe9/stitches-ci:latest
 
     steps:
       - name: Get PR head SHA
@@ -40,12 +41,6 @@ jobs:
 
       - name: Check debug markers
         run: bash scripts/check-debug-markers.sh
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.4'
-          channel: stable
-          cache: true
 
       - name: Install dependencies
         run: flutter pub get

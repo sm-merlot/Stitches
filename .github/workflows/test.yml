@@ -36,7 +36,8 @@ jobs:
     if: |
       always() &&
       (github.event_name == 'workflow_dispatch' || needs.pr-context.result == 'success')
-    runs-on: ubuntu-latest
+    runs-on: home-k8s
+    container: scottyjoe9/stitches-ci:latest
     steps:
       - name: Set status pending
         if: needs.pr-context.outputs.sha != ''
@@ -58,11 +59,6 @@ jobs:
           path: test-fixtures
       - name: Write placeholder secrets
         run: cp secrets.json.example secrets.json
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.41.4"
-          channel: stable
-          cache: true
       - run: flutter pub get
       - name: Run unit and widget tests
         run: flutter test --reporter=expanded
@@ -91,7 +87,8 @@ jobs:
     if: |
       always() &&
       (github.event_name == 'workflow_dispatch' || needs.pr-context.result == 'success')
-    runs-on: ubuntu-latest
+    runs-on: home-k8s
+    container: scottyjoe9/stitches-ci:latest
     timeout-minutes: 10
     steps:
       - name: Set status pending
@@ -114,23 +111,9 @@ jobs:
           path: test-fixtures
       - name: Write placeholder secrets
         run: cp secrets.json.example secrets.json
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.41.4"
-          channel: stable
-          cache: true
-      - name: Install Linux desktop dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends \
-            clang cmake ninja-build pkg-config \
-            libgtk-3-dev libblkid-dev liblzma-dev \
-            xvfb
       - run: flutter pub get
-      - name: Enable Linux desktop and scaffold platform
-        run: |
-          flutter config --enable-linux-desktop
-          flutter create --platforms=linux .
+      - name: Scaffold Linux platform
+        run: flutter create --platforms=linux .
       - name: PK parser — real-world PDFs
         run: xvfb-run flutter test integration_test/pk_real_pdf_parse_test.dart -d linux --no-pub --reporter=expanded
       - name: PK PDF roundtrip
