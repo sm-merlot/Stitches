@@ -54,7 +54,7 @@ jobs:
       - name: Checkout private test fixtures
         uses: actions/checkout@v4
         with:
-          repository: scme0/stitches-test-fixtures
+          repository: sm-merlot/stitches-test-fixtures
           token: ${{ secrets.FIXTURES_TOKEN }}
           path: test-fixtures
       - name: Write placeholder secrets
@@ -106,7 +106,7 @@ jobs:
       - name: Checkout private test fixtures
         uses: actions/checkout@v4
         with:
-          repository: scme0/stitches-test-fixtures
+          repository: sm-merlot/stitches-test-fixtures
           token: ${{ secrets.FIXTURES_TOKEN }}
           path: test-fixtures
       - name: Write placeholder secrets
