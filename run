@@ -23,6 +23,7 @@
 #   test-planner     Run only the stitch planner tests
 #   ci [--fast-fail] Run full CI suite locally (analyze + unit tests + integration tests);
 #                      --fast-fail stops immediately on first failure
+#                      On Linux: uses -d linux + xvfb-run (use scottyjoe9/stitches-ci image)
 #   clean            Delete build artefacts
 #   help             Show this message
 
@@ -188,6 +189,16 @@ case "$cmd" in
 
     failures=()
 
+    # On Linux use the linux device + xvfb for headless integration tests.
+    # On macOS use the native macos device.
+    if [[ "$(uname)" == "Linux" ]]; then
+      INTEGRATION_DEVICE=linux
+      XVFB=(xvfb-run)
+    else
+      INTEGRATION_DEVICE=macos
+      XVFB=()
+    fi
+
     run_step() {
       local label="$1"; shift
       if ! ci_step "$label" "$@"; then
@@ -205,8 +216,11 @@ case "$cmd" in
     run_step "pub get"          $FLUTTER pub get
     run_step "analyze"          $FLUTTER analyze --fatal-warnings
     run_step "unit tests"       $FLUTTER test --reporter=expanded
-    run_step "PK PDF parse"     $FLUTTER test integration_test/pk_real_pdf_parse_test.dart -d macos --no-pub --reporter=expanded
-    run_step "PK PDF roundtrip" $FLUTTER test integration_test/pk_roundtrip_test.dart      -d macos --no-pub --reporter=expanded
+    # Scaffold the Linux platform directory if missing (required for -d linux).
+    [[ "$INTEGRATION_DEVICE" == "linux" && ! -d linux ]] && \
+      run_step "linux scaffold" $FLUTTER create --platforms=linux .
+    run_step "PK PDF parse"     "${XVFB[@]}" $FLUTTER test integration_test/pk_real_pdf_parse_test.dart -d "$INTEGRATION_DEVICE" --no-pub --reporter=expanded
+    run_step "PK PDF roundtrip" "${XVFB[@]}" $FLUTTER test integration_test/pk_roundtrip_test.dart      -d "$INTEGRATION_DEVICE" --no-pub --reporter=expanded
 
     printf "\n${BOLD}────────────────────────────────${RESET}\n"
     if [[ ${#failures[@]} -eq 0 ]]; then
