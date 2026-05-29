@@ -36,7 +36,7 @@ jobs:
     if: |
       always() &&
       (github.event_name == 'workflow_dispatch' || needs.pr-context.result == 'success')
-    runs-on: home-k8s
+    runs-on: homelab
     container: scottyjoe9/stitches-ci:latest
     steps:
       - name: Set status pending
@@ -87,7 +87,7 @@ jobs:
     if: |
       always() &&
       (github.event_name == 'workflow_dispatch' || needs.pr-context.result == 'success')
-    runs-on: home-k8s
+    runs-on: homelab
     container: scottyjoe9/stitches-ci:latest
     timeout-minutes: 10
     steps:
