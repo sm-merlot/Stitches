@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../models/snippet/snippet.dart';
+import '../../models/snippet/snippet_palette_resolver.dart';
 import '../../models/thread.dart';
 import '../../providers/editor/editor_provider.dart';
 import '../../screens/snippet_editor_screen.dart';
@@ -171,6 +173,33 @@ class SnippetsPanel extends ConsumerWidget {
                 _showResize(context, ref, snippet);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('Duplicate'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                ref.read(editorProvider.notifier).addSnippet(
+                  Snippet(
+                    id: const Uuid().v4(),
+                    name: '${snippet.name} copy',
+                    width: snippet.width,
+                    height: snippet.height,
+                    stitches: snippet.stitches,
+                    palettes: snippet.palettes,
+                    activePaletteIndex: snippet.activePaletteIndex,
+                  ),
+                );
+              },
+            ),
+            if (snippet.palettes.length > 1)
+              ListTile(
+                leading: const Icon(Icons.layers_clear_outlined),
+                title: const Text('Flatten to active palette'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _flattenSnippet(context, ref, snippet);
+                },
+              ),
             const Divider(height: 1),
             ListTile(
               leading: Icon(Icons.delete_outline,
@@ -184,6 +213,27 @@ class SnippetsPanel extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _flattenSnippet(BuildContext context, WidgetRef ref, Snippet snippet) {
+    final activeIdx =
+        snippet.activePaletteIndex.clamp(0, snippet.palettes.length - 1);
+    final activePalette = snippet.palettes[activeIdx];
+    final remapped = snippet.stitches.map((s) {
+      final resolved = resolveThread(snippet, s.threadId);
+      return EditorState.remapStitchThread(s, resolved.dmcCode);
+    }).toList();
+    ref.read(editorProvider.notifier).addSnippet(
+      Snippet(
+        id: const Uuid().v4(),
+        name: '${snippet.name} (flat)',
+        width: snippet.width,
+        height: snippet.height,
+        stitches: remapped,
+        palettes: [activePalette],
+        activePaletteIndex: 0,
       ),
     );
   }
