@@ -263,16 +263,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               if (context.mounted) showSuccess(context, 'Saved');
             }
           } else {
+            final yaml = FileService.toYamlString(sharePattern);
+            final effectiveCompress = kDebugMode ? state.compressOnSave : true;
+            final bytes = Uint8List.fromList(effectiveCompress
+                ? gzip.encode(utf8.encode(yaml))
+                : utf8.encode(yaml));
             final path = await FilePicker.saveFile(
-              fileName: suggested,
+              fileName: '$suggested.stitches',
               type: FileType.custom,
               allowedExtensions: ['stitches'],
               initialDirectory: initialDir,
+              bytes: bytes,
             );
             if (path == null) return;
             final finalPath = path.endsWith('.stitches') ? path : '$path.stitches';
-            await FileService.saveFile(sharePattern, finalPath,
-                compress: state.compressOnSave);
             ref.read(editorProvider.notifier).setFilePath(finalPath);
             ref.read(editorProvider.notifier).markSaved();
             if (context.mounted) {
@@ -288,16 +292,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             if (context.mounted) showSuccess(context, 'Exported $suggested.oxs');
           } else {
             final path = await FilePicker.saveFile(
-              fileName: suggested,
+              fileName: '$suggested.oxs',
               type: FileType.custom,
               allowedExtensions: ['oxs'],
               initialDirectory: initialDir,
+              bytes: bytes,
             );
             if (path == null) return;
-            final finalPath = path.endsWith('.oxs') ? path : '$path.oxs';
-            await FormatService.exportFile(state.pattern, finalPath, CrossStitchFormat.oxs);
             if (context.mounted) {
-              showSuccess(context, 'Exported ${finalPath.split(Platform.pathSeparator).last}');
+              showSuccess(context, 'Exported ${path.split(Platform.pathSeparator).last}');
             }
           }
         case ShareFormat.pdf:
@@ -321,25 +324,28 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             }
           } else {
             final path = await FilePicker.saveFile(
-              fileName: suggested,
+              fileName: '$suggested.pdf',
               type: FileType.custom,
               allowedExtensions: ['pdf'],
               initialDirectory: initialDir,
+              bytes: bytes,
             );
             if (path == null) return;
-            final finalPath = path.endsWith('.pdf') ? path : '$path.pdf';
-            await File(finalPath).writeAsBytes(bytes);
             if (context.mounted) {
-              showSuccess(context, 'Exported ${finalPath.split(Platform.pathSeparator).last}');
+              showSuccess(context, 'Exported ${path.split(Platform.pathSeparator).last}');
             }
             if (result.patternKeeperPdf && context.mounted) {
               final pkBytes = await PdfService.buildPdfBytes(state.pattern,
                   useDmc: ref.read(settingsProvider).useDmc,
                   patternKeeperMode: true);
-              final pkPath = finalPath.replaceFirst(RegExp(r'\.pdf$'), '_PatternKeeper.pdf');
-              await File(pkPath).writeAsBytes(pkBytes);
               if (context.mounted) {
-                showSuccess(context, 'Also saved ${pkPath.split(Platform.pathSeparator).last}');
+                await FilePicker.saveFile(
+                  fileName: '${suggested}_PatternKeeper.pdf',
+                  type: FileType.custom,
+                  allowedExtensions: ['pdf'],
+                  bytes: pkBytes,
+                );
+                if (context.mounted) showSuccess(context, 'Exported PatternKeeper PDF');
               }
             }
           }
@@ -353,16 +359,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             if (context.mounted) showSuccess(context, 'Exported $suggested.png');
           } else {
             final path = await FilePicker.saveFile(
-              fileName: suggested,
+              fileName: '$suggested.png',
               type: FileType.custom,
               allowedExtensions: ['png'],
               initialDirectory: initialDir,
+              bytes: bytes,
             );
             if (path == null) return;
-            final finalPath = path.endsWith('.png') ? path : '$path.png';
-            await File(finalPath).writeAsBytes(bytes);
             if (context.mounted) {
-              showSuccess(context, 'Exported ${finalPath.split(Platform.pathSeparator).last}');
+              showSuccess(context, 'Exported ${path.split(Platform.pathSeparator).last}');
             }
           }
       }
