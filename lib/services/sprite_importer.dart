@@ -501,6 +501,22 @@ class SpriteImporter {
     final stitches = _importRegionRestrictedFromRaw(
         image, x, y, w, h, dedupRaw, dedupPrimary);
 
+    // Build source palette from deduplicated raw strip colours.
+    // Stored as read-only reference — never used for stitch rendering.
+    final sourceThreads = [
+      for (int i = 0; i < dedupRaw.length; i++)
+        Thread(
+          dmcCode: '#${(dedupRaw[i].toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+          color: dedupRaw[i],
+          name: 'Source ${i + 1}',
+          symbol: '',
+        ),
+    ];
+    final sourcePalette = SnippetPalette.create(
+      name: 'Source',
+      threads: sourceThreads,
+    );
+
     final palettes = <SnippetPalette>[
       SnippetPalette.create(name: 'Palette 1', threads: dedupPrimary),
     ];
@@ -526,6 +542,7 @@ class SpriteImporter {
       height: h.clamp(1, image.height),
       stitches: stitches,
       palettes: palettes,
+      sourcePalette: sourcePalette,
     );
   }
 
