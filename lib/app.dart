@@ -22,6 +22,7 @@ class StitchesApp extends ConsumerStatefulWidget {
 }
 
 class _StitchesAppState extends ConsumerState<StitchesApp>
+    with WidgetsBindingObserver
     implements ShortcutHandler {
   /// Used by [_openSettings] to push settings onto the navigator from
   /// anywhere — including the macOS menu bar callback.
@@ -30,6 +31,7 @@ class _StitchesAppState extends ConsumerState<StitchesApp>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Register at the bottom of the stack so mode-specific handlers take
     // priority and can consume events before this global handler fires.
     ShortcutRouter.instance.push(this);
@@ -37,8 +39,30 @@ class _StitchesAppState extends ConsumerState<StitchesApp>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     ShortcutRouter.instance.pop(this);
     super.dispose();
+  }
+
+  /// Triggered when the app returns to the foreground (including device unlock).
+  /// Re-downloads the open Drive file if it hasn't been locally edited so that
+  /// progress marked on another device is reflected without a manual refresh.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final editor = ref.read(editorProvider);
+    final fileId = editor.driveFileId;
+    final parentFolderId = editor.driveParentFolderId;
+    final tempPath = editor.filePath;
+    if (fileId != null && parentFolderId != null && tempPath != null &&
+        !editor.isDirty) {
+      refreshDrivePatternInBackground(
+        ref,
+        fileId: fileId,
+        parentFolderId: parentFolderId,
+        tempPath: tempPath,
+      );
+    }
   }
 
   @override
