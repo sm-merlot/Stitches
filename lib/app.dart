@@ -22,7 +22,8 @@ class StitchesApp extends ConsumerStatefulWidget {
 }
 
 class _StitchesAppState extends ConsumerState<StitchesApp>
-    implements ShortcutHandler, WidgetsBindingObserver {
+    with WidgetsBindingObserver
+    implements ShortcutHandler {
   /// Used by [_openSettings] to push settings onto the navigator from
   /// anywhere — including the macOS menu bar callback.
   final _navigatorKey = GlobalKey<NavigatorState>();
