@@ -81,6 +81,7 @@ class _ResizeCanvasDialogState extends State<ResizeCanvasDialog> {
                   Expanded(
                     child: TextFormField(
                       controller: _widthCtrl,
+                      autofocus: true,
                       decoration: const InputDecoration(
                         labelText: 'Width (cells)',
                         border: OutlineInputBorder(),
