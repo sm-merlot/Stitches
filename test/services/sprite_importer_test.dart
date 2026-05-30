@@ -5,6 +5,7 @@
 /// the `image` package (already a direct dependency).
 library;
 
+import 'package:flutter/material.dart' show Color, Rect;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
@@ -107,6 +108,53 @@ void main() {
       final result = SpriteImporter.importRegion(image, 0, 0, 2, 2,
           mergeThreshold: 0);
       expect(result.threads.length, greaterThanOrEqualTo(2));
+    });
+  });
+
+  // ─── importRegionWithPalettes ─────────────────────────────────────────────
+
+  group('SpriteImporter.importRegionWithPalettes', () {
+    img.Image solid(int r, int g, int b, {int w = 2, int h = 2}) {
+      final image = img.Image(width: w, height: h, numChannels: 4);
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          image.setPixelRgba(x, y, r, g, b, 255);
+        }
+      }
+      return image;
+    }
+
+    test('duplicate DMC codes in primary strip are deduplicated', () async {
+      // Two identical colours in the primary strip → same DMC code → duplicate slot.
+      const black = Color(0xFF000000);
+      final snippet = await SpriteImporter.importRegionWithPalettes(
+        image: solid(0, 0, 0),
+        region: const Rect.fromLTWH(0, 0, 2, 2),
+        name: 'test',
+        paletteStrips: [[black, black]],
+      );
+      final codes = snippet.palettes.first.threads.map((t) => t.dmcCode).toList();
+      expect(codes.length, equals(codes.toSet().length),
+          reason: 'primary palette must not contain duplicate DMC codes');
+    });
+
+    test('secondary palette slot count matches deduplicated primary', () async {
+      // Two identical primary colours collapse to one slot; secondary must also have one.
+      const black = Color(0xFF000000);
+      const red = Color(0xFFCC0000);
+      final snippet = await SpriteImporter.importRegionWithPalettes(
+        image: solid(0, 0, 0),
+        region: const Rect.fromLTWH(0, 0, 2, 2),
+        name: 'test',
+        paletteStrips: [
+          [black, black],  // primary: 2 entries → deduplicated to 1
+          [red,   red],    // secondary: must also end up with 1 slot
+        ],
+      );
+      expect(snippet.palettes, hasLength(2));
+      expect(snippet.palettes[1].threads.length,
+          equals(snippet.palettes[0].threads.length),
+          reason: 'secondary palette must be positionally aligned with deduplicated primary');
     });
   });
 }
