@@ -218,7 +218,11 @@ mixin DrawingMixin on Notifier<EditorState> {
       selectedThreadId:
           state.selectedThreadId == oldDmcCode ? newDmcCode : state.selectedThreadId,
       isDirty: true,
+      // Invalidate the composite cache so the canvas immediately repaints with
+      // the new thread colour rather than serving stale Thread objects.
+      compositeLayer: null,
     );
+    refreshCompositeCache();
   }
 
   /// Replaces every stitch using [oldDmcCode] with [newDmcCode] within a
