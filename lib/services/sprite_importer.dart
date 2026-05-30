@@ -476,22 +476,45 @@ class SpriteImporter {
       );
     }
 
-    // Import crop pixels: match against raw strip colours for accuracy,
-    // then assign the corresponding DMC thread code.
+    // Deduplicate the primary palette by DMC code (first occurrence wins).
+    //
+    // When two raw strip colours match the same DMC code, keeping both would
+    // create a duplicate slot. The snippet editor later loads threads into a
+    // Map<String,Thread> (keyed by dmcCode), silently dropping the duplicate
+    // entry — but the secondary palettes, built with the original slot count,
+    // retain the extra slot and become misaligned: slot N in each secondary
+    // maps to the wrong primary colour.
+    //
+    // Tracking which original indices were kept lets us apply the same
+    // deduplication to every secondary strip so all palettes stay aligned.
+    final seenCodes = <String>{};
+    final keptIndices = <int>[];
+    for (int i = 0; i < primaryThreads.length; i++) {
+      if (seenCodes.add(primaryThreads[i].dmcCode)) keptIndices.add(i);
+    }
+    final dedupPrimary = [for (final i in keptIndices) primaryThreads[i]];
+    // Parallel raw colours for pixel matching — same deduplication applied.
+    final dedupRaw = [for (final i in keptIndices) paletteStrips[0][i]];
+
+    // Import crop pixels: match against deduplicated raw strip colours for
+    // accuracy, then assign the corresponding DMC thread code.
     final stitches = _importRegionRestrictedFromRaw(
-        image, x, y, w, h, paletteStrips[0], primaryThreads);
+        image, x, y, w, h, dedupRaw, dedupPrimary);
 
     final palettes = <SnippetPalette>[
-      SnippetPalette.create(name: 'Palette 1', threads: primaryThreads),
+      SnippetPalette.create(name: 'Palette 1', threads: dedupPrimary),
     ];
 
-    // Build subsequent palettes using positional slot mapping.
-    final slotCount = primaryThreads.length;
+    // Build subsequent palettes using the same positional deduplication so
+    // secondary slot j maps to the same original strip index as primary slot j.
     for (int i = 1; i < paletteStrips.length; i++) {
       final stripThreads = _dmcMatchStrip(paletteStrips[i]);
-      // Pad or truncate to match primary slot count.
-      final threads = List<Thread>.generate(slotCount, (j) =>
-        j < stripThreads.length ? stripThreads[j] : primaryThreads[j]);
+      final threads = List<Thread>.generate(dedupPrimary.length, (j) {
+        final origIdx = keptIndices[j];
+        return origIdx < stripThreads.length
+            ? stripThreads[origIdx]
+            : dedupPrimary[j];
+      });
       palettes.add(SnippetPalette.create(
           name: 'Palette ${i + 1}', threads: threads));
     }
