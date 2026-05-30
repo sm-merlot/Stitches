@@ -62,7 +62,7 @@ jobs:
   # For Play Store distribution, add a keystore via secrets and pass
   # --dart-define or a key.properties file.
   build-android:
-    runs-on: ubuntu-latest
+    runs-on: homelab
     steps:
       - uses: actions/checkout@v4
 
@@ -134,7 +134,7 @@ jobs:
   # ── GitHub Release ────────────────────────────────────────────────────────
   publish:
     needs: [build-macos-arm64, build-android, build-windows]
-    runs-on: ubuntu-latest
+    runs-on: homelab
 
     steps:
       - uses: actions/checkout@v4

@@ -8,7 +8,7 @@ on:
 jobs:
   add-changeset:
     if: github.event.issue.pull_request != null && contains(github.event.comment.body, '/changeset') && github.event.comment.user.login == 'scme0'
-    runs-on: ubuntu-latest
+    runs-on: homelab
     permissions:
       contents: write
 
