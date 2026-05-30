@@ -255,6 +255,28 @@ void main() {
       expect(editorState(c).canRedo, isTrue);
       expect(editorState(c).canUndo, isFalse);
     });
+
+    test('undo restores displaced stitch when new stitch is a different type', () {
+      const half = HalfStitch(x: 1, y: 1, isForward: true, threadId: '310');
+      // Place a HalfStitch.
+      um.execute(AddStitchCommand(
+        notifier: notifier(c),
+        stitch: half,
+        overwritten: [],
+      ));
+      // Place a FullStitch over it — HalfStitch is the displaced stitch.
+      um.execute(AddStitchCommand(
+        notifier: notifier(c),
+        stitch: const FullStitch(x: 1, y: 1, threadId: '310'),
+        overwritten: [half],
+      ));
+      expect(editorState(c).pattern.stitches.whereType<FullStitch>(), hasLength(1));
+      expect(editorState(c).pattern.stitches.whereType<HalfStitch>(), isEmpty);
+
+      notifier(c).undo();
+      expect(editorState(c).pattern.stitches.whereType<FullStitch>(), isEmpty);
+      expect(editorState(c).pattern.stitches.whereType<HalfStitch>(), hasLength(1));
+    });
   });
 
   // ─── Layers ───────────────────────────────────────────────────────────────────
