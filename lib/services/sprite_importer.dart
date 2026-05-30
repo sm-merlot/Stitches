@@ -476,23 +476,26 @@ class SpriteImporter {
       );
     }
 
-    // Deduplicate the primary palette by DMC code (first occurrence wins).
+    // Deduplicate by raw colour hex (identical raw pixels only).
     //
-    // When two raw strip colours match the same DMC code, keeping both would
-    // create a duplicate slot. The snippet editor later loads threads into a
-    // Map<String,Thread> (keyed by dmcCode), silently dropping the duplicate
-    // entry — but the secondary palettes, built with the original slot count,
-    // retain the extra slot and become misaligned: slot N in each secondary
-    // maps to the wrong primary colour.
-    //
-    // Tracking which original indices were kept lets us apply the same
-    // deduplication to every secondary strip so all palettes stay aligned.
-    final seenCodes = <String>{};
+    // Previous behaviour deduplicated by DMC code, which wrongly collapsed
+    // two visually distinct raw colours that happened to match the same DMC
+    // thread — discarding the second slot's data from all secondary palettes.
+    // Deduplicating by raw colour preserves all distinct source positions:
+    // secondary palettes can independently assign different DMC codes to each
+    // slot, and the source palette accurately reflects every original colour.
+    final seenHex = <String>{};
     final keptIndices = <int>[];
-    for (int i = 0; i < primaryThreads.length; i++) {
-      if (seenCodes.add(primaryThreads[i].dmcCode)) keptIndices.add(i);
+    for (int i = 0; i < paletteStrips[0].length; i++) {
+      if (seenHex.add(_colorHex(paletteStrips[0][i]))) keptIndices.add(i);
     }
-    final dedupPrimary = [for (final i in keptIndices) primaryThreads[i]];
+    // Assign a stable slot ID to each kept position.  Stitches use this ID as
+    // their threadId so two slots with the same DMC code stay independently
+    // addressable in the pattern-threads Map.
+    final dedupPrimary = [
+      for (int j = 0; j < keptIndices.length; j++)
+        primaryThreads[keptIndices[j]].copyWith(slotId: 'slot:$j'),
+    ];
     // Parallel raw colours for pixel matching — same deduplication applied.
     final dedupRaw = [for (final i in keptIndices) paletteStrips[0][i]];
 
@@ -521,15 +524,17 @@ class SpriteImporter {
       SnippetPalette.create(name: 'Palette 1', threads: dedupPrimary),
     ];
 
-    // Build subsequent palettes using the same positional deduplication so
-    // secondary slot j maps to the same original strip index as primary slot j.
+    // Build subsequent palettes aligned by slot position. Each secondary strip
+    // assigns its own best DMC match independently; slotIds match the primary
+    // so resolveThread can address each slot unambiguously.
     for (int i = 1; i < paletteStrips.length; i++) {
       final stripThreads = _dmcMatchStrip(paletteStrips[i]);
       final threads = List<Thread>.generate(dedupPrimary.length, (j) {
         final origIdx = keptIndices[j];
-        return origIdx < stripThreads.length
+        final base = origIdx < stripThreads.length
             ? stripThreads[origIdx]
             : dedupPrimary[j];
+        return base.copyWith(slotId: 'slot:$j');
       });
       palettes.add(SnippetPalette.create(
           name: 'Palette ${i + 1}', threads: threads));
@@ -547,6 +552,9 @@ class SpriteImporter {
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  static String _colorHex(Color c) =>
+      '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
 
   /// Like [_importRegionRestricted] but matches crop pixels against [rawStripColors]
   /// (the original palette-strip pixel colours) rather than their DMC translations.
@@ -608,7 +616,7 @@ class SpriteImporter {
         if (best > dropThreshold || bestThread == null) continue;
 
         stitches.add(FullStitch(
-            x: px - x0, y: py - y0, threadId: bestThread.dmcCode));
+            x: px - x0, y: py - y0, threadId: bestThread.effectiveId));
       }
     }
 
