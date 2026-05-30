@@ -140,10 +140,14 @@ class EditController implements CanvasEditController, ShortcutHandler {
         final state = _getState();
         // Use stitchesAt (O(1)) instead of the stitches getter (O(N) alloc).
         final coords = stitch.cellCoords;
+        // Capture all stitches that would be displaced by the new stitch so
+        // undo can restore them.  Use stitchesOverlap (region-based) for cell
+        // stitches — s == stitch uses type-aware equality and would miss
+        // stitches of a different type (e.g. HalfStitch under a new FullStitch).
         final overwritten = coords != null
             ? state.activeLayer
                 .stitchesAt(coords.x, coords.y)
-                .where((s) => s == stitch)
+                .where((s) => stitchesOverlap(s, stitch))
                 .toList()
             : state.activeLayer.backstitches
                 .where((s) => s == stitch)
