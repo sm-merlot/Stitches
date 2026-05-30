@@ -402,14 +402,12 @@ class PdfService {
         bytes: bytes,
       );
     } else {
-      final path = await FilePicker.saveFile(
-        fileName: suggestedName,
+      await FilePicker.saveFile(
+        fileName: '$suggestedName.pdf',
         type: FileType.custom,
         allowedExtensions: ['pdf'],
+        bytes: bytes,
       );
-      if (path == null) return;
-      final finalPath = path.endsWith('.pdf') ? path : '$path.pdf';
-      await File(finalPath).writeAsBytes(bytes);
     }
   }
 

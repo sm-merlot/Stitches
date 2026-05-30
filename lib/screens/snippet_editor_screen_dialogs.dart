@@ -308,7 +308,7 @@ class _PaletteManagerSheetState extends ConsumerState<_PaletteManagerSheet> {
           child: ReorderableListView.builder(
             scrollController: widget.scrollController,
             itemCount: palettes.length,
-            onReorder: (oldIndex, newIndex) =>
+            onReorderItem: (oldIndex, newIndex) =>
                 notifier.reorderSnippetPaletteLocal(oldIndex, newIndex),
             itemBuilder: (context, index) {
               final palette = palettes[index];
