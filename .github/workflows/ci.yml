@@ -10,6 +10,8 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FLUTTER_VERSION: "3.41.4"
+  FLUTTER_HOME: /home/runner/flutter
 
 jobs:
   analyze:
@@ -21,10 +23,18 @@ jobs:
       - name: Check debug markers
         run: bash scripts/check-debug-markers.sh
 
-      - uses: subosito/flutter-action@v2
+      - uses: actions/cache@v4
+        id: flutter-cache
         with:
-          flutter-version: "3.41.4"
-          cache: true
+          path: ${{ env.FLUTTER_HOME }}
+          key: flutter-${{ env.FLUTTER_VERSION }}-linux-arm64
+
+      - name: Install Flutter
+        if: steps.flutter-cache.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch ${{ env.FLUTTER_VERSION }} https://github.com/flutter/flutter.git ${{ env.FLUTTER_HOME }}
+
+      - name: Add Flutter to PATH
+        run: echo "${{ env.FLUTTER_HOME }}/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: flutter pub get
