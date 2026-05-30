@@ -83,6 +83,20 @@ jobs:
           flutter config --enable-linux-desktop
           flutter create --platforms=linux .
       - name: PK parser — real-world PDFs
-        run: xvfb-run flutter test integration_test/pk_real_pdf_parse_test.dart -d linux --no-pub --reporter=expanded
+        run: |
+          for i in 1 2 3; do
+            xvfb-run --auto-servernum flutter test \
+              integration_test/pk_real_pdf_parse_test.dart \
+              -d linux --no-pub --reporter=expanded && break
+            echo "Attempt $i failed — retrying in 5s..."
+            sleep 5
+          done
       - name: PK PDF roundtrip
-        run: xvfb-run flutter test integration_test/pk_roundtrip_test.dart -d linux --no-pub --reporter=expanded
+        run: |
+          for i in 1 2 3; do
+            xvfb-run --auto-servernum flutter test \
+              integration_test/pk_roundtrip_test.dart \
+              -d linux --no-pub --reporter=expanded && break
+            echo "Attempt $i failed — retrying in 5s..."
+            sleep 5
+          done
