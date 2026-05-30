@@ -34,8 +34,17 @@ void showColorPicker(
       ),
     );
   } else {
+    // Capture the container before pushing so the new route inherits the
+    // caller's ProviderScope (critical when opened from the snippet editor,
+    // which runs its own scoped editorProvider).
+    final container = ProviderScope.containerOf(context);
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
+      MaterialPageRoute(
+        builder: (_) => UncontrolledProviderScope(
+          container: container,
+          child: screen,
+        ),
+      ),
     );
   }
 }
