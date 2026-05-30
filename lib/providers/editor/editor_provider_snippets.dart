@@ -333,8 +333,7 @@ mixin SnippetsMixin on Notifier<EditorState> {
     final palettes = [...state.snippetEditorState.palettes];
     if (oldIndex < 0 || oldIndex >= palettes.length) return;
     final palette = palettes.removeAt(oldIndex);
-    final insertIdx =
-        (newIndex > oldIndex ? newIndex - 1 : newIndex).clamp(0, palettes.length);
+    final insertIdx = newIndex.clamp(0, palettes.length);
     palettes.insert(insertIdx, palette);
     int newActive = state.snippetEditorState.activePaletteIndex;
     if (state.snippetEditorState.activePaletteIndex == oldIndex) {

@@ -178,15 +178,19 @@ class FileService {
       );
       return path; // null if user cancelled; path if platform returns one
     }
+    final bytes = await Isolate.run(() {
+      final yaml = toYamlString(pattern);
+      return effectiveCompress
+          ? Uint8List.fromList(gzip.encode(utf8.encode(yaml)))
+          : Uint8List.fromList(utf8.encode(yaml));
+    });
     final path = await FilePicker.saveFile(
-      fileName: suggestedName,
+      fileName: '$suggestedName.$_ext',
       type: FileType.custom,
       allowedExtensions: [_ext],
+      bytes: bytes,
     );
-    if (path == null) return null;
-    final finalPath = path.endsWith('.$_ext') ? path : '$path.$_ext';
-    await saveFile(pattern, finalPath, compress: effectiveCompress);
-    return finalPath;
+    return path;
   }
 
   // ─── Serialisation ───────────────────────────────────────────────────────

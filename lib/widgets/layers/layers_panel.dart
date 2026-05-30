@@ -137,7 +137,7 @@ class LayersPanelBody extends ConsumerWidget {
           Expanded(
             child: ReorderableListView.builder(
               buildDefaultDragHandles: false,
-              onReorder: (oldVisual, newVisual) {
+              onReorderItem: (oldVisual, newVisual) {
                 final currentLayerItems =
                     ref.read(editorProvider).pattern.layerItems;
                 _onFlatReorder(
