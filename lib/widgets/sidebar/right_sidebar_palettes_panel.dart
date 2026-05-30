@@ -290,8 +290,9 @@ class _SlotRow extends ConsumerWidget {
       final notifier = ref.read(editorProvider.notifier);
       if (paletteIndex == 0) {
         // Primary palette: remap stitches on canvas too.
+        // Use effectiveId as the lookup key so slot-based threads are found.
         notifier.replaceThread(
-            thread.dmcCode, result.dmcCode, result.color, result.name);
+            thread.effectiveId, result.dmcCode, result.color, result.name);
       }
       notifier.setSnippetPaletteThreadColor(paletteIndex, slotIndex, result);
     }

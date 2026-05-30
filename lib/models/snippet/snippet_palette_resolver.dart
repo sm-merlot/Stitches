@@ -8,6 +8,9 @@ import '../thread.dart';
 ///
 /// Slot mapping: palettes[0] defines canonical slot order.
 /// palettes[n].threads[i] replaces palettes[0].threads[i] when palette n is active.
+///
+/// For sprite-imported snippets [baseThreadId] is a slotId (e.g. 'slot:2').
+/// For manual snippets it is a DMC code (e.g. '310').
 Thread resolveThread(Snippet snippet, String baseThreadId) {
   if (snippet.palettes.isEmpty) {
     return Thread(
@@ -19,7 +22,11 @@ Thread resolveThread(Snippet snippet, String baseThreadId) {
   }
 
   final primary = snippet.palettes[0];
-  final baseIndex = primary.threads.indexWhere((t) => t.dmcCode == baseThreadId);
+
+  // Prefer slotId lookup — handles sprite imports where two slots may share a
+  // DMC code.  Fall back to dmcCode lookup for manual (legacy) snippets.
+  final baseIndex = primary.threads.indexWhere((t) =>
+      (t.slotId != null ? t.slotId == baseThreadId : t.dmcCode == baseThreadId));
 
   if (baseIndex == -1) {
     return primary.threads.isNotEmpty

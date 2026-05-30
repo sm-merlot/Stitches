@@ -115,7 +115,7 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
             name: s.name,
             width: s.width,
             height: s.height,
-            threads: {for (final t in s.threads) t.dmcCode: t},
+            threads: {for (final t in s.threads) t.effectiveId: t},
             aidaColor: widget.aidaColor,
             layerItems: [
               LayerLeaf(

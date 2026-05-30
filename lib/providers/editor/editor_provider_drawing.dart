@@ -167,6 +167,34 @@ mixin DrawingMixin on Notifier<EditorState> {
     final oldThread = state.pattern.threads[oldDmcCode];
     if (oldThread == null) return;
 
+    // Slot-based threads (sprite imports): keep stitches at their slotId —
+    // just update the thread colour/code in the pattern and palette.
+    if (oldThread.slotId != null) {
+      final newThread = oldThread.copyWith(
+          dmcCode: newDmcCode, color: newColor, name: newName);
+      final threads = Map<String, Thread>.from(state.pattern.threads)
+        ..[oldDmcCode] = newThread;
+      var snippetPalettes = state.snippetEditorState.palettes;
+      if (snippetPalettes.isNotEmpty) {
+        final primary = snippetPalettes[0].threads.map((t) =>
+            t.slotId == oldThread.slotId
+                ? t.copyWith(dmcCode: newDmcCode, color: newColor, name: newName)
+                : t).toList();
+        snippetPalettes = syncPaletteSymbolsToPrimary([
+          snippetPalettes[0].copyWith(threads: primary),
+          ...snippetPalettes.skip(1),
+        ]);
+      }
+      state = state.copyWith(
+        pattern: state.pattern.copyWith(threads: threads),
+        snippetEditorState: state.snippetEditorState.copyWith(palettes: snippetPalettes),
+        isDirty: true,
+        compositeLayer: null,
+      );
+      refreshCompositeCache();
+      return;
+    }
+
     final newThread = Thread(
         dmcCode: newDmcCode, color: newColor, name: newName, symbol: oldThread.symbol);
 
@@ -280,12 +308,42 @@ mixin DrawingMixin on Notifier<EditorState> {
   }
 
   /// Same as [replaceThread] but operates on a snippet.
+  ///
+  /// For slot-based snippets (sprite imports) the [oldDmcCode] is actually a
+  /// slotId.  In that case we update the thread colour at that slot across all
+  /// palettes — stitches keep their slotId and don't need remapping.
   void replaceSnippetThread(String snippetId, String oldDmcCode,
       String newDmcCode, Color newColor, String newName) {
     if (oldDmcCode == newDmcCode) return;
     final snippet =
         state.pattern.snippets.where((s) => s.id == snippetId).firstOrNull;
     if (snippet == null) return;
+
+    // ── Slot-based (sprite imports) ─────────────────────────────────────────
+    if (oldDmcCode.startsWith('slot:')) {
+      final slotIdx = int.tryParse(oldDmcCode.split(':')[1]);
+      if (slotIdx == null) return;
+      final updatedPalettes = snippet.palettes.map((p) {
+        if (slotIdx >= p.threads.length) return p;
+        final threads = [...p.threads];
+        threads[slotIdx] = threads[slotIdx].copyWith(
+          dmcCode: newDmcCode, color: newColor, name: newName,
+        );
+        return p.copyWith(threads: threads);
+      }).toList();
+      final updated = state.pattern.snippets
+          .map((s) => s.id == snippetId
+              ? s.copyWith(palettes: updatedPalettes)
+              : s)
+          .toList();
+      state = state.copyWith(
+        pattern: state.pattern.copyWith(snippets: updated),
+        isDirty: true,
+      );
+      return;
+    }
+
+    // ── DMC-code-based (manual snippets) ────────────────────────────────────
     final oldThread =
         snippet.threads.where((t) => t.dmcCode == oldDmcCode).firstOrNull;
     if (oldThread == null) return;
