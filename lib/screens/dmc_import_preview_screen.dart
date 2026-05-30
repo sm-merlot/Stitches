@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
 import '../data/dmc_colors.dart';
+import '../models/thread.dart';
 import '../services/color_space.dart';
 import '../services/sprite_importer.dart';
+import '../widgets/dialogs/dmc_picker_dialog.dart';
 
 /// Full-screen DMC-matched preview shown before the user commits to importing.
 ///
@@ -15,6 +17,7 @@ import '../services/sprite_importer.dart';
 /// The user can:
 ///   - Switch algorithms and see the preview update in real time.
 ///   - Browse each palette and see which DMC colours its slots map to.
+///   - Tap any DMC slot to swap it for a different colour.
 ///   - Confirm ("Add to Snippets") or cancel.
 ///
 /// Pops with `true` (confirmed) or `false` / `null` (cancelled).
@@ -111,6 +114,175 @@ class _DmcImportPreviewScreenState extends State<DmcImportPreviewScreen> {
       _activePalette = index;
       _renderPreview();
     });
+  }
+
+  Future<void> _editSlot(int paletteIdx, int slotIdx) async {
+    final sourceColour = widget.paletteStrips[paletteIdx][slotIdx];
+    final currentDmc = paletteIdx < _dmcSlots.length &&
+            slotIdx < _dmcSlots[paletteIdx].length
+        ? _dmcSlots[paletteIdx][slotIdx]
+        : null;
+
+    final picked = await _showSlotPicker(
+      context,
+      sourceColour: sourceColour,
+      currentDmc: currentDmc,
+    );
+    if (picked == null) return;
+
+    setState(() {
+      while (_dmcSlots.length <= paletteIdx) { _dmcSlots.add([]); }
+      while (_dmcSlots[paletteIdx].length <= slotIdx) {
+        _dmcSlots[paletteIdx].add(null);
+      }
+      _dmcSlots[paletteIdx][slotIdx] = picked;
+      _renderPreview();
+    });
+  }
+
+  /// Shows a bottom sheet with nearest DMC alternatives for [sourceColour].
+  /// Returns the chosen [DmcColor] or null if cancelled.
+  Future<DmcColor?> _showSlotPicker(
+    BuildContext context, {
+    required Color sourceColour,
+    DmcColor? currentDmc,
+  }) async {
+    final r = (sourceColour.r * 255).round();
+    final g = (sourceColour.g * 255).round();
+    final b = (sourceColour.b * 255).round();
+    final nearest = SpriteImporter.nearestDmcColours(r, g, b, count: 12);
+
+    return showModalBottomSheet<DmcColor>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Source colour header
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: sourceColour,
+                      border: Border.all(color: Colors.black26),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Source colour — pick replacement',
+                    style: Theme.of(ctx).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Nearest matches grid
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 0.85,
+                ),
+                itemCount: nearest.length,
+                itemBuilder: (_, i) {
+                  final c = nearest[i];
+                  final isCurrent = c.code == currentDmc?.code;
+                  return GestureDetector(
+                    onTap: () => Navigator.of(ctx).pop(c),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: c.color,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: isCurrent
+                                        ? Theme.of(ctx).colorScheme.primary
+                                        : Colors.black26,
+                                    width: isCurrent ? 2.5 : 1,
+                                  ),
+                                ),
+                              ),
+                              if (isCurrent)
+                                Center(
+                                  child: Icon(
+                                    Icons.check,
+                                    size: 14,
+                                    color: _contrastColor(c.color),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          c.code,
+                          style: const TextStyle(fontSize: 9),
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              // Full search escape hatch
+              OutlinedButton.icon(
+                icon: const Icon(Icons.search, size: 16),
+                label: const Text('Search all DMC colours…'),
+                onPressed: () async {
+                  Navigator.of(ctx).pop(); // close this sheet first
+                  final thread = await showDialog<Thread>(
+                    context: context,
+                    builder: (_) => DmcPickerDialog(
+                      initialThread: currentDmc != null
+                          ? Thread(
+                              dmcCode: currentDmc.code,
+                              color: currentDmc.color,
+                              name: currentDmc.name,
+                              symbol: '',
+                            )
+                          : Thread(
+                              dmcCode: '',
+                              color: sourceColour,
+                              name: '',
+                              symbol: '',
+                            ),
+                    ),
+                  );
+                  if (thread != null && context.mounted) {
+                    final picked = dmcColorByCode(thread.dmcCode);
+                    if (picked != null) {
+                      Navigator.of(context).pop(picked);
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _contrastColor(Color bg) {
+    final l = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+    return l > 0.4 ? Colors.black54 : Colors.white70;
   }
 
   // ── Build ───────────────────────────────────────────────────────────────────
@@ -289,7 +461,7 @@ class _DmcImportPreviewScreenState extends State<DmcImportPreviewScreen> {
             ),
             const SizedBox(height: 6),
 
-            // Two rows: raw colours on top, matched DMC below.
+            // Source colours row (read-only).
             _buildSwatchRow(
               label: 'Source',
               colours: rawStrip,
@@ -297,15 +469,11 @@ class _DmcImportPreviewScreenState extends State<DmcImportPreviewScreen> {
               theme: theme,
             ),
             const SizedBox(height: 4),
-            _buildSwatchRow(
-              label: 'DMC',
-              colours: List.generate(rawStrip.length, (j) {
-                final dmc = j < slots.length ? slots[j] : null;
-                return dmc?.color ?? rawStrip[j];
-              }),
-              labels: List.generate(rawStrip.length, (j) {
-                return j < slots.length ? slots[j]?.code : null;
-              }),
+            // DMC row — tappable to swap individual slots.
+            _buildDmcSwatchRow(
+              paletteIdx: index,
+              rawStrip: rawStrip,
+              slots: slots,
               theme: theme,
             ),
           ],
@@ -358,6 +526,82 @@ class _DmcImportPreviewScreenState extends State<DmcImportPreviewScreen> {
       ],
     );
   }
+
+  Widget _buildDmcSwatchRow({
+    required int paletteIdx,
+    required List<Color> rawStrip,
+    required List<DmcColor?> slots,
+    required ThemeData theme,
+  }) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 36,
+          child: Row(
+            children: [
+              Text(
+                'DMC',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontSize: 9,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(Icons.edit, size: 8,
+                  color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (int j = 0; j < rawStrip.length; j++)
+                  _buildTappableDmcSwatch(
+                    paletteIdx: paletteIdx,
+                    slotIdx: j,
+                    dmcColour: j < slots.length ? slots[j] : null,
+                    fallback: rawStrip[j],
+                    theme: theme,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTappableDmcSwatch({
+    required int paletteIdx,
+    required int slotIdx,
+    required DmcColor? dmcColour,
+    required Color fallback,
+    required ThemeData theme,
+  }) {
+    final colour = dmcColour?.color ?? fallback;
+    final code = dmcColour?.code ?? '?';
+    return Tooltip(
+      message: code,
+      child: GestureDetector(
+        onTap: () => _editSlot(paletteIdx, slotIdx),
+        child: Container(
+          width: 16,
+          height: 16,
+          margin: const EdgeInsets.only(right: 2),
+          decoration: BoxDecoration(
+            color: colour,
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
+              width: 0.75,
+            ),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Checkerboard background ───────────────────────────────────────────────────
@@ -383,4 +627,3 @@ class _CheckerPainter extends CustomPainter {
   @override
   bool shouldRepaint(_CheckerPainter _) => false;
 }
-
