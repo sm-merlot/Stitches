@@ -34,21 +34,19 @@ Future<bool> showExportDialog(
         showSuccess(context, 'Exported as $suggested.${format.extension}');
       }
     } else {
+      final bytes =
+          Uint8List.fromList(utf8.encode(FormatService.encodeFile(pattern, format)));
       final path = await FilePicker.saveFile(
-        fileName: suggested,
+        fileName: '$suggested.${format.extension}',
         type: FileType.custom,
         allowedExtensions: [format.extension],
+        bytes: bytes,
       );
       if (path == null) return false;
 
-      final finalPath = path.endsWith('.${format.extension}')
-          ? path
-          : '$path.${format.extension}';
-      await FormatService.exportFile(pattern, finalPath, format);
-
       if (context.mounted) {
         showSuccess(
-            context, 'Exported as ${finalPath.split(Platform.pathSeparator).last}');
+            context, 'Exported as ${path.split(Platform.pathSeparator).last}');
       }
     }
     return true;

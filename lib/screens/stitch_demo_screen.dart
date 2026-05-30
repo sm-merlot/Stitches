@@ -194,13 +194,12 @@ class _StitchDemoScreenState extends State<StitchDemoScreen> {
         );
       } else {
         final path = await FilePicker.saveFile(
-          fileName: suggestedName,
+          fileName: '$suggestedName.gif',
           type: FileType.custom,
           allowedExtensions: ['gif'],
+          bytes: Uint8List.fromList(gifBytes),
         );
         if (path == null) return;
-        final finalPath = path.endsWith('.gif') ? path : '$path.gif';
-        await File(finalPath).writeAsBytes(gifBytes);
       }
 
       if (mounted) showSuccess(context, 'GIF saved');
