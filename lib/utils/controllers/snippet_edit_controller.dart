@@ -112,10 +112,14 @@ class SnippetEditController implements CanvasEditController, ShortcutHandler {
       onAddStitch: (stitch) {
         final state = _getState();
         final coords = stitch.cellCoords;
+        // Capture all stitches that would be displaced by the new stitch so
+        // undo can restore them.  Use stitchesOverlap (region-based) for cell
+        // stitches — s == stitch uses type-aware equality and would miss
+        // stitches of a different type (e.g. HalfStitch under a new FullStitch).
         final overwritten = coords != null
             ? state.activeLayer
                 .stitchesAt(coords.x, coords.y)
-                .where((s) => s == stitch)
+                .where((s) => stitchesOverlap(s, stitch))
                 .toList()
             : state.activeLayer.backstitches
                 .where((s) => s == stitch)
