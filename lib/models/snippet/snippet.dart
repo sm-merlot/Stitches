@@ -14,6 +14,10 @@ class Snippet {
   final List<SnippetPalette> palettes;
   final int activePaletteIndex;
 
+  /// Original source colours from a sprite import, stored for comparison only.
+  /// Never used for stitch rendering. Null for non-sprite-imported snippets.
+  final SnippetPalette? sourcePalette;
+
   const Snippet({
     required this.id,
     required this.name,
@@ -22,6 +26,7 @@ class Snippet {
     required this.stitches,
     required this.palettes,
     this.activePaletteIndex = 0,
+    this.sourcePalette,
   });
 
   /// Backward-compatible getter: returns the primary palette's thread list.
@@ -54,6 +59,8 @@ class Snippet {
     List<Stitch>? stitches,
     List<SnippetPalette>? palettes,
     int? activePaletteIndex,
+    SnippetPalette? sourcePalette,
+    bool clearSourcePalette = false,
   }) {
     return Snippet(
       id: id,
@@ -63,6 +70,7 @@ class Snippet {
       stitches: stitches ?? this.stitches,
       palettes: palettes ?? this.palettes,
       activePaletteIndex: activePaletteIndex ?? this.activePaletteIndex,
+      sourcePalette: clearSourcePalette ? null : (sourcePalette ?? this.sourcePalette),
     );
   }
 
@@ -74,6 +82,7 @@ class Snippet {
         'activePalette': activePaletteIndex,
         'stitches': stitches.map((s) => s.toYaml()).toList(),
         'palettes': palettes.map((p) => p.toYaml()).toList(),
+        if (sourcePalette != null) 'sourcePalette': sourcePalette!.toYaml(),
       };
 
   factory Snippet.fromYaml(Map<String, dynamic> yaml) {
@@ -108,6 +117,8 @@ class Snippet {
     final safePalettes =
         palettes.isNotEmpty ? palettes : [SnippetPalette.create()];
 
+    final sourcePaletteYaml = yaml['sourcePalette'] as Map?;
+
     return Snippet(
       id: yaml['id'] as String,
       name: yaml['name'] as String,
@@ -116,6 +127,9 @@ class Snippet {
       activePaletteIndex: (yaml['activePalette'] as int?) ?? 0,
       stitches: Stitch.listFromYaml(yaml['stitches'] as List? ?? const []),
       palettes: safePalettes,
+      sourcePalette: sourcePaletteYaml != null
+          ? SnippetPalette.fromYaml(Map<String, dynamic>.from(sourcePaletteYaml))
+          : null,
     );
   }
 

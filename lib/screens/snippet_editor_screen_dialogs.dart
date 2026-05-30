@@ -281,6 +281,7 @@ class _PaletteManagerSheetState extends ConsumerState<_PaletteManagerSheet> {
     final editorState = ref.watch(editorProvider);
     final palettes = editorState.snippetEditorState.palettes;
     final activeIdx = editorState.snippetEditorState.activePaletteIndex;
+    final sourcePalette = editorState.snippetEditorState.sourcePalette;
     final notifier = ref.read(editorProvider.notifier);
 
     return Column(
@@ -304,6 +305,13 @@ class _PaletteManagerSheetState extends ConsumerState<_PaletteManagerSheet> {
           ),
         ),
         const SizedBox(height: 8),
+        if (sourcePalette != null)
+          _SourcePaletteRow(
+            sourcePalette: sourcePalette,
+            activePalette: activeIdx < palettes.length ? palettes[activeIdx] : null,
+            onReplaceSlot: (slotIdx, thread) =>
+                notifier.setSnippetPaletteThreadColor(activeIdx, slotIdx, thread),
+          ),
         Expanded(
           child: ReorderableListView.builder(
             scrollController: widget.scrollController,
@@ -575,6 +583,315 @@ class _AddPaletteDialogState extends State<_AddPaletteDialog> {
           child: const Text('Add palette'),
         ),
       ],
+    );
+  }
+}
+
+// ─── Source palette row ────────────────────────────────────────────────────
+
+/// Read-only comparison row shown at the top of the palette manager for
+/// sprite-imported snippets. Displays each source colour slot alongside the
+/// corresponding slot in the active DMC palette. Tapping a slot opens a
+/// nearest-alternatives picker to reassign the active palette at that slot.
+class _SourcePaletteRow extends StatefulWidget {
+  final SnippetPalette sourcePalette;
+  final SnippetPalette? activePalette;
+  final void Function(int slotIdx, Thread newThread) onReplaceSlot;
+
+  const _SourcePaletteRow({
+    required this.sourcePalette,
+    required this.activePalette,
+    required this.onReplaceSlot,
+  });
+
+  @override
+  State<_SourcePaletteRow> createState() => _SourcePaletteRowState();
+}
+
+class _SourcePaletteRowState extends State<_SourcePaletteRow> {
+  bool _expanded = true;
+
+  Future<void> _pickAlternative(int slotIdx) async {
+    final sourceThread = widget.sourcePalette.threads[slotIdx];
+    final activeThread = widget.activePalette != null &&
+            slotIdx < widget.activePalette!.threads.length
+        ? widget.activePalette!.threads[slotIdx]
+        : null;
+
+    final r = (sourceThread.color.r * 255).round();
+    final g = (sourceThread.color.g * 255).round();
+    final b = (sourceThread.color.b * 255).round();
+    final nearest = SpriteImporter.nearestDmcColours(r, g, b, count: 12);
+
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<DmcColor>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 24, height: 24,
+                    decoration: BoxDecoration(
+                      color: sourceThread.color,
+                      border: Border.all(color: Colors.black26),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Source slot ${slotIdx + 1} — pick replacement for active palette',
+                      style: Theme.of(ctx).textTheme.titleSmall,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 0.85,
+                ),
+                itemCount: nearest.length,
+                itemBuilder: (_, i) {
+                  final c = nearest[i];
+                  final isCurrent = c.code == activeThread?.dmcCode;
+                  return GestureDetector(
+                    onTap: () => Navigator.of(ctx).pop(c),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: c.color,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: isCurrent
+                                        ? Theme.of(ctx).colorScheme.primary
+                                        : Colors.black26,
+                                    width: isCurrent ? 2.5 : 1,
+                                  ),
+                                ),
+                              ),
+                              if (isCurrent)
+                                Center(
+                                  child: Icon(Icons.check, size: 12,
+                                      color: _contrast(c.color)),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(c.code,
+                            style: const TextStyle(fontSize: 9),
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.search, size: 16),
+                label: const Text('Search all DMC colours…'),
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  if (!mounted) return;
+                  final thread = await showDialog<Thread>(
+                    context: context,
+                    builder: (_) => DmcPickerDialog(
+                      initialThread: activeThread ??
+                          Thread(
+                            dmcCode: '',
+                            color: sourceThread.color,
+                            name: '',
+                            symbol: '',
+                          ),
+                    ),
+                  );
+                  if (thread != null) {
+                    final dmc = dmcColorByCode(thread.dmcCode);
+                    if (dmc != null && mounted) {
+                      widget.onReplaceSlot(
+                        slotIdx,
+                        Thread(
+                          dmcCode: dmc.code,
+                          color: dmc.color,
+                          name: dmc.name,
+                          symbol: activeThread?.symbol ?? '',
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (picked != null && mounted) {
+      widget.onReplaceSlot(
+        slotIdx,
+        Thread(
+          dmcCode: picked.code,
+          color: picked.color,
+          name: picked.name,
+          symbol: activeThread?.symbol ?? '',
+        ),
+      );
+    }
+  }
+
+  Color _contrast(Color bg) {
+    final l = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+    return l > 0.4 ? Colors.black54 : Colors.white70;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final slots = widget.sourcePalette.threads;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header row
+          InkWell(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, size: 14,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Source (read-only reference)',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tap any slot to change the active palette colour',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (int i = 0; i < slots.length; i++)
+                          GestureDetector(
+                            onTap: () => _pickAlternative(i),
+                            child: Container(
+                              width: 32,
+                              margin: const EdgeInsets.only(right: 4),
+                              child: Column(
+                                children: [
+                                  // Source colour
+                                  Tooltip(
+                                    message: 'Source ${i + 1}',
+                                    child: Container(
+                                      width: 28, height: 28,
+                                      decoration: BoxDecoration(
+                                        color: slots[i].color,
+                                        border: Border.all(color: Colors.black26),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  // Arrow
+                                  Icon(Icons.arrow_downward,
+                                      size: 10,
+                                      color: theme.colorScheme.onSurfaceVariant),
+                                  const SizedBox(height: 2),
+                                  // Active palette colour for this slot
+                                  Tooltip(
+                                    message: widget.activePalette != null &&
+                                            i < widget.activePalette!.threads.length
+                                        ? widget.activePalette!.threads[i].dmcCode
+                                        : '',
+                                    child: Container(
+                                      width: 28, height: 28,
+                                      decoration: BoxDecoration(
+                                        color: widget.activePalette != null &&
+                                                i < widget.activePalette!.threads.length
+                                            ? widget.activePalette!.threads[i].color
+                                            : Colors.grey,
+                                        border: Border.all(
+                                          color: theme.colorScheme.primary
+                                              .withValues(alpha: 0.5),
+                                          width: 1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Center(
+                                        child: Icon(Icons.edit, size: 10,
+                                            color: Colors.white54),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

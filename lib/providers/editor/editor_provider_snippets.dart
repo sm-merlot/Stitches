@@ -221,11 +221,17 @@ mixin SnippetsMixin on Notifier<EditorState> {
 
   // ─── Snippet editor local palette state ───────────────────────────────────
 
-  void initSnippetPalettesLocal(List<SnippetPalette> palettes, int activeIndex) {
+  void initSnippetPalettesLocal(
+    List<SnippetPalette> palettes,
+    int activeIndex, {
+    SnippetPalette? sourcePalette,
+  }) {
     state = state.copyWith(
       snippetEditorState: state.snippetEditorState.copyWith(
         palettes: syncPaletteSymbolsToPrimary(palettes),
         activePaletteIndex: activeIndex,
+        sourcePalette: sourcePalette,
+        clearSourcePalette: sourcePalette == null,
       ),
     );
   }

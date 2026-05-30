@@ -8,7 +8,9 @@ import '../models/pattern.dart';
 import '../models/snippet/snippet.dart';
 import '../models/snippet/snippet_palette.dart';
 import '../models/thread.dart';
+import '../data/dmc_colors.dart';
 import '../providers/editor/editor_provider.dart';
+import '../services/sprite_importer.dart';
 import '../widgets/dialogs/dmc_picker_dialog.dart';
 import '../widgets/sidebar/right_sidebar.dart';
 import '../widgets/views/snippet_edit_view.dart';
@@ -158,7 +160,11 @@ class _SnippetEditorBodyState extends ConsumerState<_SnippetEditorBody> {
                 ...s.palettes.skip(1),
               ]
             : [SnippetPalette.create(name: 'Palette 1', threads: symbolised)];
-        editorNotifier.initSnippetPalettesLocal(palettes, s.activePaletteIndex);
+        editorNotifier.initSnippetPalettesLocal(
+          palettes,
+          s.activePaletteIndex,
+          sourcePalette: s.sourcePalette,
+        );
       } else {
         editorNotifier.initSnippetPalettesLocal(
             [SnippetPalette.create(name: 'Palette 1')], 0);
