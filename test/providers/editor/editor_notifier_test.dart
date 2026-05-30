@@ -613,6 +613,14 @@ void main() {
       );
     });
 
+    test('replaceThread invalidates compositeLayer so canvas repaints with new colour', () {
+      notifier(c).addStitch(const FullStitch(x: 0, y: 0, threadId: '310'));
+      expect(editorState(c).compositeLayer, isNotNull);
+
+      notifier(c).replaceThread('310', '666', const Color(0xFFCC0000), 'Red');
+      expect(editorState(c).compositeLayer, isNull);
+    });
+
     test('setTool updates editSession.currentTool and clears editSession.backstitchStartPoint', () {
       notifier(c).setBackstitchStart(const Offset(1, 1));
       notifier(c).setPartialSubTool(PartialSubTool.diagonalForward);
