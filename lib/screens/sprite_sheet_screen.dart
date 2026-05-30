@@ -123,6 +123,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
   int _addedCount = 0;
   bool _importing = false;
   bool _previewBeforeAdd = false;
+  bool _primaryPaletteHasDuplicates = false;
 
   bool get _hasCrop => _cropStart != null && _cropEnd != null;
 
@@ -173,6 +174,28 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     _detectedStripColours.clear();
     _palettePreviewBytes.clear();
     _activePaletteIndex = null;
+    _primaryPaletteHasDuplicates = false;
+  }
+
+  /// Checks whether the primary strip (index 0) contains colours that map to
+  /// duplicate DMC codes — which would silently collapse palette slots.
+  void _checkPrimaryPaletteDuplicates() {
+    if (_detectedStripColours.isEmpty) {
+      _primaryPaletteHasDuplicates = false;
+      return;
+    }
+    final colours = _detectedStripColours[0];
+    final seen = <String>{};
+    _primaryPaletteHasDuplicates = colours.any((c) {
+      final match = SpriteImporter.matchPixel(
+        (c.r * 255).round(),
+        (c.g * 255).round(),
+        (c.b * 255).round(),
+        255,
+      );
+      if (match == null) return false;
+      return !seen.add(match.code);
+    });
   }
 
   void _removeStrip(int i) {
@@ -383,6 +406,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
     setState(() {
       while (_detectedStripColours.length <= i) { _detectedStripColours.add([]); }
       _detectedStripColours[i] = detected;
+      if (i == 0) _checkPrimaryPaletteDuplicates();
       while (_palettePreviewBytes.length <= i) { _palettePreviewBytes.add(null); }
       if (detected.isEmpty || !_hasCrop) {
         _palettePreviewBytes[i] = null;
@@ -651,6 +675,7 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
           _stripState = _StripDrawState.idle;
           _stripStart = null;
           _stripEnd = null;
+          if (newIndex == 0) _checkPrimaryPaletteDuplicates();
         });
       } else {
         setState(() {
@@ -939,6 +964,26 @@ class _SpriteSheetScreenState extends ConsumerState<SpriteSheetScreen> {
                 children: [
                   Text('Palette', style: theme.textTheme.labelMedium),
                   const SizedBox(height: 6),
+                  if (_primaryPaletteHasDuplicates)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 14,
+                              color: theme.colorScheme.error),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Primary palette has colours that map to the same DMC code — duplicate slots will be merged on import.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.error),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (!hasStrips)
                     Text(
                       'Auto (detected from crop)',
